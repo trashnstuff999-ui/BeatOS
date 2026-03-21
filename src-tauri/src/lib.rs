@@ -1,12 +1,7 @@
 // src-tauri/src/lib.rs
-// BeatOS — Tauri Commands (Read-Only Phase)
-// Alle Commands lesen nur aus der DB — kein INSERT/UPDATE/DELETE
-
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 
-// ── DB-Pfad ───────────────────────────────────────────────────────────────────
-// Hardcoded für jetzt — wird später konfigurierbar gemacht
 const DB_PATH: &str =
     r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\beats.db";
 
@@ -14,7 +9,6 @@ fn open_db() -> SqlResult<Connection> {
     Connection::open(DB_PATH)
 }
 
-// ── Structs — spiegeln die beats-Tabelle wider ────────────────────────────────
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Beat {
     pub id: String,
@@ -72,7 +66,6 @@ pub struct MonthCount {
     pub count: i64,
 }
 
-// ── Helper: Beat aus Row lesen ────────────────────────────────────────────────
 fn row_to_beat(row: &rusqlite::Row) -> SqlResult<Beat> {
     Ok(Beat {
         id:            row.get::<_, String>(0).unwrap_or_default(),
@@ -92,52 +85,42 @@ fn row_to_beat(row: &rusqlite::Row) -> SqlResult<Beat> {
     })
 }
 
-// ── Command: get_stats ────────────────────────────────────────────────────────
-// Wird vom Dashboard genutzt
 #[tauri::command]
-pub fn get_stats() -> Result<Stats, String> {
+fn greet(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
+
+#[tauri::command]
+fn get_stats() -> Result<Stats, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
-    // Total
     let total: i64 = conn
         .query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0))
         .unwrap_or(0);
 
-    // This month
     let this_month: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM beats WHERE strftime('%Y-%m', created_date) = strftime('%Y-%m', 'now')",
-            [],
-            |r| r.get(0),
+            [], |r| r.get(0),
         )
         .unwrap_or(0);
 
-    // Favorites
     let favorites: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM beats WHERE favorite = 1",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM beats WHERE favorite = 1", [], |r| r.get(0))
         .unwrap_or(0);
 
-    // Avg BPM
     let avg_bpm: f64 = conn
         .query_row(
             "SELECT COALESCE(AVG(CAST(bpm AS REAL)), 0) FROM beats WHERE bpm IS NOT NULL AND bpm != ''",
-            [],
-            |r| r.get(0),
+            [], |r| r.get(0),
         )
         .unwrap_or(0.0);
 
-    // By status
     let count_status = |s: &str| -> i64 {
         conn.query_row(
             "SELECT COUNT(*) FROM beats WHERE LOWER(status) = LOWER(?1)",
-            [s],
-            |r| r.get(0),
-        )
-        .unwrap_or(0)
+            [s], |r| r.get(0),
+        ).unwrap_or(0)
     };
 
     let by_status = ByStatus {
@@ -147,23 +130,17 @@ pub fn get_stats() -> Result<Stats, String> {
         sold:     count_status("sold"),
     };
 
-    // Top keys
-    let mut stmt = conn
-        .prepare(
-            "SELECT key, COUNT(*) as cnt FROM beats WHERE key IS NOT NULL AND key != ''
-             GROUP BY key ORDER BY cnt DESC LIMIT 5",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT key, COUNT(*) as cnt FROM beats WHERE key IS NOT NULL AND key != ''
+         GROUP BY key ORDER BY cnt DESC LIMIT 5",
+    ).map_err(|e| e.to_string())?;
 
     let top_keys: Vec<KeyCount> = stmt
-        .query_map([], |r| {
-            Ok(KeyCount { key: r.get(0)?, count: r.get(1)? })
-        })
+        .query_map([], |r| Ok(KeyCount { key: r.get(0)?, count: r.get(1)? }))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
 
-    // Top tags — tags is comma-separated string
     let mut tag_map: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
     let mut stmt2 = conn
         .prepare("SELECT tags FROM beats WHERE tags IS NOT NULL AND tags != ''")
@@ -183,6 +160,7 @@ pub fn get_stats() -> Result<Stats, String> {
             }
         }
     }
+
     let mut top_tags: Vec<TagCount> = tag_map
         .into_iter()
         .map(|(tag, count)| TagCount { tag, count })
@@ -190,37 +168,25 @@ pub fn get_stats() -> Result<Stats, String> {
     top_tags.sort_by(|a, b| b.count.cmp(&a.count));
     top_tags.truncate(10);
 
-    // Beats per month (last 12)
-    let mut stmt3 = conn
-        .prepare(
-            "SELECT strftime('%Y-%m', created_date) as month, COUNT(*) as cnt
-             FROM beats
-             WHERE created_date IS NOT NULL AND created_date != ''
-             GROUP BY month
-             ORDER BY month DESC
-             LIMIT 12",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt3 = conn.prepare(
+        "SELECT strftime('%Y-%m', created_date) as month, COUNT(*) as cnt
+         FROM beats
+         WHERE created_date IS NOT NULL AND created_date != ''
+         GROUP BY month ORDER BY month DESC LIMIT 12",
+    ).map_err(|e| e.to_string())?;
 
     let mut beats_per_month: Vec<MonthCount> = stmt3
-        .query_map([], |r| {
-            Ok(MonthCount { month: r.get(0)?, count: r.get(1)? })
-        })
+        .query_map([], |r| Ok(MonthCount { month: r.get(0)?, count: r.get(1)? }))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
-    beats_per_month.reverse(); // chronologisch
+    beats_per_month.reverse();
 
-    // Recent beats (5)
-    let mut stmt4 = conn
-        .prepare(
-            "SELECT id, name, path, bpm, key, status, tags, favorite,
-                    created_date, modified_date, notes, sold_to, has_artwork, has_video
-             FROM beats
-             ORDER BY created_date DESC
-             LIMIT 5",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt4 = conn.prepare(
+        "SELECT id, name, path, bpm, key, status, tags, favorite,
+                created_date, modified_date, notes, sold_to, has_artwork, has_video
+         FROM beats ORDER BY created_date DESC LIMIT 5",
+    ).map_err(|e| e.to_string())?;
 
     let recent_beats: Vec<Beat> = stmt4
         .query_map([], row_to_beat)
@@ -231,15 +197,12 @@ pub fn get_stats() -> Result<Stats, String> {
     Ok(Stats {
         total, this_month, favorites,
         avg_bpm: (avg_bpm * 10.0).round() / 10.0,
-        by_status, top_keys, top_tags,
-        beats_per_month, recent_beats,
+        by_status, top_keys, top_tags, beats_per_month, recent_beats,
     })
 }
 
-// ── Command: get_beats ────────────────────────────────────────────────────────
-// Wird vom Browse-Tab genutzt — mit optionalem Suchbegriff
 #[tauri::command]
-pub fn get_beats(
+fn get_beats(
     search: Option<String>,
     status_filter: Option<String>,
     only_favs: bool,
@@ -247,7 +210,6 @@ pub fn get_beats(
     offset: Option<i64>,
 ) -> Result<Vec<Beat>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-
     let lim    = limit.unwrap_or(50);
     let off    = offset.unwrap_or(0);
     let search = search.unwrap_or_default().to_lowercase();
@@ -260,8 +222,8 @@ pub fn get_beats(
 
     if !search.is_empty() {
         sql.push_str(&format!(
-            " AND (LOWER(name) LIKE '%{}%' OR LOWER(id) LIKE '%{}%' OR LOWER(key) LIKE '%{}%' OR LOWER(tags) LIKE '%{}%')",
-            search, search, search, search
+            " AND (LOWER(name) LIKE '%{s}%' OR LOWER(id) LIKE '%{s}%' OR LOWER(key) LIKE '%{s}%' OR LOWER(tags) LIKE '%{s}%')",
+            s = search
         ));
     }
 
@@ -275,10 +237,7 @@ pub fn get_beats(
         sql.push_str(" AND favorite = 1");
     }
 
-    sql.push_str(&format!(
-        " ORDER BY created_date DESC LIMIT {} OFFSET {}",
-        lim, off
-    ));
+    sql.push_str(&format!(" ORDER BY created_date DESC LIMIT {} OFFSET {}", lim, off));
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let beats: Vec<Beat> = stmt
@@ -290,15 +249,13 @@ pub fn get_beats(
     Ok(beats)
 }
 
-// ── Command: get_beat_count ───────────────────────────────────────────────────
 #[tauri::command]
-pub fn get_beat_count() -> Result<i64, String> {
+fn get_beat_count() -> Result<i64, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     conn.query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0))
         .map_err(|e| e.to_string())
 }
 
-// ── Tauri Entry Point ─────────────────────────────────────────────────────────
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -311,10 +268,4 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-// greet bleibt drin — schadet nicht
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
 }
