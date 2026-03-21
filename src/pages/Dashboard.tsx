@@ -153,7 +153,7 @@ function TopKeys({ stats }: { stats: Stats }) {
   const totalW   = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
+    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", maxHeight: 300, display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
         <span style={{ color: C.onSurfaceVariant, fontSize: 16 }}>≡</span>
@@ -163,7 +163,7 @@ function TopKeys({ stats }: { stats: Stats }) {
         <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>No key data</p>
       ) : (
         /* Scroll container — wheel event handled via ref */
-        <div ref={scrollRef} style={{ overflowX: needsScroll ? "auto" : "visible", overflowY: "hidden", paddingBottom: 4,
+        <div ref={scrollRef} style={{ overflowX: "auto", overflowY: "hidden", flex: 1, paddingBottom: 4,
           scrollbarWidth: "thin", scrollbarColor: `${C.surfaceContainerHighest} transparent` }}>
 
           {/* Chart rows */}
@@ -533,7 +533,7 @@ export default function Dashboard() {
           </section>
 
           {/* Analytics Row 1 */}
-          <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
             <StatusBreakdown stats={stats} />
             <TopKeys stats={stats} />
           </section>
