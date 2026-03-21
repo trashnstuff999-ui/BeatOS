@@ -494,8 +494,17 @@ export default function Dashboard() {
           </button>
           <button
             onClick={async () => {
-              const res = await invoke<{found:number,imported:number,skipped:number,errors:string[]}>("scan_archive");
-              alert(`Scan complete\nFound: ${res.found}\nImported: ${res.imported}\nAlready in DB: ${res.skipped}\nErrors: ${res.errors.length}`);
+              if (!confirm("System Repair wird:\n1. Fehlende Beats importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n\nDB-Backup vorhanden?")) return;
+              // Schritt 1: Fehlende Beats scannen
+              const scan = await invoke<{found:number,imported:number,skipped:number,errors:string[]}>("scan_archive");
+              // Schritt 2: Alle Dates fixen
+              const fix = await invoke<{updated:number,not_found:number,no_flp:number,errors:string[]}>("fix_dates");
+              alert(
+                `System Repair abgeschlossen\n\n` +
+                `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
+                `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
+                `Fehler: ${[...scan.errors, ...fix.errors].length}`
+              );
               load();
             }}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", letterSpacing: "0.05em", background: "rgba(255,115,81,0.1)", color: "#ff7351" }}>
