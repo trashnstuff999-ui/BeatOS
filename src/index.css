@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+/* ── Design Tokens — "Precision Console" ─────────────────────────────────── */
+:root {
+  /* Surface hierarchy — tonal depth, no borders */
+  --surface:            #0e0e0e;
+  --surface-low:        #131313;
+  --surface-mid:        #1a1919;
+  --surface-high:       #201f1f;
+  --surface-highest:    #262626;
+
+  /* Primary — amber signal light */
+  --primary:            #fda124;
+  --primary-hover:      #e8911a;
+  --primary-dim:        #3a2000;
+
+  /* Text */
+  --text-primary:       #ffffff;
+  --text-secondary:     #adaaaa;
+  --text-muted:         #6b6b6b;
+  --text-dim:           #484848;
+
+  /* Status */
+  --status-idea:        #3b82f6;
+  --status-idea-bg:     #1e3a5f;
+  --status-wip:         #fda124;
+  --status-wip-bg:      #3a2000;
+  --status-finished:    #22c55e;
+  --status-finished-bg: #14532d;
+  --status-sold:        #ef4444;
+  --status-sold-bg:     #7f1d1d;
+
+  /* Outline */
+  --outline:            #484847;
+  --outline-subtle:     rgba(72, 72, 71, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: "Inter", system-ui, sans-serif;
+  background: var(--surface);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-highest); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--outline); }
+
+/* Selection */
+::selection { background: var(--primary); color: #000; }
