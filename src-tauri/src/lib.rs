@@ -132,7 +132,7 @@ fn get_stats() -> Result<Stats, String> {
 
     let mut stmt = conn.prepare(
         "SELECT key, COUNT(*) as cnt FROM beats WHERE key IS NOT NULL AND key != ''
-         GROUP BY key ORDER BY cnt DESC LIMIT 5",
+         GROUP BY key ORDER BY cnt DESC",
     ).map_err(|e| e.to_string())?;
 
     let top_keys: Vec<KeyCount> = stmt
