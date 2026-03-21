@@ -153,7 +153,7 @@ function TopKeys({ stats }: { stats: Stats }) {
   const totalW   = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", maxHeight: 300, display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
+    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
         <span style={{ color: C.onSurfaceVariant, fontSize: 16 }}>≡</span>
@@ -533,7 +533,7 @@ export default function Dashboard() {
           </section>
 
           {/* Analytics Row 1 */}
-          <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
+          <section style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, alignItems: "stretch" }}>
             <StatusBreakdown stats={stats} />
             <TopKeys stats={stats} />
           </section>
