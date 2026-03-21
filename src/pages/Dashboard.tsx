@@ -231,15 +231,57 @@ function BeatsPerMonth({ stats }: { stats: Stats }) {
 }
 
 // ── Tag Kategorisierung ───────────────────────────────────────────────────────
-const GENRE_KW    = ["trap","metal","rock","drill","pop","jazz","soul","rnb","rap","hiphop","phonk","lofi","house","techno","edm","grime","afro","reggae","latin","punk","indie","folk","country","classical","orchestral","cinematic","melodic","acoustic"];
-const VIBE_KW     = ["dark","sad","emo","happy","chill","hard","heavy","aggressive","soft","emotional","melancholic","epic","atmospheric","angry","smooth","romantic","nostalgic","uplifting","dreamy","moody","intense","raw","deep","vibe","energy","powerful"];
-const INSTR_KW    = ["guitar","piano","violin","flute","drums","808","synth","bass","keys","trumpet","saxophone","strings","brass","choir","vocal","pad","pluck","lead","arp","sample","loop","melody","beat","chord"];
+// GENRE: Wortstamm-Suche — "emo-trap" enthält "trap" → Genre
+// Reihenfolge: Genre zuerst prüfen, dann Instrument, dann Vibe
+const GENRE_KW = [
+  // Trap-Familie
+  "trap","phonk","drill","mumble",
+  // Rock/Metal-Familie
+  "rock","metal","punk","grunge","hardcore","emo","screamo","alternative","indie",
+  // Electronic
+  "edm","house","techno","trance","dubstep","dnb","drumstep","garage","grime",
+  "future","bass","wavvy","wave","ambient","lofi","lo-fi","chillwave","vaporwave",
+  "synthwave","retrowave","darkwave","coldwave",
+  // Hip-Hop / Urban
+  "rap","hiphop","hip-hop","rnb","r&b","soul","funk","swing","neo-soul","afrobeats",
+  "afrotrap","afropop","afro","dancehall","reggaeton","reggae","latin","dembow",
+  // Pop-Familie
+  "pop","bubblegum","electropop","hyperpop","darkpop","art-pop","bedroom",
+  // Jazz / Classical
+  "jazz","blues","gospel","classical","orchestral","cinematic","soundtrack",
+  "neo-classical","post-classical",
+  // Weitere Genres
+  "country","folk","bluegrass","acoustic","flamenco","bossa","samba",
+  "boom-bap","cloud","pluggnb","rage","opium","gloom",
+];
+
+// INSTRUMENT: konkrete Instrumente & Sounds
+const INSTR_KW = [
+  "guitar","piano","violin","viola","cello","bass","drums","percussion",
+  "808","synth","synthesizer","keys","keyboard","organ","trumpet","saxophone",
+  "sax","flute","clarinet","trombone","french-horn","strings","brass","woodwind",
+  "choir","vocal","vocals","voice","pad","pluck","lead","arp","arpeggio",
+  "sample","loop","chord","melody","riff","lick","stab","horn",
+];
+
+// VIBE: ausschließlich Emotionen & Stimmungen — keine Musik-Begriffe
+const VIBE_KW = [
+  "happy","sad","angry","fear","joy","disgust","surprise","trust","anticipation",
+  "energetic","calm","chill","relaxed","melancholic","nostalgic","hopeful",
+  "romantic","lonely","aggressive","peaceful","dark","light","heavy","soft",
+  "uplifting","depressing","euphoric","bittersweet","triumphant","mysterious",
+  "tense","anxious","confident","powerful","raw","emotional","deep","dreamy",
+  "hype","bounce","smooth","hard","epic","moody","atmospheric","intense",
+];
 
 function getTagCat(tag: string): "genre" | "vibe" | "instrument" | "other" {
-  const t = tag.toLowerCase().replace(/[-_ ]/g, "");
-  if (INSTR_KW.some(k => t.includes(k))) return "instrument";
-  if (VIBE_KW.some(k => t.includes(k)))  return "vibe";
-  if (GENRE_KW.some(k => t.includes(k))) return "genre";
+  // Normalisieren: lowercase, Bindestriche/Underscores/Leerzeichen als Trennzeichen behalten
+  // Dann Wortstamm-Suche: "emo-trap" → ["emo","trap"] → enthält "trap" → genre
+  const normalized = tag.toLowerCase();
+  // Genre hat Priorität — prüfe ob irgendein Genre-Keyword im Tag vorkommt
+  if (GENRE_KW.some(k => normalized.includes(k))) return "genre";
+  if (INSTR_KW.some(k => normalized.includes(k))) return "instrument";
+  if (VIBE_KW.some(k => normalized.includes(k)))  return "vibe";
   return "other";
 }
 
