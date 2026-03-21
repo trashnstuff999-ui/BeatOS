@@ -27,12 +27,12 @@ const STATUS_CFG = {
   finished: { text: "#4ade80", bg: "rgba(74,222,128,0.10)", border: "rgba(74,222,128,0.20)" },
   wip:      { text: "#e48c03", bg: "rgba(228,140,3,0.10)",  border: "rgba(228,140,3,0.20)"  },
   idea:     { text: "#9492ff", bg: "rgba(148,146,255,0.10)",border: "rgba(148,146,255,0.20)"},
-  sold:     { text: "#fda124", bg: "rgba(253,161,36,0.10)", border: "rgba(253,161,36,0.20)" },
+  sold:     { text: "#ef4444", bg: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.20)"  },
 } as const;
 
 function StatusPill({ status }: { status: string }) {
-  const s = normalizeStatus(status) ?? "idea";
-  const cfg = STATUS_CFG[s as keyof typeof STATUS_CFG] ?? STATUS_CFG.idea;
+  const s = (normalizeStatus(status) ?? "idea") as keyof typeof STATUS_CFG;
+  const cfg = STATUS_CFG[s] ?? STATUS_CFG.idea;
   return (
     <span style={{ padding: "3px 10px", borderRadius: 4, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}>
       {s}
@@ -42,7 +42,10 @@ function StatusPill({ status }: { status: string }) {
 
 function KpiCard({ title, value, badgeText, badgeColor, icon }: { title: string; value: string | number; badgeText: string; badgeColor: string; icon: React.ReactNode }) {
   return (
-    <div style={{ background: C.surfaceContainerLow, padding: 20, borderRadius: 12, border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>
+    <div style={{ background: C.surfaceContainerLow, padding: 20, borderRadius: 12, border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)", cursor: "pointer", transition: "border-color 0.2s, transform 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(253,161,36,0.3)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border10; e.currentTarget.style.transform = "translateY(0)"; }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurfaceVariant }}>{title}</span>
         <span style={{ color: badgeColor, display: "flex" }}>{icon}</span>
@@ -65,10 +68,13 @@ function StatusBreakdown({ stats }: { stats: Stats }) {
     { key: "idea",     label: "Idea",     color: C.tertiary,        count: stats.by_status.idea },
     { key: "wip",      label: "WIP",      color: C.primary,         count: stats.by_status.wip },
     { key: "finished", label: "Finished", color: "#22c55e",         count: stats.by_status.finished },
-    { key: "sold",     label: "Sold",     color: C.primaryContainer, count: stats.by_status.sold },
+    { key: "sold",     label: "Sold",     color: "#ef4444",          count: stats.by_status.sold },
   ];
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}` }}>
+    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(72,72,71,0.25)")}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = C.border10)}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Status Breakdown</h4>
         <span style={{ color: C.onSurfaceVariant, fontSize: 18 }}>⋮</span>
@@ -125,11 +131,18 @@ function TopKeys({ stats }: { stats: Stats }) {
 function BeatsPerMonth({ stats }: { stats: Stats }) {
   const data  = stats.beats_per_month;
   const max   = Math.max(...data.map(d => d.count), 1);
+  const [hov, setHov] = useState<number | null>(null);
   const monthLabel = (s: string) =>
     ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][parseInt(s.split("-")[1] ?? "1") - 1] ?? s;
 
+  const CHART_H = 130;
+  const BAR_W   = 18; // schmal und elegant
+
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}` }}>
+    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(72,72,71,0.25)")}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = C.border10)}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats Per Month</h4>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -137,16 +150,49 @@ function BeatsPerMonth({ stats }: { stats: Stats }) {
           <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>Current Year</span>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 130 }}>
-        {data.map(({ month, count }) => (
-          <div key={month} style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end" }}>
-            <div style={{ width: "100%", height: `${Math.max((count / max) * 100, count > 0 ? 2 : 0)}%`, background: count > 0 ? C.primary : C.surfaceContainerHighest, borderRadius: "2px 2px 0 0", minHeight: count > 0 ? 3 : 0 }} />
-          </div>
-        ))}
+
+      {/* Chart area */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around", height: CHART_H, marginBottom: 10 }}>
+        {data.map(({ month, count }, i) => {
+          const isHov   = hov === i;
+          const barH    = count > 0 ? Math.max((count / max) * CHART_H, 4) : 2;
+          const color   = count > 0 ? C.primary : C.surfaceContainerHighest;
+          return (
+            <div key={month} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", cursor: count > 0 ? "pointer" : "default", width: BAR_W }}
+              onMouseEnter={() => count > 0 && setHov(i)}
+              onMouseLeave={() => setHov(null)}
+            >
+              {/* Count label boven de balk */}
+              <span style={{
+                fontSize: 9, fontFamily: "monospace", marginBottom: 3,
+                color: isHov ? C.primary : C.onSurfaceVariant,
+                opacity: count > 0 ? 1 : 0,
+                fontWeight: isHov ? 700 : 400,
+                transition: "all 0.15s",
+              }}>{count > 0 ? count : ""}</span>
+              {/* Bar */}
+              <div style={{
+                width: "100%", height: barH,
+                background: color,
+                borderRadius: "2px 2px 0 0",
+                opacity: isHov ? 1 : count > 0 ? 0.7 : 0.3,
+                transition: "all 0.15s",
+                boxShadow: isHov ? `0 0 10px ${C.primary}60` : "none",
+              }} />
+            </div>
+          );
+        })}
       </div>
-      <div style={{ display: "flex", gap: 3, marginTop: 8 }}>
-        {data.map(({ month }) => (
-          <span key={month} style={{ flex: 1, textAlign: "center", fontSize: 8, color: C.onSecondaryFixedVar, textTransform: "uppercase" }}>{monthLabel(month)}</span>
+
+      {/* Month labels */}
+      <div style={{ display: "flex", justifyContent: "space-around" }}>
+        {data.map(({ month }, i) => (
+          <span key={month} style={{
+            width: BAR_W, textAlign: "center", fontSize: 8,
+            color: hov === i ? C.primary : C.onSecondaryFixedVar,
+            textTransform: "uppercase", fontWeight: hov === i ? 700 : 400,
+            transition: "color 0.15s",
+          }}>{monthLabel(month)}</span>
         ))}
       </div>
     </div>
@@ -156,7 +202,10 @@ function BeatsPerMonth({ stats }: { stats: Stats }) {
 function TopTags({ stats }: { stats: Stats }) {
   const tagColors = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444", "#06b6d4", "#f97316", "#84cc16", "#ec4899"];
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, height: "100%" }}>
+    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, height: "100%", transition: "border-color 0.2s" }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(72,72,71,0.25)")}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = C.border10)}
+    >
       <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 24 }}>Top Tags</h4>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {stats.top_tags.map(({ tag }, i) => {
