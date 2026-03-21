@@ -12,7 +12,7 @@ export interface Beat {
   path?: string;
   bpm?: number;
   key?: string;
-  status?: "idea" | "wip" | "finished" | "sold";
+  status: "idea" | "wip" | "finished" | "sold";
   tags?: string;           // kommasepariert: "Trap, Dark, Heavy"
   favorite?: number;       // 0 oder 1 (SQLite hat kein bool)
   created_date?: string;
@@ -38,6 +38,8 @@ export interface Stats {
   top_tags: { tag: string; count: number }[];
   beats_per_month: { month: string; count: number }[];
   recent_beats: Beat[];
+  available_years: number[];
+  selected_year: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,8 +67,8 @@ export function normalizeStatus(status?: string): Beat["status"] {
 // ── API Functions ─────────────────────────────────────────────────────────────
 
 /** Dashboard-Stats laden */
-export async function getStats(): Promise<Stats> {
-  return invoke<Stats>("get_stats");
+export async function getStats(year?: number): Promise<Stats> {
+  return invoke<Stats>("get_stats", { year: year ?? null });
 }
 
 /** Beat-Liste laden (Browse-Tab) */

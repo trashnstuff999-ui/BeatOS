@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play } from "lucide-react";
 import { getStats, normalizeStatus, type Stats } from "../lib/Database";
+import { invoke } from "@tauri-apps/api/core";
 
 const C = {
   background:             "#0e0e0e",
@@ -215,28 +216,57 @@ function TopKeys({ stats }: { stats: Stats }) {
 }
 
 // ── Beats Per Month ───────────────────────────────────────────────────────────
-function BeatsPerMonth({ stats }: { stats: Stats }) {
-  const data = stats.beats_per_month;
-  const max  = Math.max(...data.map(d => d.count), 1);
+function BeatsPerMonth({ stats, onYearChange }: {
+  stats: Stats;
+  onYearChange: (year: number) => void;
+}) {
+  const data  = stats.beats_per_month;
+  const max   = Math.max(...data.map(d => d.count), 1);
   const [hov, setHov] = useState<number | null>(null);
 
-  const monthLabel = (s: string) =>
-    ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
-    [parseInt(s.split("-")[1] ?? "1") - 1] ?? s;
-
+  const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const monthLabel = (s: string) => MONTHS[parseInt(s.split("-")[1] ?? "1") - 1] ?? s;
   const CHART_H = 165;
 
   return (
     <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
+      {/* Header + Jahr-Dropdown */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats Per Month</h4>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary }} />
-          <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>Current Year</span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Dot */}
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
+          {/* Dropdown */}
+          <div style={{ position: "relative" }}>
+            <select
+              value={stats.selected_year}
+              onChange={e => onYearChange(parseInt(e.target.value))}
+              style={{
+                background: C.surfaceContainerHighest,
+                border: `1px solid rgba(72,72,71,0.20)`,
+                borderRadius: 6, padding: "4px 28px 4px 10px",
+                fontSize: 11, fontWeight: 700, color: C.primary,
+                appearance: "none", cursor: "pointer", outline: "none",
+                fontFamily: "Inter, sans-serif",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.primary)}
+              onBlur={e => (e.currentTarget.style.borderColor = "rgba(72,72,71,0.20)")}
+            >
+              {stats.available_years.map(yr => (
+                <option key={yr} value={yr} style={{ background: C.surfaceContainerHighest }}>{yr}</option>
+              ))}
+            </select>
+            {/* Chevron */}
+            <svg width="10" height="10" viewBox="0 0 10 10" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <polyline points="2,3 5,7 8,3" stroke="#adaaaa" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* Bars — flex layout, responsive width */}
+      {/* Bars */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: CHART_H, marginBottom: 8 }}>
         {data.map(({ month, count }, i) => {
           const isHov = hov === i;
@@ -246,22 +276,17 @@ function BeatsPerMonth({ stats }: { stats: Stats }) {
               onMouseEnter={() => count > 0 && setHov(i)}
               onMouseLeave={() => setHov(null)}
             >
-              {/* Count above bar */}
               <span style={{
                 fontSize: 11, fontFamily: "monospace", marginBottom: 4,
                 color: isHov ? C.primary : C.onSurfaceVariant,
                 opacity: count > 0 ? 1 : 0,
-                fontWeight: isHov ? 700 : 400,
-                transition: "all 0.15s",
-                lineHeight: 1,
+                fontWeight: 700, transition: "all 0.15s", lineHeight: 1,
               }}>{count > 0 ? count : ""}</span>
-              {/* Bar */}
               <div style={{
-                width: "70%",   // 70% der Zelle = Luft zwischen Balken + nicht zu breit
-                height: barH,
+                width: "72%", height: barH,
                 background: count > 0 ? C.primary : C.surfaceContainerHighest,
                 borderRadius: "2px 2px 0 0",
-                opacity: isHov ? 1 : count > 0 ? 0.72 : 0.25,
+                opacity: isHov ? 1 : count > 0 ? 0.75 : 0.2,
                 transition: "all 0.15s",
                 boxShadow: isHov ? `0 0 10px ${C.primary}50` : "none",
               }} />
@@ -276,10 +301,8 @@ function BeatsPerMonth({ stats }: { stats: Stats }) {
           <span key={month} style={{
             flex: 1, textAlign: "center", fontSize: 9,
             color: hov === i ? C.primary : C.onSurfaceVariant,
-            textTransform: "uppercase",
-            fontWeight: hov === i ? 700 : 500,
-            letterSpacing: "0.04em",
-            transition: "color 0.15s",
+            textTransform: "uppercase", fontWeight: hov === i ? 700 : 500,
+            letterSpacing: "0.04em", transition: "color 0.15s",
           }}>{monthLabel(month)}</span>
         ))}
       </div>
@@ -426,9 +449,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (year?: number) => {
     setLoading(true); setError(null);
-    try { setStats(await getStats()); }
+    try { setStats(await getStats(year)); }
     catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   };
@@ -450,7 +473,7 @@ export default function Dashboard() {
       <div style={{ textAlign: "center", maxWidth: 400 }}>
         <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Database Error</p>
         <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: 8 }}>{error}</p>
-        <button onClick={load} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>Retry</button>
+        <button onClick={() => load()} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>Retry</button>
       </div>
     </div>
   );
@@ -466,10 +489,16 @@ export default function Dashboard() {
           <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, letterSpacing: "0.05em" }}>SYSTEM STATUS: NOMINAL</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={load} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: "pointer", letterSpacing: "0.05em" }}>
+          <button onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: "pointer", letterSpacing: "0.05em" }}>
             <RefreshCw size={12} /> REFRESH
           </button>
-          <button style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", letterSpacing: "0.05em", background: "rgba(255,115,81,0.1)", color: "#ff7351" }}>
+          <button
+            onClick={async () => {
+              const res = await invoke<{found:number,imported:number,skipped:number,errors:string[]}>("scan_archive");
+              alert(`Scan complete\nFound: ${res.found}\nImported: ${res.imported}\nAlready in DB: ${res.skipped}\nErrors: ${res.errors.length}`);
+              load();
+            }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", letterSpacing: "0.05em", background: "rgba(255,115,81,0.1)", color: "#ff7351" }}>
             <Wrench size={12} /> SYSTEM REPAIR
           </button>
           <button style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.border10}`, background: "transparent", cursor: "pointer", color: C.onSurfaceVariant }}>
@@ -502,7 +531,7 @@ export default function Dashboard() {
 
           {/* Analytics Row 2 */}
           <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
-            <BeatsPerMonth stats={stats} />
+            <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr)} />
             <TopTags stats={stats} />
           </section>
 
