@@ -2,8 +2,10 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
+import Browse from "./pages/Browse";
 import Create from "./pages/Create";
-import { Browse, Studio, Settings, Support } from "./pages/Placeholder";
+import Studio from "./pages/Studio";
+import { Settings, Support } from "./pages/Placeholder";
 import { mockStats } from "./lib/mockData";
 
 export default function App() {
