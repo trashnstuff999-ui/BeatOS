@@ -154,7 +154,8 @@ fn get_stats() -> Result<Stats, String> {
 
     for tags_str in tag_rows {
         for tag in tags_str.split(',') {
-            let t = tag.trim().to_string();
+            // Normalisieren: lowercase + trim → "Guitar" == "guitar" == "GUITAR"
+            let t = tag.trim().to_lowercase();
             if !t.is_empty() {
                 *tag_map.entry(t).or_insert(0) += 1;
             }
@@ -166,7 +167,7 @@ fn get_stats() -> Result<Stats, String> {
         .map(|(tag, count)| TagCount { tag, count })
         .collect();
     top_tags.sort_by(|a, b| b.count.cmp(&a.count));
-    top_tags.truncate(10);
+    top_tags.truncate(20);
 
     let mut stmt3 = conn.prepare(
         "SELECT strftime('%Y-%m', created_date) as month, COUNT(*) as cnt

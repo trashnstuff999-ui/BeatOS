@@ -302,8 +302,8 @@ function TopTags({ stats }: { stats: Stats }) {
         <div style={{ display: "flex", gap: 10 }}>
           {(["genre","vibe","instrument"] as const).map(cat => (
             <div key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: TAG_CFG[cat].text }} />
-              <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>{cat}</span>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: TAG_CFG[cat].text }} />
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>{cat}</span>
             </div>
           ))}
         </div>
