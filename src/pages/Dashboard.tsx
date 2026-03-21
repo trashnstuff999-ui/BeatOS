@@ -112,46 +112,103 @@ function StatusBreakdown({ stats }: { stats: Stats }) {
   );
 }
 
-// ── Top 5 Keys ────────────────────────────────────────────────────────────────
+// ── Key Expansion ─────────────────────────────────────────────────────────────
+// "F#m" → "F# MINOR", "Cm" → "C MINOR", "C" → "C MAJOR", "Bb" → "BB MAJOR"
+function expandKey(raw: string): string {
+  const s = raw.trim();
+  // Detect minor: ends with 'm' (but not 'maj')
+  const isMinor = /m$/i.test(s) && !/maj/i.test(s);
+  // Root = alles ohne trailing 'm'
+  const root = isMinor ? s.slice(0, -1) : s;
+  const quality = isMinor ? "MINOR" : "MAJOR";
+  // Normalize: # bleibt, b bleibt, rest uppercase
+  const rootUp = root.charAt(0).toUpperCase() + root.slice(1);
+  return `${rootUp} ${quality}`;
+}
+
+// ── Top Keys ──────────────────────────────────────────────────────────────────
 function TopKeys({ stats }: { stats: Stats }) {
-  const keys = stats.top_keys;
-  const max  = Math.max(...keys.map(k => k.count), 1);
+  const keys     = stats.top_keys;
+  const max      = Math.max(...keys.map(k => k.count), 1);
   const [hov, setHov] = useState<number | null>(null);
-  const barColors = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444"];
+  const barColors = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
+                     "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
+                     "#8b5cf6", "#14b8a6", "#f43f5e"];
+
+  // Horizontales Scroll-Wheel innerhalb der Card
+  const scrollRef = (el: HTMLDivElement | null) => {
+    if (!el) return;
+    el.onwheel = (e) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // native horizontal scroll
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+  };
+
+  // Breite pro Bar: mindestens 52px damit Labels reinpassen
+  const BAR_W    = 52;
+  const BAR_GAP  = 10;
+  const needsScroll = keys.length > 8;
+  const totalW   = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
         <span style={{ color: C.onSurfaceVariant, fontSize: 16 }}>≡</span>
       </div>
+
       {keys.length === 0 ? (
         <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>No key data</p>
       ) : (
-        <>
-          {/* Balken — flex:1 für responsive Breite, aber max-width für Eleganz */}
-          {/* Scrollbar wenn Keys > 8 */}
-          <div style={{ overflowX: keys.length > 8 ? "auto" : "visible", paddingBottom: keys.length > 8 ? 8 : 0 }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 120, marginBottom: 16, minWidth: keys.length > 8 ? keys.length * 48 : "auto" }}>
+        /* Scroll container — wheel event handled via ref */
+        <div ref={scrollRef} style={{ overflowX: needsScroll ? "auto" : "visible", overflowY: "hidden", paddingBottom: 4,
+          scrollbarWidth: "thin", scrollbarColor: `${C.surfaceContainerHighest} transparent` }}>
+
+          {/* Chart rows */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: BAR_GAP, height: 160, marginBottom: 10, minWidth: totalW }}>
             {keys.map(({ key, count }, i) => {
-              const color = barColors[i % barColors.length];
-              const isHov = hov === i;
+              const color  = barColors[i % barColors.length];
+              const isHov  = hov === i;
+              const barH   = Math.max((count / max) * 160, 4);
               return (
-                <div key={key} style={{ flex: keys.length <= 8 ? 1 : "0 0 40px", maxWidth: 56, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 6, cursor: "pointer" }}
+                <div key={key}
+                  style={{ width: BAR_W, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 5, cursor: "pointer" }}
                   onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
-                  <span style={{ fontSize: 10, color: isHov ? color : C.onSurfaceVariant, fontFamily: "monospace", fontWeight: isHov ? 700 : 400, transition: "all 0.15s" }}>{count}</span>
-                  <div style={{ width: "100%", height: `${(count / max) * 100}%`, background: color, borderRadius: "3px 3px 0 0", minHeight: 4, opacity: isHov ? 1 : 0.75, transition: "opacity 0.15s, box-shadow 0.15s", boxShadow: isHov ? `0 0 12px ${color}60` : "none" }} />
+                  {/* Count */}
+                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: isHov ? color : C.onSurfaceVariant, transition: "all 0.15s", lineHeight: 1 }}>
+                    {count}
+                  </span>
+                  {/* Bar — volle Breite des Containers */}
+                  <div style={{
+                    width: "100%", height: barH,
+                    background: color, borderRadius: "3px 3px 0 0",
+                    opacity: isHov ? 1 : 0.78,
+                    transition: "opacity 0.15s, box-shadow 0.15s",
+                    boxShadow: isHov ? `0 0 14px ${color}70` : "none",
+                  }} />
                 </div>
               );
             })}
           </div>
-          <div style={{ display: "flex", gap: 12, minWidth: keys.length > 8 ? keys.length * 48 : "auto" }}>
+
+          {/* Labels — ausgeschrieben, ALL CAPS */}
+          <div style={{ display: "flex", gap: BAR_GAP, minWidth: totalW }}>
             {keys.map(({ key }, i) => (
-              <span key={key} style={{ flex: keys.length <= 8 ? 1 : "0 0 40px", maxWidth: 56, textAlign: "center", fontSize: 11, fontWeight: 600, color: hov === i ? barColors[i % barColors.length] : C.onSurfaceVariant, transition: "color 0.15s" }}>{key}</span>
+              <span key={key} style={{
+                width: BAR_W, flexShrink: 0,
+                textAlign: "center", fontSize: 9, fontWeight: 700,
+                color: hov === i ? barColors[i % barColors.length] : C.onSurfaceVariant,
+                transition: "color 0.15s",
+                lineHeight: 1.2,
+                // Zweizeilig wenn nötig
+                whiteSpace: "normal", wordBreak: "break-word",
+              }}>
+                {expandKey(key)}
+              </span>
             ))}
           </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
