@@ -1,9 +1,17 @@
-// src/pages/Dashboard.tsx — Live DB Version
+// src/pages/Dashboard.tsx — Live DB Version with Centralized Tag System
 import { useState, useEffect } from "react";
 import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play } from "lucide-react";
 import { getStats, normalizeStatus, type Stats } from "../lib/Database";
 import { invoke } from "@tauri-apps/api/core";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Import Centralized Tag System
+// ═══════════════════════════════════════════════════════════════════════════
+import { getTagColors, TAG_COLORS } from "../lib/tags";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Design Tokens
+// ═══════════════════════════════════════════════════════════════════════════
 const C = {
   background:             "#0e0e0e",
   surfaceContainerLow:    "#131313",
@@ -248,20 +256,16 @@ function BeatsPerMonth({ stats, onYearChange }: {
                 borderRadius: 6, padding: "4px 28px 4px 10px",
                 fontSize: 11, fontWeight: 700, color: C.primary,
                 appearance: "none", cursor: "pointer", outline: "none",
-                fontFamily: "Inter, sans-serif",
-                transition: "border-color 0.15s",
               }}
-              onFocus={e => (e.currentTarget.style.borderColor = C.primary)}
-              onBlur={e => (e.currentTarget.style.borderColor = "rgba(72,72,71,0.20)")}
             >
-              {stats.available_years.map(yr => (
-                <option key={yr} value={yr} style={{ background: C.surfaceContainerHighest }}>{yr}</option>
+              {stats.available_years.map(y => (
+                <option key={y} value={y} style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>{y}</option>
               ))}
             </select>
             {/* Chevron */}
-            <svg width="10" height="10" viewBox="0 0 10 10" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-              <polyline points="2,3 5,7 8,3" stroke="#adaaaa" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-            </svg>
+            <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
           </div>
         </div>
       </div>
@@ -270,23 +274,25 @@ function BeatsPerMonth({ stats, onYearChange }: {
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: CHART_H, marginBottom: 8 }}>
         {data.map(({ month, count }, i) => {
           const isHov = hov === i;
-          const barH  = count > 0 ? Math.max((count / max) * CHART_H, 4) : 2;
+          const barH = count > 0 ? Math.max((count / max) * CHART_H, 4) : 0;
           return (
-            <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", cursor: count > 0 ? "pointer" : "default" }}
-              onMouseEnter={() => count > 0 && setHov(i)}
-              onMouseLeave={() => setHov(null)}
-            >
+            <div key={month}
+              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: "pointer", padding: "0 2px" }}
+              onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
+              {/* Count */}
               <span style={{
-                fontSize: 11, fontFamily: "monospace", marginBottom: 4,
+                fontSize: 10, fontWeight: 700, fontFamily: "monospace",
                 color: isHov ? C.primary : C.onSurfaceVariant,
-                opacity: count > 0 ? 1 : 0,
-                fontWeight: 700, transition: "all 0.15s", lineHeight: 1,
-              }}>{count > 0 ? count : ""}</span>
+                opacity: isHov || count > 0 ? 1 : 0.3,
+                transition: "all 0.15s", lineHeight: 1,
+              }}>
+                {count || "–"}
+              </span>
+              {/* Bar */}
               <div style={{
-                width: "72%", height: barH,
-                background: count > 0 ? C.primary : C.surfaceContainerHighest,
-                borderRadius: "2px 2px 0 0",
-                opacity: isHov ? 1 : count > 0 ? 0.75 : 0.2,
+                width: "100%", height: barH,
+                background: C.primary, borderRadius: "3px 3px 0 0",
+                opacity: isHov ? 1 : 0.72,
                 transition: "all 0.15s",
                 boxShadow: isHov ? `0 0 10px ${C.primary}50` : "none",
               }} />
@@ -310,69 +316,9 @@ function BeatsPerMonth({ stats, onYearChange }: {
   );
 }
 
-// ── Tag Kategorisierung ───────────────────────────────────────────────────────
-// GENRE: Wortstamm-Suche — "emo-trap" enthält "trap" → Genre
-// Reihenfolge: Genre zuerst prüfen, dann Instrument, dann Vibe
-const GENRE_KW = [
-  // Trap-Familie
-  "trap","phonk","drill","mumble",
-  // Rock/Metal-Familie
-  "rock","metal","punk","grunge","hardcore","emo","screamo","alternative","indie",
-  // Electronic
-  "edm","house","techno","trance","dubstep","dnb","drumstep","garage","grime",
-  "future","bass","wavvy","wave","ambient","lofi","lo-fi","chillwave","vaporwave",
-  "synthwave","retrowave","darkwave","coldwave",
-  // Hip-Hop / Urban
-  "rap","hiphop","hip-hop","rnb","r&b","soul","funk","swing","neo-soul","afrobeats",
-  "afrotrap","afropop","afro","dancehall","reggaeton","reggae","latin","dembow",
-  // Pop-Familie
-  "pop","bubblegum","electropop","hyperpop","darkpop","art-pop","bedroom",
-  // Jazz / Classical
-  "jazz","blues","gospel","classical","orchestral","cinematic","soundtrack",
-  "neo-classical","post-classical",
-  // Weitere Genres
-  "country","folk","bluegrass","acoustic","flamenco","bossa","samba",
-  "boom-bap","cloud","pluggnb","rage","opium","gloom",
-];
-
-// INSTRUMENT: konkrete Instrumente & Sounds
-const INSTR_KW = [
-  "guitar","piano","violin","viola","cello","bass","drums","percussion",
-  "808","synth","synthesizer","keys","keyboard","organ","trumpet","saxophone",
-  "sax","flute","clarinet","trombone","french-horn","strings","brass","woodwind",
-  "choir","vocal","vocals","voice","pad","pluck","lead","arp","arpeggio",
-  "sample","loop","chord","melody","riff","lick","stab","horn",
-];
-
-// VIBE: ausschließlich Emotionen & Stimmungen — keine Musik-Begriffe
-const VIBE_KW = [
-  "happy","sad","angry","fear","joy","disgust","surprise","trust","anticipation",
-  "energetic","calm","chill","relaxed","melancholic","nostalgic","hopeful",
-  "romantic","lonely","aggressive","peaceful","dark","light","heavy","soft",
-  "uplifting","depressing","euphoric","bittersweet","triumphant","mysterious",
-  "tense","anxious","confident","powerful","raw","emotional","deep","dreamy",
-  "hype","bounce","smooth","hard","epic","moody","atmospheric","intense",
-];
-
-function getTagCat(tag: string): "genre" | "vibe" | "instrument" | "other" {
-  // Normalisieren: lowercase, Bindestriche/Underscores/Leerzeichen als Trennzeichen behalten
-  // Dann Wortstamm-Suche: "emo-trap" → ["emo","trap"] → enthält "trap" → genre
-  const normalized = tag.toLowerCase();
-  // Genre hat Priorität — prüfe ob irgendein Genre-Keyword im Tag vorkommt
-  if (GENRE_KW.some(k => normalized.includes(k))) return "genre";
-  if (INSTR_KW.some(k => normalized.includes(k))) return "instrument";
-  if (VIBE_KW.some(k => normalized.includes(k)))  return "vibe";
-  return "other";
-}
-
-const TAG_CFG = {
-  genre:      { text: "#fda124", border: "rgba(253,161,36,0.30)", bg: "rgba(253,161,36,0.10)" },
-  vibe:       { text: "#60a5fa", border: "rgba(96,165,250,0.30)", bg: "rgba(96,165,250,0.10)" },
-  instrument: { text: "#34d399", border: "rgba(52,211,153,0.30)", bg: "rgba(52,211,153,0.10)" },
-  other:      { text: "#c084fc", border: "rgba(192,132,252,0.30)",bg: "rgba(192,132,252,0.10)"},
-} as const;
-
-// ── Top Tags ──────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// Top Tags — Now using centralized tag system from tags.ts
+// ══════════════════════════════════════════════════════════════════════════════
 function TopTags({ stats }: { stats: Stats }) {
   return (
     <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, height: "100%", transition: "border-color 0.2s" }} {...cardHover}>
@@ -380,9 +326,9 @@ function TopTags({ stats }: { stats: Stats }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Tags</h4>
         <div style={{ display: "flex", gap: 10 }}>
-          {(["genre","vibe","instrument"] as const).map(cat => (
+          {(["genre", "vibe", "instrument"] as const).map(cat => (
             <div key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: TAG_CFG[cat].text }} />
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: TAG_COLORS[cat].text }} />
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>{cat}</span>
             </div>
           ))}
@@ -391,11 +337,23 @@ function TopTags({ stats }: { stats: Stats }) {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {stats.top_tags.map(({ tag }) => {
-          const cat = getTagCat(tag);
-          const cfg = TAG_CFG[cat];
+          // Use centralized getTagColors from tags.ts
+          const colors = getTagColors(tag);
           return (
             <span key={tag}
-              style={{ padding: "5px 11px", background: cfg.bg, borderRadius: 9999, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: cfg.text, border: `1px solid ${cfg.border}`, cursor: "pointer", transition: "all 0.15s" }}
+              style={{ 
+                padding: "5px 11px", 
+                background: colors.bg, 
+                borderRadius: 9999, 
+                fontSize: 10, 
+                fontWeight: 700, 
+                textTransform: "uppercase", 
+                letterSpacing: "0.08em", 
+                color: colors.text, 
+                border: `1px solid ${colors.border}`, 
+                cursor: "pointer", 
+                transition: "all 0.15s" 
+              }}
               onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.25)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
               onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)";   e.currentTarget.style.transform = "translateY(0)"; }}
             >

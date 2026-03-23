@@ -84,7 +84,7 @@ function ExportBadge({ status }: { status: ExportStatus }) {
 }
 
 // ── Project Inspector (Right Panel) ──────────────────────────────────────────
-function ProjectInspector({ project, onClose }: { project: Project; onClose: () => void }) {
+function ProjectInspector({ project }: { project: Project; onClose: () => void }) {
   const [exportStatus, setExportStatus] = useState<ExportStatus>(project.exportStatus);
   const [notes, setNotes]               = useState(project.notes);
   const [priority, setPriority]         = useState(project.priority);

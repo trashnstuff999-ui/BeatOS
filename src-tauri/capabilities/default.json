@@ -5,6 +5,19 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-read",
+    "fs:allow-write",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$DOCUMENT/**",
+        "$HOME/**",
+        "C:\\**",
+        "D:\\**"
+      ]
+    }
   ]
 }
