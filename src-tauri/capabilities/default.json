@@ -7,6 +7,7 @@
     "core:default",
     "opener:default",
     "dialog:default",
+    
     "fs:default",
     "fs:allow-read",
     "fs:allow-write",
@@ -15,9 +16,16 @@
       "allow": [
         "$DOCUMENT/**",
         "$HOME/**",
-        "C:\\**",
-        "D:\\**"
+        "C:/**",
+        "D:/**",
+        "E:/**"
       ]
+    },
+    {
+      "identifier": "fs:read-all"
     }
-  ]
+  ],
+  "security": {
+    "csp": null
+  }
 }

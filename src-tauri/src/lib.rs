@@ -3,24 +3,73 @@ use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Once;
 
-const DB_PATH: &str = r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\beats.db";
+// ══════════════════════════════════════════════════════════════════════════════
+// DATABASE CONFIGURATION
+// ══════════════════════════════════════════════════════════════════════════════
 
+/// Database path - can be changed for different environments
+/// TODO: Make this configurable via settings or environment variable
+fn get_db_path() -> &'static str {
+    r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\beats.db"
+}
+
+/// Open database connection (fast, no schema operations)
 fn open_db() -> SqlResult<Connection> {
-    let conn = Connection::open(DB_PATH)?;
-    // Ensure custom_tags table exists
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS custom_tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tag TEXT UNIQUE NOT NULL,
-            display_name TEXT NOT NULL,
-            category TEXT NOT NULL CHECK (category IN ('genre', 'vibe', 'instrument', 'other')),
-            usage_count INTEGER DEFAULT 1,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )",
-        [],
-    )?;
-    Ok(conn)
+    Connection::open(get_db_path())
+}
+
+/// Initialize database schema - called ONCE at app startup
+static DB_INIT: Once = std::sync::Once::new();
+static mut DB_INIT_ERROR: Option<String> = None;
+
+fn init_db() -> Result<(), String> {
+    let mut init_error: Option<String> = None;
+    
+    DB_INIT.call_once(|| {
+        match open_db() {
+            Ok(conn) => {
+                // Create custom_tags table if not exists
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS custom_tags (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        tag TEXT UNIQUE NOT NULL,
+                        display_name TEXT NOT NULL,
+                        category TEXT NOT NULL CHECK (category IN ('genre', 'vibe', 'instrument', 'other')),
+                        usage_count INTEGER DEFAULT 1,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create custom_tags table: {}", e));
+                }
+                
+                // Future migrations can be added here:
+                // - Add new columns
+                // - Create indexes
+                // - Data migrations
+            }
+            Err(e) => {
+                init_error = Some(format!("Failed to open database: {}", e));
+            }
+        }
+    });
+    
+    // Store error for later retrieval (using unsafe because of static mut)
+    if let Some(ref e) = init_error {
+        unsafe { DB_INIT_ERROR = Some(e.clone()); }
+        return Err(e.clone());
+    }
+    
+    // Check if previous init failed
+    unsafe {
+        if let Some(ref e) = DB_INIT_ERROR {
+            return Err(e.clone());
+        }
+    }
+    
+    Ok(())
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -679,34 +728,43 @@ fn check_beat_duplicate(
         });
     }
     
-    // 2. Prüfe ob Name + Key + BPM Kombination existiert
+    // 2. Prüfe ob Name + Key + BPM Kombination existiert (fully parametrized)
     let title_lower = title.to_lowercase();
     let key_lower = key.as_ref().map(|k| k.to_lowercase());
     
-    let mut query = String::from(
-        "SELECT id, name FROM beats WHERE LOWER(name) = ?1"
-    );
-    
-    // Key-Vergleich (NULL-safe)
-    if key_lower.is_some() {
-        query.push_str(" AND LOWER(key) = ?2");
-    } else {
-        query.push_str(" AND (key IS NULL OR key = '')");
-    }
-    
-    // BPM-Vergleich (NULL-safe, mit Toleranz von ±2)
-    if let Some(b) = bpm {
-        query.push_str(&format!(" AND bpm BETWEEN {} AND {}", b - 2, b + 2));
-    } else {
-        query.push_str(" AND (bpm IS NULL OR bpm = '')");
-    }
-    
-    let existing_by_combo: Option<(String, String)> = if let Some(ref k) = key_lower {
-        conn.query_row(&query, [&title_lower, k], |row| Ok((row.get(0)?, row.get(1)?)))
-            .ok()
-    } else {
-        conn.query_row(&query, [&title_lower], |row| Ok((row.get(0)?, row.get(1)?)))
-            .ok()
+    let existing_by_combo: Option<(String, String)> = match (&key_lower, bpm) {
+        // Both key and bpm provided
+        (Some(k), Some(b)) => {
+            conn.query_row(
+                "SELECT id, name FROM beats WHERE LOWER(name) = ?1 AND LOWER(key) = ?2 AND bpm BETWEEN ?3 AND ?4",
+                rusqlite::params![&title_lower, k, b - 2, b + 2],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ).ok()
+        },
+        // Only key provided
+        (Some(k), None) => {
+            conn.query_row(
+                "SELECT id, name FROM beats WHERE LOWER(name) = ?1 AND LOWER(key) = ?2 AND (bpm IS NULL OR bpm = '')",
+                rusqlite::params![&title_lower, k],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ).ok()
+        },
+        // Only bpm provided
+        (None, Some(b)) => {
+            conn.query_row(
+                "SELECT id, name FROM beats WHERE LOWER(name) = ?1 AND (key IS NULL OR key = '') AND bpm BETWEEN ?2 AND ?3",
+                rusqlite::params![&title_lower, b - 2, b + 2],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ).ok()
+        },
+        // Neither provided
+        (None, None) => {
+            conn.query_row(
+                "SELECT id, name FROM beats WHERE LOWER(name) = ?1 AND (key IS NULL OR key = '') AND (bpm IS NULL OR bpm = '')",
+                rusqlite::params![&title_lower],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ).ok()
+        },
     };
     
     if let Some((existing_id, existing_name)) = existing_by_combo {
@@ -1256,11 +1314,6 @@ fn search_custom_tags(query: String) -> Result<Vec<CustomTag>, String> {
 // EXISTING COMMANDS (UNVERÄNDERT)
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}!", name)
-}
-
 // ── Scan & Import ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1339,11 +1392,29 @@ fn scan_archive() -> Result<ScanResult, String> {
         let year_path = year_entry.path();
         if !year_path.is_dir() { continue; }
 
-        for month_entry in std::fs::read_dir(&year_path).unwrap_or_else(|_| panic!()).filter_map(|e| e.ok()) {
+        // Graceful handling: skip unreadable month directories instead of crashing
+        let month_entries = match std::fs::read_dir(&year_path) {
+            Ok(entries) => entries,
+            Err(e) => {
+                errors.push(format!("Cannot read year dir {:?}: {}", year_path, e));
+                continue;
+            }
+        };
+
+        for month_entry in month_entries.filter_map(|e| e.ok()) {
             let month_path = month_entry.path();
             if !month_path.is_dir() { continue; }
 
-            for beat_entry in std::fs::read_dir(&month_path).unwrap_or_else(|_| panic!()).filter_map(|e| e.ok()) {
+            // Graceful handling: skip unreadable beat directories instead of crashing
+            let beat_entries = match std::fs::read_dir(&month_path) {
+                Ok(entries) => entries,
+                Err(e) => {
+                    errors.push(format!("Cannot read month dir {:?}: {}", month_path, e));
+                    continue;
+                }
+            };
+
+            for beat_entry in beat_entries.filter_map(|e| e.ok()) {
                 let beat_path = beat_entry.path();
                 if !beat_path.is_dir() { continue; }
 
@@ -1705,38 +1776,59 @@ fn get_beats(
     offset: Option<i64>,
 ) -> Result<Vec<Beat>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    let lim    = limit.unwrap_or(50);
-    let off    = offset.unwrap_or(0);
-    let search = search.unwrap_or_default().to_lowercase();
-
-    let mut sql = String::from(
-        "SELECT id, name, path, bpm, key, status, tags, favorite,
-                created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats WHERE 1=1",
-    );
-
-    if !search.is_empty() {
-        sql.push_str(&format!(
-            " AND (LOWER(name) LIKE '%{s}%' OR LOWER(id) LIKE '%{s}%' OR LOWER(key) LIKE '%{s}%' OR LOWER(tags) LIKE '%{s}%')",
-            s = search
-        ));
-    }
-
-    if let Some(ref s) = status_filter {
-        if s != "all" {
-            sql.push_str(&format!(" AND LOWER(status) = LOWER('{}')", s));
+    let lim = limit.unwrap_or(50);
+    let off = offset.unwrap_or(0);
+    
+    // Build query with parameter placeholders
+    let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let mut param_idx = 1;
+    
+    // Search filter (parametrized)
+    if let Some(ref s) = search {
+        let search_lower = s.to_lowercase();
+        if !search_lower.is_empty() {
+            let search_pattern = format!("%{}%", search_lower);
+            where_clauses.push(format!(
+                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
+                idx = param_idx
+            ));
+            params.push(Box::new(search_pattern));
+            param_idx += 1;
         }
     }
-
-    if only_favs {
-        sql.push_str(" AND favorite = 1");
+    
+    // Status filter (parametrized)
+    if let Some(ref s) = status_filter {
+        if s != "all" {
+            where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
+            params.push(Box::new(s.clone()));
+            param_idx += 1;
+        }
     }
-
-    sql.push_str(&format!(" ORDER BY CAST(id AS INTEGER) DESC LIMIT {} OFFSET {}", lim, off));
-
+    
+    // Favorites filter (no user input, safe)
+    if only_favs {
+        where_clauses.push("favorite = 1".to_string());
+    }
+    
+    let where_sql = where_clauses.join(" AND ");
+    
+    // LIMIT and OFFSET are i64, safe to format directly
+    let sql = format!(
+        "SELECT id, name, path, bpm, key, status, tags, favorite,
+                created_date, modified_date, notes, sold_to, has_artwork, has_video
+         FROM beats WHERE {} ORDER BY CAST(id AS INTEGER) DESC LIMIT {} OFFSET {}",
+        where_sql, lim, off
+    );
+    
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    
+    // Convert params to references
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    
     let beats: Vec<Beat> = stmt
-        .query_map([], row_to_beat)
+        .query_map(param_refs.as_slice(), row_to_beat)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
@@ -1756,7 +1848,7 @@ fn get_beats_paginated(
     search: Option<String>,
     status_filter: Option<String>,
     only_favs: bool,
-    key_filter: Option<Vec<String>>,  // Multi-select keys
+    key_filter: Option<Vec<String>>,
     bpm_min: Option<i32>,
     bpm_max: Option<i32>,
     sort_column: Option<String>,
@@ -1767,88 +1859,118 @@ fn get_beats_paginated(
     let conn = open_db().map_err(|e| e.to_string())?;
     let lim = limit.unwrap_or(50);
     let off = offset.unwrap_or(0);
-    let search = search.unwrap_or_default().to_lowercase();
     
-    // Build WHERE clause
+    // Build WHERE clause with parameterized queries
     let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let mut param_idx = 1;
     
-    if !search.is_empty() {
-        where_clauses.push(format!(
-            "(LOWER(name) LIKE '%{s}%' OR LOWER(id) LIKE '%{s}%' OR LOWER(key) LIKE '%{s}%' OR LOWER(tags) LIKE '%{s}%')",
-            s = search
-        ));
-    }
-    
-    if let Some(ref s) = status_filter {
-        if s != "all" {
-            where_clauses.push(format!("LOWER(status) = LOWER('{}')", s));
+    // Search filter (parametrized)
+    if let Some(ref s) = search {
+        let search_lower = s.to_lowercase();
+        if !search_lower.is_empty() {
+            let search_pattern = format!("%{}%", search_lower);
+            where_clauses.push(format!(
+                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
+                idx = param_idx
+            ));
+            params.push(Box::new(search_pattern));
+            param_idx += 1;
         }
     }
     
+    // Status filter (parametrized)
+    if let Some(ref s) = status_filter {
+        if s != "all" {
+            where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
+            params.push(Box::new(s.clone()));
+            param_idx += 1;
+        }
+    }
+    
+    // Favorites filter (no user input, safe)
     if only_favs {
         where_clauses.push("favorite = 1".to_string());
     }
     
-    // Key filter (multi-select) - normalize and match
+    // Key filter (parametrized) - each key gets its own parameter
     if let Some(ref keys) = key_filter {
         if !keys.is_empty() {
-            let key_conditions: Vec<String> = keys.iter().map(|k| {
-                // Normalize: remove spaces, convert "minor"/"min" to "m", remove "major"/"maj"
-                let normalized = k.to_lowercase()
+            let mut key_conditions: Vec<String> = vec![];
+            for key in keys {
+                // Normalize the key
+                let normalized = key.to_lowercase()
                     .replace(" ", "")
                     .replace("minor", "m")
                     .replace("min", "m")
                     .replace("major", "")
                     .replace("maj", "");
-                format!(
-                    "(LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(key, ' ', ''), 'minor', 'm'), 'min', 'm'), 'major', ''), 'maj', '')) = '{}')",
-                    normalized
-                )
-            }).collect();
+                
+                key_conditions.push(format!(
+                    "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(key, ' ', ''), 'minor', 'm'), 'min', 'm'), 'major', ''), 'maj', '')) = ?{}",
+                    param_idx
+                ));
+                params.push(Box::new(normalized));
+                param_idx += 1;
+            }
             where_clauses.push(format!("({})", key_conditions.join(" OR ")));
         }
     }
     
-    // BPM range filter
+    // BPM range filter (i32 values, safe to use directly but let's parametrize anyway)
     if let Some(min) = bpm_min {
-        where_clauses.push(format!("bpm >= {}", min));
+        where_clauses.push(format!("bpm >= ?{}", param_idx));
+        params.push(Box::new(min));
+        param_idx += 1;
     }
     if let Some(max) = bpm_max {
-        where_clauses.push(format!("bpm <= {}", max));
+        where_clauses.push(format!("bpm <= ?{}", param_idx));
+        params.push(Box::new(max));
+        // param_idx += 1; // Not needed after last use
     }
     
     let where_sql = where_clauses.join(" AND ");
     
-    // Count total matching
+    // Count total matching (reuse same params)
     let count_sql = format!("SELECT COUNT(*) FROM beats WHERE {}", where_sql);
-    let total_count: i64 = conn.query_row(&count_sql, [], |r| r.get(0))
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    
+    let total_count: i64 = conn
+        .query_row(&count_sql, param_refs.as_slice(), |r| r.get(0))
         .map_err(|e| e.to_string())?;
     
-    // Build ORDER BY clause
+    // WHITELIST validation for sort_column and sort_direction
     let sort_col = sort_column.unwrap_or_else(|| "id".to_string());
-    let sort_dir = sort_direction.unwrap_or_else(|| "desc".to_string()).to_uppercase();
+    let sort_dir_input = sort_direction.unwrap_or_else(|| "desc".to_string()).to_uppercase();
     
-    // Validate and map sort column
-    let order_by = match sort_col.as_str() {
-        "id" => format!("CAST(id AS INTEGER) {}", sort_dir),
-        "name" => format!("LOWER(name) {}", sort_dir),
-        "bpm" => format!("COALESCE(bpm, 0) {}", sort_dir),
-        "key" => format!("COALESCE(LOWER(key), 'zzz') {}", sort_dir),
-        "status" => format!("COALESCE(status, 'zzz') {}", sort_dir),
-        _ => format!("CAST(id AS INTEGER) {}", sort_dir),
+    // Whitelist: only allow known column names
+    let order_expr = match sort_col.as_str() {
+        "id" => "CAST(id AS INTEGER)",
+        "name" => "LOWER(name)",
+        "bpm" => "COALESCE(bpm, 0)",
+        "key" => "COALESCE(LOWER(key), 'zzz')",
+        "status" => "COALESCE(status, 'zzz')",
+        _ => "CAST(id AS INTEGER)",  // Default fallback, ignore invalid input
     };
     
-    // Build final query
+    // Whitelist: only allow ASC or DESC
+    let sort_dir = match sort_dir_input.as_str() {
+        "ASC" => "ASC",
+        "DESC" => "DESC",
+        _ => "DESC",  // Default fallback
+    };
+    
+    // Build final query (LIMIT/OFFSET are i64, safe)
     let sql = format!(
         "SELECT id, name, path, bpm, key, status, tags, favorite,
                 created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
-        where_sql, order_by, lim, off
+         FROM beats WHERE {} ORDER BY {} {} LIMIT {} OFFSET {}",
+        where_sql, order_expr, sort_dir, lim, off
     );
     
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let beats: Vec<Beat> = stmt
-        .query_map([], row_to_beat)
+        .query_map(param_refs.as_slice(), row_to_beat)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
@@ -2203,18 +2325,177 @@ fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> {
     Ok(None)
 }
 
+/// Get cover image as base64 data URL - OPTIMIZED single call
+/// Combines path lookup + file read into one command
+#[tauri::command]
+fn get_beat_cover_base64(beat_path: String) -> Result<Option<String>, String> {
+    let base_path = Path::new(&beat_path);
+    let visuals_dir = base_path.join("02_VISUALS");
+    
+    if !visuals_dir.exists() {
+        return Ok(None);
+    }
+    
+    let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
+    
+    let entries: Vec<_> = match std::fs::read_dir(&visuals_dir) {
+        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
+        Err(_) => return Ok(None),
+    };
+    
+    // Filter to image files
+    let images: Vec<_> = entries.into_iter()
+        .filter(|e| {
+            let path = e.path();
+            if !path.is_file() { return false; }
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                image_extensions.contains(&ext_lower.as_str())
+            } else {
+                false
+            }
+        })
+        .collect();
+    
+    if images.is_empty() {
+        return Ok(None);
+    }
+    
+    // Priority: file with "cover" in name
+    let cover_file = images.iter()
+        .find(|e| e.file_name().to_string_lossy().to_lowercase().contains("cover"))
+        .or_else(|| images.first());
+    
+    let cover_path = match cover_file {
+        Some(e) => e.path(),
+        None => return Ok(None),
+    };
+    
+    // Read file
+    let bytes = match std::fs::read(&cover_path) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    
+    // Determine MIME type
+    let ext = cover_path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png")
+        .to_lowercase();
+    
+    let mime_type = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/jpeg",
+    };
+    
+    // Encode as base64
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let encoded = STANDARD.encode(&bytes);
+    
+    Ok(Some(format!("data:{};base64,{}", mime_type, encoded)))
+}
+
+/// Get audio file info for streaming - returns path and format
+#[derive(Debug, Serialize, Deserialize)]
+struct StreamingAudioInfo {
+    path: String,
+    format: String,
+}
+
+#[tauri::command]
+fn get_beat_audio_for_streaming(beat_path: String) -> Result<Option<StreamingAudioInfo>, String> {
+    let base_path = Path::new(&beat_path);
+    let audio_dir = base_path.join("01_AUDIO");
+    
+    let search_dir = if audio_dir.exists() { audio_dir } else { base_path.to_path_buf() };
+    
+    if !search_dir.exists() {
+        return Ok(None);
+    }
+    
+    let entries: Vec<_> = match std::fs::read_dir(&search_dir) {
+        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
+        Err(_) => return Ok(None),
+    };
+    
+    let audio_files: Vec<_> = entries.into_iter()
+        .filter(|e| {
+            let path = e.path();
+            if !path.is_file() { return false; }
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                ext_lower == "mp3" || ext_lower == "wav" || ext_lower == "m4a" || ext_lower == "flac"
+            } else {
+                false
+            }
+        })
+        .collect();
+    
+    if audio_files.is_empty() {
+        return Ok(None);
+    }
+    
+    // Priority 1: Untagged MP3
+    for entry in &audio_files {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if name.contains("untagged") && ext == "mp3" {
+            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
+        }
+    }
+    
+    // Priority 2: Any Untagged
+    for entry in &audio_files {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if name.contains("untagged") {
+            let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("mp3").to_lowercase();
+            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: ext }));
+        }
+    }
+    
+    // Priority 3: Tagged MP3
+    for entry in &audio_files {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if name.contains("tagged") && !name.contains("untagged") && ext == "mp3" {
+            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
+        }
+    }
+    
+    // Priority 4: Any MP3
+    for entry in &audio_files {
+        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if ext == "mp3" {
+            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
+        }
+    }
+    
+    // Priority 5: First audio file
+    let first = &audio_files[0];
+    let ext = first.path().extension().and_then(|e| e.to_str()).unwrap_or("mp3").to_lowercase();
+    Ok(Some(StreamingAudioInfo { path: first.path().to_string_lossy().to_string(), format: ext }))
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ENTRY POINT
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize database schema ONCE at startup
+    if let Err(e) = init_db() {
+        eprintln!("WARNING: Database initialization failed: {}", e);
+        // Continue anyway - individual commands will fail with proper errors
+    }
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             get_stats,
             get_beats,
             get_beats_paginated,
@@ -2244,6 +2525,8 @@ pub fn run() {
             get_beat_audio_path,
             get_beat_cover_path,
             read_audio_file,
+            get_beat_cover_base64,
+            get_beat_audio_for_streaming,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

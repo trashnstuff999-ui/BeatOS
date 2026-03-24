@@ -35,7 +35,7 @@ export function DetailPanel({
   const seekBarRef = useRef<HTMLDivElement>(null);
   const volumeBarRef = useRef<HTMLDivElement>(null);
 
-  // ─── Audio Player Hook ─────────────────────────────────────────────────────
+  // Audio Player - note: coverUrl (streaming, not base64)
   const {
     isPlaying,
     isLoading,
@@ -54,7 +54,7 @@ export function DetailPanel({
     setVolume,
   } = useAudioPlayer({ beatPath: beat.path });
 
-  // ─── Seek Handler ──────────────────────────────────────────────────────────
+  // Handlers
   const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!seekBarRef.current) return;
     const rect = seekBarRef.current.getBoundingClientRect();
@@ -62,21 +62,12 @@ export function DetailPanel({
     seekPercent(Math.max(0, Math.min(100, percent)));
   };
 
-  // ─── Volume Handler ────────────────────────────────────────────────────────
   const handleVolumeClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!volumeBarRef.current) return;
     const rect = volumeBarRef.current.getBoundingClientRect();
     const vol = (e.clientX - rect.left) / rect.width;
     setVolume(Math.max(0, Math.min(1, vol)));
   };
-
-  // ─── Status Items ──────────────────────────────────────────────────────────
-  const statusItems: { key: BeatStatus; label: string }[] = [
-    { key: "idea", label: "Idea" },
-    { key: "wip", label: "WIP" },
-    { key: "finished", label: "Fin" },
-    { key: "sold", label: "Sold" },
-  ];
 
   const handleOpenFolder = async () => {
     if (beat.path) {
@@ -87,6 +78,13 @@ export function DetailPanel({
       }
     }
   };
+
+  const statusItems: { key: BeatStatus; label: string }[] = [
+    { key: "idea", label: "Idea" },
+    { key: "wip", label: "WIP" },
+    { key: "finished", label: "Fin" },
+    { key: "sold", label: "Sold" },
+  ];
 
   return (
     <aside style={{
@@ -105,33 +103,15 @@ export function DetailPanel({
           Player Section with Cover Art
       ═══════════════════════════════════════════════════════════════════════ */}
       <div style={{ position: "relative", flexShrink: 0 }}>
-        {/* Cover Art Container (1:1 aspect ratio) */}
+        {/* Cover Art Container (1:1) */}
         <div style={{
           position: "relative",
           width: "100%",
-          paddingTop: "100%", // 1:1 aspect ratio
+          paddingTop: "100%",
           background: C.surfaceContainerLowest,
           overflow: "hidden",
         }}>
-          {/* Cover Image or Placeholder */}
-          {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={beat.name}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-              onError={(e) => {
-                // Hide broken image, placeholder will show through
-                e.currentTarget.style.display = "none";
-              }}
-            />
-          ) : null}
-          {/* Placeholder (always rendered behind image) */}
+          {/* Placeholder (always behind) */}
           <div style={{
             position: "absolute",
             inset: 0,
@@ -144,12 +124,33 @@ export function DetailPanel({
             <Music size={64} color="rgba(255,255,255,0.1)" strokeWidth={1} />
           </div>
 
+          {/* Cover Image */}
+          {coverUrl && (
+            <img
+              src={coverUrl}
+              alt={beat.name}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                zIndex: 1,
+              }}
+              onError={(e) => {
+                // Hide image on error, placeholder shows through
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          )}
+
           {/* Gradient Overlay */}
           <div style={{
             position: "absolute",
             inset: 0,
             background: "linear-gradient(0deg, rgba(14,14,14,1) 0%, rgba(14,14,14,0.4) 40%, rgba(14,14,14,0) 70%)",
             pointerEvents: "none",
+            zIndex: 2,
           }} />
 
           {/* Close Button */}
@@ -166,12 +167,13 @@ export function DetailPanel({
               padding: 8,
               cursor: "pointer",
               display: "flex",
+              zIndex: 10,
             }}
           >
             <X size={16} color="rgba(255,255,255,0.8)" />
           </button>
 
-          {/* Play/Pause Button - Centered */}
+          {/* Play/Pause Button */}
           <button
             onClick={togglePlay}
             disabled={isLoading || !!audioError}
@@ -191,17 +193,8 @@ export function DetailPanel({
               justifyContent: "center",
               boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
               opacity: audioError ? 0.5 : 1,
-              transition: "transform 0.15s, box-shadow 0.15s",
-            }}
-            onMouseEnter={e => {
-              if (!isLoading && !audioError) {
-                e.currentTarget.style.transform = "translate(-50%, -50%) scale(1.05)";
-                e.currentTarget.style.boxShadow = "0 6px 32px rgba(253,161,36,0.4)";
-              }
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = "translate(-50%, -50%) scale(1)";
-              e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.5)";
+              zIndex: 10,
+              transition: "transform 0.15s",
             }}
           >
             {isLoading ? (
@@ -213,7 +206,7 @@ export function DetailPanel({
             )}
           </button>
 
-          {/* Controls Overlay (Bottom) */}
+          {/* Controls Overlay */}
           <div style={{
             position: "absolute",
             bottom: 0,
@@ -223,6 +216,7 @@ export function DetailPanel({
             display: "flex",
             flexDirection: "column",
             gap: 12,
+            zIndex: 10,
           }}>
             {/* Seek Bar */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -237,7 +231,6 @@ export function DetailPanel({
                   position: "relative",
                 }}
               >
-                {/* Progress */}
                 <div style={{
                   position: "absolute",
                   left: 0,
@@ -246,9 +239,7 @@ export function DetailPanel({
                   width: `${progress}%`,
                   background: C.primary,
                   borderRadius: 3,
-                  transition: "width 0.1s linear",
                 }} />
-                {/* Thumb */}
                 <div style={{
                   position: "absolute",
                   top: "50%",
@@ -259,10 +250,8 @@ export function DetailPanel({
                   borderRadius: "50%",
                   background: C.primary,
                   boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                  opacity: isPlaying ? 1 : 0.7,
                 }} />
               </div>
-              {/* Time Display */}
               <div style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -277,7 +266,6 @@ export function DetailPanel({
 
             {/* Loop & Volume */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              {/* Loop Button */}
               <button
                 onClick={toggleLoop}
                 style={{
@@ -289,24 +277,13 @@ export function DetailPanel({
                   display: "flex",
                 }}
               >
-                <Repeat 
-                  size={14} 
-                  color={isLooped ? C.primary : "rgba(255,255,255,0.6)"} 
-                  strokeWidth={1.5} 
-                />
+                <Repeat size={14} color={isLooped ? C.primary : "rgba(255,255,255,0.6)"} strokeWidth={1.5} />
               </button>
 
-              {/* Volume */}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <button
                   onClick={toggleMute}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    display: "flex",
-                    padding: 0,
-                  }}
+                  style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
                 >
                   {isMuted || volume === 0 ? (
                     <VolumeX size={14} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
@@ -339,26 +316,27 @@ export function DetailPanel({
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Audio Error Display */}
-        {audioError && (
-          <div style={{
-            position: "absolute",
-            bottom: 80,
-            left: 20,
-            right: 20,
-            padding: "8px 12px",
-            background: "rgba(239,68,68,0.2)",
-            border: "1px solid rgba(239,68,68,0.4)",
-            borderRadius: 6,
-            fontSize: 10,
-            color: "#ef4444",
-            textAlign: "center",
-          }}>
-            {audioError}
-          </div>
-        )}
+          {/* Error Display */}
+          {audioError && (
+            <div style={{
+              position: "absolute",
+              bottom: 100,
+              left: 20,
+              right: 20,
+              padding: "8px 12px",
+              background: "rgba(239,68,68,0.2)",
+              border: "1px solid rgba(239,68,68,0.4)",
+              borderRadius: 6,
+              fontSize: 10,
+              color: "#ef4444",
+              textAlign: "center",
+              zIndex: 10,
+            }}>
+              {audioError}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -374,21 +352,10 @@ export function DetailPanel({
       }}>
         {/* Beat ID + Name */}
         <section>
-          <div style={{
-            fontSize: 10,
-            fontFamily: "monospace",
-            color: C.primary,
-            marginBottom: 4,
-          }}>
+          <div style={{ fontSize: 10, fontFamily: "monospace", color: C.primary, marginBottom: 4 }}>
             #{beat.id}
           </div>
-          <h3 style={{
-            fontSize: 20,
-            fontWeight: 700,
-            color: C.onSurface,
-            margin: 0,
-            letterSpacing: "-0.02em",
-          }}>
+          <h3 style={{ fontSize: 20, fontWeight: 700, color: C.onSurface, margin: 0, letterSpacing: "-0.02em" }}>
             {beat.name}
           </h3>
         </section>
@@ -396,14 +363,7 @@ export function DetailPanel({
         {/* BPM / Key */}
         <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              color: C.onSecondaryFixedVar,
-              marginBottom: 4,
-            }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 4 }}>
               BPM
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.onSurface }}>
@@ -411,14 +371,7 @@ export function DetailPanel({
             </div>
           </div>
           <div>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              color: C.onSecondaryFixedVar,
-              marginBottom: 4,
-            }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 4 }}>
               Key
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.onSurface }}>
@@ -429,23 +382,10 @@ export function DetailPanel({
 
         {/* Status Console */}
         <section>
-          <div style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.15em",
-            color: C.onSecondaryFixedVar,
-            marginBottom: 8,
-          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
             Status
           </div>
-          <div style={{
-            display: "flex",
-            padding: 4,
-            background: C.surfaceContainerLow,
-            borderRadius: 4,
-            border: `1px solid ${C.border10}`,
-          }}>
+          <div style={{ display: "flex", padding: 4, background: C.surfaceContainerLow, borderRadius: 4, border: `1px solid ${C.border10}` }}>
             {statusItems.map(({ key, label }) => {
               const isActive = beat.status === key;
               const cfg = STATUS_CONFIG[key];
@@ -477,23 +417,14 @@ export function DetailPanel({
 
         {/* Tags */}
         <section>
-          <div style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.15em",
-            color: C.onSecondaryFixedVar,
-            marginBottom: 8,
-          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
             Tags
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {tags.length > 0 ? (
               tags.map(tag => <TagPill key={tag} tag={tag} size="sm" />)
             ) : (
-              <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>
-                No tags
-              </span>
+              <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>No tags</span>
             )}
           </div>
         </section>
@@ -501,14 +432,7 @@ export function DetailPanel({
         {/* Notes */}
         {beat.notes && (
           <section>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              color: C.onSecondaryFixedVar,
-              marginBottom: 8,
-            }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
               Notes
             </div>
             <div style={{
@@ -529,14 +453,7 @@ export function DetailPanel({
         {/* Path */}
         {beat.path && (
           <section>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              color: C.onSecondaryFixedVar,
-              marginBottom: 8,
-            }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
               Archive Path
             </div>
             <button
@@ -583,7 +500,6 @@ export function DetailPanel({
         alignItems: "center",
         gap: 12,
       }}>
-        {/* Favorite Toggle */}
         <button
           onClick={() => onToggleFavorite(beat.id)}
           style={{
@@ -601,7 +517,6 @@ export function DetailPanel({
           <Heart size={20} fill={fav ? C.primary : "none"} color={C.primary} strokeWidth={1.5} />
         </button>
 
-        {/* Edit Button */}
         <button
           onClick={() => onOpenEditModal(beat)}
           style={{
@@ -625,10 +540,7 @@ export function DetailPanel({
         </button>
       </div>
 
-      {/* Keyframes */}
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </aside>
   );
 }

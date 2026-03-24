@@ -1,21 +1,22 @@
 // src/hooks/useAudioPlayer.ts
 // ═══════════════════════════════════════════════════════════════════════════════
-// Audio Player Hook - Optimized for fast cover loading
-// Cover: Uses Tauri asset protocol (instant)
-// Audio: Uses base64 data URL (slower but reliable)
+// Audio Player Hook - STREAMING via Tauri Asset Protocol
+// 
+// Strategy:
+// - Audio: Stream via asset:// protocol (no Base64, no memory bloat)
+// - Cover: Stream via asset:// protocol (fast)
+// - Proper URL encoding for special characters in paths
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-interface UseAudioPlayerOptions {
+interface UseAudioPlayerProps {
   beatPath: string | null;
-  onError?: (error: string) => void;
 }
 
 interface UseAudioPlayerReturn {
-  // State
   isPlaying: boolean;
   isLoading: boolean;
   isLooped: boolean;
@@ -23,27 +24,17 @@ interface UseAudioPlayerReturn {
   currentTime: number;
   duration: number;
   volume: number;
-  audioPath: string | null;
   coverUrl: string | null;
   error: string | null;
-
-  // Controls
-  play: () => void;
-  pause: () => void;
   togglePlay: () => void;
   toggleLoop: () => void;
   toggleMute: () => void;
-  seek: (time: number) => void;
   seekPercent: (percent: number) => void;
   setVolume: (volume: number) => void;
-
-  // Computed
   progress: number;
   currentTimeFormatted: string;
   durationFormatted: string;
 }
-
-// ─── Time Formatting ─────────────────────────────────────────────────────────
 
 function formatTime(seconds: number): string {
   if (!isFinite(seconds) || isNaN(seconds)) return "--:--";
@@ -52,17 +43,26 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Hook Implementation
-// ═══════════════════════════════════════════════════════════════════════════════
+/**
+ * Convert a file path to a properly encoded asset:// URL
+ * Handles special characters like #, [], spaces, etc.
+ */
+function pathToAssetUrl(filePath: string): string {
+  // Normalize path separators (Windows -> forward slashes)
+  let normalized = filePath.replace(/\\/g, "/");
+  
+  // Use Tauri's convertFileSrc which handles the protocol
+  // But we need to ensure the path is properly encoded
+  const assetUrl = convertFileSrc(normalized);
+  
+  return assetUrl;
+}
 
-export function useAudioPlayer({ beatPath, onError }: UseAudioPlayerOptions): UseAudioPlayerReturn {
-  // ─── Refs ──────────────────────────────────────────────────────────────────
+export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlayerReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const prevBeatPathRef = useRef<string | null>(null);
-  const loadingAbortRef = useRef<boolean>(false);
+  const currentBeatPathRef = useRef<string | null>(null);
+  const abortedRef = useRef<boolean>(false);
 
-  // ─── State ─────────────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLooped, setIsLooped] = useState(false);
@@ -70,211 +70,210 @@ export function useAudioPlayer({ beatPath, onError }: UseAudioPlayerOptions): Us
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.7);
-  const [audioPath, setAudioPath] = useState<string | null>(null);
-  const [audioDataUrl, setAudioDataUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Load Cover & Audio ────────────────────────────────────────────────────
+  // ─── Beat Change Handler ───────────────────────────────────────────────────
   useEffect(() => {
+    abortedRef.current = true;
+    
     if (!beatPath) {
-      // Reset when no beat
-      setAudioPath(null);
-      setAudioDataUrl(null);
+      currentBeatPathRef.current = null;
       setCoverUrl(null);
+      setAudioUrl(null);
+      setError(null);
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
-      setError(null);
+      setIsLoading(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
       return;
     }
 
-    // Only reload if beat changed
-    if (beatPath === prevBeatPathRef.current) return;
-    prevBeatPathRef.current = beatPath;
-    loadingAbortRef.current = false;
+    if (beatPath === currentBeatPathRef.current) return;
+    
+    abortedRef.current = false;
+    currentBeatPathRef.current = beatPath;
 
-    // Stop current playback immediately
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
-      setIsPlaying(false);
     }
 
-    // Reset states
-    setError(null);
-    setAudioDataUrl(null);
     setCoverUrl(null);
+    setAudioUrl(null);
+    setError(null);
+    setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Load Cover FIRST (fast - uses asset protocol)
-    // ═══════════════════════════════════════════════════════════════════════
-    invoke<string | null>("get_beat_cover_path", { beatPath })
-      .then((path) => {
-        if (loadingAbortRef.current) return;
-        if (path) {
-          // Use Tauri's asset protocol - much faster than base64
-          const assetUrl = convertFileSrc(path);
-          setCoverUrl(assetUrl);
-        }
-      })
-      .catch(e => {
-        console.error("Failed to get cover path:", e);
-      });
+    const currentPath = beatPath;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Load Audio in background (slower - uses base64)
+    // LOAD COVER (via asset:// protocol - instant streaming)
+    // ═══════════════════════════════════════════════════════════════════════
+    (async () => {
+      try {
+        const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: currentPath });
+        if (abortedRef.current || currentBeatPathRef.current !== currentPath) return;
+        
+        if (coverPath) {
+          const url = pathToAssetUrl(coverPath);
+          setCoverUrl(url);
+        }
+      } catch (e) {
+        console.error("Cover load error:", e);
+      }
+    })();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LOAD AUDIO (via asset:// protocol - true streaming, no Base64!)
     // ═══════════════════════════════════════════════════════════════════════
     setIsLoading(true);
 
-    invoke<string | null>("get_beat_audio_path", { beatPath })
-      .then(async (path) => {
-        if (loadingAbortRef.current) return;
-        
-        if (!path) {
+    (async () => {
+      try {
+        const audioPath = await invoke<string | null>("get_beat_audio_path", { beatPath: currentPath });
+        if (abortedRef.current || currentBeatPathRef.current !== currentPath) return;
+
+        if (!audioPath) {
           setError("No audio file found");
           setIsLoading(false);
           return;
         }
-        
-        setAudioPath(path);
-        
-        try {
-          const dataUrl = await invoke<string>("read_audio_file", { filePath: path });
-          if (loadingAbortRef.current) return;
-          setAudioDataUrl(dataUrl);
-        } catch (e) {
-          if (loadingAbortRef.current) return;
-          console.error("Failed to read audio file:", e);
-          setError(`Failed to load audio`);
-          onError?.(String(e));
-        }
-      })
-      .catch(e => {
-        if (loadingAbortRef.current) return;
-        console.error("Failed to get audio path:", e);
-        setError("Failed to find audio");
-        onError?.(String(e));
-      })
-      .finally(() => {
-        if (!loadingAbortRef.current) {
-          setIsLoading(false);
-        }
-      });
 
-    // Cleanup on unmount or beat change
+        const url = pathToAssetUrl(audioPath);
+        setAudioUrl(url);
+        // isLoading will be set to false when audio's loadedmetadata fires
+      } catch (e) {
+        if (abortedRef.current || currentBeatPathRef.current !== currentPath) return;
+        console.error("Audio load error:", e);
+        setError("Failed to load audio");
+        setIsLoading(false);
+      }
+    })();
+
     return () => {
-      loadingAbortRef.current = true;
+      abortedRef.current = true;
     };
-  }, [beatPath, onError]);
+  }, [beatPath]);
 
   // ─── Audio Element Setup ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!audioDataUrl) {
-      return;
-    }
+    if (!audioUrl) return;
 
-    // Create or reuse audio element
     if (!audioRef.current) {
       audioRef.current = new Audio();
     }
 
     const audio = audioRef.current;
-    audio.src = audioDataUrl;
+    audio.src = audioUrl;
     audio.volume = volume;
     audio.loop = isLooped;
     audio.muted = isMuted;
 
-    // Event handlers
-    const handleLoadedMetadata = () => {
+    const onLoadedMetadata = () => {
       setDuration(audio.duration);
+      setIsLoading(false);
       setError(null);
     };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-
-    const handleEnded = () => {
+    
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    
+    const onEnded = () => {
       if (!isLooped) {
         setIsPlaying(false);
         setCurrentTime(0);
       }
     };
-
-    const handleError = () => {
-      setError("Failed to play audio");
-      setIsPlaying(false);
+    
+    const onError = (e: Event) => {
+      console.error("Audio playback error:", e);
+      // Fallback to Base64 if asset protocol fails
+      handleAssetProtocolFallback();
     };
+    
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onCanPlay = () => setIsLoading(false);
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
-    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("ended", handleEnded);
-    audio.addEventListener("error", handleError);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("ended", onEnded);
+    audio.addEventListener("error", onError);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("canplay", onCanPlay);
 
     audio.load();
 
     return () => {
-      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("ended", handleEnded);
-      audio.removeEventListener("error", handleError);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onError);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("canplay", onCanPlay);
     };
-  }, [audioDataUrl]);
+  }, [audioUrl]);
 
-  // ─── Sync volume/loop/mute ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
+  // ─── Fallback to Base64 if Asset Protocol fails ────────────────────────────
+  const handleAssetProtocolFallback = useCallback(async () => {
+    if (!currentBeatPathRef.current) return;
+    
+    console.log("Asset protocol failed, falling back to Base64...");
+    setIsLoading(true);
+    
+    try {
+      const audioPath = await invoke<string | null>("get_beat_audio_path", { 
+        beatPath: currentBeatPathRef.current 
+      });
+      
+      if (!audioPath) {
+        setError("No audio file found");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Use Base64 fallback
+      const dataUrl = await invoke<string>("read_audio_file", { filePath: audioPath });
+      
+      if (audioRef.current) {
+        audioRef.current.src = dataUrl;
+        audioRef.current.load();
+      }
+    } catch (e) {
+      console.error("Base64 fallback also failed:", e);
+      setError("Failed to load audio");
+      setIsLoading(false);
+    }
+  }, []);
 
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.loop = isLooped;
-  }, [isLooped]);
-
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.muted = isMuted;
-  }, [isMuted]);
+  // Sync settings
+  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
+  useEffect(() => { if (audioRef.current) audioRef.current.loop = isLooped; }, [isLooped]);
+  useEffect(() => { if (audioRef.current) audioRef.current.muted = isMuted; }, [isMuted]);
 
   // ─── Controls ──────────────────────────────────────────────────────────────
-  const play = useCallback(() => {
-    if (audioRef.current && audioDataUrl) {
-      audioRef.current.play().catch(e => {
+  const togglePlay = useCallback(() => {
+    if (!audioRef.current || (!audioUrl)) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch((e) => {
         console.error("Play failed:", e);
-        setError("Failed to play");
+        setError("Play failed");
       });
     }
-  }, [audioDataUrl]);
+  }, [isPlaying, audioUrl]);
 
-  const pause = useCallback(() => {
-    audioRef.current?.pause();
-  }, []);
-
-  const togglePlay = useCallback(() => {
-    isPlaying ? pause() : play();
-  }, [isPlaying, play, pause]);
-
-  const toggleLoop = useCallback(() => {
-    setIsLooped(prev => !prev);
-  }, []);
-
-  const toggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
-  }, []);
-
-  const seek = useCallback((time: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, Math.min(time, duration));
-    }
-  }, [duration]);
+  const toggleLoop = useCallback(() => setIsLooped(prev => !prev), []);
+  const toggleMute = useCallback(() => setIsMuted(prev => !prev), []);
 
   const seekPercent = useCallback((percent: number) => {
     if (audioRef.current && duration > 0) {
@@ -286,7 +285,6 @@ export function useAudioPlayer({ beatPath, onError }: UseAudioPlayerOptions): Us
     setVolumeState(Math.max(0, Math.min(1, vol)));
   }, []);
 
-  // ─── Computed ──────────────────────────────────────────────────────────────
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return {
@@ -297,15 +295,11 @@ export function useAudioPlayer({ beatPath, onError }: UseAudioPlayerOptions): Us
     currentTime,
     duration,
     volume,
-    audioPath,
     coverUrl,
     error,
-    play,
-    pause,
     togglePlay,
     toggleLoop,
     toggleMute,
-    seek,
     seekPercent,
     setVolume,
     progress,

@@ -1,6 +1,9 @@
 // src/hooks/useBeats.ts
 // ═══════════════════════════════════════════════════════════════════════════════
-// Custom Hook for Browse Tab - ALL FILTERS ARE SERVER-SIDE
+// Custom Hook for Browse Tab - ALL FILTERS SERVER-SIDE
+// FIXED: No double-loading on filter change
+// FIXED: Selection does NOT trigger reload
+// FIXED: List scroll position preserved on selection
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -20,48 +23,28 @@ import {
   DEFAULT_PAGINATION,
 } from "../types/browse";
 
-// ─── Hook Return Type ───────────────────────────────────────────────────────
-
 interface UseBeatsReturn {
-  // Data
   beats: Beat[];
   selectedBeat: Beat | null;
-  
-  // Loading State
   isLoading: boolean;
   error: string | null;
-  
-  // Filters
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   resetFilters: () => void;
-  
-  // Sorting
   sort: SortState;
   setSort: (column: SortColumn) => void;
-  
-  // Pagination
   pagination: PaginationState;
   setPage: (page: number) => void;
   setPageSize: (size: number) => void;
   totalPages: number;
-  
-  // Selection
   selectBeat: (beat: Beat | null) => void;
-  
-  // Actions
   refresh: () => Promise<void>;
   toggleFavorite: (beatId: string) => Promise<void>;
   updateStatus: (beatId: string, status: BeatStatus) => Promise<void>;
   updateBeat: (params: UpdateBeatParams) => Promise<void>;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Hook Implementation
-// ═══════════════════════════════════════════════════════════════════════════════
-
 export function useBeats(): UseBeatsReturn {
-  // ─── State ─────────────────────────────────────────────────────────────────
   const [beats, setBeats] = useState<Beat[]>([]);
   const [selectedBeat, setSelectedBeat] = useState<Beat | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,70 +53,58 @@ export function useBeats(): UseBeatsReturn {
   const [sort, setSortState] = useState<SortState>(DEFAULT_SORT);
   const [pagination, setPagination] = useState<PaginationState>(DEFAULT_PAGINATION);
   
-  // Track previous filter values to detect changes
-  const prevFiltersRef = useRef<string>("");
+  // Track filter changes to detect when we need to reset page
+  const prevFiltersRef = useRef<string>(JSON.stringify(DEFAULT_FILTERS));
+  const loadIdRef = useRef(0); // Prevent stale responses
 
-  // ─── Load Beats from DB (ALL FILTERS SERVER-SIDE) ──────────────────────────
-  const loadBeats = useCallback(async () => {
+  // ─── Load Beats (internal, called by effect) ─────────────────────────────────
+  const loadBeatsInternal = useCallback(async (
+    currentFilters: FilterState,
+    currentSort: SortState,
+    currentPage: number,
+    currentPageSize: number,
+  ) => {
+    const loadId = ++loadIdRef.current;
     setIsLoading(true);
     setError(null);
     
     try {
-      // Parse BPM values
-      const bpmMin = filters.bpmMin ? parseInt(filters.bpmMin) : null;
-      const bpmMax = filters.bpmMax ? parseInt(filters.bpmMax) : null;
+      const bpmMin = currentFilters.bpmMin ? parseInt(currentFilters.bpmMin) : null;
+      const bpmMax = currentFilters.bpmMax ? parseInt(currentFilters.bpmMax) : null;
       
-      // ALL filters go to server
       const result = await invoke<{ beats: Beat[]; total_count: number }>("get_beats_paginated", {
-        search: filters.search || null,
-        statusFilter: filters.status !== "all" ? filters.status : null,
-        onlyFavs: filters.onlyFavs,
-        keyFilter: filters.keys.length > 0 ? filters.keys : null,
+        search: currentFilters.search || null,
+        statusFilter: currentFilters.status !== "all" ? currentFilters.status : null,
+        onlyFavs: currentFilters.onlyFavs,
+        keyFilter: currentFilters.keys.length > 0 ? currentFilters.keys : null,
         bpmMin: isNaN(bpmMin!) ? null : bpmMin,
         bpmMax: isNaN(bpmMax!) ? null : bpmMax,
-        sortColumn: sort.column,
-        sortDirection: sort.direction,
-        limit: pagination.pageSize,
-        offset: (pagination.page - 1) * pagination.pageSize,
+        sortColumn: currentSort.column,
+        sortDirection: currentSort.direction,
+        limit: currentPageSize,
+        offset: (currentPage - 1) * currentPageSize,
       });
+      
+      // Ignore stale responses
+      if (loadId !== loadIdRef.current) return;
       
       setBeats(result.beats);
       setPagination(prev => ({ ...prev, totalCount: result.total_count }));
-      
-      // Update selected beat if it's in the new results
-      if (selectedBeat) {
-        const updated = result.beats.find(b => b.id === selectedBeat.id);
-        if (updated) {
-          setSelectedBeat(updated);
-        }
-      }
     } catch (e) {
+      if (loadId !== loadIdRef.current) return;
       console.error("Failed to load beats:", e);
       setError(String(e));
     } finally {
-      setIsLoading(false);
+      if (loadId === loadIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [
-    filters.search, 
-    filters.status, 
-    filters.onlyFavs, 
-    filters.keys, 
-    filters.bpmMin, 
-    filters.bpmMax,
-    sort, 
-    pagination.page, 
-    pagination.pageSize,
-    selectedBeat?.id
-  ]);
+  }, []);
 
-  // Load on mount and when any filter/sort/page changes
+  // ─── Single Effect for Loading ───────────────────────────────────────────────
+  // Combines filter-change detection + page reset + loading into ONE effect
   useEffect(() => {
-    loadBeats();
-  }, [loadBeats]);
-
-  // Reset to page 1 when filters change (but not when page changes)
-  useEffect(() => {
-    const currentFilters = JSON.stringify({
+    const currentFiltersJson = JSON.stringify({
       search: filters.search,
       status: filters.status,
       onlyFavs: filters.onlyFavs,
@@ -142,49 +113,59 @@ export function useBeats(): UseBeatsReturn {
       bpmMax: filters.bpmMax,
     });
     
-    if (prevFiltersRef.current && prevFiltersRef.current !== currentFilters) {
+    const filtersChanged = prevFiltersRef.current !== currentFiltersJson;
+    prevFiltersRef.current = currentFiltersJson;
+    
+    // If filters changed and we're not on page 1, reset to page 1
+    // This will trigger another run of this effect with page=1
+    if (filtersChanged && pagination.page !== 1) {
       setPagination(prev => ({ ...prev, page: 1 }));
+      return; // Don't load yet - wait for page reset to trigger next effect run
     }
     
-    prevFiltersRef.current = currentFilters;
-  }, [filters.search, filters.status, filters.onlyFavs, filters.keys, filters.bpmMin, filters.bpmMax]);
+    // Load with current state
+    loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
+  }, [
+    filters.search,
+    filters.status,
+    filters.onlyFavs,
+    filters.keys,
+    filters.bpmMin,
+    filters.bpmMax,
+    sort.column,
+    sort.direction,
+    pagination.page,
+    pagination.pageSize,
+    loadBeatsInternal,
+  ]);
 
-  // ─── Total Pages ───────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize));
 
-  // ─── Reset Filters ─────────────────────────────────────────────────────────
-  const resetFilters = useCallback(() => {
-    setFilters(DEFAULT_FILTERS);
-  }, []);
+  const resetFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
-  // ─── Set Sort ──────────────────────────────────────────────────────────────
   const setSort = useCallback((column: SortColumn) => {
-    setSortState(prev => {
-      if (prev.column === column) {
-        // Toggle direction
-        return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
-      }
-      // New column, default to desc for ID, asc for others
-      return { column, direction: column === "id" ? "desc" : "asc" };
-    });
+    setSortState(prev => ({
+      column,
+      direction: prev.column === column 
+        ? (prev.direction === "asc" ? "desc" : "asc")
+        : (column === "id" ? "desc" : "asc")
+    }));
   }, []);
 
-  // ─── Set Page ──────────────────────────────────────────────────────────────
   const setPage = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, page: Math.max(1, Math.min(page, totalPages)) }));
   }, [totalPages]);
 
-  // ─── Set Page Size ─────────────────────────────────────────────────────────
   const setPageSize = useCallback((pageSize: number) => {
     setPagination(prev => ({ ...prev, pageSize, page: 1 }));
   }, []);
 
-  // ─── Select Beat ───────────────────────────────────────────────────────────
+  // Select beat - NO RELOAD!
   const selectBeat = useCallback((beat: Beat | null) => {
     setSelectedBeat(beat);
   }, []);
 
-  // ─── Toggle Favorite ───────────────────────────────────────────────────────
+  // ─── Toggle Favorite (Optimistic) ──────────────────────────────────────────
   const toggleFavorite = useCallback(async (beatId: string) => {
     const beat = beats.find(b => b.id === beatId);
     if (!beat) return;
@@ -203,7 +184,6 @@ export function useBeats(): UseBeatsReturn {
     try {
       await invoke("toggle_favorite", { beatId, favorite: newFavorite });
     } catch (e) {
-      console.error("Failed to toggle favorite:", e);
       // Revert on error
       setBeats(prev => prev.map(b => 
         b.id === beatId ? { ...b, favorite: beat.favorite } : b
@@ -211,10 +191,11 @@ export function useBeats(): UseBeatsReturn {
       if (selectedBeat?.id === beatId) {
         setSelectedBeat(prev => prev ? { ...prev, favorite: beat.favorite } : null);
       }
+      console.error("Failed to toggle favorite:", e);
     }
   }, [beats, selectedBeat?.id]);
 
-  // ─── Update Status ─────────────────────────────────────────────────────────
+  // ─── Update Status (Optimistic) ────────────────────────────────────────────
   const updateStatus = useCallback(async (beatId: string, status: BeatStatus) => {
     const beat = beats.find(b => b.id === beatId);
     if (!beat) return;
@@ -233,7 +214,6 @@ export function useBeats(): UseBeatsReturn {
     try {
       await invoke("update_beat_status", { beatId, status });
     } catch (e) {
-      console.error("Failed to update status:", e);
       // Revert on error
       setBeats(prev => prev.map(b => 
         b.id === beatId ? { ...b, status: oldStatus } : b
@@ -241,59 +221,37 @@ export function useBeats(): UseBeatsReturn {
       if (selectedBeat?.id === beatId) {
         setSelectedBeat(prev => prev ? { ...prev, status: oldStatus } : null);
       }
+      console.error("Failed to update status:", e);
     }
   }, [beats, selectedBeat?.id]);
 
-  // ─── Update Beat (Full Update from Edit Modal) ─────────────────────────────
+  // ─── Update Beat (Full) ────────────────────────────────────────────────────
   const updateBeat = useCallback(async (params: UpdateBeatParams) => {
-    const beat = beats.find(b => b.id === params.id);
-    if (!beat) return;
-    
-    try {
-      await invoke("update_beat", { params });
-      
-      // Refresh to get updated data
-      await loadBeats();
-    } catch (e) {
-      console.error("Failed to update beat:", e);
-      throw e;
-    }
-  }, [beats, loadBeats]);
+    await invoke("update_beat", { params });
+    // Reload to get fresh data
+    loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
+  }, [filters, sort, pagination.page, pagination.pageSize, loadBeatsInternal]);
 
-  // ─── Refresh ───────────────────────────────────────────────────────────────
+  // ─── Manual Refresh ────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
-    await loadBeats();
-  }, [loadBeats]);
+    await loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
+  }, [filters, sort, pagination.page, pagination.pageSize, loadBeatsInternal]);
 
-  // ─── Return ────────────────────────────────────────────────────────────────
   return {
-    // Data - no more client-side filtering, beats ARE the filtered beats
     beats,
     selectedBeat,
-    
-    // Loading State
     isLoading,
     error,
-    
-    // Filters
     filters,
     setFilters,
     resetFilters,
-    
-    // Sorting
     sort,
     setSort,
-    
-    // Pagination
     pagination,
     setPage,
     setPageSize,
     totalPages,
-    
-    // Selection
     selectBeat,
-    
-    // Actions
     refresh,
     toggleFavorite,
     updateStatus,

@@ -1,6 +1,6 @@
 // src/App.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// BeatOS App - Fixed: Tabs persist state by hiding instead of unmounting
+// BeatOS App - Fixed: Uses live stats instead of mockStats
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -10,7 +10,7 @@ import Browse from "./pages/Browse";
 import Create from "./pages/Create";
 import Studio from "./pages/Studio";
 import { Settings, Support } from "./pages/Placeholder";
-import { mockStats } from "./lib/mockData";
+import { useBeatCount } from "./hooks/useStats";
 
 // Wrapper component that uses CSS visibility instead of unmounting
 // This preserves state across tab switches
@@ -63,15 +63,24 @@ function PersistentRoutes() {
   );
 }
 
+function AppContent() {
+  // Live beat count from database
+  const beatCount = useBeatCount();
+
+  return (
+    <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "#0e0e0e" }}>
+      <Sidebar beatCount={beatCount} />
+      <main style={{ marginLeft: 260, height: "100vh", overflow: "hidden" }}>
+        <PersistentRoutes />
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "#0e0e0e" }}>
-        <Sidebar beatCount={mockStats.total} />
-        <main style={{ marginLeft: 260, height: "100vh", overflow: "hidden" }}>
-          <PersistentRoutes />
-        </main>
-      </div>
+      <AppContent />
     </BrowserRouter>
   );
 }
