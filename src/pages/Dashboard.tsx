@@ -1,5 +1,6 @@
 // src/pages/Dashboard.tsx — Live DB Version with Centralized Tag System
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play } from "lucide-react";
 import { getStats, normalizeStatus, type Stats } from "../lib/Database";
 import { invoke } from "@tauri-apps/api/core";
@@ -7,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 // ═══════════════════════════════════════════════════════════════════════════
 // Import Centralized Tag System
 // ═══════════════════════════════════════════════════════════════════════════
-import { getTagColors, TAG_COLORS } from "../lib/tags";
+import { getTagCategory, TAG_COLORS, type TagCategory } from "../lib/tags";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Design Tokens
@@ -83,7 +84,7 @@ function KpiCard({ title, value, badgeText, badgeColor, icon }: {
 }
 
 // ── Status Breakdown ──────────────────────────────────────────────────────────
-function StatusBreakdown({ stats }: { stats: Stats }) {
+function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
   const total = stats.total || 1;
   const bars = [
     { key: "idea",     label: "Idea",     color: C.tertiary,  count: stats.by_status.idea },
@@ -103,6 +104,7 @@ function StatusBreakdown({ stats }: { stats: Stats }) {
             style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 0.15s", margin: "0 -10px" }}
             onMouseEnter={e => (e.currentTarget.style.background = `${color}12`)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            onClick={() => onNavigate({ status: key })}
           >
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", color: C.onSurfaceVariant }}>
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -121,74 +123,98 @@ function StatusBreakdown({ stats }: { stats: Stats }) {
   );
 }
 
-// ── Key Expansion ─────────────────────────────────────────────────────────────
-// "F#m" → "F# MINOR", "Cm" → "C MINOR", "C" → "C MAJOR", "Bb" → "BB MAJOR"
+// ── Key Expansion + Classification ────────────────────────────────────────────
 function expandKey(raw: string): string {
   const s = raw.trim();
-  // Detect minor: ends with 'm' (but not 'maj')
   const isMinor = /m$/i.test(s) && !/maj/i.test(s);
-  // Root = alles ohne trailing 'm'
   const root = isMinor ? s.slice(0, -1) : s;
-  const quality = isMinor ? "MINOR" : "MAJOR";
-  // Normalize: # bleibt, b bleibt, rest uppercase
   const rootUp = root.charAt(0).toUpperCase() + root.slice(1);
-  return `${rootUp} ${quality}`;
+  return `${rootUp} ${isMinor ? "MINOR" : "MAJOR"}`;
+}
+
+function keyType(raw: string): "major" | "minor" | "others" {
+  const s = raw.trim();
+  if (!s) return "others";
+  if (/m$/i.test(s) && !/maj/i.test(s)) return "minor";
+  if (/^[A-Ga-g][#b]?$/.test(s)) return "major";
+  return "others";
 }
 
 // ── Top Keys ──────────────────────────────────────────────────────────────────
-function TopKeys({ stats }: { stats: Stats }) {
-  const keys     = stats.top_keys;
-  const max      = Math.max(...keys.map(k => k.count), 1);
+function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
   const [hov, setHov] = useState<number | null>(null);
+  const [keyMode, setKeyMode] = useState<"major" | "minor" | "others">("major");
+
+  const allKeys = stats.top_keys;
+  const keys = allKeys.filter(k => keyType(k.key) === keyMode);
+  const max  = Math.max(...keys.map(k => k.count), 1);
+
   const barColors = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
                      "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
                      "#8b5cf6", "#14b8a6", "#f43f5e"];
 
-  // Horizontales Scroll-Wheel innerhalb der Card
   const scrollRef = (el: HTMLDivElement | null) => {
     if (!el) return;
     el.onwheel = (e) => {
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // native horizontal scroll
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       el.scrollLeft += e.deltaY;
     };
   };
 
-  // Breite pro Bar: mindestens 52px damit Labels reinpassen
-  const BAR_W    = 52;
-  const BAR_GAP  = 10;
+  const BAR_W = 52;
+  const BAR_GAP = 10;
   const needsScroll = keys.length > 8;
-  const totalW   = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
+  const totalW = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
 
   return (
     <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
-        <span style={{ color: C.onSurfaceVariant, fontSize: 16 }}>≡</span>
+        {/* Mode Dropdown */}
+        <div style={{ position: "relative" }}>
+          <select
+            value={keyMode}
+            onChange={e => { setKeyMode(e.target.value as typeof keyMode); setHov(null); }}
+            style={{
+              background: C.surfaceContainerHighest,
+              border: `1px solid rgba(72,72,71,0.20)`,
+              borderRadius: 6, padding: "4px 28px 4px 10px",
+              fontSize: 11, fontWeight: 700, color: C.primary,
+              appearance: "none", cursor: "pointer", outline: "none",
+            }}
+          >
+            <option value="major" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Major</option>
+            <option value="minor" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Minor</option>
+            <option value="others" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Others</option>
+          </select>
+          <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
       </div>
 
       {keys.length === 0 ? (
-        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>No key data</p>
+        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>
+          No {keyMode} key data
+        </p>
       ) : (
-        /* Scroll container — wheel event handled via ref */
         <div ref={scrollRef} style={{ overflowX: "auto", overflowY: "hidden", flex: 1, paddingBottom: 4,
           scrollbarWidth: "thin", scrollbarColor: `${C.surfaceContainerHighest} transparent` }}>
-
-          {/* Chart rows */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: BAR_GAP, height: 160, marginBottom: 10, minWidth: totalW }}>
             {keys.map(({ key, count }, i) => {
-              const color  = barColors[i % barColors.length];
-              const isHov  = hov === i;
-              const barH   = Math.max((count / max) * 160, 4);
+              const color = barColors[i % barColors.length];
+              const isHov = hov === i;
+              const barH  = Math.max((count / max) * 160, 4);
               return (
                 <div key={key}
                   style={{ width: BAR_W, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 5, cursor: "pointer" }}
-                  onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
-                  {/* Count */}
+                  onMouseEnter={() => setHov(i)}
+                  onMouseLeave={() => setHov(null)}
+                  onClick={() => onNavigate({ keys: [key] })}>
                   <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: isHov ? color : C.onSurfaceVariant, transition: "all 0.15s", lineHeight: 1 }}>
                     {count}
                   </span>
-                  {/* Bar — volle Breite des Containers */}
                   <div style={{
                     width: "100%", height: barH,
                     background: color, borderRadius: "3px 3px 0 0",
@@ -200,17 +226,13 @@ function TopKeys({ stats }: { stats: Stats }) {
               );
             })}
           </div>
-
-          {/* Labels — ausgeschrieben, ALL CAPS */}
           <div style={{ display: "flex", gap: BAR_GAP, minWidth: totalW }}>
             {keys.map(({ key }, i) => (
               <span key={key} style={{
                 width: BAR_W, flexShrink: 0,
                 textAlign: "center", fontSize: 9, fontWeight: 700,
                 color: hov === i ? barColors[i % barColors.length] : C.onSurfaceVariant,
-                transition: "color 0.15s",
-                lineHeight: 1.2,
-                // Zweizeilig wenn nötig
+                transition: "color 0.15s", lineHeight: 1.2,
                 whiteSpace: "normal", wordBreak: "break-word",
               }}>
                 {expandKey(key)}
@@ -281,12 +303,12 @@ function BeatsPerMonth({ stats, onYearChange }: {
               onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
               {/* Count */}
               <span style={{
-                fontSize: 10, fontWeight: 700, fontFamily: "monospace",
+                fontSize: 11, fontWeight: 700, fontFamily: "monospace",
                 color: isHov ? C.primary : C.onSurfaceVariant,
-                opacity: isHov || count > 0 ? 1 : 0.3,
+                opacity: count > 0 ? 1 : 0,
                 transition: "all 0.15s", lineHeight: 1,
               }}>
-                {count || "–"}
+                {count}
               </span>
               {/* Bar */}
               <div style={{
@@ -317,48 +339,68 @@ function BeatsPerMonth({ stats, onYearChange }: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Top Tags — Now using centralized tag system from tags.ts
+// Top Tags — 4 category rows, sorted by usage, max 5 per row
 // ══════════════════════════════════════════════════════════════════════════════
-function TopTags({ stats }: { stats: Stats }) {
+const TAG_ROW_ORDER: TagCategory[] = ["genre", "vibe", "instrument", "other"];
+const TAG_ROW_LABELS: Record<TagCategory, string> = {
+  genre: "Genre", vibe: "Vibe", instrument: "Instr", custom: "Custom", other: "Custom",
+};
+
+function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
+  // Group tags by category, sort each bucket by count desc, cap at 5
+  const grouped = Object.fromEntries(TAG_ROW_ORDER.map(cat => [cat, [] as typeof stats.top_tags])) as Record<TagCategory, typeof stats.top_tags>;
+  for (const item of stats.top_tags) {
+    const cat = getTagCategory(item.tag);
+    const bucket = cat === "custom" ? "other" : cat;
+    if (grouped[bucket]) grouped[bucket].push(item);
+    else grouped["other"].push(item);
+  }
+  TAG_ROW_ORDER.forEach(cat => grouped[cat].sort((a, b) => b.count - a.count));
+
   return (
     <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, height: "100%", transition: "border-color 0.2s" }} {...cardHover}>
-      {/* Header + Legend */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+      <div style={{ marginBottom: 18 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Tags</h4>
-        <div style={{ display: "flex", gap: 10 }}>
-          {(["genre", "vibe", "instrument"] as const).map(cat => (
-            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: TAG_COLORS[cat].text }} />
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>{cat}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {stats.top_tags.map(({ tag }) => {
-          // Use centralized getTagColors from tags.ts
-          const colors = getTagColors(tag);
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {TAG_ROW_ORDER.map(cat => {
+          const row = grouped[cat].slice(0, 5);
+          if (row.length === 0) return null;
+          const colors = TAG_COLORS[cat];
           return (
-            <span key={tag}
-              style={{ 
-                padding: "5px 11px", 
-                background: colors.bg, 
-                borderRadius: 9999, 
-                fontSize: 10, 
-                fontWeight: 700, 
-                textTransform: "uppercase", 
-                letterSpacing: "0.08em", 
-                color: colors.text, 
-                border: `1px solid ${colors.border}`, 
-                cursor: "pointer", 
-                transition: "all 0.15s" 
-              }}
-              onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.25)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)";   e.currentTarget.style.transform = "translateY(0)"; }}
-            >
-              #{tag}
-            </span>
+            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Row label */}
+              <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: colors.text, width: 36, flexShrink: 0, opacity: 0.8 }}>
+                {TAG_ROW_LABELS[cat]}
+              </span>
+              {/* Tag pills */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
+                {row.map(({ tag }) => (
+                  <span key={tag}
+                    onClick={() => onNavigate({ search: tag })}
+                    style={{
+                      padding: "4px 10px",
+                      background: colors.bg,
+                      borderRadius: 9999,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      color: colors.text,
+                      border: `1px solid ${colors.border}`,
+                      cursor: "pointer",
+                      transition: "filter 0.15s, transform 0.15s",
+                      whiteSpace: "nowrap",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.3)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; e.currentTarget.style.transform = "translateY(0)"; }}
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -406,6 +448,10 @@ export default function Dashboard() {
   const [stats, setStats]     = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const navigate = useNavigate();
+  const handleNavigate = useCallback((filter: object) => {
+    navigate("/browse", { state: { initialFilters: filter } });
+  }, [navigate]);
 
   const load = async (year?: number) => {
     setLoading(true); setError(null);
@@ -492,14 +538,14 @@ export default function Dashboard() {
 
           {/* Analytics Row 1 */}
           <section style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, alignItems: "stretch" }}>
-            <StatusBreakdown stats={stats} />
-            <TopKeys stats={stats} />
+            <StatusBreakdown stats={stats} onNavigate={handleNavigate} />
+            <TopKeys stats={stats} onNavigate={handleNavigate} />
           </section>
 
           {/* Analytics Row 2 */}
           <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
             <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr)} />
-            <TopTags stats={stats} />
+            <TopTags stats={stats} onNavigate={handleNavigate} />
           </section>
 
           {/* Latest Beats */}

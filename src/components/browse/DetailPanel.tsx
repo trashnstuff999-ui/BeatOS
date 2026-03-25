@@ -3,7 +3,7 @@
 // Detail Panel with Functional Audio Player
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
 import { 
   X, Heart, Edit3, Play, Pause, Volume2, VolumeX, 
   Repeat, FolderOpen, Loader2, Music 
@@ -15,20 +15,31 @@ import { useAudioPlayer } from "../../hooks/useAudioPlayer";
 import type { Beat, BeatStatus } from "../../types/browse";
 import { STATUS_CONFIG, parseTags, isFavorite } from "../../types/browse";
 
+const STATUS_ITEMS: { key: BeatStatus; label: string }[] = [
+  { key: "idea", label: "Idea" },
+  { key: "wip", label: "WIP" },
+  { key: "finished", label: "Fin" },
+  { key: "sold", label: "Sold" },
+];
+
 interface DetailPanelProps {
   beat: Beat;
+  isOpen: boolean;
   onClose: () => void;
   onToggleFavorite: (beatId: string) => void;
   onUpdateStatus: (beatId: string, status: BeatStatus) => void;
   onOpenEditModal: (beat: Beat) => void;
+  preloadedCoverUrl?: string | null;
 }
 
 export function DetailPanel({
   beat,
+  isOpen,
   onClose,
   onToggleFavorite,
   onUpdateStatus,
   onOpenEditModal,
+  preloadedCoverUrl,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
   const tags = parseTags(beat.tags);
@@ -52,22 +63,22 @@ export function DetailPanel({
     toggleMute,
     seekPercent,
     setVolume,
-  } = useAudioPlayer({ beatPath: beat.path });
+  } = useAudioPlayer({ beatPath: isOpen ? beat.path : null, preloadedCoverUrl });
 
   // Handlers
-  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleSeekClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!seekBarRef.current) return;
     const rect = seekBarRef.current.getBoundingClientRect();
     const percent = ((e.clientX - rect.left) / rect.width) * 100;
     seekPercent(Math.max(0, Math.min(100, percent)));
-  };
+  }, [seekPercent]);
 
-  const handleVolumeClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleVolumeClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!volumeBarRef.current) return;
     const rect = volumeBarRef.current.getBoundingClientRect();
     const vol = (e.clientX - rect.left) / rect.width;
     setVolume(Math.max(0, Math.min(1, vol)));
-  };
+  }, [setVolume]);
 
   const handleOpenFolder = async () => {
     if (beat.path) {
@@ -78,13 +89,6 @@ export function DetailPanel({
       }
     }
   };
-
-  const statusItems: { key: BeatStatus; label: string }[] = [
-    { key: "idea", label: "Idea" },
-    { key: "wip", label: "WIP" },
-    { key: "finished", label: "Fin" },
-    { key: "sold", label: "Sold" },
-  ];
 
   return (
     <aside style={{
@@ -98,6 +102,8 @@ export function DetailPanel({
       flexDirection: "column",
       zIndex: 50,
       borderLeft: `1px solid ${C.border15}`,
+      transform: isOpen ? "translateX(0)" : "translateX(100%)",
+      transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
       {/* ═══════════════════════════════════════════════════════════════════════
           Player Section with Cover Art
@@ -386,7 +392,7 @@ export function DetailPanel({
             Status
           </div>
           <div style={{ display: "flex", padding: 4, background: C.surfaceContainerLow, borderRadius: 4, border: `1px solid ${C.border10}` }}>
-            {statusItems.map(({ key, label }) => {
+            {STATUS_ITEMS.map(({ key, label }) => {
               const isActive = beat.status === key;
               const cfg = STATUS_CONFIG[key];
               return (

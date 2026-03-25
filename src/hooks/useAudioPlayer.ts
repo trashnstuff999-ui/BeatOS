@@ -14,6 +14,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface UseAudioPlayerProps {
   beatPath: string | null;
+  preloadedCoverUrl?: string | null;
 }
 
 interface UseAudioPlayerReturn {
@@ -58,10 +59,11 @@ function pathToAssetUrl(filePath: string): string {
   return assetUrl;
 }
 
-export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlayerReturn {
+export function useAudioPlayer({ beatPath, preloadedCoverUrl }: UseAudioPlayerProps): UseAudioPlayerReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentBeatPathRef = useRef<string | null>(null);
   const abortedRef = useRef<boolean>(false);
+  const timeUpdateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +96,10 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
       return;
     }
 
-    if (beatPath === currentBeatPathRef.current) return;
+    if (beatPath === currentBeatPathRef.current) {
+      abortedRef.current = false; // Nicht abbrechen – gleicher Beat ist noch valid
+      return;
+    }
     
     abortedRef.current = false;
     currentBeatPathRef.current = beatPath;
@@ -114,21 +119,25 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
     const currentPath = beatPath;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LOAD COVER (via asset:// protocol - instant streaming)
+    // LOAD COVER — use preloaded URL instantly if available, else IPC
     // ═══════════════════════════════════════════════════════════════════════
-    (async () => {
-      try {
-        const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: currentPath });
-        if (abortedRef.current || currentBeatPathRef.current !== currentPath) return;
-        
-        if (coverPath) {
-          const url = pathToAssetUrl(coverPath);
-          setCoverUrl(url);
+    if (preloadedCoverUrl) {
+      setCoverUrl(preloadedCoverUrl);
+    } else {
+      (async () => {
+        try {
+          const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: currentPath });
+          if (abortedRef.current || currentBeatPathRef.current !== currentPath) return;
+
+          if (coverPath) {
+            const url = pathToAssetUrl(coverPath);
+            setCoverUrl(url);
+          }
+        } catch (e) {
+          console.error("Cover load error:", e);
         }
-      } catch (e) {
-        console.error("Cover load error:", e);
-      }
-    })();
+      })();
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LOAD AUDIO (via asset:// protocol - true streaming, no Base64!)
@@ -182,8 +191,6 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
       setError(null);
     };
     
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    
     const onEnded = () => {
       if (!isLooped) {
         setIsPlaying(false);
@@ -202,7 +209,6 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
     const onCanPlay = () => setIsLoading(false);
 
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
-    audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("error", onError);
     audio.addEventListener("play", onPlay);
@@ -211,9 +217,18 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
 
     audio.load();
 
+    timeUpdateIntervalRef.current = setInterval(() => {
+      if (audioRef.current && !audioRef.current.paused) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+    }, 100);
+
     return () => {
+      if (timeUpdateIntervalRef.current !== null) {
+        clearInterval(timeUpdateIntervalRef.current);
+        timeUpdateIntervalRef.current = null;
+      }
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("error", onError);
       audio.removeEventListener("play", onPlay);
@@ -226,7 +241,7 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
   const handleAssetProtocolFallback = useCallback(async () => {
     if (!currentBeatPathRef.current) return;
     
-    console.log("Asset protocol failed, falling back to Base64...");
+    console.warn("[useAudioPlayer] asset:// protocol failed — falling back to Base64 (high RAM usage!). Check if the file path contains special characters:", currentBeatPathRef.current);
     setIsLoading(true);
     
     try {
@@ -252,6 +267,17 @@ export function useAudioPlayer({ beatPath }: UseAudioPlayerProps): UseAudioPlaye
       setError("Failed to load audio");
       setIsLoading(false);
     }
+  }, []);
+
+  // ─── Unmount Cleanup ──────────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current.load(); // Gibt dekodierten Audio-Buffer frei
+      }
+    };
   }, []);
 
   // Sync settings

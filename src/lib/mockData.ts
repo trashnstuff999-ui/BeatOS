@@ -76,9 +76,4 @@ export const mockStats: Stats = {
   ],
 };
 
-export const STATUS_CONFIG = {
-  idea:     { label: "IDEA",     color: "var(--status-idea)",     bg: "var(--status-idea-bg)" },
-  wip:      { label: "WIP",      color: "var(--status-wip)",      bg: "var(--status-wip-bg)" },
-  finished: { label: "FINISHED", color: "var(--status-finished)", bg: "var(--status-finished-bg)" },
-  sold:     { label: "SOLD",     color: "var(--status-sold)",     bg: "var(--status-sold-bg)" },
-} as const;
+// STATUS_CONFIG wurde entfernt — identische Definition existiert in lib/theme.ts

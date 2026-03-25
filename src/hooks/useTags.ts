@@ -172,6 +172,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   }, []);
 
   const saveCustomTagsToDb = useCallback(async () => {
+    const saved: CustomTag[] = [];
     for (const tag of pendingCustomTags) {
       const prepared = prepareCustomTagForDb(tag);
       try {
@@ -180,13 +181,26 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
           displayName: prepared.display_name,
           category: prepared.category,
         });
+        // Build local CustomTag to append without a full DB reload
+        saved.push({
+          tag: prepared.tag,
+          display_name: prepared.display_name,
+          category: prepared.category as TagCategory,
+          usage_count: 1,
+        });
       } catch (err) {
         console.error("Failed to save custom tag:", err);
       }
     }
     setPendingCustomTags([]);
-    await loadCustomTags();
-  }, [pendingCustomTags, loadCustomTags]);
+    // Append newly saved tags instead of reloading all from DB
+    if (saved.length > 0) {
+      setCustomTags(prev => {
+        const existingTags = new Set(prev.map(t => t.tag));
+        return [...prev, ...saved.filter(t => !existingTags.has(t.tag))];
+      });
+    }
+  }, [pendingCustomTags]);
 
   const reloadCustomTags = useCallback(async () => {
     await loadCustomTags();

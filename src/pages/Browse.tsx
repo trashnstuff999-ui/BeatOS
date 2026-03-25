@@ -3,10 +3,12 @@
 // Browse Page - Modular Architecture with Server-Side Pagination & Filtering
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Loader2, AlertCircle } from "lucide-react";
 import { C } from "../lib/theme";
 import { useBeats } from "../hooks/useBeats";
+import type { FilterState } from "../types/browse";
 import {
   BrowseHeader,
   FilterBar,
@@ -18,6 +20,9 @@ import {
 import type { Beat, UpdateBeatParams } from "../types/browse";
 
 export default function Browse() {
+  const location = useLocation();
+  const initialFilters = (location.state as { initialFilters?: Partial<FilterState> } | null)?.initialFilters;
+
   // ─── Data & Actions from Hook ──────────────────────────────────────────────
   const {
     beats,  // Already filtered by server!
@@ -38,10 +43,17 @@ export default function Browse() {
     toggleFavorite,
     updateStatus,
     updateBeat,
-  } = useBeats();
+    getCoverUrl,
+  } = useBeats(initialFilters);
 
   // ─── Edit Modal State ──────────────────────────────────────────────────────
   const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
+
+  // ─── Panel Animation: keep last beat visible during slide-out ─────────────
+  const [displayBeat, setDisplayBeat] = useState<Beat | null>(null);
+  useEffect(() => {
+    if (selectedBeat) setDisplayBeat(selectedBeat);
+  }, [selectedBeat]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleOpenEditModal = (beat: Beat) => {
@@ -174,13 +186,15 @@ export default function Browse() {
       {/* ═══════════════════════════════════════════════════════════════════════
           Detail Panel (Read-Only + Status Toggles)
       ═══════════════════════════════════════════════════════════════════════ */}
-      {selectedBeat && (
+      {displayBeat && (
         <DetailPanel
-          beat={selectedBeat}
+          beat={displayBeat}
+          isOpen={!!selectedBeat}
           onClose={() => selectBeat(null)}
           onToggleFavorite={toggleFavorite}
           onUpdateStatus={updateStatus}
           onOpenEditModal={handleOpenEditModal}
+          preloadedCoverUrl={selectedBeat ? getCoverUrl(selectedBeat.id) : null}
         />
       )}
 

@@ -37,6 +37,7 @@ import {
 // ─── Hook Imports ───────────────────────────────────────────────────────────
 import { useTags } from "../hooks/useTags";
 import { useCreateBeat } from "../hooks/useCreateBeat";
+import { useCreateGuard } from "../hooks/useCreateGuard";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
 import { C } from "../lib/theme";
@@ -168,6 +169,9 @@ export default function Create() {
         title !== savedState.title ||
         key !== savedState.key ||
         bpm !== savedState.bpm ||
+        catalogId !== savedState.catalogId ||
+        selectedFile !== savedState.selectedFile ||
+        selectedFlp !== savedState.selectedFlp ||
         status !== savedState.status ||
         notes !== savedState.notes ||
         coverImage !== savedState.coverImage ||
@@ -176,7 +180,7 @@ export default function Create() {
     } else {
       setIsDirty(false);
     }
-  }, [title, key, bpm, status, notes, coverImage, tags, sourceFolderPath, savedState]);
+  }, [title, key, bpm, catalogId, selectedFile, selectedFlp, status, notes, coverImage, tags, sourceFolderPath, savedState]);
 
   // ─── Get Current State Snapshot ────────────────────────────────────────────
   const getCurrentState = useCallback((): SavedBeatState => ({
@@ -316,7 +320,6 @@ export default function Create() {
         setFlpFiles([]);
         setSelectedFlp("");
       }
-
       // Cover
       if (parsed.cover_path) {
         setCoverSourcePath(parsed.cover_path);
@@ -358,6 +361,16 @@ export default function Create() {
 
   // ─── Check if we have data ─────────────────────────────────────────────────
   const hasData = Boolean(sourceFolderPath || savedState);
+
+        // ─── Navigation Guard Integration ──────────────────────────────────────────
+  // This connects Create's dirty state to the global navigation guard
+  // so App.tsx can show a dialog when user tries to leave with unsaved changes
+  useCreateGuard({
+    isDirty,
+    onApply: handleApply,
+    onDiscard: restoreToSavedState,  // Restore to last applied state, not full reset
+  });
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Render

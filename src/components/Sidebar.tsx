@@ -1,10 +1,13 @@
-// src/components/Sidebar.tsx — 1:1 nach Stitch HTML
-import { NavLink } from "react-router-dom";
+// src/components/Sidebar.tsx
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sidebar with Navigation Guard support
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// Stitch exakt: Material Symbols Icons als Text-Fallback mit Lucide
-import {
-  LayoutGrid, LibraryBig, PlusSquare, Music, Settings, HelpCircle
-} from "lucide-react";
+import { useCallback, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { LayoutGrid, LibraryBig, PlusSquare, Music, Settings, HelpCircle } from "lucide-react";
+import { useNavigationGuardOptional } from "../contexts/NavigationGuardContext";
+import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 
 const C = {
   bg:          "#131313",
@@ -13,7 +16,6 @@ const C = {
   text:        "#adaaaa",
   primary:     "#fda124",
   container:   "#1a1919",
-  highest:     "#262626",
   border:      "rgba(72,72,71,0.15)",
 };
 
@@ -30,43 +32,84 @@ const BOTTOM_NAV = [
 ];
 
 export default function Sidebar({ beatCount }: { beatCount: number }) {
-  return (
-    <aside style={{
-      position: "fixed", left: 0, top: 0,
-      height: "100vh", width: 260,
-      background: C.bg,
-      display: "flex", flexDirection: "column",
-      padding: 16, gap: 8,
-      zIndex: 50,
-    }}>
-      {/* Logo — exakt nach Stitch */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 8px", marginBottom: 24 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 8,
-          background: C.container,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "inset 0 0 10px rgba(253,161,36,0.1)",
-        }}>
-          {/* graphic_eq equivalent */}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fda124">
-            <rect x="2" y="10" width="3" height="10" rx="1"/>
-            <rect x="7" y="6" width="3" height="14" rx="1"/>
-            <rect x="12" y="3" width="3" height="17" rx="1"/>
-            <rect x="17" y="7" width="3" height="13" rx="1"/>
-          </svg>
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: "#F89D1F", lineHeight: 1 }}>BeatOS</h1>
-          <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.2em", color: "#adaaaa", fontWeight: 500, marginTop: 2 }}>Precision Console</p>
-        </div>
-      </div>
+  const location = useLocation();
+  const navigate = useNavigate();
+  const guard = useNavigationGuardOptional();
 
-      {/* Main nav */}
-      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-        {NAV.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} end={to === "/"} style={{ textDecoration: "none" }}>
-            {({ isActive }) => (
+  // Pending destination when guard dialog is shown
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+
+  // Handle navigation — intercept if leaving Create with unsaved changes
+  const handleNavClick = useCallback((to: string) => {
+    if (location.pathname === to) return;
+
+    if (location.pathname === "/create" && guard?.isCreateDirty) {
+      setPendingPath(to);
+      return;
+    }
+
+    navigate(to);
+  }, [location.pathname, guard?.isCreateDirty, navigate]);
+
+  // "Save & Leave" — apply pending changes, then navigate
+  const handleApply = useCallback(() => {
+    if (!pendingPath) return;
+    guard?.getCreateHandlers()?.onApply();
+    navigate(pendingPath);
+    setPendingPath(null);
+  }, [pendingPath, guard, navigate]);
+
+  // "Discard" — restore to last applied state (not full reset), then navigate
+  const handleDiscard = useCallback(() => {
+    if (!pendingPath) return;
+    guard?.getCreateHandlers()?.onDiscard();
+    navigate(pendingPath);
+    setPendingPath(null);
+  }, [pendingPath, guard, navigate]);
+
+  const handleCancel = useCallback(() => {
+    setPendingPath(null);
+  }, []);
+
+  return (
+    <>
+      <aside style={{
+        position: "fixed", left: 0, top: 0,
+        height: "100vh", width: 260,
+        background: C.bg,
+        display: "flex", flexDirection: "column",
+        padding: 16, gap: 8,
+        zIndex: 50,
+      }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 8px", marginBottom: 24 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 8,
+            background: C.container,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "inset 0 0 10px rgba(253,161,36,0.1)",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fda124">
+              <rect x="2" y="10" width="3" height="10" rx="1"/>
+              <rect x="7" y="6" width="3" height="14" rx="1"/>
+              <rect x="12" y="3" width="3" height="17" rx="1"/>
+              <rect x="17" y="7" width="3" height="13" rx="1"/>
+            </svg>
+          </div>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: "#F89D1F", lineHeight: 1 }}>BeatOS</h1>
+            <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.2em", color: "#adaaaa", fontWeight: 500, marginTop: 2 }}>Precision Console</p>
+          </div>
+        </div>
+
+        {/* Main nav */}
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+          {NAV.map(({ to, icon: Icon, label }) => {
+            const isActive = to === "/" ? location.pathname === "/" : location.pathname === to;
+            return (
               <div
+                key={to}
+                onClick={() => handleNavClick(to)}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "12px 16px", borderRadius: 6,
@@ -93,26 +136,24 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
                 <Icon size={18} strokeWidth={1.5} />
                 {label}
               </div>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+            );
+          })}
+        </nav>
 
-      {/* Bottom section */}
-      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        {/* Beat count box */}
-        <div style={{ padding: "8px 16px", marginBottom: 8 }}>
-          <div style={{
-            background: "rgba(38,38,38,0.5)", borderRadius: 8, padding: 12,
-          }}>
-            <p style={{ fontSize: 10, color: "#adaaaa", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Total Beats</p>
-            <p style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{beatCount.toLocaleString()}</p>
+        {/* Bottom section */}
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+          {/* Beat count */}
+          <div style={{ padding: "8px 16px", marginBottom: 8 }}>
+            <div style={{ background: "rgba(38,38,38,0.5)", borderRadius: 8, padding: 12 }}>
+              <p style={{ fontSize: 10, color: "#adaaaa", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Total Beats</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{beatCount.toLocaleString()}</p>
+            </div>
           </div>
-        </div>
 
-        {BOTTOM_NAV.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} style={{ textDecoration: "none" }}>
+          {BOTTOM_NAV.map(({ to, icon: Icon, label }) => (
             <div
+              key={to}
+              onClick={() => handleNavClick(to)}
               style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "12px 16px", borderRadius: 6,
@@ -131,9 +172,18 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
               <Icon size={18} strokeWidth={1.5} />
               {label}
             </div>
-          </NavLink>
-        ))}
-      </div>
-    </aside>
+          ))}
+        </div>
+      </aside>
+
+      {/* Unsaved Changes Dialog — only shown when leaving Create with dirty state */}
+      {pendingPath && (
+        <UnsavedChangesDialog
+          onApply={handleApply}
+          onDiscard={handleDiscard}
+          onCancel={handleCancel}
+        />
+      )}
+    </>
   );
 }

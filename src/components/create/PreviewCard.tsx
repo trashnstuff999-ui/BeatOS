@@ -3,6 +3,7 @@
 // Preview Card - Beat registry preview with cover and metadata
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { memo } from "react";
 import { FolderOpen, ImagePlus, Info } from "lucide-react";
 import { C } from "../../lib/theme";
 import { Label } from "../ui";
@@ -21,7 +22,7 @@ interface PreviewCardProps {
   onSelectCover: () => void;
 }
 
-export function PreviewCard({
+export const PreviewCard = memo(function PreviewCard({
   title,
   keyValue,
   bpm,
@@ -169,4 +170,4 @@ export function PreviewCard({
       </div>
     </div>
   );
-}
+});

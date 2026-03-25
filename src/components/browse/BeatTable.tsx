@@ -3,6 +3,7 @@
 // Beat Table with Sortable Headers
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { memo } from "react";
 import { Music, Heart, ArrowUp, ArrowDown } from "lucide-react";
 import { C } from "../../lib/theme";
 import type { Beat, BeatStatus, SortState, SortColumn } from "../../types/browse";
@@ -90,6 +91,75 @@ function SortableHeader({ label, column, currentSort, onSort, align = "left" }: 
   );
 }
 
+// ─── Beat Row (memoized) ──────────────────────────────────────────────────────
+
+interface BeatRowProps {
+  beat: Beat;
+  index: number;
+  isSelected: boolean;
+  onSelectBeat: (beat: Beat) => void;
+  onToggleFavorite: (beatId: string) => void;
+}
+
+const BeatRow = memo(function BeatRow({ beat, index, isSelected, onSelectBeat, onToggleFavorite }: BeatRowProps) {
+  const isFav = beat.favorite === 1;
+  return (
+    <tr
+      onClick={() => onSelectBeat(beat)}
+      style={{
+        borderTop: index > 0 ? "1px solid rgba(72,72,71,0.05)" : undefined,
+        background: isSelected ? "rgba(26,25,25,0.5)" : "transparent",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.surfaceContainer; }}
+      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+    >
+      {/* ID */}
+      <td style={{ padding: 16, fontSize: 12, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
+        #{beat.id}
+      </td>
+
+      {/* Name */}
+      <td style={{ padding: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 4, background: C.surfaceContainerHighest, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Music size={12} color={C.onSurfaceVariant} strokeWidth={1.5} />
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface }}>
+            {beat.name}
+          </span>
+        </div>
+      </td>
+
+      {/* Key */}
+      <td style={{ padding: 16, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
+        {beat.key || "—"}
+      </td>
+
+      {/* BPM */}
+      <td style={{ padding: 16, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
+        {beat.bpm || "—"}
+      </td>
+
+      {/* Status */}
+      <td style={{ padding: 16, textAlign: "center" }}>
+        <StatusPill status={beat.status as BeatStatus} />
+      </td>
+
+      {/* Favorite Action */}
+      <td style={{ padding: 16, textAlign: "right" }}>
+        <button
+          onClick={e => { e.stopPropagation(); onToggleFavorite(beat.id); }}
+          style={{ background: "none", border: "none", cursor: "pointer", display: "inline-flex", padding: 4 }}
+        >
+          <Heart size={20} strokeWidth={1.5} fill={isFav ? C.primary : "none"} color={isFav ? C.primary : C.onSurfaceVariant} />
+        </button>
+      </td>
+    </tr>
+  );
+});
+
 // ─── Beat Table ──────────────────────────────────────────────────────────────
 
 export function BeatTable({ 
@@ -129,114 +199,16 @@ export function BeatTable({
           </tr>
         </thead>
         <tbody>
-          {beats.map((beat, i) => {
-            const isSelected = selectedBeatId === beat.id;
-            const isFav = beat.favorite === 1;
-
-            return (
-              <tr
-                key={beat.id}
-                onClick={() => onSelectBeat(beat)}
-                style={{
-                  borderTop: i > 0 ? "1px solid rgba(72,72,71,0.05)" : undefined,
-                  background: isSelected ? "rgba(26,25,25,0.5)" : "transparent",
-                  cursor: "pointer",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={e => {
-                  if (!isSelected) e.currentTarget.style.background = C.surfaceContainer;
-                }}
-                onMouseLeave={e => {
-                  if (!isSelected) e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {/* ID */}
-                <td style={{
-                  padding: 16,
-                  fontSize: 12,
-                  fontFamily: "monospace",
-                  color: C.primary,
-                  fontWeight: 700,
-                }}>
-                  #{beat.id}
-                </td>
-
-                {/* Name */}
-                <td style={{ padding: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 4,
-                      background: C.surfaceContainerHighest,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}>
-                      <Music size={12} color={C.onSurfaceVariant} strokeWidth={1.5} />
-                    </div>
-                    <span style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      letterSpacing: "-0.01em",
-                      color: C.onSurface,
-                    }}>
-                      {beat.name}
-                    </span>
-                  </div>
-                </td>
-
-                {/* Key */}
-                <td style={{
-                  padding: 16,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: C.onSurfaceVariant,
-                }}>
-                  {beat.key || "—"}
-                </td>
-
-                {/* BPM */}
-                <td style={{
-                  padding: 16,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: C.onSurfaceVariant,
-                }}>
-                  {beat.bpm || "—"}
-                </td>
-
-                {/* Status */}
-                <td style={{ padding: 16, textAlign: "center" }}>
-                  <StatusPill status={beat.status as BeatStatus} />
-                </td>
-
-                {/* Favorite Action */}
-                <td style={{ padding: 16, textAlign: "right" }}>
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      onToggleFavorite(beat.id);
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      padding: 4,
-                    }}
-                  >
-                    <Heart
-                      size={20}
-                      strokeWidth={1.5}
-                      fill={isFav ? C.primary : "none"}
-                      color={isFav ? C.primary : C.onSurfaceVariant}
-                    />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+          {beats.map((beat, i) => (
+            <BeatRow
+              key={beat.id}
+              beat={beat}
+              index={i}
+              isSelected={selectedBeatId === beat.id}
+              onSelectBeat={onSelectBeat}
+              onToggleFavorite={onToggleFavorite}
+            />
+          ))}
 
           {/* Empty State */}
           {beats.length === 0 && (
