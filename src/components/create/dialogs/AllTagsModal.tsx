@@ -194,21 +194,27 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     if (!newTagName.trim() || isCreating) return;
     const name = normalizeTag(newTagName);
     const key = name.toLowerCase();
+    const cat = newTagCategory;
     setIsCreating(true);
     try {
-      await invoke("save_custom_tag", { tag: key, displayName: name, category: newTagCategory });
+      await invoke("save_custom_tag", { tag: key, displayName: name, category: cat });
       const entry: CustomTag = {
         id: Date.now(), tag: key, display_name: name,
-        category: newTagCategory, usage_count: 1, created_at: new Date().toISOString(),
+        category: cat, usage_count: 1, created_at: new Date().toISOString(),
       };
       setAllTags(prev => {
-        const next = prev.some(t => t.tag === key) ? prev : [...prev, entry];
+        // If tag exists (e.g. seeded with different category) → update its category
+        const next = prev.some(t => t.tag === key)
+          ? prev.map(t => t.tag === key ? { ...t, display_name: name, category: cat } : t)
+          : [...prev, entry];
         updateCustomTagsCache(next);
         return next;
       });
       setStaged(prev => new Set([...prev, key]));
       setNewTagName("");
       setShowCreateForm(false);
+    } catch (e) {
+      console.error("Failed to create tag:", e);
     } finally {
       setIsCreating(false);
     }

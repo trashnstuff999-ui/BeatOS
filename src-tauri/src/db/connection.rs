@@ -33,7 +33,7 @@ pub fn init_db() -> Result<(), String> {
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         tag TEXT UNIQUE NOT NULL,
                         display_name TEXT NOT NULL,
-                        category TEXT NOT NULL CHECK (category IN ('genre', 'vibe', 'instrument', 'other')),
+                        category TEXT NOT NULL CHECK (category IN ('genre', 'vibe', 'instrument', 'custom', 'other')),
                         usage_count INTEGER DEFAULT 1,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP
                     )",
@@ -41,11 +41,36 @@ pub fn init_db() -> Result<(), String> {
                 ) {
                     init_error = Some(format!("Failed to create custom_tags table: {}", e));
                 }
-                
-                // Future migrations can be added here:
-                // - Add new columns
-                // - Create indexes
-                // - Data migrations
+
+                // Migration: rebuild table if CHECK constraint is missing 'custom'
+                // SQLite cannot ALTER a constraint, so we recreate the table.
+                let needs_migration: bool = conn.query_row(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='custom_tags'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                ).map(|sql| !sql.contains("'custom'"))
+                 .unwrap_or(false);
+
+                if needs_migration {
+                    let migration = "
+                        BEGIN;
+                        CREATE TABLE custom_tags_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            tag TEXT UNIQUE NOT NULL,
+                            display_name TEXT NOT NULL,
+                            category TEXT NOT NULL CHECK (category IN ('genre', 'vibe', 'instrument', 'custom', 'other')),
+                            usage_count INTEGER DEFAULT 1,
+                            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        );
+                        INSERT INTO custom_tags_new SELECT * FROM custom_tags;
+                        DROP TABLE custom_tags;
+                        ALTER TABLE custom_tags_new RENAME TO custom_tags;
+                        COMMIT;
+                    ";
+                    if let Err(e) = conn.execute_batch(migration) {
+                        init_error = Some(format!("Failed to migrate custom_tags table: {}", e));
+                    }
+                }
             }
             Err(e) => {
                 init_error = Some(format!("Failed to open database: {}", e));
