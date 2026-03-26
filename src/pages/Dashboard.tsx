@@ -1,37 +1,11 @@
 // src/pages/Dashboard.tsx — Live DB Version with Centralized Tag System
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play } from "lucide-react";
+import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play, Sparkles, Piano, Star } from "lucide-react";
 import { getStats, normalizeStatus, type Stats } from "../lib/Database";
 import { invoke } from "@tauri-apps/api/core";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Import Centralized Tag System
-// ═══════════════════════════════════════════════════════════════════════════
-import { getTagCategory, TAG_COLORS, type TagCategory } from "../lib/tags";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Design Tokens
-// ═══════════════════════════════════════════════════════════════════════════
-const C = {
-  background:             "#0e0e0e",
-  surfaceContainerLow:    "#131313",
-  surfaceContainer:       "#1a1919",
-  surfaceContainerHigh:   "#201f1f",
-  surfaceContainerHighest:"#262626",
-  surfaceContainerLowest: "#000000",
-  primary:                "#fda124",
-  primaryContainer:       "#e48c03",
-  tertiary:               "#9492ff",
-  error:                  "#ff7351",
-  onSurface:              "#ffffff",
-  onSurfaceVariant:       "#adaaaa",
-  onSecondaryFixedVar:    "#5c5b5b",
-  outlineVariant:         "#484847",
-  border10:               "rgba(72,72,71,0.10)",
-  border15:               "rgba(72,72,71,0.15)",
-  onPrimary:              "#4e2d00",
-} as const;
+import { C, commonStyles } from "../lib/theme";
+import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
 
 const STATUS_CFG = {
   finished: { text: "#4ade80", bg: "rgba(74,222,128,0.10)", border: "rgba(74,222,128,0.20)" },
@@ -123,15 +97,7 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
   );
 }
 
-// ── Key Expansion + Classification ────────────────────────────────────────────
-function expandKey(raw: string): string {
-  const s = raw.trim();
-  const isMinor = /m$/i.test(s) && !/maj/i.test(s);
-  const root = isMinor ? s.slice(0, -1) : s;
-  const rootUp = root.charAt(0).toUpperCase() + root.slice(1);
-  return `${rootUp} ${isMinor ? "MINOR" : "MAJOR"}`;
-}
-
+// ── Key Classification ─────────────────────────────────────────────────────────
 function keyType(raw: string): "major" | "minor" | "others" {
   const s = raw.trim();
   if (!s) return "others";
@@ -140,49 +106,37 @@ function keyType(raw: string): "major" | "minor" | "others" {
   return "others";
 }
 
+// Canonical chromatic order
+const CHROMATIC_MAJOR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const CHROMATIC_MINOR = ["Cm", "C#m", "Dm", "D#m", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "A#m", "Bm"];
+const BAR_COLORS = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
+                    "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
+                    "#8b5cf6", "#14b8a6"];
+
 // ── Top Keys ──────────────────────────────────────────────────────────────────
 function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
   const [hov, setHov] = useState<number | null>(null);
   const [keyMode, setKeyMode] = useState<"major" | "minor" | "others">("major");
 
   const allKeys = stats.top_keys;
-  const keys = allKeys.filter(k => keyType(k.key) === keyMode);
-  const max  = Math.max(...keys.map(k => k.count), 1);
 
-  const barColors = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
-                     "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
-                     "#8b5cf6", "#14b8a6", "#f43f5e"];
+  // Build display list: all 12 for major/minor (fill gaps with 0), raw for others
+  const displayKeys: { key: string; count: number }[] =
+    keyMode === "major" ? CHROMATIC_MAJOR.map(k => ({ key: k, count: allKeys.find(x => x.key === k)?.count ?? 0 })) :
+    keyMode === "minor" ? CHROMATIC_MINOR.map(k => ({ key: k, count: allKeys.find(x => x.key === k)?.count ?? 0 })) :
+    allKeys.filter(k => keyType(k.key) === "others");
 
-  const scrollRef = (el: HTMLDivElement | null) => {
-    if (!el) return;
-    el.onwheel = (e) => {
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      el.scrollLeft += e.deltaY;
-    };
-  };
-
-  const BAR_W = 52;
-  const BAR_GAP = 10;
-  const needsScroll = keys.length > 8;
-  const totalW = needsScroll ? keys.length * (BAR_W + BAR_GAP) : undefined;
+  const max = Math.max(...displayKeys.map(k => k.count), 1);
 
   return (
     <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
-        {/* Mode Dropdown */}
         <div style={{ position: "relative" }}>
           <select
             value={keyMode}
             onChange={e => { setKeyMode(e.target.value as typeof keyMode); setHov(null); }}
-            style={{
-              background: C.surfaceContainerHighest,
-              border: `1px solid rgba(72,72,71,0.20)`,
-              borderRadius: 6, padding: "4px 28px 4px 10px",
-              fontSize: 11, fontWeight: 700, color: C.primary,
-              appearance: "none", cursor: "pointer", outline: "none",
-            }}
+            style={{ background: C.surfaceContainerHighest, border: `1px solid rgba(72,72,71,0.20)`, borderRadius: 6, padding: "4px 28px 4px 10px", fontSize: 11, fontWeight: 700, color: C.primary, appearance: "none", cursor: "pointer", outline: "none" }}
           >
             <option value="major" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Major</option>
             <option value="minor" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Minor</option>
@@ -194,48 +148,51 @@ function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
         </div>
       </div>
 
-      {keys.length === 0 ? (
-        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>
-          No {keyMode} key data
-        </p>
+      {displayKeys.length === 0 ? (
+        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>No {keyMode} key data</p>
       ) : (
-        <div ref={scrollRef} style={{ overflowX: "auto", overflowY: "hidden", flex: 1, paddingBottom: 4,
-          scrollbarWidth: "thin", scrollbarColor: `${C.surfaceContainerHighest} transparent` }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: BAR_GAP, height: 160, marginBottom: 10, minWidth: totalW }}>
-            {keys.map(({ key, count }, i) => {
-              const color = barColors[i % barColors.length];
-              const isHov = hov === i;
-              const barH  = Math.max((count / max) * 160, 4);
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {/* Bars row — flex:1 fills all remaining space */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, flex: 1, marginBottom: 8 }}>
+            {displayKeys.map(({ key, count }, i) => {
+              const color   = BAR_COLORS[i % BAR_COLORS.length];
+              const isEmpty = count === 0;
+              const isHov   = hov === i;
+              // Heights as % of the flex container — works because parent has resolved height via flex:1
+              const barPct  = isEmpty ? "3%" : `${Math.max((count / max) * 100, 2)}%`;
               return (
                 <div key={key}
-                  style={{ width: BAR_W, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 5, cursor: "pointer" }}
-                  onMouseEnter={() => setHov(i)}
+                  style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: isEmpty ? "default" : "pointer" }}
+                  onMouseEnter={() => !isEmpty && setHov(i)}
                   onMouseLeave={() => setHov(null)}
-                  onClick={() => onNavigate({ keys: [key] })}>
-                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: isHov ? color : C.onSurfaceVariant, transition: "all 0.15s", lineHeight: 1 }}>
+                  onClick={() => !isEmpty && onNavigate({ keys: [key] })}>
+                  {/* Count label — hidden for 0 */}
+                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "monospace", color: isHov ? color : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
                     {count}
                   </span>
+                  {/* Bar */}
                   <div style={{
-                    width: "100%", height: barH,
-                    background: color, borderRadius: "3px 3px 0 0",
-                    opacity: isHov ? 1 : 0.78,
+                    width: "100%", height: barPct,
+                    background: isEmpty ? C.surfaceContainerHighest : color,
+                    borderRadius: "3px 3px 0 0",
+                    opacity: isEmpty ? 0.4 : isHov ? 1 : 0.78,
                     transition: "opacity 0.15s, box-shadow 0.15s",
-                    boxShadow: isHov ? `0 0 14px ${color}70` : "none",
+                    boxShadow: isHov ? `0 0 12px ${color}70` : "none",
                   }} />
                 </div>
               );
             })}
           </div>
-          <div style={{ display: "flex", gap: BAR_GAP, minWidth: totalW }}>
-            {keys.map(({ key }, i) => (
+          {/* Labels */}
+          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            {displayKeys.map(({ key, count }, i) => (
               <span key={key} style={{
-                width: BAR_W, flexShrink: 0,
-                textAlign: "center", fontSize: 9, fontWeight: 700,
-                color: hov === i ? barColors[i % barColors.length] : C.onSurfaceVariant,
+                flex: 1, textAlign: "center", fontSize: 9, fontWeight: 700,
+                color: hov === i ? BAR_COLORS[i % BAR_COLORS.length] : count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
                 transition: "color 0.15s", lineHeight: 1.2,
-                whiteSpace: "normal", wordBreak: "break-word",
+                overflow: "hidden",
               }}>
-                {expandKey(key)}
+                {key}
               </span>
             ))}
           </div>
@@ -256,18 +213,19 @@ function BeatsPerMonth({ stats, onYearChange }: {
 
   const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
   const monthLabel = (s: string) => MONTHS[parseInt(s.split("-")[1] ?? "1") - 1] ?? s;
-  const CHART_H = 165;
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
+    <div style={{
+      background: C.surfaceContainer, padding: 24, borderRadius: 12,
+      border: `1px solid ${C.border10}`, transition: "border-color 0.2s",
+      minHeight: 360, display: "flex", flexDirection: "column", boxSizing: "border-box",
+    }} {...cardHover}>
       {/* Header + Jahr-Dropdown */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexShrink: 0 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats Per Month</h4>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Dot */}
           <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
-          {/* Dropdown */}
           <div style={{ position: "relative" }}>
             <select
               value={stats.selected_year}
@@ -284,7 +242,6 @@ function BeatsPerMonth({ stats, onYearChange }: {
                 <option key={y} value={y} style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>{y}</option>
               ))}
             </select>
-            {/* Chevron */}
             <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
@@ -292,29 +249,29 @@ function BeatsPerMonth({ stats, onYearChange }: {
         </div>
       </div>
 
-      {/* Bars */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: CHART_H, marginBottom: 8 }}>
+      {/* Bars — flex: 1 fills remaining card height */}
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 8 }}>
         {data.map(({ month, count }, i) => {
           const isHov = hov === i;
-          const barH = count > 0 ? Math.max((count / max) * CHART_H, 4) : 0;
+          const isEmpty = count === 0;
+          const barPct = isEmpty ? 1.5 : Math.max((count / max) * 100, 3);
           return (
             <div key={month}
-              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: "pointer", padding: "0 2px" }}
-              onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
-              {/* Count */}
+              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: isEmpty ? "default" : "pointer", padding: "0 2px" }}
+              onMouseEnter={() => !isEmpty && setHov(i)} onMouseLeave={() => setHov(null)}>
               <span style={{
                 fontSize: 11, fontWeight: 700, fontFamily: "monospace",
                 color: isHov ? C.primary : C.onSurfaceVariant,
-                opacity: count > 0 ? 1 : 0,
+                opacity: isEmpty ? 0 : 1,
                 transition: "all 0.15s", lineHeight: 1,
               }}>
                 {count}
               </span>
-              {/* Bar */}
               <div style={{
-                width: "100%", height: barH,
-                background: C.primary, borderRadius: "3px 3px 0 0",
-                opacity: isHov ? 1 : 0.72,
+                width: "100%", height: `${barPct}%`,
+                background: isEmpty ? C.surfaceContainerHighest : C.primary,
+                borderRadius: "3px 3px 0 0",
+                opacity: isEmpty ? 0.4 : isHov ? 1 : 0.72,
                 transition: "all 0.15s",
                 boxShadow: isHov ? `0 0 10px ${C.primary}50` : "none",
               }} />
@@ -324,7 +281,7 @@ function BeatsPerMonth({ stats, onYearChange }: {
       </div>
 
       {/* Month labels */}
-      <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
         {data.map(({ month }, i) => (
           <span key={month} style={{
             flex: 1, textAlign: "center", fontSize: 9,
@@ -339,18 +296,22 @@ function BeatsPerMonth({ stats, onYearChange }: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Top Tags — 4 category rows, sorted by usage, max 5 per row
+// Top Tags — Category rows with icons, like Create tab
 // ══════════════════════════════════════════════════════════════════════════════
 const TAG_ROW_ORDER: TagCategory[] = ["genre", "vibe", "instrument", "other"];
-const TAG_ROW_LABELS: Record<TagCategory, string> = {
-  genre: "Genre", vibe: "Vibe", instrument: "Instr", custom: "Custom", other: "Custom",
+
+const TAG_ROW_META: Record<TagCategory, { label: string; icon: React.ReactNode }> = {
+  genre:      { label: "Genre",       icon: <Music size={11} /> },
+  vibe:       { label: "Vibe",        icon: <Sparkles size={11} /> },
+  instrument: { label: "Instruments", icon: <Piano size={11} /> },
+  custom:     { label: "Custom",      icon: <Star size={11} /> },
+  other:      { label: "Custom",      icon: <Star size={11} /> },
 };
 
 function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  // Group tags by category, sort each bucket by count desc, cap at 5
   const grouped = Object.fromEntries(TAG_ROW_ORDER.map(cat => [cat, [] as typeof stats.top_tags])) as Record<TagCategory, typeof stats.top_tags>;
   for (const item of stats.top_tags) {
-    const cat = getTagCategory(item.tag);
+    const cat = getTagCategoryFromDb(item.tag) ?? "custom";
     const bucket = cat === "custom" ? "other" : cat;
     if (grouped[bucket]) grouped[bucket].push(item);
     else grouped["other"].push(item);
@@ -358,40 +319,46 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
   TAG_ROW_ORDER.forEach(cat => grouped[cat].sort((a, b) => b.count - a.count));
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, height: "100%", transition: "border-color 0.2s" }} {...cardHover}>
+    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", minHeight: 360, boxSizing: "border-box" }} {...cardHover}>
       <div style={{ marginBottom: 18 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Tags</h4>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {TAG_ROW_ORDER.map(cat => {
           const row = grouped[cat].slice(0, 5);
           if (row.length === 0) return null;
           const colors = TAG_COLORS[cat];
+          const meta = TAG_ROW_META[cat];
           return (
-            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Row label */}
-              <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: colors.text, width: 36, flexShrink: 0, opacity: 0.8 }}>
-                {TAG_ROW_LABELS[cat]}
-              </span>
-              {/* Tag pills */}
+            <div key={cat}>
+              {/* Category label with icon */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: colors.text }}>
+                {meta.icon}
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.13em" }}>
+                  {meta.label}
+                </span>
+              </div>
+              {/* Tag pills — nowrap, overflow hidden, # prefix, uppercase */}
               <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
                 {row.map(({ tag }) => (
-                  <span key={tag}
+                  <span
+                    key={tag}
                     onClick={() => onNavigate({ search: tag })}
                     style={{
-                      padding: "4px 10px",
+                      padding: "4px 12px",
                       background: colors.bg,
                       borderRadius: 9999,
                       fontSize: 10,
                       fontWeight: 700,
+                      letterSpacing: "0.05em",
                       textTransform: "uppercase",
-                      letterSpacing: "0.08em",
                       color: colors.text,
                       border: `1px solid ${colors.border}`,
                       cursor: "pointer",
                       transition: "filter 0.15s, transform 0.15s",
                       whiteSpace: "nowrap",
+                      flexShrink: 0,
                     }}
                     onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.3)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
                     onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; e.currentTarget.style.transform = "translateY(0)"; }}
@@ -487,9 +454,9 @@ export default function Dashboard() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
       {/* Header */}
-      <header style={{ height: 64, flexShrink: 0, background: "rgba(14,14,14,0.7)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", borderBottom: `1px solid ${C.border15}` }}>
+      <header style={{ height: 64, flexShrink: 0, ...commonStyles.glassHeader, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", borderBottom: `1px solid ${C.border15}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 800, letterSpacing: "0.05em", color: C.onSurface }}>DASHBOARD</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurface }}>Dashboard</h1>
           <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, letterSpacing: "0.05em" }}>SYSTEM STATUS: NOMINAL</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

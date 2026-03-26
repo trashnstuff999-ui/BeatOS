@@ -5,6 +5,8 @@
 
 use crate::db::{open_db, CustomTag};
 
+const VALID_CATEGORIES: &[&str] = &["genre", "vibe", "instrument", "custom", "other"];
+
 /// Get all custom tags, sorted by usage_count (most used first)
 #[tauri::command]
 pub fn get_custom_tags() -> Result<Vec<CustomTag>, String> {
@@ -40,9 +42,8 @@ pub fn save_custom_tag(tag: String, display_name: String, category: String) -> R
     let conn = open_db().map_err(|e| e.to_string())?;
     
     // Validate category
-    let valid_categories = ["genre", "vibe", "instrument", "other"];
-    if !valid_categories.contains(&category.as_str()) {
-        return Err(format!("Invalid category: {}. Must be one of: genre, vibe, instrument, other", category));
+    if !VALID_CATEGORIES.contains(&category.as_str()) {
+        return Err(format!("Invalid category: {}. Must be one of: {:?}", category, VALID_CATEGORIES));
     }
     
     // INSERT OR UPDATE (UPSERT)
@@ -83,8 +84,7 @@ pub fn save_custom_tags_batch(tags: Vec<(String, String, String)>) -> Result<i64
     let mut saved_count = 0i64;
     
     for (tag, display_name, category) in tags {
-        let valid_categories = ["genre", "vibe", "instrument", "other"];
-        if !valid_categories.contains(&category.as_str()) {
+        if !VALID_CATEGORIES.contains(&category.as_str()) {
             continue;
         }
         
@@ -116,6 +116,51 @@ pub fn delete_custom_tag(tag: String) -> Result<bool, String> {
     ).map_err(|e| e.to_string())?;
     
     Ok(rows_affected > 0)
+}
+
+/// Rename a custom tag (changes primary key: delete old + insert new)
+#[tauri::command]
+pub fn rename_custom_tag(old_tag: String, new_tag: String, new_display_name: String, category: String) -> Result<CustomTag, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+
+    if !VALID_CATEGORIES.contains(&category.as_str()) {
+        return Err(format!("Invalid category: {}. Must be one of: {:?}", category, VALID_CATEGORIES));
+    }
+
+    let old_key = old_tag.to_lowercase();
+    let new_key = new_tag.to_lowercase();
+
+    // Copy row with new key, preserving usage_count and created_at
+    conn.execute(
+        "INSERT INTO custom_tags (tag, display_name, category, usage_count, created_at)
+         SELECT ?1, ?2, ?3, usage_count, created_at FROM custom_tags WHERE tag = ?4",
+        rusqlite::params![new_key, new_display_name, category, old_key],
+    ).map_err(|e| e.to_string())?;
+
+    // Remove old row
+    conn.execute(
+        "DELETE FROM custom_tags WHERE tag = ?1",
+        [old_key],
+    ).map_err(|e| e.to_string())?;
+
+    // Return the renamed tag
+    let saved: CustomTag = conn.query_row(
+        "SELECT id, tag, display_name, category, usage_count, created_at
+         FROM custom_tags WHERE tag = ?1",
+        [new_key],
+        |row| {
+            Ok(CustomTag {
+                id:           row.get(0)?,
+                tag:          row.get(1)?,
+                display_name: row.get(2)?,
+                category:     row.get(3)?,
+                usage_count:  row.get(4)?,
+                created_at:   row.get(5)?,
+            })
+        },
+    ).map_err(|e| e.to_string())?;
+
+    Ok(saved)
 }
 
 /// Search custom tags (for autocomplete)

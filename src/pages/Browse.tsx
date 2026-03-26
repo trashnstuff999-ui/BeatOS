@@ -18,6 +18,7 @@ import {
   Pagination,
 } from "../components/browse";
 import type { Beat, UpdateBeatParams } from "../types/browse";
+import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 
 export default function Browse() {
   const location = useLocation();
@@ -46,6 +47,8 @@ export default function Browse() {
     getCoverUrl,
   } = useBeats(initialFilters);
 
+  const { playBeat } = useAudioPlayerContext();
+
   // ─── Edit Modal State ──────────────────────────────────────────────────────
   const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
 
@@ -56,6 +59,14 @@ export default function Browse() {
   }, [selectedBeat]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
+  const handleSelectBeat = (beat: Beat) => {
+    selectBeat(beat);
+  };
+
+  const handlePlayBeat = (beat: Beat) => {
+    playBeat(beat, getCoverUrl(beat.id));
+  };
+
   const handleOpenEditModal = (beat: Beat) => {
     setEditModalBeat(beat);
   };
@@ -70,7 +81,7 @@ export default function Browse() {
   };
 
   // ─── Layout Calculation ────────────────────────────────────────────────────
-  const PANEL_WIDTH = selectedBeat ? 360 : 0;
+  const PANEL_WIDTH = selectedBeat ? 400 : 0;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Render
@@ -161,8 +172,9 @@ export default function Browse() {
             <BeatTable
               beats={beats}
               selectedBeatId={selectedBeat?.id || null}
-              onSelectBeat={selectBeat}
+              onSelectBeat={handleSelectBeat}
               onToggleFavorite={toggleFavorite}
+              onPlayBeat={handlePlayBeat}
               sort={sort}
               onSort={setSort}
             />
@@ -195,6 +207,9 @@ export default function Browse() {
           onUpdateStatus={updateStatus}
           onOpenEditModal={handleOpenEditModal}
           preloadedCoverUrl={selectedBeat ? getCoverUrl(selectedBeat.id) : null}
+          onUpdateTags={async (beatId, tags) => {
+            await updateBeat({ id: beatId, tags: tags.join(", ") });
+          }}
         />
       )}
 

@@ -1,30 +1,31 @@
 // src/components/browse/BeatTable.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Beat Table with Sortable Headers
+// Beat Table — Card-style rows with spacing
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
-import { Music, Heart, ArrowUp, ArrowDown } from "lucide-react";
-import { C } from "../../lib/theme";
+import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
+import { C, STATUS_CONFIG } from "../../lib/theme";
 import type { Beat, BeatStatus, SortState, SortColumn } from "../../types/browse";
-import { STATUS_CONFIG } from "../../types/browse";
+import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 
 interface BeatTableProps {
   beats: Beat[];
   selectedBeatId: string | null;
   onSelectBeat: (beat: Beat) => void;
   onToggleFavorite: (beatId: string) => void;
+  onPlayBeat: (beat: Beat) => void;
   sort: SortState;
   onSort: (column: SortColumn) => void;
 }
 
 // ─── Status Pill ─────────────────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: BeatStatus | null }) {
+const StatusPill = memo(function StatusPill({ status }: { status: BeatStatus | null }) {
   const cfg = STATUS_CONFIG[(status as BeatStatus) || "idea"] || STATUS_CONFIG.idea;
   return (
     <span style={{
-      padding: "2px 10px",
+      padding: "3px 10px",
       borderRadius: 9999,
       fontSize: 9,
       fontWeight: 700,
@@ -33,202 +34,224 @@ function StatusPill({ status }: { status: BeatStatus | null }) {
       background: cfg.bg,
       color: cfg.color,
       border: `1px solid ${cfg.border}`,
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
     }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
       {cfg.label}
     </span>
   );
-}
+});
 
-// ─── Sortable Header ─────────────────────────────────────────────────────────
+// ─── Column Header ────────────────────────────────────────────────────────────
 
-interface SortableHeaderProps {
+interface ColHeaderProps {
   label: string;
   column: SortColumn;
   currentSort: SortState;
   onSort: (column: SortColumn) => void;
+  flex?: number;
   align?: "left" | "center" | "right";
 }
 
-function SortableHeader({ label, column, currentSort, onSort, align = "left" }: SortableHeaderProps) {
+function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left" }: ColHeaderProps) {
   const isActive = currentSort.column === column;
-  
   return (
-    <th
+    <div
       onClick={() => onSort(column)}
       style={{
-        padding: 16,
-        fontSize: 10,
-        fontWeight: 700,
-        textTransform: "uppercase",
+        flex,
+        fontSize: 10, fontWeight: 700, textTransform: "uppercase",
         letterSpacing: "0.15em",
         color: isActive ? C.primary : C.onSecondaryFixedVar,
-        textAlign: align,
-        cursor: "pointer",
-        userSelect: "none",
-        transition: "color 0.15s",
-      }}
-      onMouseEnter={e => {
-        if (!isActive) e.currentTarget.style.color = C.onSurface;
-      }}
-      onMouseLeave={e => {
-        if (!isActive) e.currentTarget.style.color = C.onSecondaryFixedVar;
-      }}
-    >
-      <div style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 4,
+        cursor: "pointer", userSelect: "none",
+        display: "flex", alignItems: "center", gap: 4,
         justifyContent: align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start",
-      }}>
-        {label}
-        {isActive && (
-          currentSort.direction === "asc" 
-            ? <ArrowUp size={12} /> 
-            : <ArrowDown size={12} />
-        )}
-      </div>
-    </th>
+      }}
+      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.onSurface; }}
+      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.onSecondaryFixedVar; }}
+    >
+      {label}
+      {isActive && (currentSort.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+    </div>
   );
 }
 
-// ─── Beat Row (memoized) ──────────────────────────────────────────────────────
+// ─── Beat Row ─────────────────────────────────────────────────────────────────
 
 interface BeatRowProps {
   beat: Beat;
-  index: number;
   isSelected: boolean;
   onSelectBeat: (beat: Beat) => void;
   onToggleFavorite: (beatId: string) => void;
+  onPlayBeat: (beat: Beat) => void;
 }
 
-const BeatRow = memo(function BeatRow({ beat, index, isSelected, onSelectBeat, onToggleFavorite }: BeatRowProps) {
+const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggleFavorite, onPlayBeat }: BeatRowProps) {
   const isFav = beat.favorite === 1;
+  const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
+  const isCurrentBeat = currentBeat?.id === beat.id;
+  const isThisPlaying = isCurrentBeat && isPlaying;
+  const isThisLoading = isCurrentBeat && isLoading;
+
+  const handlePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCurrentBeat) {
+      togglePlay();
+    } else {
+      onPlayBeat(beat);
+    }
+  };
+
   return (
-    <tr
+    <div
       onClick={() => onSelectBeat(beat)}
       style={{
-        borderTop: index > 0 ? "1px solid rgba(72,72,71,0.05)" : undefined,
-        background: isSelected ? "rgba(26,25,25,0.5)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        padding: "14px 20px",
+        borderRadius: 10,
+        background: isSelected ? C.surfaceContainerHigh : C.surfaceContainerLow,
+        border: isSelected ? `1px solid ${C.border30}` : "1px solid transparent",
         cursor: "pointer",
-        transition: "background 0.15s",
+        transition: "background 0.12s, border-color 0.12s",
+        gap: 0,
       }}
-      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.surfaceContainer; }}
-      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+      onMouseEnter={e => {
+        if (!isSelected) (e.currentTarget as HTMLElement).style.background = C.surfaceContainer;
+      }}
+      onMouseLeave={e => {
+        if (!isSelected) (e.currentTarget as HTMLElement).style.background = C.surfaceContainerLow;
+      }}
     >
+      {/* Play Button */}
+      <div style={{ width: 44, flexShrink: 0 }}>
+        <button
+          onClick={handlePlay}
+          style={{
+            width: 30, height: 30, borderRadius: "50%",
+            background: isCurrentBeat ? C.primary : C.surfaceContainerHighest,
+            border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.15s",
+            flexShrink: 0,
+          }}
+        >
+          {isThisLoading
+            ? <Loader2 size={13} color={isCurrentBeat ? C.onPrimary : C.onSurfaceVariant} style={{ animation: "spin 1s linear infinite" }} />
+            : isThisPlaying
+              ? <Pause size={13} fill={isCurrentBeat ? C.onPrimary : C.onSurfaceVariant} color={isCurrentBeat ? C.onPrimary : C.onSurfaceVariant} />
+              : <Play size={13} fill={isCurrentBeat ? C.onPrimary : C.onSurfaceVariant} color={isCurrentBeat ? C.onPrimary : C.onSurfaceVariant} style={{ marginLeft: 2 }} />
+          }
+        </button>
+      </div>
+
       {/* ID */}
-      <td style={{ padding: 16, fontSize: 12, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
+      <div style={{ width: 80, flexShrink: 0, fontSize: 11, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
         #{beat.id}
-      </td>
+      </div>
 
       {/* Name */}
-      <td style={{ padding: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 4, background: C.surfaceContainerHighest, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Music size={12} color={C.onSurfaceVariant} strokeWidth={1.5} />
-          </div>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface }}>
-            {beat.name}
-          </span>
-        </div>
-      </td>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <span style={{
+          fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {beat.name}
+        </span>
+      </div>
 
       {/* Key */}
-      <td style={{ padding: 16, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
+      <div style={{ width: 90, flexShrink: 0, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
         {beat.key || "—"}
-      </td>
+      </div>
 
       {/* BPM */}
-      <td style={{ padding: 16, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
+      <div style={{ width: 60, flexShrink: 0, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
         {beat.bpm || "—"}
-      </td>
+      </div>
 
       {/* Status */}
-      <td style={{ padding: 16, textAlign: "center" }}>
+      <div style={{ width: 100, flexShrink: 0, display: "flex", justifyContent: "center" }}>
         <StatusPill status={beat.status as BeatStatus} />
-      </td>
+      </div>
 
-      {/* Favorite Action */}
-      <td style={{ padding: 16, textAlign: "right" }}>
+      {/* Favorite */}
+      <div style={{ width: 44, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={e => { e.stopPropagation(); onToggleFavorite(beat.id); }}
           style={{ background: "none", border: "none", cursor: "pointer", display: "inline-flex", padding: 4 }}
         >
-          <Heart size={20} strokeWidth={1.5} fill={isFav ? C.primary : "none"} color={isFav ? C.primary : C.onSurfaceVariant} />
+          <Heart size={18} strokeWidth={1.5} fill={isFav ? C.primary : "none"} color={isFav ? C.primary : C.onSurfaceVariant} />
         </button>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 });
 
 // ─── Beat Table ──────────────────────────────────────────────────────────────
 
-export function BeatTable({ 
-  beats, 
-  selectedBeatId, 
-  onSelectBeat, 
-  onToggleFavorite,
-  sort,
-  onSort,
-}: BeatTableProps) {
+export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, sort, onSort }: BeatTableProps) {
   return (
-    <section style={{
-      background: C.surfaceContainerLowest,
-      borderRadius: 8,
-      overflow: "hidden",
-      border: `1px solid ${C.border10}`,
-    }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: C.surfaceContainerLow, borderBottom: `1px solid ${C.border10}` }}>
-            <SortableHeader label="ID" column="id" currentSort={sort} onSort={onSort} />
-            <SortableHeader label="Name" column="name" currentSort={sort} onSort={onSort} />
-            <SortableHeader label="Key" column="key" currentSort={sort} onSort={onSort} />
-            <SortableHeader label="BPM" column="bpm" currentSort={sort} onSort={onSort} />
-            <SortableHeader label="Status" column="status" currentSort={sort} onSort={onSort} align="center" />
-            <th style={{
-              padding: 16,
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.15em",
-              color: C.onSecondaryFixedVar,
-              textAlign: "right",
-            }}>
-              Action
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {beats.map((beat, i) => (
-            <BeatRow
-              key={beat.id}
-              beat={beat}
-              index={i}
-              isSelected={selectedBeatId === beat.id}
-              onSelectBeat={onSelectBeat}
-              onToggleFavorite={onToggleFavorite}
-            />
-          ))}
+    <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {/* Header Row */}
+      <div style={{
+        display: "flex", alignItems: "center",
+        padding: "0 20px 8px",
+        gap: 0,
+      }}>
+        {/* Play column spacer */}
+        <div style={{ width: 44, flexShrink: 0 }} />
+        <div style={{ width: 80, flexShrink: 0 }}>
+          <ColHeader label="ID" column="id" currentSort={sort} onSort={onSort} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <ColHeader label="Beat Name" column="name" currentSort={sort} onSort={onSort} />
+        </div>
+        <div style={{ width: 90, flexShrink: 0 }}>
+          <ColHeader label="Key" column="key" currentSort={sort} onSort={onSort} />
+        </div>
+        <div style={{ width: 60, flexShrink: 0 }}>
+          <ColHeader label="BPM" column="bpm" currentSort={sort} onSort={onSort} />
+        </div>
+        <div style={{ width: 100, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+          <ColHeader label="Status" column="status" currentSort={sort} onSort={onSort} align="center" />
+        </div>
+        <div style={{
+          width: 44, flexShrink: 0, textAlign: "right",
+          fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.15em", color: C.onSecondaryFixedVar,
+          display: "flex", justifyContent: "flex-end",
+        }}>
+          Fav
+        </div>
+      </div>
 
-          {/* Empty State */}
-          {beats.length === 0 && (
-            <tr>
-              <td
-                colSpan={6}
-                style={{
-                  padding: 48,
-                  textAlign: "center",
-                  color: C.onSecondaryFixedVar,
-                  fontSize: 13,
-                  fontStyle: "italic",
-                }}
-              >
-                No beats found
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      {/* Rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {beats.map(beat => (
+          <BeatRow
+            key={beat.id}
+            beat={beat}
+            isSelected={selectedBeatId === beat.id}
+            onSelectBeat={onSelectBeat}
+            onToggleFavorite={onToggleFavorite}
+            onPlayBeat={onPlayBeat}
+          />
+        ))}
+
+        {beats.length === 0 && (
+          <div style={{
+            padding: 48, textAlign: "center",
+            color: C.onSecondaryFixedVar, fontSize: 13, fontStyle: "italic",
+            background: "#181717", borderRadius: 10,
+          }}>
+            No beats found
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </section>
   );
 }

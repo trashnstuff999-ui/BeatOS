@@ -1,19 +1,12 @@
 // src/components/create/CreateFooter.tsx
-// ═══════════════════════════════════════════════════════════════════════════════
-// Footer with Select Folder and Create Beatstructure buttons
-// ═══════════════════════════════════════════════════════════════════════════════
 
-import { FolderOpen, Network, Loader2, CheckCircle } from "lucide-react";
+import { FolderOpen, Network, Loader2 } from "lucide-react";
 import { C } from "../../lib/theme";
-import type { SavedBeatState } from "../../types/create";
 
 interface CreateFooterProps {
   isLoading: boolean;
   isArchiving: boolean;
   sourceFolderPath: string | null;
-  editMode: boolean;
-  savedState: SavedBeatState | null;
-  isDirty: boolean;
   title: string;
   onSelectFolder: () => void;
   onCreateBeatstructure: () => void;
@@ -23,9 +16,6 @@ export function CreateFooter({
   isLoading,
   isArchiving,
   sourceFolderPath,
-  editMode,
-  savedState,
-  isDirty,
   title,
   onSelectFolder,
   onCreateBeatstructure,
@@ -57,16 +47,9 @@ export function CreateFooter({
               ? "Parsing folder..."
               : sourceFolderPath
                 ? `Source: ${sourceFolderPath.split(/[/\\]/).pop()}`
-                : editMode
-                  ? "Edit mode — changes enabled"
-                  : "View mode — read only"
+                : "Select a folder to get started"
           }
         </span>
-        {savedState && !isDirty && !isArchiving && (
-          <span style={{ fontSize: 10, color: C.mint, display: "flex", alignItems: "center", gap: 4 }}>
-            <CheckCircle size={12} /> Applied
-          </span>
-        )}
       </div>
 
       {/* Right: Buttons */}

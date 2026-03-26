@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { RefreshCw, Bell, Search } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, commonStyles } from "../../lib/theme";
 
 interface BrowseHeaderProps {
   search: string;
@@ -32,9 +32,7 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: B
     <header style={{
       height: 64,
       flexShrink: 0,
-      background: "rgba(14,14,14,0.7)",
-      backdropFilter: "blur(20px)",
-      WebkitBackdropFilter: "blur(20px)",
+      ...commonStyles.glassHeader,
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
@@ -44,13 +42,13 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: B
       {/* Title */}
       <h2 style={{
         fontSize: 18,
-        fontWeight: 600,
+        fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.15em",
-        color: C.primary,
+        color: C.onSurface,
         margin: 0,
       }}>
-        Archive
+        Browse
       </h2>
 
       {/* Right Side */}

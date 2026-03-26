@@ -32,6 +32,7 @@ use commands::{
     save_custom_tag,
     save_custom_tags_batch,
     delete_custom_tag,
+    rename_custom_tag,
     search_custom_tags,
     // Archive commands
     scan_archive,
@@ -83,6 +84,7 @@ pub fn run() {
             save_custom_tag,
             save_custom_tags_batch,
             delete_custom_tag,
+            rename_custom_tag,
             search_custom_tags,
             // Archive
             scan_archive,

@@ -98,14 +98,6 @@ export interface EditModalState {
   error: string | null;
 }
 
-export const INITIAL_EDIT_FORM: EditFormState = {
-  name: "",
-  bpm: "",
-  key: "",
-  tags: [],
-  notes: "",
-  sold_to: "",
-};
 
 // ─── Update Params (for API) ────────────────────────────────────────────────
 
@@ -121,41 +113,9 @@ export interface UpdateBeatParams {
   sold_to?: string | null;
 }
 
-// ─── Status Config ──────────────────────────────────────────────────────────
-
-export interface StatusConfig {
-  label: string;
-  color: string;
-  bg: string;
-  border: string;
-}
-
-export const STATUS_CONFIG: Record<BeatStatus, StatusConfig> = {
-  idea: {
-    label: "IDEA",
-    color: "#9492ff",
-    bg: "rgba(148,146,255,0.15)",
-    border: "rgba(148,146,255,0.20)",
-  },
-  wip: {
-    label: "WIP",
-    color: "#fda124",
-    bg: "rgba(253,161,36,0.15)",
-    border: "rgba(253,161,36,0.20)",
-  },
-  finished: {
-    label: "FINISHED",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.15)",
-    border: "rgba(34,197,94,0.20)",
-  },
-  sold: {
-    label: "SOLD",
-    color: "#e48c03",
-    bg: "rgba(228,140,3,0.15)",
-    border: "rgba(228,140,3,0.20)",
-  },
-};
+// ─── Status Config — re-exported from lib/theme (single source of truth) ────
+export { STATUS_CONFIG } from "../lib/theme";
+export type { StatusConfig } from "../lib/theme";
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 

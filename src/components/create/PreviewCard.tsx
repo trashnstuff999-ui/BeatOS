@@ -18,7 +18,6 @@ interface PreviewCardProps {
   tags: string[];
   coverImage: string | null;
   previewPath: string;
-  editMode: boolean;
   onSelectCover: () => void;
 }
 
@@ -31,7 +30,6 @@ export const PreviewCard = memo(function PreviewCard({
   tags,
   coverImage,
   previewPath,
-  editMode,
   onSelectCover,
 }: PreviewCardProps) {
   const previewTitle = title || "SONGNAME";
@@ -43,12 +41,12 @@ export const PreviewCard = memo(function PreviewCard({
     <div style={{ position: "sticky", top: 0, alignSelf: "flex-start" }}>
       <Label style={{ color: C.primary, letterSpacing: "0.3em", marginBottom: 16 }}>Registry Preview</Label>
 
-      <div style={{ 
-        background: C.surfaceContainer, 
-        borderRadius: 12, 
-        overflow: "hidden", 
-        boxShadow: "0 25px 50px rgba(0,0,0,0.5)", 
-        border: `1px solid ${C.border10}` 
+      <div style={{
+        background: C.surfaceContainer,
+        borderRadius: 12,
+        overflow: "hidden",
+        boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+        border: `1px solid ${C.border10}`
       }}>
         {/* Cover */}
         <div
@@ -56,33 +54,33 @@ export const PreviewCard = memo(function PreviewCard({
           style={{
             position: "relative", paddingBottom: "100%",
             background: C.surfaceContainerHighest,
-            cursor: editMode ? "pointer" : "default",
+            cursor: "pointer",
           }}
         >
           {/* Gradient Overlay */}
-          <div style={{ 
-            position: "absolute", inset: 0, 
-            background: "linear-gradient(to top, #000 0%, transparent 50%)", 
-            zIndex: 2, pointerEvents: "none" 
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(to top, #000 0%, transparent 50%)",
+            zIndex: 2, pointerEvents: "none"
           }} />
 
           {/* Cover Image or Placeholder */}
           {coverImage ? (
-            <img 
-              src={coverImage} 
-              alt="Cover" 
-              style={{ 
-                position: "absolute", inset: 0, 
-                width: "100%", height: "100%", 
-                objectFit: "cover", zIndex: 1 
-              }} 
+            <img
+              src={coverImage}
+              alt="Cover"
+              style={{
+                position: "absolute", inset: 0,
+                width: "100%", height: "100%",
+                objectFit: "cover", zIndex: 1
+              }}
             />
           ) : (
-            <div style={{ 
-              position: "absolute", inset: 0, 
-              background: "linear-gradient(135deg, #1a1919 0%, #262626 50%, #1a1919 100%)", 
-              display: "flex", alignItems: "center", justifyContent: "center", 
-              zIndex: 1 
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(135deg, #1a1919 0%, #262626 50%, #1a1919 100%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 1
             }}>
               <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="rgba(253,161,36,0.15)" strokeWidth="0.5">
                 <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
@@ -91,13 +89,13 @@ export const PreviewCard = memo(function PreviewCard({
             </div>
           )}
 
-          {/* Empty State Hint */}
-          {editMode && !coverImage && (
-            <div style={{ 
-              position: "absolute", inset: 0, 
-              display: "flex", flexDirection: "column", 
-              alignItems: "center", justifyContent: "center", 
-              gap: 8, zIndex: 3, pointerEvents: "none" 
+          {/* Cover hint */}
+          {!coverImage && (
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              gap: 8, zIndex: 3, pointerEvents: "none"
             }}>
               <ImagePlus size={24} color={C.onSurfaceVariant} strokeWidth={1.5} style={{ opacity: 0.5 }} />
               <span style={{ color: C.onSurfaceVariant, fontSize: 10, opacity: 0.5 }}>Click to select cover</span>
@@ -105,21 +103,21 @@ export const PreviewCard = memo(function PreviewCard({
           )}
 
           {/* ID Badge */}
-          <div style={{ 
-            position: "absolute", top: 16, right: 16, zIndex: 4, 
-            background: C.primary, color: "#4e2d00", 
-            fontSize: 10, fontWeight: 900, 
-            padding: "4px 8px", borderRadius: 4 
+          <div style={{
+            position: "absolute", top: 16, right: 16, zIndex: 4,
+            background: C.primary, color: C.onPrimary,
+            fontSize: 10, fontWeight: 900,
+            padding: "4px 8px", borderRadius: 4
           }}>
             {previewId}
           </div>
 
           {/* Title & Meta */}
           <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, zIndex: 4 }}>
-            <h3 style={{ 
-              fontSize: 24, fontWeight: 900, 
-              textTransform: "uppercase", letterSpacing: "-0.02em", 
-              color: "#fff", marginBottom: 6, lineHeight: 1 
+            <h3 style={{
+              fontSize: 24, fontWeight: 900,
+              textTransform: "uppercase", letterSpacing: "-0.02em",
+              color: "#fff", marginBottom: 6, lineHeight: 1
             }}>
               {previewTitle.toUpperCase()}
             </h3>
@@ -157,11 +155,11 @@ export const PreviewCard = memo(function PreviewCard({
       </div>
 
       {/* Info Box */}
-      <div style={{ 
-        marginTop: 24, padding: 16, borderRadius: 8, 
-        background: "rgba(148,146,255,0.05)", 
-        border: "1px solid rgba(148,146,255,0.10)", 
-        display: "flex", gap: 16, alignItems: "flex-start" 
+      <div style={{
+        marginTop: 24, padding: 16, borderRadius: 8,
+        background: "rgba(148,146,255,0.05)",
+        border: "1px solid rgba(148,146,255,0.10)",
+        display: "flex", gap: 16, alignItems: "flex-start"
       }}>
         <Info size={18} color={C.tertiary} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} />
         <p style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0 }}>

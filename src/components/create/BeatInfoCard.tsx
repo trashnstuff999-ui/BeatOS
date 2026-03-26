@@ -18,7 +18,6 @@ interface BeatInfoCardProps {
   setCatalogId: (v: string) => void;
   createdDate: string | null;
   yearMonth: string;
-  editMode: boolean;
 }
 
 export function BeatInfoCard({
@@ -32,14 +31,7 @@ export function BeatInfoCard({
   setCatalogId,
   createdDate,
   yearMonth,
-  editMode,
 }: BeatInfoCardProps) {
-  const getInputStyle = (base: React.CSSProperties): React.CSSProperties => ({
-    ...base,
-    opacity: editMode ? 1 : 0.6,
-    cursor: editMode ? "text" : "not-allowed",
-  });
-
   return (
     <Card accent={C.primary}>
       <Label>Track Title</Label>
@@ -54,15 +46,14 @@ export function BeatInfoCard({
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="ENTER BEAT NAME..."
-          disabled={!editMode}
-          style={getInputStyle({ ...commonStyles.input, flex: 1, padding: 16, fontSize: 20, fontWeight: 500 })}
+          style={{ ...commonStyles.input, flex: 1, padding: 16, fontSize: 20, fontWeight: 500 }}
         />
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, marginTop: 24 }}>
-        <SmallInput label="Key" value={keyValue} onChange={setKey} placeholder="Cm" disabled={!editMode} width={80} />
-        <SmallInput label="BPM" value={bpm} onChange={setBpm} placeholder="140" disabled={!editMode} width={80} />
-        <SmallInput label="Catalog ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" disabled={!editMode} width={96} mono />
+        <SmallInput label="Key" value={keyValue} onChange={setKey} placeholder="Cm" width={80} />
+        <SmallInput label="BPM" value={bpm} onChange={setBpm} placeholder="140" width={80} />
+        <SmallInput label="Catalog ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" width={96} mono />
       </div>
 
       {createdDate && (
@@ -79,12 +70,11 @@ export function BeatInfoCard({
 
 // ─── Small Input Helper ─────────────────────────────────────────────────────
 
-function SmallInput({ label, value, onChange, placeholder, disabled, width, mono }: {
+function SmallInput({ label, value, onChange, placeholder, width, mono }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
-  disabled: boolean;
   width: number;
   mono?: boolean;
 }) {
@@ -97,7 +87,6 @@ function SmallInput({ label, value, onChange, placeholder, disabled, width, mono
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        disabled={disabled}
         style={{
           width, background: C.surfaceContainerLowest,
           border: `1px solid ${C.border20}`, borderRadius: 6,
@@ -106,8 +95,6 @@ function SmallInput({ label, value, onChange, placeholder, disabled, width, mono
           letterSpacing: "0.15em", outline: "none",
           color: C.onSurface,
           fontFamily: mono ? "monospace" : "Inter, sans-serif",
-          opacity: disabled ? 0.6 : 1,
-          cursor: disabled ? "not-allowed" : "text",
         }}
       />
     </div>

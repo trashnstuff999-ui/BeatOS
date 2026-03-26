@@ -3,8 +3,8 @@
 // Wiederverwendbare Tag-Komponenten für Create, Browse, Detail, etc.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { X, Music, Sparkles, Piano, Tag } from "lucide-react";
-import { getTagColors, isPresetTag, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
+import { X, Music, Sparkles, Piano, Star } from "lucide-react";
+import { getTagColors, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
 import { C } from "../lib/theme";
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -15,7 +15,8 @@ export const CATEGORY_ICONS: Record<TagCategory, React.ReactNode> = {
   genre: <Music size={12} />,
   vibe: <Sparkles size={12} />,
   instrument: <Piano size={12} />,
-  other: <Tag size={12} />,
+  custom: <Star size={12} />,
+  other: <Star size={12} />,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -24,9 +25,9 @@ export const CATEGORY_ICONS: Record<TagCategory, React.ReactNode> = {
 
 export interface TagPillProps {
   tag: string;
+  category?: TagCategory;
   removable?: boolean;
   onRemove?: (tag: string) => void;
-  showCustomIndicator?: boolean;
   size?: "sm" | "md" | "lg";
   interactive?: boolean;
   onClick?: (tag: string) => void;
@@ -34,15 +35,14 @@ export interface TagPillProps {
 
 export function TagPill({
   tag,
+  category,
   removable = false,
   onRemove,
-  showCustomIndicator = true,
   size = "md",
   interactive = false,
   onClick,
 }: TagPillProps) {
-  const colors = getTagColors(tag);
-  const isCustom = !isPresetTag(tag);
+  const colors = category ? TAG_COLORS[category] ?? TAG_COLORS.custom : getTagColors(tag);
 
   // Size variants
   const sizeStyles = {
@@ -87,11 +87,6 @@ export function TagPill({
           : undefined
       }
     >
-      {/* Custom Tag Indicator */}
-      {showCustomIndicator && isCustom && (
-        <span style={{ opacity: 0.6, fontSize: s.fontSize - 2 }}>✦</span>
-      )}
-
       {tag}
 
       {/* Remove Button */}
@@ -131,27 +126,22 @@ export function TagPill({
 
 export interface QuickAddButtonProps {
   tag: string;
+  category: TagCategory;
   onAdd: (tag: string) => void;
-  showCustomIndicator?: boolean;
 }
 
-export function QuickAddButton({
-  tag,
-  onAdd,
-  showCustomIndicator = true,
-}: QuickAddButtonProps) {
-  const colors = getTagColors(tag);
-  const isCustom = !isPresetTag(tag);
+export function QuickAddButton({ tag, category, onAdd }: QuickAddButtonProps) {
+  const colors = TAG_COLORS[category] ?? TAG_COLORS.custom;
 
   return (
     <button
       onClick={() => onAdd(tag)}
       style={{
-        padding: "4px 10px",
+        padding: "7px 14px",
         background: "transparent",
         border: `1px solid ${colors.border}`,
         borderRadius: 9999,
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: 600,
         color: colors.text,
         cursor: "pointer",
@@ -170,7 +160,6 @@ export function QuickAddButton({
         e.currentTarget.style.opacity = "0.7";
       }}
     >
-      {showCustomIndicator && isCustom && <span style={{ fontSize: 8 }}>✦</span>}
       + {tag}
     </button>
   );
@@ -188,7 +177,6 @@ export interface TagSuggestionItemProps {
 
 export function TagSuggestionItem({ tag, category, onSelect }: TagSuggestionItemProps) {
   const colors = getTagColors(tag);
-  const isCustom = !isPresetTag(tag);
 
   return (
     <button
@@ -223,7 +211,6 @@ export function TagSuggestionItem({ tag, category, onSelect }: TagSuggestionItem
           gap: 4,
         }}
       >
-        {isCustom && <span style={{ opacity: 0.6, fontSize: 10 }}>✦</span>}
         {tag}
       </span>
       <span
@@ -253,7 +240,7 @@ export interface TagCategoryRowProps {
 export function TagCategoryRow({ category, tags, onAdd }: TagCategoryRowProps) {
   if (tags.length === 0) return null;
 
-  const colors = getTagColors(tags[0] || "");
+  const colors = TAG_COLORS[category] ?? TAG_COLORS.custom;
 
   return (
     <div>
@@ -283,7 +270,7 @@ export function TagCategoryRow({ category, tags, onAdd }: TagCategoryRowProps) {
       {/* Tags */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {tags.map((tag) => (
-          <QuickAddButton key={tag} tag={tag} onAdd={onAdd} />
+          <QuickAddButton key={tag} tag={tag} category={category} onAdd={onAdd} />
         ))}
       </div>
     </div>

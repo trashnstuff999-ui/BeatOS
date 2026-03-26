@@ -38,14 +38,14 @@ pub fn get_beats(
         if s != "all" {
             where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
             params.push(Box::new(s.clone()));
-            let _ = param_idx; // Suppress warning
+            param_idx += 1;
         }
     }
-    
+
     if only_favs {
         where_clauses.push("favorite = 1".to_string());
     }
-    
+
     let where_sql = where_clauses.join(" AND ");
     let sql = format!(
         "SELECT id, name, path, bpm, key, status, tags, favorite,
@@ -146,8 +146,10 @@ pub fn get_beats_paginated(
     if let Some(max) = bpm_max {
         where_clauses.push(format!("bpm <= ?{}", param_idx));
         params.push(Box::new(max));
+        param_idx += 1;
     }
-    
+
+    let _ = param_idx; // all params accounted for
     let where_sql = where_clauses.join(" AND ");
     
     // Count total

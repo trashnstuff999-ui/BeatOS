@@ -1,25 +1,27 @@
 // src/components/browse/DetailPanel.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Detail Panel with Functional Audio Player
+// Detail Panel — Artwork + Metadata (audio is in GlobalAudioPlayer)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useRef, useCallback } from "react";
-import { 
-  X, Heart, Edit3, Play, Pause, Volume2, VolumeX, 
-  Repeat, FolderOpen, Loader2, Music 
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Heart, FolderOpen, Music, Plus, Edit3 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C } from "../../lib/theme";
 import { TagPill } from "./TagPill";
-import { useAudioPlayer } from "../../hooks/useAudioPlayer";
+import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus } from "../../types/browse";
-import { STATUS_CONFIG, parseTags, isFavorite } from "../../types/browse";
+import { parseTags, isFavorite } from "../../types/browse";
+import { STATUS_CONFIG } from "../../lib/theme";
+import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
+import { useTagManager } from "../../contexts/TagManagerContext";
 
 const STATUS_ITEMS: { key: BeatStatus; label: string }[] = [
-  { key: "idea", label: "Idea" },
+  { key: "idea", label: "IDEA" },
   { key: "wip", label: "WIP" },
-  { key: "finished", label: "Fin" },
-  { key: "sold", label: "Sold" },
+  { key: "finished", label: "FINISHED" },
+  { key: "sold", label: "SOLD" },
 ];
 
 interface DetailPanelProps {
@@ -30,6 +32,7 @@ interface DetailPanelProps {
   onUpdateStatus: (beatId: string, status: BeatStatus) => void;
   onOpenEditModal: (beat: Beat) => void;
   preloadedCoverUrl?: string | null;
+  onUpdateTags?: (beatId: string, tags: string[]) => void;
 }
 
 export function DetailPanel({
@@ -40,53 +43,67 @@ export function DetailPanel({
   onUpdateStatus,
   onOpenEditModal,
   preloadedCoverUrl,
+  onUpdateTags,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
-  const tags = parseTags(beat.tags);
-  const seekBarRef = useRef<HTMLDivElement>(null);
-  const volumeBarRef = useRef<HTMLDivElement>(null);
+  const { openTagManager } = useTagManager();
 
-  // Audio Player - note: coverUrl (streaming, not base64)
-  const {
-    isPlaying,
-    isLoading,
-    isLooped,
-    isMuted,
-    volume,
-    coverUrl,
-    error: audioError,
-    progress,
-    currentTimeFormatted,
-    durationFormatted,
-    togglePlay,
-    toggleLoop,
-    toggleMute,
-    seekPercent,
-    setVolume,
-  } = useAudioPlayer({ beatPath: isOpen ? beat.path : null, preloadedCoverUrl });
+  const [localTags, setLocalTags] = useState<string[]>(parseTags(beat.tags));
 
-  // Handlers
-  const handleSeekClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!seekBarRef.current) return;
-    const rect = seekBarRef.current.getBoundingClientRect();
-    const percent = ((e.clientX - rect.left) / rect.width) * 100;
-    seekPercent(Math.max(0, Math.min(100, percent)));
-  }, [seekPercent]);
+  useEffect(() => {
+    setLocalTags(parseTags(beat.tags));
+  }, [beat.id, beat.tags]);
 
-  const handleVolumeClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!volumeBarRef.current) return;
-    const rect = volumeBarRef.current.getBoundingClientRect();
-    const vol = (e.clientX - rect.left) / rect.width;
-    setVolume(Math.max(0, Math.min(1, vol)));
-  }, [setVolume]);
+  const handleOpenTagManager = () => {
+    openTagManager({
+      initialSelected: localTags,
+      onConfirm: (newTags) => {
+        setLocalTags(newTags);
+        onUpdateTags?.(beat.id, newTags);
+      },
+      editMode: true,
+    });
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    const newTags = localTags.filter(t => t !== tag);
+    setLocalTags(newTags);
+    onUpdateTags?.(beat.id, newTags);
+  };
+
+  // 1. Use cover from global player if this beat is the active one
+  const { coverUrl: playerCoverUrl, currentBeat: playerBeat } = useAudioPlayerContext();
+  const playerCover = playerBeat?.id === beat.id ? playerCoverUrl : null;
+
+  // 2. Fallback: load cover locally for whichever beat is displayed
+  const [localCoverUrl, setLocalCoverUrl] = useState<string | null>(preloadedCoverUrl ?? null);
+
+  useEffect(() => {
+    // Instantly use preloaded URL if available, otherwise fetch
+    if (preloadedCoverUrl) {
+      setLocalCoverUrl(preloadedCoverUrl);
+      return;
+    }
+    setLocalCoverUrl(null);
+    if (!beat.path) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: beat.path });
+        if (!cancelled && coverPath) {
+          setLocalCoverUrl(convertFileSrc(coverPath.replace(/\\/g, "/")));
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [beat.id, preloadedCoverUrl]);
+
+  const coverUrl = playerCover ?? localCoverUrl ?? null;
+  const playerActive = !!playerBeat;
 
   const handleOpenFolder = async () => {
     if (beat.path) {
-      try {
-        await revealItemInDir(beat.path);
-      } catch (e) {
-        console.error("Failed to open folder:", e);
-      }
+      try { await revealItemInDir(beat.path); } catch {}
     }
   };
 
@@ -95,8 +112,8 @@ export function DetailPanel({
       position: "fixed",
       right: 0,
       top: 0,
-      height: "100vh",
-      width: 360,
+      height: playerActive ? "calc(100vh - 80px)" : "100vh",
+      width: 380,
       background: C.background,
       display: "flex",
       flexDirection: "column",
@@ -105,448 +122,231 @@ export function DetailPanel({
       transform: isOpen ? "translateX(0)" : "translateX(100%)",
       transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Player Section with Cover Art
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <div style={{ position: "relative", flexShrink: 0 }}>
-        {/* Cover Art Container (1:1) */}
-        <div style={{
-          position: "relative",
-          width: "100%",
-          paddingTop: "100%",
-          background: C.surfaceContainerLowest,
-          overflow: "hidden",
-        }}>
-          {/* Placeholder (always behind) */}
+      {/* Close */}
+      <button
+        onClick={onClose}
+        style={{
+          position: "absolute", top: 16, right: 16, zIndex: 20,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
+          border: "none", borderRadius: 6, padding: 8, cursor: "pointer", display: "flex",
+        }}
+      >
+        <X size={16} color="rgba(255,255,255,0.8)" />
+      </button>
+
+      {/* ── Scrollable Body ─────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
+
+        {/* ── Artwork Section ────────────────────────────────────────────────── */}
+        <div style={{ padding: "24px 20px 8px" }}>
           <div style={{
-            position: "absolute",
-            inset: 0,
+            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 10,
+          }}>
+            Artwork
+          </div>
+          <div style={{
+            width: "100%", paddingTop: "100%", position: "relative",
+            borderRadius: 10, overflow: "hidden",
             background: "linear-gradient(135deg, #1a1919 0%, #262626 60%, #131313 100%)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 0,
           }}>
-            <Music size={64} color="rgba(255,255,255,0.1)" strokeWidth={1} />
-          </div>
-
-          {/* Cover Image */}
-          {coverUrl && (
-            <img
-              src={coverUrl}
-              alt={beat.name}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                zIndex: 1,
-              }}
-              onError={(e) => {
-                // Hide image on error, placeholder shows through
-                e.currentTarget.style.display = "none";
-              }}
-            />
-          )}
-
-          {/* Gradient Overlay */}
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(0deg, rgba(14,14,14,1) 0%, rgba(14,14,14,0.4) 40%, rgba(14,14,14,0) 70%)",
-            pointerEvents: "none",
-            zIndex: 2,
-          }} />
-
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            style={{
-              position: "absolute",
-              top: 16,
-              right: 16,
-              background: "rgba(0,0,0,0.5)",
-              backdropFilter: "blur(8px)",
-              border: "none",
-              borderRadius: 6,
-              padding: 8,
-              cursor: "pointer",
-              display: "flex",
-              zIndex: 10,
-            }}
-          >
-            <X size={16} color="rgba(255,255,255,0.8)" />
-          </button>
-
-          {/* Play/Pause Button */}
-          <button
-            onClick={togglePlay}
-            disabled={isLoading || !!audioError}
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: 72,
-              height: 72,
-              borderRadius: "50%",
-              background: isLoading ? C.surfaceContainerHigh : C.primary,
-              border: "none",
-              cursor: isLoading || audioError ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-              opacity: audioError ? 0.5 : 1,
-              zIndex: 10,
-              transition: "transform 0.15s",
-            }}
-          >
-            {isLoading ? (
-              <Loader2 size={28} color="#4e2d00" style={{ animation: "spin 1s linear infinite" }} />
-            ) : isPlaying ? (
-              <Pause size={28} fill="#4e2d00" color="#4e2d00" />
-            ) : (
-              <Play size={28} fill="#4e2d00" color="#4e2d00" style={{ marginLeft: 3 }} />
-            )}
-          </button>
-
-          {/* Controls Overlay */}
-          <div style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: "16px 20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            zIndex: 10,
-          }}>
-            {/* Seek Bar */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div
-                ref={seekBarRef}
-                onClick={handleSeekClick}
-                style={{
-                  height: 6,
-                  background: "rgba(255,255,255,0.15)",
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  position: "relative",
-                }}
-              >
-                <div style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  height: "100%",
-                  width: `${progress}%`,
-                  background: C.primary,
-                  borderRadius: 3,
-                }} />
-                <div style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: `${progress}%`,
-                  transform: "translate(-50%, -50%)",
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: C.primary,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                }} />
-              </div>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 10,
-                fontFamily: "monospace",
-                color: "rgba(255,255,255,0.7)",
-              }}>
-                <span>{currentTimeFormatted}</span>
-                <span>{durationFormatted}</span>
-              </div>
-            </div>
-
-            {/* Loop & Volume */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button
-                onClick={toggleLoop}
-                style={{
-                  background: isLooped ? "rgba(253,161,36,0.2)" : "transparent",
-                  border: isLooped ? `1px solid ${C.primary}` : "1px solid transparent",
-                  borderRadius: 4,
-                  padding: 6,
-                  cursor: "pointer",
-                  display: "flex",
-                }}
-              >
-                <Repeat size={14} color={isLooped ? C.primary : "rgba(255,255,255,0.6)"} strokeWidth={1.5} />
-              </button>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button
-                  onClick={toggleMute}
-                  style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
-                >
-                  {isMuted || volume === 0 ? (
-                    <VolumeX size={14} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-                  ) : (
-                    <Volume2 size={14} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-                  )}
-                </button>
-                <div
-                  ref={volumeBarRef}
-                  onClick={handleVolumeClick}
-                  style={{
-                    width: 80,
-                    height: 4,
-                    background: "rgba(255,255,255,0.15)",
-                    borderRadius: 2,
-                    cursor: "pointer",
-                    position: "relative",
-                  }}
-                >
-                  <div style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    height: "100%",
-                    width: `${(isMuted ? 0 : volume) * 100}%`,
-                    background: C.primary,
-                    borderRadius: 2,
-                  }} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {audioError && (
+            {/* Placeholder */}
             <div style={{
-              position: "absolute",
-              bottom: 100,
-              left: 20,
-              right: 20,
-              padding: "8px 12px",
-              background: "rgba(239,68,68,0.2)",
-              border: "1px solid rgba(239,68,68,0.4)",
-              borderRadius: 6,
-              fontSize: 10,
-              color: "#ef4444",
-              textAlign: "center",
-              zIndex: 10,
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              {audioError}
+              <Music size={56} color="rgba(255,255,255,0.08)" strokeWidth={1} />
+            </div>
+            {/* Cover */}
+            {coverUrl && (
+              <img
+                src={coverUrl}
+                alt={beat.name}
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%", objectFit: "cover",
+                }}
+                onError={e => { e.currentTarget.style.display = "none"; }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* ── Metadata ───────────────────────────────────────────────────────── */}
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Project Name */}
+          <div>
+            <div style={labelStyle}>Project Name</div>
+            <div style={fieldStyle}>{beat.name}</div>
+          </div>
+
+          {/* BPM + Key */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={labelStyle}>BPM</div>
+              <div style={fieldStyle}>{beat.bpm || "—"}</div>
+            </div>
+            <div>
+              <div style={labelStyle}>Key</div>
+              <div style={fieldStyle}>{beat.key || "—"}</div>
+            </div>
+          </div>
+
+          {/* Status Selection */}
+          <div>
+            <div style={labelStyle}>Status Selection</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+              {STATUS_ITEMS.map(({ key, label }) => {
+                const isActive = beat.status === key;
+                const cfg = STATUS_CONFIG[key];
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onUpdateStatus(beat.id, key)}
+                    style={{
+                      padding: "10px 8px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      border: isActive ? `1.5px solid ${cfg.color}` : `1px solid ${C.border20}`,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      background: isActive ? `${cfg.color}18` : C.surfaceContainerLow,
+                      color: isActive ? cfg.color : C.onSurfaceVariant,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 7,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <span style={{
+                      width: 7, height: 7, borderRadius: "50%",
+                      background: cfg.color, flexShrink: 0,
+                    }} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <div style={labelStyle}>Tags</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {sortTagsByCategory(localTags, (tag) => getTagCategoryFromDb(tag) ?? "custom").map(tag => (
+                <TagPill key={tag} tag={tag} size="sm" onRemove={() => handleRemoveTag(tag)} />
+              ))}
+              <button
+                onClick={handleOpenTagManager}
+                style={{
+                  padding: "4px 10px", borderRadius: 9999,
+                  border: `1px dashed ${C.border30}`,
+                  background: "transparent", cursor: "pointer",
+                  fontSize: 11, fontWeight: 600, color: C.primary,
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                <Plus size={11} strokeWidth={2.5} />
+                Add Tag
+              </button>
+            </div>
+          </div>
+
+          {/* Notes */}
+          {beat.notes && (
+            <div>
+              <div style={labelStyle}>Notes</div>
+              <div style={{
+                marginTop: 6, padding: 12,
+                background: C.surfaceContainerLow,
+                borderRadius: 8, border: `1px solid ${C.border10}`,
+                fontSize: 12, color: C.onSurface, lineHeight: 1.6, whiteSpace: "pre-wrap",
+              }}>
+                {beat.notes}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Scrollable Content
-      ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div style={{
-        flex: 1,
-        overflowY: "auto",
-        padding: 24,
-        display: "flex",
-        flexDirection: "column",
-        gap: 24,
-      }}>
-        {/* Beat ID + Name */}
-        <section>
-          <div style={{ fontSize: 10, fontFamily: "monospace", color: C.primary, marginBottom: 4 }}>
-            #{beat.id}
-          </div>
-          <h3 style={{ fontSize: 20, fontWeight: 700, color: C.onSurface, margin: 0, letterSpacing: "-0.02em" }}>
-            {beat.name}
-          </h3>
-        </section>
-
-        {/* BPM / Key */}
-        <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 4 }}>
-              BPM
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: C.onSurface }}>
-              {beat.bpm || "—"}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 4 }}>
-              Key
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: C.onSurface }}>
-              {beat.key || "—"}
-            </div>
-          </div>
-        </section>
-
-        {/* Status Console */}
-        <section>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
-            Status
-          </div>
-          <div style={{ display: "flex", padding: 4, background: C.surfaceContainerLow, borderRadius: 4, border: `1px solid ${C.border10}` }}>
-            {STATUS_ITEMS.map(({ key, label }) => {
-              const isActive = beat.status === key;
-              const cfg = STATUS_CONFIG[key];
-              return (
-                <button
-                  key={key}
-                  onClick={() => onUpdateStatus(beat.id, key)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 4px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    border: "none",
-                    borderRadius: 3,
-                    cursor: "pointer",
-                    background: isActive ? cfg.color : "transparent",
-                    color: isActive ? (key === "wip" || key === "sold" ? "#000" : "#fff") : C.onSurfaceVariant,
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Tags */}
-        <section>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
-            Tags
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {tags.length > 0 ? (
-              tags.map(tag => <TagPill key={tag} tag={tag} size="sm" />)
-            ) : (
-              <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>No tags</span>
-            )}
-          </div>
-        </section>
-
-        {/* Notes */}
-        {beat.notes && (
-          <section>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
-              Notes
-            </div>
-            <div style={{
-              padding: 12,
-              background: C.surfaceContainerLow,
-              borderRadius: 6,
-              border: `1px solid ${C.border10}`,
-              fontSize: 12,
-              color: C.onSurface,
-              lineHeight: 1.6,
-              whiteSpace: "pre-wrap",
-            }}>
-              {beat.notes}
-            </div>
-          </section>
-        )}
-
-        {/* Path */}
-        {beat.path && (
-          <section>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 8 }}>
-              Archive Path
-            </div>
-            <button
-              onClick={handleOpenFolder}
-              style={{
-                width: "100%",
-                padding: 12,
-                background: C.surfaceContainerLow,
-                borderRadius: 6,
-                border: `1px solid ${C.border10}`,
-                fontSize: 10,
-                fontFamily: "monospace",
-                color: C.onSurfaceVariant,
-                textAlign: "left",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                wordBreak: "break-all",
-              }}
-            >
-              <FolderOpen size={14} color={C.primary} />
-              {beat.path.split(/[/\\]/).pop()}
-            </button>
-          </section>
-        )}
-
-        {/* Created Date */}
-        {beat.created_date && (
-          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            Created: {beat.created_date}
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Footer
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <div style={{
-        padding: 16,
+        padding: "12px 20px",
         borderTop: `1px solid ${C.border10}`,
         display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 12,
+        flexDirection: "column",
+        gap: 8,
+        background: C.background,
       }}>
-        <button
-          onClick={() => onToggleFavorite(beat.id)}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 8,
-            background: fav ? "rgba(253,161,36,0.15)" : C.surfaceContainerHigh,
-            border: `1px solid ${fav ? "rgba(253,161,36,0.3)" : C.border20}`,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Heart size={20} fill={fav ? C.primary : "none"} color={C.primary} strokeWidth={1.5} />
-        </button>
-
+        {/* Edit Beat */}
         <button
           onClick={() => onOpenEditModal(beat)}
           style={{
-            flex: 1,
-            padding: "12px 20px",
-            borderRadius: 8,
-            background: C.primary,
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            fontSize: 12,
-            fontWeight: 700,
-            color: "#4e2d00",
+            width: "100%", padding: "13px 16px",
+            borderRadius: 10, background: C.primary,
+            border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            fontSize: 12, fontWeight: 700, color: C.onPrimary,
           }}
         >
-          <Edit3 size={16} />
+          <Edit3 size={15} />
           Edit Beat
         </button>
+
+        {/* Open Folder + Favorite */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={handleOpenFolder}
+            style={{
+              flex: 1, padding: "11px 16px",
+              borderRadius: 10, background: C.surfaceContainerHigh,
+              border: `1px solid ${C.border20}`,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontSize: 12, fontWeight: 700, color: C.onSurface,
+            }}
+          >
+            <FolderOpen size={15} color={C.onSurface} strokeWidth={1.5} />
+            Open Folder
+          </button>
+
+          <button
+            onClick={() => onToggleFavorite(beat.id)}
+            style={{
+              width: 46, height: 46, borderRadius: 10,
+              background: fav ? "rgba(253,161,36,0.15)" : C.surfaceContainerHigh,
+              border: `1px solid ${fav ? "rgba(253,161,36,0.35)" : C.border20}`,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Heart size={20} fill={fav ? C.primary : "none"} color={C.primary} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </aside>
   );
 }
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.15em",
+  color: C.onSecondaryFixedVar,
+  marginBottom: 6,
+};
+
+const fieldStyle: React.CSSProperties = {
+  padding: "11px 14px",
+  background: C.surfaceContainerLow,
+  borderRadius: 8,
+  border: `1px solid ${C.border15}`,
+  fontSize: 14,
+  fontWeight: 600,
+  color: C.onSurface,
+};

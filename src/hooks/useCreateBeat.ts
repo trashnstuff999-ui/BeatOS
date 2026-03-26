@@ -5,7 +5,7 @@
 
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ARCHIVE_BASE_PATH } from "../lib/constants";
+import { useSettings } from "../contexts/SettingsContext";
 import type {
   DuplicateCheckResult,
   ArchiveResult,
@@ -46,26 +46,30 @@ export function useCreateBeat({
   onReset,
   setCatalogId,
 }: UseCreateBeatParams) {
-  // ─── Archive Process State ─────────────────────────────────────────────────
+  const { settings } = useSettings();
+
   const [isArchiving, setIsArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState | null>(null);
   const [successDialog, setSuccessDialog] = useState<SuccessDialogState | null>(null);
 
   // ─── CREATE BEATSTRUCTURE Handler ──────────────────────────────────────────
-  const handleCreateBeatstructure = useCallback(async (forceV2 = false) => {
+  const handleCreateBeatstructure = useCallback(async (forceV2 = false, overrideCatalogId?: string) => {
     if (!sourceFolderPath || !title) return;
+    if (!settings.archivePath) {
+      setArchiveError("Archive path is not configured. Please set it in Settings.");
+      return;
+    }
 
     setArchiveError(null);
     setIsArchiving(true);
 
     try {
-      // 1. Parse catalog ID
-      const catalogIdNum = parseInt(catalogId.replace("#", "")) || 0;
+      const idToUse = overrideCatalogId ?? catalogId;
+      const catalogIdNum = parseInt(idToUse.replace("#", "")) || 0;
       const bpmNum = bpm ? parseInt(bpm) : null;
       const keyVal = key || null;
 
-      // 2. Check for duplicates (unless forcing V2)
       if (!forceV2) {
         const duplicateCheck = await invoke<DuplicateCheckResult>("check_beat_duplicate", {
           catalogId: catalogIdNum,
@@ -86,7 +90,6 @@ export function useCreateBeat({
         }
       }
 
-      // 3. Prepare archive params
       const params = {
         source_folder: sourceFolderPath,
         title,
@@ -100,14 +103,12 @@ export function useCreateBeat({
         source_flp_path: selectedFlp,
         cover_path: coverSourcePath,
         year_month: yearMonth,
-        archive_base_path: ARCHIVE_BASE_PATH,
+        archive_base_path: settings.archivePath,
       };
 
-      // 4. Execute archive operation
       const result = await invoke<ArchiveResult>("archive_beat", { params });
 
       if (result.success) {
-        // Success! Show success dialog
         setSuccessDialog({
           show: true,
           archivePath: result.archive_path,
@@ -123,43 +124,30 @@ export function useCreateBeat({
     } finally {
       setIsArchiving(false);
     }
-  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp, coverSourcePath, yearMonth]);
+  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp, coverSourcePath, yearMonth, settings.archivePath]);
 
-  // ─── Handle Duplicate Dialog Actions ───────────────────────────────────────
   const handleDuplicateCreateV2 = useCallback(() => {
     setDuplicateDialog(null);
-    // Increment catalog ID for V2
     const currentId = parseInt(catalogId.replace("#", "")) || 0;
-    const nextId = currentId + 1;
-    setCatalogId(`#${String(nextId).padStart(4, "0")}`);
-    // Retry with force flag
-    handleCreateBeatstructure(true);
+    const newId = `#${String(currentId + 1).padStart(4, "0")}`;
+    setCatalogId(newId);                          // update display state
+    handleCreateBeatstructure(true, newId);       // pass directly — avoids async state timing bug
   }, [catalogId, setCatalogId, handleCreateBeatstructure]);
 
-  const handleDuplicateCancel = useCallback(() => {
-    setDuplicateDialog(null);
-  }, []);
+  const handleDuplicateCancel = useCallback(() => setDuplicateDialog(null), []);
 
-  // ─── Handle Success Dialog Close ───────────────────────────────────────────
   const handleSuccessClose = useCallback(() => {
     setSuccessDialog(null);
-    // Reset form for next beat
     onReset();
   }, [onReset]);
 
-  // ─── Clear Error ───────────────────────────────────────────────────────────
-  const clearError = useCallback(() => {
-    setArchiveError(null);
-  }, []);
+  const clearError = useCallback(() => setArchiveError(null), []);
 
   return {
-    // State
     isArchiving,
     archiveError,
     duplicateDialog,
     successDialog,
-    
-    // Actions
     handleCreateBeatstructure,
     handleDuplicateCreateV2,
     handleDuplicateCancel,

@@ -62,28 +62,40 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   useEffect(() => { beatsRef.current = beats; }, [beats]);
   useEffect(() => { selectedBeatIdRef.current = selectedBeat?.id ?? null; }, [selectedBeat]);
 
-  // ─── Cover URL Cache ──────────────────────────────────────────────────────────
-  // Preloads cover URLs for visible beats so DetailPanel shows them instantly
+  // ─── Cover URL Cache (LRU, max 100 entries) ──────────────────────────────────
   const coverCacheRef = useRef<Map<string, string>>(new Map());
 
+  const setCoverCache = useCallback((id: string, url: string) => {
+    const cache = coverCacheRef.current;
+    if (cache.has(id)) { cache.delete(id); } // refresh position
+    if (cache.size >= 100) { cache.delete(cache.keys().next().value!); } // evict oldest
+    cache.set(id, url);
+  }, []);
+
   const preloadCovers = useCallback(async (beatsToLoad: Beat[]) => {
-    // Only fetch uncached beats that have a path and artwork
     const uncached = beatsToLoad.filter(b => b.path && b.has_artwork === 1 && !coverCacheRef.current.has(b.id));
     if (uncached.length === 0) return;
     await Promise.allSettled(
       uncached.map(async (beat) => {
         try {
           const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: beat.path });
-          coverCacheRef.current.set(beat.id, coverPath ? convertFileSrc(coverPath.replace(/\\/g, "/")) : "");
+          setCoverCache(beat.id, coverPath ? convertFileSrc(coverPath.replace(/\\/g, "/")) : "");
         } catch { /* ignore individual failures */ }
       })
     );
-  }, []);
+  }, [setCoverCache]);
 
   const getCoverUrl = useCallback((beatId: string): string | null => {
     const cached = coverCacheRef.current.get(beatId);
     return cached ? cached : null; // "" (no cover) and undefined (not loaded yet) both return null
   }, []);
+
+  // ─── Debounce search input (300ms) ───────────────────────────────────────────
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => clearTimeout(t);
+  }, [filters.search]);
 
   // Track filter changes to detect when we need to reset page
   const prevFiltersRef = useRef<string>(JSON.stringify(DEFAULT_FILTERS));
@@ -135,31 +147,33 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   }, []);
 
   // ─── Single Effect for Loading ───────────────────────────────────────────────
-  // Combines filter-change detection + page reset + loading into ONE effect
   useEffect(() => {
     const currentFiltersJson = JSON.stringify({
-      search: filters.search,
+      search: debouncedSearch,
       status: filters.status,
       onlyFavs: filters.onlyFavs,
       keys: filters.keys,
       bpmMin: filters.bpmMin,
       bpmMax: filters.bpmMax,
     });
-    
+
     const filtersChanged = prevFiltersRef.current !== currentFiltersJson;
     prevFiltersRef.current = currentFiltersJson;
-    
-    // If filters changed and we're not on page 1, reset to page 1
-    // This will trigger another run of this effect with page=1
+
     if (filtersChanged && pagination.page !== 1) {
       setPagination(prev => ({ ...prev, page: 1 }));
-      return; // Don't load yet - wait for page reset to trigger next effect run
+      return;
     }
-    
-    // Load with current state
-    loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
+
+    // Use debounced search for the actual IPC call
+    loadBeatsInternal(
+      { ...filters, search: debouncedSearch },
+      sort,
+      pagination.page,
+      pagination.pageSize,
+    );
   }, [
-    filters.search,
+    debouncedSearch,
     filters.status,
     filters.onlyFavs,
     filters.keys,

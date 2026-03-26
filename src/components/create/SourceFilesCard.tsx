@@ -15,7 +15,6 @@ interface SourceFilesCardProps {
   flpFiles: FlpFileInfo[];
   selectedFlp: string;
   setSelectedFlp: (v: string) => void;
-  editMode: boolean;
 }
 
 export function SourceFilesCard({
@@ -25,14 +24,7 @@ export function SourceFilesCard({
   flpFiles,
   selectedFlp,
   setSelectedFlp,
-  editMode,
 }: SourceFilesCardProps) {
-  const getInputStyle = (base: React.CSSProperties): React.CSSProperties => ({
-    ...base,
-    opacity: editMode ? 1 : 0.6,
-    cursor: editMode ? "pointer" : "not-allowed",
-  });
-
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -47,7 +39,7 @@ export function SourceFilesCard({
 
       {hasFiles ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          
+
           {/* Audio Selection */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -61,8 +53,7 @@ export function SourceFilesCard({
                 <select
                   value={selectedFile}
                   onChange={e => setSelectedFile(e.target.value)}
-                  disabled={!editMode}
-                  style={getInputStyle({ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" })}
+                  style={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" }}
                 >
                   {audioFiles.map(f => (
                     <option key={f.path} value={f.path}>
@@ -102,8 +93,7 @@ export function SourceFilesCard({
                 <select
                   value={selectedFlp}
                   onChange={e => setSelectedFlp(e.target.value)}
-                  disabled={!editMode}
-                  style={getInputStyle({ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" })}
+                  style={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" }}
                 >
                   {flpFiles.map(f => (
                     <option key={f.path} value={f.path}>

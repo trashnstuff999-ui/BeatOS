@@ -1,7 +1,6 @@
 // src/hooks/useTags.ts
 // ═══════════════════════════════════════════════════════════════════════════════
 // Custom Hook für Tag State Management
-// Mit Custom Tags Support für Quick Add
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -9,13 +8,11 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   type TagCategory,
   type CustomTag,
-  PRESET_TAGS,
   searchAllTags,
   normalizeTag,
-  isPresetTag,
-  prepareCustomTagForDb,
   tagsToString,
-  parseTagString,
+  sortTagsByCategory,
+  updateCustomTagsCache,
 } from "../lib/tags";
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -32,7 +29,7 @@ export interface QuickAddTagsResult {
   genre: string[];
   vibe: string[];
   instrument: string[];
-  custom: string[];  // NEU: Custom Tags Kategorie
+  custom: string[];
   other: string[];
 }
 
@@ -42,7 +39,6 @@ export interface UseTagsReturn {
   tagInput: string;
   showSuggestions: boolean;
   customTags: CustomTag[];
-  pendingCustomTags: string[];
   tagSuggestions: { tag: string; category: TagCategory }[];
   quickAddTags: QuickAddTagsResult;
 
@@ -53,10 +49,10 @@ export interface UseTagsReturn {
   removeTag: (tag: string) => void;
   setTags: (tags: string[]) => void;
   clearTags: () => void;
-  saveCustomTagsToDb: () => Promise<void>;
+  createCustomTag: (name: string, category: string) => Promise<void>;
+  deleteCustomTag: (displayName: string) => Promise<void>;
   reloadCustomTags: () => Promise<void>;
   getTagsForDb: () => string;
-  hasPendingTags: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -66,7 +62,7 @@ export interface UseTagsReturn {
 export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const {
     initialTags = [],
-    quickAddLimit = 10,
+    quickAddLimit = 5,
     autoLoadCustomTags = true,
   } = options;
 
@@ -75,7 +71,6 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const [tagInput, setTagInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [customTags, setCustomTags] = useState<CustomTag[]>([]);
-  const [pendingCustomTags, setPendingCustomTags] = useState<string[]>([]);
 
   // ─── Load Custom Tags from DB on Mount ─────────────────────────────────────
   useEffect(() => {
@@ -88,6 +83,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     try {
       const loadedTags = await invoke<CustomTag[]>("get_custom_tags");
       setCustomTags(loadedTags);
+      updateCustomTagsCache(loadedTags);
     } catch (err) {
       console.error("Failed to load custom tags:", err);
     }
@@ -101,7 +97,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
       .slice(0, 8);
   }, [tagInput, tags, customTags]);
 
-  // ─── Quick-Add Tags (grouped by category, mit Custom) ─────────────────────
+  // ─── Quick-Add Tags — built entirely from DB ────────────────────────────────
   const quickAddTags = useMemo((): QuickAddTagsResult => {
     const result: QuickAddTagsResult = {
       genre: [],
@@ -111,29 +107,13 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
       other: [],
     };
 
-    // 1. Add presets (genre, vibe, instrument, other)
-    for (const [category, presetTags] of Object.entries(PRESET_TAGS)) {
-      const cat = category as keyof typeof PRESET_TAGS;
-      result[cat] = presetTags
-        .filter((t) => !tags.includes(t))
-        .slice(0, quickAddLimit);
-    }
+    const tagsLower = new Set(tags.map(t => t.toLowerCase()));
 
-    // 2. Add custom tags sorted by usage_count
-    const sortedCustom = [...customTags].sort(
-      (a, b) => b.usage_count - a.usage_count
-    );
-    
-    for (const ct of sortedCustom) {
-      // Skip wenn bereits in tags
-      if (tags.includes(ct.display_name)) continue;
-      
-      // Skip wenn bereits ein Preset ist
-      if (isPresetTag(ct.display_name)) continue;
-      
-      // Zu "custom" Kategorie hinzufügen (max quickAddLimit)
-      if (result.custom.length < quickAddLimit) {
-        result.custom.push(ct.display_name);
+    for (const ct of customTags) {
+      if (tagsLower.has(ct.display_name.toLowerCase())) continue;
+      const bucket = ct.category as keyof QuickAddTagsResult;
+      if (result[bucket] && result[bucket].length < quickAddLimit) {
+        result[bucket].push(ct.display_name);
       }
     }
 
@@ -145,62 +125,59 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const addTag = useCallback(
     (tagToAdd?: string) => {
       const newTag = normalizeTag(tagToAdd || tagInput);
-      if (newTag && !tags.includes(newTag)) {
-        setTags((prev) => [...prev, newTag]);
+      if (newTag && !tags.some(t => t.toLowerCase() === newTag.toLowerCase())) {
+        setTags((prev) => {
+          const next = [...prev, newTag];
+          return sortTagsByCategory(next, (tag) => {
+            const ct = customTags.find(t =>
+              t.display_name.toLowerCase() === tag.toLowerCase() ||
+              t.tag === tag.toLowerCase()
+            );
+            return ct?.category ?? "custom";
+          });
+        });
         setTagInput("");
         setShowSuggestions(false);
-
-        // Track custom tags for later DB save
-        if (!isPresetTag(newTag)) {
-          if (!pendingCustomTags.includes(newTag)) {
-            setPendingCustomTags((prev) => [...prev, newTag]);
-          }
-        }
       }
     },
-    [tagInput, tags, pendingCustomTags]
+    [tagInput, tags, customTags]
   );
 
   const removeTag = useCallback((tagToRemove: string) => {
     setTags((prev) => prev.filter((t) => t !== tagToRemove));
-    setPendingCustomTags((prev) => prev.filter((t) => t !== tagToRemove));
   }, []);
 
   const clearTags = useCallback(() => {
     setTags([]);
-    setPendingCustomTags([]);
   }, []);
 
-  const saveCustomTagsToDb = useCallback(async () => {
-    const saved: CustomTag[] = [];
-    for (const tag of pendingCustomTags) {
-      const prepared = prepareCustomTagForDb(tag);
-      try {
-        await invoke("save_custom_tag", {
-          tag: prepared.tag,
-          displayName: prepared.display_name,
-          category: prepared.category,
-        });
-        // Build local CustomTag to append without a full DB reload
-        saved.push({
-          tag: prepared.tag,
-          display_name: prepared.display_name,
-          category: prepared.category as TagCategory,
-          usage_count: 1,
-        });
-      } catch (err) {
-        console.error("Failed to save custom tag:", err);
-      }
-    }
-    setPendingCustomTags([]);
-    // Append newly saved tags instead of reloading all from DB
-    if (saved.length > 0) {
-      setCustomTags(prev => {
-        const existingTags = new Set(prev.map(t => t.tag));
-        return [...prev, ...saved.filter(t => !existingTags.has(t.tag))];
-      });
-    }
-  }, [pendingCustomTags]);
+  const createCustomTag = useCallback(async (name: string, category: string) => {
+    const normalized = normalizeTag(name);
+    if (!normalized) return;
+    const tagKey = normalized.toLowerCase().replace(/\s+/g, "_");
+    await invoke("save_custom_tag", {
+      tag: tagKey,
+      displayName: normalized,
+      category,
+    });
+    const newEntry: CustomTag = {
+      id: Date.now(),
+      tag: tagKey,
+      display_name: normalized,
+      category: category as TagCategory,
+      usage_count: 1,
+      created_at: new Date().toISOString(),
+    };
+    setCustomTags(prev => prev.some(t => t.display_name === normalized) ? prev : [...prev, newEntry]);
+    setTags(prev => prev.includes(normalized) ? prev : [...prev, normalized]);
+  }, []);
+
+  const deleteCustomTag = useCallback(async (displayName: string) => {
+    const tagKey = displayName.toLowerCase().replace(/\s+/g, "_");
+    await invoke("delete_custom_tag", { tag: tagKey });
+    setCustomTags(prev => prev.filter(t => t.display_name !== displayName));
+    setTags(prev => prev.filter(t => t !== displayName));
+  }, []);
 
   const reloadCustomTags = useCallback(async () => {
     await loadCustomTags();
@@ -216,7 +193,6 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     tagInput,
     showSuggestions,
     customTags,
-    pendingCustomTags,
     tagSuggestions,
     quickAddTags,
 
@@ -226,17 +202,9 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     removeTag,
     setTags,
     clearTags,
-    saveCustomTagsToDb,
+    createCustomTag,
+    deleteCustomTag,
     reloadCustomTags,
     getTagsForDb,
-    hasPendingTags: pendingCustomTags.length > 0,
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────────
-// Helper Hook
-// ─────────────────────────────────────────────────────────────────────────────────
-
-export function useTagsFromString(tagString: string | null | undefined) {
-  return useMemo(() => parseTagString(tagString), [tagString]);
 }

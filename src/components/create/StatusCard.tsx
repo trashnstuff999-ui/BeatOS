@@ -9,10 +9,9 @@ import { Card, Label } from "../ui";
 interface StatusCardProps {
   status: string;
   setStatus: (v: string) => void;
-  editMode: boolean;
 }
 
-export function StatusCard({ status, setStatus, editMode }: StatusCardProps) {
+export function StatusCard({ status, setStatus }: StatusCardProps) {
   return (
     <Card accent={C.tertiary}>
       <Label>Production Status</Label>
@@ -22,16 +21,14 @@ export function StatusCard({ status, setStatus, editMode }: StatusCardProps) {
           return (
             <button
               key={item.key}
-              onClick={() => editMode && setStatus(item.key)}
-              disabled={!editMode}
+              onClick={() => setStatus(item.key)}
               style={{
                 padding: "12px 8px", borderRadius: 6,
                 fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
                 border: "none", borderBottom: `2px solid ${isActive ? item.color : "transparent"}`,
                 background: isActive ? C.surfaceContainerHighest : C.surfaceContainer,
                 color: isActive ? item.color : C.onSurfaceVariant,
-                cursor: editMode ? "pointer" : "not-allowed",
-                opacity: editMode ? 1 : 0.6,
+                cursor: "pointer",
                 transition: "all 0.15s",
               }}
             >

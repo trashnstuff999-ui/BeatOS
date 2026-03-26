@@ -280,10 +280,13 @@ export function useAudioPlayer({ beatPath, preloadedCoverUrl }: UseAudioPlayerPr
     };
   }, []);
 
-  // Sync settings
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
-  useEffect(() => { if (audioRef.current) audioRef.current.loop = isLooped; }, [isLooped]);
-  useEffect(() => { if (audioRef.current) audioRef.current.muted = isMuted; }, [isMuted]);
+  // Sync audio settings (combined to avoid 3 separate effects)
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.volume = volume;
+    audioRef.current.loop = isLooped;
+    audioRef.current.muted = isMuted;
+  }, [volume, isLooped, isMuted]);
 
   // ─── Controls ──────────────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
