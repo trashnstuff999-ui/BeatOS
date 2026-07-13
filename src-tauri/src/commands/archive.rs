@@ -15,12 +15,6 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ARCHIVE PATH CONSTANT
-// ══════════════════════════════════════════════════════════════════════════════
-
-const ARCHIVE_PATH: &str = r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\03_ARCHIVE";
-
-// ══════════════════════════════════════════════════════════════════════════════
 // HELPER STRUCTS
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -38,6 +32,13 @@ pub struct ArchiveBeatParams {
     pub source_flp_path: String,
     pub year_month: String,
     pub archive_base_path: String,
+    /// Apply the filename convention right after archiving (default: true).
+    #[serde(default = "default_true")]
+    pub auto_rename: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -157,6 +158,24 @@ fn date_from_archive_path(beat_path: &Path) -> Option<String> {
     if !(1..=12).contains(&month_num) { return None; }
 
     Some(format!("{:04}-{:02}-01", year, month_num))
+}
+
+/// Detect whether a beat folder contains artwork (image) / video files.
+/// Checks the flat root and the legacy 02_VISUALS/ subfolder.
+fn detect_assets(beat_root: &Path) -> (bool, bool) {
+    let mut has_artwork = false;
+    let mut has_video = false;
+    for dir in [beat_root.to_path_buf(), beat_root.join("02_VISUALS")] {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.filter_map(|e| e.ok()) {
+            let p = e.path();
+            if !p.is_file() { continue; }
+            let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+            if is_image_extension(&ext) { has_artwork = true; }
+            if is_video_extension(&ext) { has_video = true; }
+        }
+    }
+    (has_artwork, has_video)
 }
 
 fn find_beat_in_archive(archive_path: &str, id: &str) -> Option<PathBuf> {
@@ -290,6 +309,31 @@ fn build_archive_folder_name(
     crate::utils::sanitize_filename_part(
         format!("{:04} - {} {}", catalog_id, safe_title, key_bpm).trim(),
     )
+}
+
+/// Move the source folder of a just-archived beat to the recycle bin.
+/// Opt-in only (dialog after successful archive) — never called automatically.
+#[tauri::command]
+pub fn trash_source_folder(source_folder: String, archive_base_path: String) -> Result<(), String> {
+    let src = Path::new(&source_folder);
+    if !src.exists() || !src.is_dir() {
+        return Err(format!("Quellordner nicht gefunden: {}", source_folder));
+    }
+    // Never trash a drive root / degenerate path
+    if src.parent().is_none() || source_folder.trim().len() < 8 {
+        return Err("Sicherheitsstopp: Pfad zu kurz oder Laufwerks-Root".to_string());
+    }
+    // Never trash anything inside (or equal to) the archive itself
+    if !archive_base_path.trim().is_empty() {
+        if let (Ok(canon_src), Ok(canon_archive)) =
+            (src.canonicalize(), Path::new(&archive_base_path).canonicalize())
+        {
+            if canon_src.starts_with(&canon_archive) {
+                return Err("Sicherheitsstopp: Quellordner liegt im Archiv".to_string());
+            }
+        }
+    }
+    trash::delete(src).map_err(|e| format!("Papierkorb fehlgeschlagen: {}", e))
 }
 
 /// Relative archive path preview for the Create tab (e.g.
@@ -440,10 +484,12 @@ fn archive_beat_inner(
         .map(secs_to_date)
         .unwrap_or_else(|| secs_to_date(now_secs));
 
+    let (has_artwork, has_video) = detect_assets(target_path);
+
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date, has_artwork, has_video)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             beat_id,
             params.title,
@@ -455,9 +501,23 @@ fn archive_beat_inner(
             params.notes,
             created_date_str,
             secs_to_date(now_secs),
+            has_artwork as i32,
+            has_video as i32,
         ],
     ).map_err(|e| format!("DB insert error: {}", e))?;
     tx.commit().map_err(|e| format!("DB commit error: {}", e))?;
+
+    // Auto-rename: apply the same filename convention as the Upload-tab
+    // "Convert filenames" tool, so the asset checklist is green immediately.
+    // A rename problem never fails the archive — it is reported as warning.
+    let mut warning: Option<String> = None;
+    if params.auto_rename {
+        match crate::commands::apply_filename_convention(beat_id.clone()) {
+            Ok(r) if r.errors.is_empty() => {}
+            Ok(r) => warning = Some(format!("Auto-Rename mit Fehlern: {}", r.errors.join("; "))),
+            Err(e) => warning = Some(format!("Auto-Rename fehlgeschlagen: {}", e)),
+        }
+    }
 
     // Refresh the OneDrive snapshot in the background after a successful write.
     std::thread::spawn(|| {
@@ -471,18 +531,18 @@ fn archive_beat_inner(
         archive_path: target_path.to_string_lossy().to_string(),
         beat_id,
         files_copied,
-        error: None,
+        error: warning,
     })
 }
 
 #[tauri::command]
-pub async fn scan_archive() -> Result<ScanResult, String> {
-    tauri::async_runtime::spawn_blocking(scan_archive_blocking)
+pub async fn scan_archive(archive_base_path: String) -> Result<ScanResult, String> {
+    tauri::async_runtime::spawn_blocking(move || scan_archive_blocking(&archive_base_path))
         .await
         .map_err(|e| format!("Scan task panicked: {}", e))?
 }
 
-fn scan_archive_blocking() -> Result<ScanResult, String> {
+fn scan_archive_blocking(archive_base_path: &str) -> Result<ScanResult, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
     let mut id_stmt = conn.prepare("SELECT id FROM beats").map_err(|e| e.to_string())?;
@@ -497,9 +557,12 @@ fn scan_archive_blocking() -> Result<ScanResult, String> {
     let mut skipped  = 0i64;
     let mut errors: Vec<String> = Vec::new();
 
-    let archive_dir = Path::new(ARCHIVE_PATH);
-    if !archive_dir.exists() {
-        return Err(format!("Archive not found: {}", ARCHIVE_PATH));
+    let archive_dir = Path::new(archive_base_path);
+    if archive_base_path.trim().is_empty() || !archive_dir.exists() {
+        return Err(format!(
+            "Archive not found: '{}' — bitte Archive Path in den Settings setzen",
+            archive_base_path
+        ));
     }
 
     for year_entry in std::fs::read_dir(archive_dir).map_err(|e| e.to_string())?.filter_map(|e| e.ok()) {
@@ -549,12 +612,14 @@ fn scan_archive_blocking() -> Result<ScanResult, String> {
                     .unwrap_or_default();
 
                 let path_str = beat_path.to_string_lossy().to_string();
+                let (has_artwork, has_video) = detect_assets(&beat_path);
 
                 // key/bpm stay NULL when unknown — 0.0/'' would poison
                 // avg_bpm stats and BPM range filters.
                 match conn.execute(
-                    "INSERT OR IGNORE INTO beats (id, name, path, key, bpm, status, created_date, favorite) VALUES (?1,?2,?3,?4,?5,'idea',?6,0)",
-                    rusqlite::params![id, name, path_str, key, bpm, created_date],
+                    "INSERT OR IGNORE INTO beats (id, name, path, key, bpm, status, created_date, favorite, has_artwork, has_video)
+                     VALUES (?1,?2,?3,?4,?5,'idea',?6,0,?7,?8)",
+                    rusqlite::params![id, name, path_str, key, bpm, created_date, has_artwork as i32, has_video as i32],
                 ) {
                     Ok(_)  => imported += 1,
                     Err(e) => errors.push(format!("{}: {}", folder_name, e)),
@@ -567,13 +632,13 @@ fn scan_archive_blocking() -> Result<ScanResult, String> {
 }
 
 #[tauri::command]
-pub async fn fix_dates() -> Result<FixDatesResult, String> {
-    tauri::async_runtime::spawn_blocking(fix_dates_blocking)
+pub async fn fix_dates(archive_base_path: String) -> Result<FixDatesResult, String> {
+    tauri::async_runtime::spawn_blocking(move || fix_dates_blocking(&archive_base_path))
         .await
         .map_err(|e| format!("Fix-dates task panicked: {}", e))?
 }
 
-fn fix_dates_blocking() -> Result<FixDatesResult, String> {
+fn fix_dates_blocking(archive_base_path: &str) -> Result<FixDatesResult, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
     let mut stmt = conn.prepare("SELECT id, path FROM beats")
@@ -601,7 +666,7 @@ fn fix_dates_blocking() -> Result<FixDatesResult, String> {
         } else { None };
 
         let beat_path = if beat_path.is_none() {
-            find_beat_in_archive(ARCHIVE_PATH, &beat.id)
+            find_beat_in_archive(archive_base_path, &beat.id)
         } else {
             beat_path
         };
@@ -614,6 +679,16 @@ fn fix_dates_blocking() -> Result<FixDatesResult, String> {
                 continue;
             }
         };
+
+        // Backfill has_artwork / has_video while we already have the folder
+        // resolved — keeps Browse/Checklist consistent with the filesystem.
+        let (has_artwork, has_video) = detect_assets(&beat_path);
+        if let Err(e) = conn.execute(
+            "UPDATE beats SET has_artwork = ?1, has_video = ?2 WHERE id = ?3",
+            rusqlite::params![has_artwork as i32, has_video as i32, beat.id],
+        ) {
+            errors.push(format!("{}: asset backfill failed: {}", beat.id, e));
+        }
 
         let new_date = date_from_archive_path(&beat_path);
 

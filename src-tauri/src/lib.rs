@@ -42,6 +42,7 @@ use commands::{
     check_beat_duplicate,
     archive_beat,
     preview_archive_path,
+    trash_source_folder,
     // Create commands
     get_next_beat_id,
     parse_beat_folder_for_create,
@@ -128,6 +129,7 @@ pub fn run() {
             check_beat_duplicate,
             archive_beat,
             preview_archive_path,
+            trash_source_folder,
             // Create
             get_next_beat_id,
             parse_beat_folder_for_create,

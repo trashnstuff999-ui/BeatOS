@@ -116,17 +116,21 @@ export const api = {
   // ─── Archive ─────────────────────────────────────────────────────────────
 
   archive: {
-    scan: () =>
-      invoke<{ found: number; imported: number; skipped: number; errors: string[] }>("scan_archive"),
+    scan: (archiveBasePath: string) =>
+      invoke<{ found: number; imported: number; skipped: number; errors: string[] }>("scan_archive", { archiveBasePath }),
 
-    fixDates: () =>
-      invoke<{ updated: number; not_found: number; no_flp: number; errors: string[] }>("fix_dates"),
+    fixDates: (archiveBasePath: string) =>
+      invoke<{ updated: number; not_found: number; no_flp: number; errors: string[] }>("fix_dates", { archiveBasePath }),
 
     checkDuplicate: (catalogId: number, title: string, key: string | null, bpm: number | null) =>
       invoke<DuplicateCheckResult>("check_beat_duplicate", { catalogId, title, key, bpm }),
 
     archiveBeat: (params: ArchiveBeatParams) =>
       invoke<ArchiveResult>("archive_beat", { params }),
+
+    /** Move the source folder of an archived beat to the recycle bin (opt-in). */
+    trashSourceFolder: (sourceFolder: string, archiveBasePath: string) =>
+      invoke<void>("trash_source_folder", { sourceFolder, archiveBasePath }),
 
     /** Relative archive path preview — shares the exact folder-name logic of archive_beat. */
     previewPath: (catalogId: number, title: string, key: string | null, bpm: number | null, yearMonth: string) =>

@@ -79,6 +79,8 @@ export interface ArchiveBeatParams {
   source_flp_path: string;
   year_month: string;
   archive_base_path: string;
+  /** Dateien direkt nach Namenskonvention umbenennen (Default: true) */
+  auto_rename: boolean;
 }
 
 export interface ArchiveResult {
@@ -109,6 +111,10 @@ export interface SuccessDialogState {
   archivePath: string;
   beatId: string;
   filesCopied: number;
+  /** Quellordner des archivierten Beats — für optionalen Papierkorb-Cleanup */
+  sourceFolder: string;
+  /** Nicht-fatale Warnung aus dem Archivieren (z.B. Auto-Rename-Fehler) */
+  warning: string | null;
 }
 
 // ─── Form State ─────────────────────────────────────────────────────────────

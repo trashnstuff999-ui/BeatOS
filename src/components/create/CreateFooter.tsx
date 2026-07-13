@@ -8,6 +8,8 @@ interface CreateFooterProps {
   isArchiving: boolean;
   sourceFolderPath: string | null;
   title: string;
+  autoRename: boolean;
+  onAutoRenameChange: (value: boolean) => void;
   onSelectFolder: () => void;
   onCreateBeatstructure: () => void;
 }
@@ -17,6 +19,8 @@ export function CreateFooter({
   isArchiving,
   sourceFolderPath,
   title,
+  autoRename,
+  onAutoRenameChange,
   onSelectFolder,
   onCreateBeatstructure,
 }: CreateFooterProps) {
@@ -54,6 +58,21 @@ export function CreateFooter({
 
       {/* Right: Buttons */}
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {/* Auto-Rename Toggle */}
+        <label style={{
+          display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+          fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+          color: autoRename ? C.onSurface : C.onSurfaceVariant, userSelect: "none",
+        }}>
+          <input
+            type="checkbox"
+            checked={autoRename}
+            onChange={e => onAutoRenameChange(e.target.checked)}
+            style={{ accentColor: C.primary, width: 14, height: 14, cursor: "pointer" }}
+          />
+          AUTO-RENAME
+        </label>
+
         <button
           onClick={onSelectFolder}
           disabled={isLoading}

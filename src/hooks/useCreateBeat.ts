@@ -23,6 +23,7 @@ interface UseCreateBeatParams {
   selectedFile: string;
   selectedFlp: string;
   yearMonth: string;
+  autoRename: boolean;
   onReset: () => void;
   setCatalogId: (id: string) => void;
 }
@@ -39,6 +40,7 @@ export function useCreateBeat({
   selectedFile,
   selectedFlp,
   yearMonth,
+  autoRename,
   onReset,
   setCatalogId,
 }: UseCreateBeatParams) {
@@ -94,6 +96,7 @@ export function useCreateBeat({
         source_flp_path: selectedFlp,
         year_month: yearMonth,
         archive_base_path: settings.archivePath,
+        auto_rename: autoRename,
       };
 
       const result = await api.archive.archiveBeat(params);
@@ -104,6 +107,8 @@ export function useCreateBeat({
           archivePath: result.archive_path,
           beatId: result.beat_id,
           filesCopied: result.files_copied,
+          sourceFolder: sourceFolderPath,
+          warning: result.error ?? null,
         });
       } else {
         setArchiveError(result.error || "Unknown error occurred");

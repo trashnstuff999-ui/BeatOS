@@ -3,14 +3,19 @@
 // Archive Success Dialog
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { CheckCircle, FolderOpen } from "lucide-react";
+import { CheckCircle, FolderOpen, Trash2, AlertTriangle } from "lucide-react";
 import { C } from "../../../lib/theme";
+import { api } from "../../../lib/api";
+import { useSettings } from "../../../contexts/SettingsContext";
 
 interface SuccessDialogProps {
   archivePath: string;
   beatId: string;
   filesCopied: number;
+  sourceFolder: string;
+  warning: string | null;
   onClose: () => void;
 }
 
@@ -18,9 +23,16 @@ export function SuccessDialog({
   archivePath,
   beatId,
   filesCopied,
+  sourceFolder,
+  warning,
   onClose,
 }: SuccessDialogProps) {
+  const { settings } = useSettings();
   const folderName = archivePath.split(/[/\\]/).pop() || archivePath;
+
+  // "idle" → Button sichtbar, "done" → erledigt, "error" → Meldung anzeigen
+  const [trashState, setTrashState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [trashError, setTrashError] = useState<string | null>(null);
 
   const handleOpenFolder = async () => {
     try {
@@ -28,6 +40,22 @@ export function SuccessDialog({
       await revealItemInDir(archivePath);
     } catch (e) {
       console.error("Failed to open folder:", e);
+    }
+  };
+
+  const handleTrashSource = async () => {
+    if (!confirm(
+      `Quellordner in den Papierkorb verschieben?\n\n${sourceFolder}\n\n` +
+      `Alle Dateien wurden bereits verifiziert ins Archiv kopiert. ` +
+      `Der Ordner landet im Papierkorb (kein endgültiges Löschen).`
+    )) return;
+    setTrashState("busy");
+    try {
+      await api.archive.trashSourceFolder(sourceFolder, settings.archivePath);
+      setTrashState("done");
+    } catch (e) {
+      setTrashError(String(e));
+      setTrashState("error");
     }
   };
 
@@ -100,6 +128,59 @@ export function SuccessDialog({
         }}>
           <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Archive Location</div>
           <div style={{ fontSize: 12, color: C.onSurface, fontFamily: "monospace", wordBreak: "break-all" }}>{folderName}</div>
+        </div>
+
+        {/* Warnung aus dem Archivieren (z.B. Auto-Rename) */}
+        {warning && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 8,
+            background: "rgba(253,161,36,0.08)", border: "1px solid rgba(253,161,36,0.25)",
+            borderRadius: 8, padding: 12, marginBottom: 16,
+          }}>
+            <AlertTriangle size={14} color="#fda124" style={{ flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 11, color: "#fda124", lineHeight: 1.5 }}>{warning}</span>
+          </div>
+        )}
+
+        {/* Quellordner-Cleanup (Opt-in) */}
+        <div style={{
+          background: C.surfaceContainer, borderRadius: 8, padding: 12,
+          marginBottom: 24, border: `1px solid ${C.border15}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
+              Quellordner aufräumen
+            </div>
+            <div style={{ fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {sourceFolder}
+            </div>
+            {trashState === "error" && (
+              <div style={{ fontSize: 10, color: C.error, marginTop: 4 }}>{trashError}</div>
+            )}
+          </div>
+          {trashState === "done" ? (
+            <span style={{ fontSize: 11, color: C.mint, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <CheckCircle size={13} /> Im Papierkorb
+            </span>
+          ) : (
+            <button
+              onClick={handleTrashSource}
+              disabled={trashState === "busy"}
+              style={{
+                padding: "8px 14px", borderRadius: 6, flexShrink: 0,
+                fontSize: 11, fontWeight: 600,
+                background: "transparent",
+                border: `1px solid ${C.border30}`,
+                color: C.onSurfaceVariant,
+                cursor: trashState === "busy" ? "wait" : "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <Trash2 size={13} />
+              In Papierkorb
+            </button>
+          )}
         </div>
 
         {/* Buttons */}

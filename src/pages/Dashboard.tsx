@@ -7,6 +7,7 @@ import type { Stats } from "../types/stats";
 import { C, commonStyles } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
 import { StatusPill } from "../components/Tagpill";
+import { useSettings } from "../contexts/SettingsContext";
 
 // ── Hover helper ──────────────────────────────────────────────────────────────
 const cardHover = {
@@ -399,6 +400,7 @@ export default function Dashboard() {
   const [stats, setStats]     = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const handleNavigate = useCallback((filter: object) => {
     navigate("/browse", { state: { initialFilters: filter } });
@@ -452,9 +454,9 @@ export default function Dashboard() {
               if (!confirm("System Repair wird:\n1. Fehlende Beats importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n\nDB-Backup vorhanden?")) return;
               try {
                 // Schritt 1: Fehlende Beats scannen
-                const scan = await api.archive.scan();
+                const scan = await api.archive.scan(settings.archivePath);
                 // Schritt 2: Alle Dates fixen
-                const fix = await api.archive.fixDates();
+                const fix = await api.archive.fixDates(settings.archivePath);
                 alert(
                   `System Repair abgeschlossen\n\n` +
                   `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +

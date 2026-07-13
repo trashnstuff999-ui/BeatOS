@@ -53,6 +53,7 @@ export default function Create() {
   const [sourceFolderPath, setSourceFolderPath] = useState<string | null>(null);
   const [createdDate, setCreatedDate] = useState<string | null>(null);
   const [yearMonth, setYearMonth] = useState<string>("");
+  const [autoRename, setAutoRename] = useState(true);
 
   // ─── Parsed Folder State ───────────────────────────────────────────────────
   const [audioFiles, setAudioFiles] = useState<AudioFileInfo[]>([]);
@@ -124,6 +125,7 @@ export default function Create() {
     selectedFile,
     selectedFlp,
     yearMonth,
+    autoRename,
     onReset: handleReset,
     setCatalogId,
   });
@@ -318,6 +320,8 @@ export default function Create() {
         isArchiving={isArchiving}
         sourceFolderPath={sourceFolderPath}
         title={title}
+        autoRename={autoRename}
+        onAutoRenameChange={setAutoRename}
         onSelectFolder={handleSelectFolder}
         onCreateBeatstructure={() => handleCreateBeatstructure()}
       />
@@ -343,6 +347,8 @@ export default function Create() {
           archivePath={successDialog.archivePath}
           beatId={successDialog.beatId}
           filesCopied={successDialog.filesCopied}
+          sourceFolder={successDialog.sourceFolder}
+          warning={successDialog.warning}
           onClose={handleSuccessClose}
         />
       )}
