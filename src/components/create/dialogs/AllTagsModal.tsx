@@ -179,7 +179,12 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
   const handleApply = () => {
     const next = [...internalSelected];
     for (const key of staged) {
-      if (!next.some(s => s.toLowerCase() === key)) next.push(key);
+      // Beats carry display names ("Type-Beat"), not lowercase DB keys.
+      const display = allTags.find(t => t.tag === key)?.display_name ?? key;
+      const dup = next.some(
+        s => s.toLowerCase() === key || s.toLowerCase() === display.toLowerCase()
+      );
+      if (!dup) next.push(display);
     }
     onConfirm(sortActive(next));
     onClose();
@@ -187,6 +192,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
 
   const handleTrashStaged = async () => {
     setInternalSelected(prev => prev.filter(s => !staged.has(s.toLowerCase())));
+    const failed: string[] = [];
     for (const key of staged) {
       try {
         await invoke("delete_custom_tag", { tag: key });
@@ -195,9 +201,12 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           updateCustomTagsCache(next);
           return next;
         });
-      } catch {}
+      } catch (e) {
+        failed.push(`${key}: ${String(e)}`);
+      }
     }
     setStaged(new Set());
+    if (failed.length) alert(`Tags konnten nicht gelöscht werden:\n${failed.join("\n")}`);
   };
 
   const handleCreate = async () => {
@@ -231,20 +240,28 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
   };
 
   const handleMoveStagedTo = async (targetCat: TagCategory) => {
+    // Only tags whose DB write succeeded are moved locally — otherwise the
+    // UI would silently diverge from the database.
+    const moved = new Set<string>();
+    const failed: string[] = [];
     for (const key of staged) {
       const tag = allTags.find(t => t.tag === key);
       if (!tag || tag.category === targetCat) continue;
       try {
         await invoke("save_custom_tag", { tag: key, displayName: tag.display_name, category: targetCat });
-      } catch {}
+        moved.add(key);
+      } catch (e) {
+        failed.push(`${key}: ${String(e)}`);
+      }
     }
     setAllTags(prev => {
-      const next = prev.map(t => staged.has(t.tag) ? { ...t, category: targetCat } : t);
+      const next = prev.map(t => moved.has(t.tag) ? { ...t, category: targetCat } : t);
       updateCustomTagsCache(next);
       return next;
     });
     setStaged(new Set());
     setShowMoveMenu(false);
+    if (failed.length) alert(`Tags konnten nicht verschoben werden:\n${failed.join("\n")}`);
   };
 
   const handleMoveTag = async (targetKey: ColKey) => {
@@ -259,7 +276,9 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         updateCustomTagsCache(next);
         return next;
       });
-    } catch {}
+    } catch (e) {
+      alert(`Tag konnte nicht verschoben werden: ${String(e)}`);
+    }
   };
 
   const handleRenameCommit = useCallback(async () => {

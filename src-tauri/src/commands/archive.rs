@@ -5,7 +5,8 @@
 
 use crate::db::{open_db, DuplicateCheckResult, ScanResult};
 use crate::utils::{
-    secs_to_date, file_created_secs, file_modified_secs,
+    secs_to_date, file_created_secs, file_modified_secs, file_creation_date,
+    oldest_flp_date, parse_beat_folder,
     is_audio_extension, is_image_extension, is_video_extension, unique_dest,
 };
 use serde::{Deserialize, Serialize};
@@ -136,47 +137,6 @@ fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<i32, String> {
     }
     
     Ok(count)
-}
-
-fn parse_beat_folder(folder_name: &str) -> Option<(String, String, Option<String>, Option<f64>)> {
-    let parts: Vec<&str> = folder_name.splitn(2, " - ").collect();
-    if parts.len() < 2 { return None; }
-
-    let id   = parts[0].trim().to_string();
-    let rest = parts[1].trim();
-
-    let (name_part, key, bpm) = if let (Some(lb), Some(rb)) = (rest.rfind('['), rest.rfind(']')) {
-        if lb < rb {
-            let bracket = &rest[lb+1..rb];
-            let name    = rest[..lb].trim().to_string();
-            let tokens: Vec<&str> = bracket.split_whitespace().collect();
-            if tokens.is_empty() {
-                (name, None, None)
-            } else {
-                let last = tokens.last().unwrap();
-                let bpm_str: String = last.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
-                let bpm_val: Option<f64> = bpm_str.parse().ok();
-                let key_val = if tokens.len() > 1 {
-                    Some(tokens[..tokens.len()-1].join(" "))
-                } else if bpm_val.is_some() {
-                    None
-                } else {
-                    Some(tokens[0].to_string())
-                };
-                (name, key_val, bpm_val)
-            }
-        } else {
-            (rest.to_string(), None, None)
-        }
-    } else {
-        (rest.to_string(), None, None)
-    };
-
-    Some((id, name_part, key, bpm))
-}
-
-fn file_creation_date(path: &Path) -> Option<String> {
-    file_created_secs(path).map(secs_to_date)
 }
 
 fn date_from_archive_path(beat_path: &Path) -> Option<String> {
@@ -310,7 +270,14 @@ pub fn check_beat_duplicate(
 }
 
 #[tauri::command]
-pub fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, String> {
+pub async fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, String> {
+    // Copying whole beat folders is heavy I/O — keep it off the IPC thread.
+    tauri::async_runtime::spawn_blocking(move || archive_beat_blocking(params))
+        .await
+        .map_err(|e| format!("Archive task panicked: {}", e))?
+}
+
+fn archive_beat_blocking(params: ArchiveBeatParams) -> Result<ArchiveResultFull, String> {
     let source_path = Path::new(&params.source_folder);
     
     if !source_path.exists() {
@@ -479,7 +446,13 @@ fn archive_beat_inner(
 }
 
 #[tauri::command]
-pub fn scan_archive() -> Result<ScanResult, String> {
+pub async fn scan_archive() -> Result<ScanResult, String> {
+    tauri::async_runtime::spawn_blocking(scan_archive_blocking)
+        .await
+        .map_err(|e| format!("Scan task panicked: {}", e))?
+}
+
+fn scan_archive_blocking() -> Result<ScanResult, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
     let mut id_stmt = conn.prepare("SELECT id FROM beats").map_err(|e| e.to_string())?;
@@ -540,33 +513,18 @@ pub fn scan_archive() -> Result<ScanResult, String> {
                 if existing_ids.contains(&id) { skipped += 1; continue; }
 
                 // FLPs live in 01_SAVEFILES/ (new) or 03_PROJECTS/ (legacy).
-                let flp_dir = flp_subdir(&beat_path);
-                let created_date = if let Some(dir) = flp_dir {
-                    let mut flp_dates: Vec<(SystemTime, PathBuf)> = Vec::new();
-                    if let Ok(entries) = std::fs::read_dir(&dir) {
-                        for e in entries.filter_map(|e| e.ok()) {
-                            let p = e.path();
-                            if p.extension().and_then(|x| x.to_str()) == Some("flp") {
-                                if let Ok(meta) = std::fs::metadata(&p) {
-                                    let t = meta.created().or_else(|_| meta.modified());
-                                    if let Ok(t) = t { flp_dates.push((t, p)); }
-                                }
-                            }
-                        }
-                    }
-                    flp_dates.sort_by_key(|(t, _)| *t);
-                    flp_dates.first().and_then(|(_, p)| file_creation_date(p))
-                } else { None };
-
-                let created_date = created_date
+                let created_date = flp_subdir(&beat_path)
+                    .and_then(|dir| oldest_flp_date(&dir))
                     .or_else(|| file_creation_date(&beat_path))
                     .unwrap_or_default();
 
                 let path_str = beat_path.to_string_lossy().to_string();
 
+                // key/bpm stay NULL when unknown — 0.0/'' would poison
+                // avg_bpm stats and BPM range filters.
                 match conn.execute(
                     "INSERT OR IGNORE INTO beats (id, name, path, key, bpm, status, created_date, favorite) VALUES (?1,?2,?3,?4,?5,'idea',?6,0)",
-                    rusqlite::params![id, name, path_str, key.unwrap_or_default(), bpm.unwrap_or(0.0), created_date],
+                    rusqlite::params![id, name, path_str, key, bpm, created_date],
                 ) {
                     Ok(_)  => imported += 1,
                     Err(e) => errors.push(format!("{}: {}", folder_name, e)),
@@ -579,7 +537,13 @@ pub fn scan_archive() -> Result<ScanResult, String> {
 }
 
 #[tauri::command]
-pub fn fix_dates() -> Result<FixDatesResult, String> {
+pub async fn fix_dates() -> Result<FixDatesResult, String> {
+    tauri::async_runtime::spawn_blocking(fix_dates_blocking)
+        .await
+        .map_err(|e| format!("Fix-dates task panicked: {}", e))?
+}
+
+fn fix_dates_blocking() -> Result<FixDatesResult, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
     let mut stmt = conn.prepare("SELECT id, path FROM beats")
@@ -625,24 +589,12 @@ pub fn fix_dates() -> Result<FixDatesResult, String> {
 
         let new_date = if new_date.is_none() {
             // FLPs live in 01_SAVEFILES/ (new) or 03_PROJECTS/ (legacy).
-            let flp_dir = flp_subdir(&beat_path);
-            if let Some(dir) = flp_dir {
-                let mut flp_dates: Vec<(SystemTime, PathBuf)> = Vec::new();
-                if let Ok(entries) = std::fs::read_dir(&dir) {
-                    for e in entries.filter_map(|e| e.ok()) {
-                        let p = e.path();
-                        if p.extension().and_then(|x| x.to_str()) == Some("flp") {
-                            if let Ok(meta) = std::fs::metadata(&p) {
-                                if let Ok(t) = meta.modified() { flp_dates.push((t, p)); }
-                            }
-                        }
-                    }
+            match flp_subdir(&beat_path) {
+                Some(dir) => oldest_flp_date(&dir),
+                None => {
+                    no_flp += 1;
+                    None
                 }
-                flp_dates.sort_by_key(|(t, _)| *t);
-                flp_dates.first().and_then(|(_, p)| file_creation_date(p))
-            } else {
-                no_flp += 1;
-                None
             }
         } else {
             new_date

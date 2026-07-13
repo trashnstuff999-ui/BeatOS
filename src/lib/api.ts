@@ -117,8 +117,8 @@ export const api = {
     delete: (tag: string) =>
       invoke<void>("delete_custom_tag", { tag }),
 
-    rename: (oldTag: string, newTag: string, displayName: string, category: string) =>
-      invoke<void>("rename_custom_tag", { oldTag, newTag, displayName, category }),
+    rename: (oldTag: string, newTag: string, newDisplayName: string, category: string) =>
+      invoke<void>("rename_custom_tag", { oldTag, newTag, newDisplayName, category }),
 
     search: (query: string) =>
       invoke<CustomTag[]>("search_custom_tags", { query }),

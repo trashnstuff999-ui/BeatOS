@@ -246,4 +246,23 @@ mod tests {
         assert_eq!(key, None);
         assert_eq!(bpm, Some(140.0));
     }
+
+    #[test]
+    fn test_folder_bpm_before_key() {
+        // The old local parser in archive.rs got this wrong (key="140", bpm=None)
+        let (id, name, key, bpm) = parse_beat_folder("0011 - Night Ride [140 Am]").unwrap();
+        assert_eq!(id, "0011");
+        assert_eq!(name, "Night Ride");
+        assert_eq!(key, Some("Am".to_string()));
+        assert_eq!(bpm, Some(140.0));
+    }
+
+    #[test]
+    fn test_folder_umlauts_and_sharp_key() {
+        let (id, name, key, bpm) = parse_beat_folder("0099 - Träume [F#m 92]").unwrap();
+        assert_eq!(id, "0099");
+        assert_eq!(name, "Träume");
+        assert_eq!(key, Some("F#m".to_string()));
+        assert_eq!(bpm, Some(92.0));
+    }
 }

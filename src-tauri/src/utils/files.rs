@@ -20,6 +20,14 @@ pub fn is_video_extension(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "mp4" | "mov" | "webm" | "mkv" | "avi")
 }
 
+/// True if the path is an FL Studio project file (case-insensitive `.flp`)
+pub fn is_flp(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("flp"))
+        .unwrap_or(false)
+}
+
 /// Resolve a destination path that does not collide with an existing file.
 /// If `dir/file_name` exists, returns `dir/{stem}_2.{ext}`, `_3`, ... until a free slot is found.
 /// Never overwrites; guarantees the returned PathBuf does not yet exist.

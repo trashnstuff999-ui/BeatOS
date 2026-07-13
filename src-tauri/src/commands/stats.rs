@@ -25,7 +25,10 @@ pub fn get_stats(year: Option<i64>) -> Result<Stats, String> {
 
     let current_year: i64 = conn
         .query_row("SELECT CAST(strftime('%Y', 'now') AS INTEGER)", [], |r| r.get(0))
-        .unwrap_or(2025);
+        .unwrap_or_else(|_| {
+            let (year, _, _) = crate::utils::secs_to_ymd(crate::utils::current_secs());
+            year as i64
+        });
 
     let selected_year: i64 = year.unwrap_or(current_year);
 

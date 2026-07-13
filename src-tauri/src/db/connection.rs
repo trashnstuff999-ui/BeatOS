@@ -240,6 +240,21 @@ pub fn init_db() -> Result<(), String> {
                         }
                     }
                 }
+
+                // Data repair: earlier archive scans stored 0.0 / '' instead
+                // of NULL, which poisons avg_bpm stats and BPM filters.
+                // Idempotent, so safe to run on every start.
+                for sql in [
+                    "UPDATE beats SET bpm = NULL WHERE bpm = 0",
+                    "UPDATE beats SET key = NULL WHERE key = ''",
+                ] {
+                    if let Err(e) = conn.execute(sql, []) {
+                        // `beats` is created externally; a brand-new DB may not have it yet.
+                        if !e.to_string().to_lowercase().contains("no such table") {
+                            eprintln!("WARNING: data repair failed: {} ({})", sql, e);
+                        }
+                    }
+                }
             }
             Err(e) => {
                 init_error = Some(format!("Failed to open database: {}", e));

@@ -178,7 +178,7 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
         (None, None, year_month_from_secs(now_secs))
     };
     
-    // Find cover PNG
+    // Find cover image (any supported image format, not just PNG)
     let cover_path = entries
         .iter()
         .find(|e| {
@@ -187,7 +187,7 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
                 .and_then(|x| x.to_str())
                 .unwrap_or("")
                 .to_lowercase();
-            ext == "png"
+            crate::utils::is_image_extension(&ext)
         })
         .map(|e| e.path().to_string_lossy().to_string());
     

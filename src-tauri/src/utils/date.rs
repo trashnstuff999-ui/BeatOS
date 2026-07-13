@@ -83,7 +83,6 @@ pub fn year_month_from_secs(secs: u64) -> String {
     format!("{}/{:02}_{}", year, month, MONTH_NAMES[month_idx])
 }
 
-#[allow(dead_code)]
 /// Get current time as Unix seconds
 pub fn current_secs() -> u64 {
     SystemTime::now()
@@ -92,8 +91,26 @@ pub fn current_secs() -> u64 {
         .unwrap_or(0)
 }
 
-#[allow(dead_code)]
 /// Get creation date from a file path as "YYYY-MM-DD" string
 pub fn file_creation_date(path: &Path) -> Option<String> {
     file_created_secs(path).map(secs_to_date)
+}
+
+/// Creation date ("YYYY-MM-DD") of the oldest FLP file in `dir`.
+/// The oldest project file is the best proxy for when a beat was started.
+pub fn oldest_flp_date(dir: &Path) -> Option<String> {
+    let mut flps: Vec<(SystemTime, std::path::PathBuf)> = Vec::new();
+    for e in std::fs::read_dir(dir).ok()?.filter_map(|e| e.ok()) {
+        let p = e.path();
+        if !crate::utils::is_flp(&p) {
+            continue;
+        }
+        if let Ok(meta) = std::fs::metadata(&p) {
+            if let Ok(t) = meta.created().or_else(|_| meta.modified()) {
+                flps.push((t, p));
+            }
+        }
+    }
+    flps.sort_by_key(|(t, _)| *t);
+    flps.first().and_then(|(_, p)| file_creation_date(p))
 }
