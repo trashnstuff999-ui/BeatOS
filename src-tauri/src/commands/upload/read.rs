@@ -9,6 +9,49 @@ use std::fs;
 use std::path::Path;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Upload schedule (planner strip / future calendar)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize)]
+pub struct ScheduleEntry {
+    pub date: String,       // YYYY-MM-DD (scheduled_at)
+    pub platform: String,   // beatstars | soundcloud | youtube
+    pub status: String,     // scheduled | uploaded
+    pub beat_id: String,
+    pub beat_name: String,
+}
+
+/// All scheduled/uploaded platform entries between two dates (inclusive).
+/// Dates are YYYY-MM-DD strings, so a plain string BETWEEN is correct.
+#[tauri::command]
+pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<ScheduleEntry>, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT u.scheduled_at, u.platform, u.status, b.id, b.name
+         FROM beat_uploads u JOIN beats b ON b.id = u.beat_id
+         WHERE u.scheduled_at IS NOT NULL AND u.scheduled_at != ''
+           AND u.scheduled_at BETWEEN ?1 AND ?2
+         ORDER BY u.scheduled_at, u.platform",
+    ).map_err(|e| e.to_string())?;
+
+    let entries: Vec<ScheduleEntry> = stmt
+        .query_map(rusqlite::params![from_date, to_date], |row| {
+            Ok(ScheduleEntry {
+                date:      row.get(0)?,
+                platform:  row.get(1)?,
+                status:    row.get(2)?,
+                beat_id:   row.get(3)?,
+                beat_name: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(entries)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Phase B — get_upload_data
 // ═══════════════════════════════════════════════════════════════════════════════
 

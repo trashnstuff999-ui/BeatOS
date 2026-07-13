@@ -325,11 +325,55 @@ fn split_artists(s: &str) -> Vec<String> {
         .collect()
 }
 
+/// Split a genre/tag list on commas AND pipes. The Upload tab serializes
+/// genre rows as "Sad Guitar Type Beat | Sad Melodic Type Beat".
 fn split_csv(s: &str) -> Vec<String> {
-    s.split(',')
+    s.split(|c: char| c == ',' || c == '|')
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn artists_split_on_x_comma_ampersand() {
+        assert_eq!(
+            split_artists("Dro Kenji x Juice WRLD, Lil Peep & Convolk"),
+            vec!["Dro Kenji", "Juice WRLD", "Lil Peep", "Convolk"]
+        );
+        assert_eq!(split_artists("A X B"), vec!["A", "B"]);
+        assert_eq!(split_artists(""), Vec::<String>::new());
+        // "x" inside a name must not split (only " x " with spaces does)
+        assert_eq!(split_artists("Xavier Wulf"), vec!["Xavier Wulf"]);
+    }
+
+    #[test]
+    fn csv_splits_on_comma_and_pipe() {
+        assert_eq!(
+            split_csv("Sad Guitar Type Beat | Sad Melodic Type Beat"),
+            vec!["Sad Guitar Type Beat", "Sad Melodic Type Beat"]
+        );
+        assert_eq!(split_csv("Dark, Melodic"), vec!["Dark", "Melodic"]);
+        assert_eq!(split_csv("Mixed | A, B"), vec!["Mixed", "A", "B"]);
+        assert_eq!(split_csv("  "), Vec::<String>::new());
+    }
+
+    #[test]
+    fn tag_text_splits_on_comma_and_newline_strips_hash() {
+        assert_eq!(
+            split_tag_text("#Tag1\n#Tag2\r\nTag3, Tag4"),
+            vec!["Tag1", "Tag2", "Tag3", "Tag4"]
+        );
+    }
+
+    #[test]
+    fn dedup_is_case_insensitive_and_capped() {
+        let tags = vec!["Trap".into(), "trap".into(), "Dark".into(), "Sad".into()];
+        assert_eq!(dedup_take(tags, 2), vec!["Trap", "Dark"]);
+    }
 }
 
 // ─── Default Template Contents ─────────────────────────────────────────────

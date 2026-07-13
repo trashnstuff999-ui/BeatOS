@@ -6,3 +6,6 @@ export { DescriptionFilesCard } from "./DescriptionFilesCard";
 export { LegacyMigrationBanner } from "./LegacyMigrationBanner";
 export { ConvertFilenamesDialog } from "./ConvertFilenamesDialog";
 export { PlaceholderCard } from "./PlaceholderCard";
+export { PlannerStrip } from "./PlannerStrip";
+export { ChipListEditor } from "./ChipListEditor";
+export { PresetBar } from "./PresetBar";

@@ -1,7 +1,9 @@
 // src/components/upload/UploadStatusCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Per-platform upload tracking: status pill, schedule date, final URL.
-// All writes go through update_upload_status (upsert).
+// Per-platform upload tracking: status segments, schedule date, final URL.
+// The schedule date is always visible; picking a date on a draft row
+// automatically moves the row to "scheduled" (one upsert). All writes go
+// through update_upload_status.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
@@ -61,8 +63,6 @@ function PlatformRow({ beatId, row, onChanged }: {
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
 
-  // The row layout is the same for every platform; status governs which
-  // detail rows (date / URL) are visible underneath.
   const persist = async (patch: Partial<UploadPlatformRow>) => {
     setIsSaving(true);
     try {
@@ -82,10 +82,8 @@ function PlatformRow({ beatId, row, onChanged }: {
     }
   };
 
-  const cycleStatus = () => {
-    const idx = STATUS_ORDER.indexOf(row.status);
-    const next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
-
+  const setStatus = (next: UploadStatus) => {
+    if (next === row.status) return;
     // Side-effects when crossing into specific states:
     // • Entering "uploaded" stamps uploaded_at with today's date if empty.
     // • Leaving "uploaded" clears uploaded_at so the timestamp doesn't lie.
@@ -94,6 +92,15 @@ function PlatformRow({ beatId, row, onChanged }: {
       patch.uploaded_at = todayISO();
     } else if (next !== "uploaded" && row.uploaded_at) {
       patch.uploaded_at = null;
+    }
+    persist(patch);
+  };
+
+  // Picking a date on a draft row promotes it to "scheduled" in the same write.
+  const handleScheduledChange = (value: string) => {
+    const patch: Partial<UploadPlatformRow> = { scheduled_at: value || null };
+    if (value && row.status === "draft") {
+      patch.status = "scheduled";
     }
     persist(patch);
   };
@@ -115,7 +122,7 @@ function PlatformRow({ beatId, row, onChanged }: {
       border: `1px solid ${C.border15}`,
       borderRadius: 8,
     }}>
-      {/* Top line: platform + status pill */}
+      {/* Top line: platform + status segments */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <PlatIcon size={16} color={meta.color} strokeWidth={1.75} />
         <span style={{
@@ -125,65 +132,77 @@ function PlatformRow({ beatId, row, onChanged }: {
         }}>
           {meta.label}
         </span>
-        <button
-          onClick={cycleStatus}
-          disabled={isSaving}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "5px 10px",
-            background: STATUS_META[row.status].bg,
-            border: `1px solid ${STATUS_META[row.status].color}40`,
-            borderRadius: 6,
-            cursor: isSaving ? "wait" : "pointer",
-            fontSize: 10, fontWeight: 700,
-            color: STATUS_META[row.status].color,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            opacity: isSaving ? 0.6 : 1,
-          }}
-          title="Click to cycle: Draft → Scheduled → Uploaded"
-        >
-          <span style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: STATUS_META[row.status].color,
-          }} />
-          {STATUS_META[row.status].label}
-        </button>
+
+        {/* Segmented status control — no more blind cycling */}
+        <div style={{
+          display: "flex", gap: 2,
+          background: "rgba(255,255,255,0.03)",
+          border: `1px solid ${C.border15}`,
+          borderRadius: 7, padding: 2,
+        }}>
+          {STATUS_ORDER.map(s => {
+            const active = row.status === s;
+            const m = STATUS_META[s];
+            return (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                disabled={isSaving}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "4px 9px",
+                  background: active ? m.bg : "transparent",
+                  border: "none",
+                  borderRadius: 5,
+                  cursor: isSaving ? "wait" : "pointer",
+                  fontSize: 9, fontWeight: 700,
+                  color: active ? m.color : C.onSecondaryFixedVar,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  opacity: isSaving ? 0.6 : 1,
+                  transition: "all 0.15s",
+                }}
+              >
+                {active && (
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: m.color }} />
+                )}
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Scheduled date row */}
-      {(row.status === "scheduled" || row.status === "uploaded") && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          marginTop: 10, paddingTop: 10,
-          borderTop: `1px solid ${C.border10}`,
-        }}>
-          <Calendar size={13} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, letterSpacing: "0.05em", textTransform: "uppercase", width: 90 }}>
-            {row.status === "uploaded" ? "Uploaded on" : "Scheduled for"}
-          </span>
-          <input
-            type="date"
-            value={row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "")}
-            onChange={e => persist(
-              row.status === "uploaded"
-                ? { uploaded_at: e.target.value || null }
-                : { scheduled_at: e.target.value || null }
-            )}
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              fontSize: 12,
-              background: C.surfaceContainer,
-              border: `1px solid ${C.border20}`,
-              borderRadius: 6,
-              outline: "none",
-              color: C.onSurface,
-              colorScheme: "dark",
-            }}
-          />
-        </div>
-      )}
+      {/* Scheduled date — always visible; picking a date schedules a draft */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        marginTop: 10, paddingTop: 10,
+        borderTop: `1px solid ${C.border10}`,
+      }}>
+        <Calendar size={13} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, letterSpacing: "0.05em", textTransform: "uppercase", width: 90 }}>
+          {row.status === "uploaded" ? "Uploaded on" : "Scheduled for"}
+        </span>
+        <input
+          type="date"
+          value={row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "")}
+          onChange={e => row.status === "uploaded"
+            ? persist({ uploaded_at: e.target.value || null })
+            : handleScheduledChange(e.target.value)
+          }
+          style={{
+            flex: 1,
+            padding: "6px 10px",
+            fontSize: 12,
+            background: C.surfaceContainer,
+            border: `1px solid ${C.border20}`,
+            borderRadius: 6,
+            outline: "none",
+            color: C.onSurface,
+            colorScheme: "dark",
+          }}
+        />
+      </div>
 
       {/* URL row (uploaded) */}
       {row.status === "uploaded" && (

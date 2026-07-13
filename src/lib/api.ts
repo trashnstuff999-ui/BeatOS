@@ -16,6 +16,7 @@ import type { CustomTag } from "./tags";
 import type { Stats } from "../types/stats";
 import type {
   UploadData,
+  ScheduleEntry,
   TypeBeatPreset,
   SaveTypeBeatPresetParams,
   UpdateUploadStatusParams,
@@ -165,6 +166,10 @@ export const api = {
   upload: {
     getData: (beatId: string) =>
       invoke<UploadData>("get_upload_data", { beatId }),
+
+    /** Scheduled/uploaded entries between two YYYY-MM-DD dates (inclusive). */
+    getSchedule: (fromDate: string, toDate: string) =>
+      invoke<ScheduleEntry[]>("get_upload_schedule", { fromDate, toDate }),
 
     updateTypeBeatInfo: (
       beatId: string,

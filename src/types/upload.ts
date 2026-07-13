@@ -50,6 +50,15 @@ export interface UploadData {
   uploads: UploadPlatformRow[];
 }
 
+/** One scheduled/uploaded platform entry — for the planner strip / calendar. */
+export interface ScheduleEntry {
+  date: string;              // YYYY-MM-DD (scheduled_at)
+  platform: UploadPlatform;
+  status: UploadStatus;
+  beat_id: string;
+  beat_name: string;
+}
+
 export interface TypeBeatPreset {
   id: number;
   label: string;

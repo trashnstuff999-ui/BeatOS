@@ -17,6 +17,7 @@ import {
   DescriptionFilesCard,
   LegacyMigrationBanner,
   ConvertFilenamesDialog,
+  PlannerStrip,
 } from "../components/upload";
 import type { Beat } from "../types/browse";
 
@@ -26,7 +27,14 @@ export default function Upload() {
 
   const [selectedBeat, setSelectedBeat] = useState<Beat | null>(null);
   const [convertOpen, setConvertOpen]   = useState(false);
+  const [plannerRefresh, setPlannerRefresh] = useState(0);
   const { data, isLoading, error, refresh } = useUploadData(selectedBeat?.id ?? null);
+
+  // Status/date changes must also update the planner strip
+  const handleStatusChanged = () => {
+    refresh();
+    setPlannerRefresh(k => k + 1);
+  };
 
   // Re-render trigger for DescriptionFilesCard: bump only when a field that
   // actually appears in the rendered output changes — NOT on every refresh.
@@ -110,6 +118,9 @@ export default function Upload() {
           {/* Beat Selector */}
           <BeatSelector selectedBeat={selectedBeat} onSelect={setSelectedBeat} />
 
+          {/* Upload planner — always visible, independent of the selected beat */}
+          <PlannerStrip refreshKey={plannerRefresh} />
+
           {/* Loading / Error / Empty
               LoadingBanner only on the first load (when there's no data yet).
               Background refreshes after a save must not unmount the cards —
@@ -144,7 +155,7 @@ export default function Upload() {
                 <UploadStatusCard
                   beatId={data.beat.id}
                   uploads={data.uploads}
-                  onChanged={refresh}
+                  onChanged={handleStatusChanged}
                 />
               </div>
 
