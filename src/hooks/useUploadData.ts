@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import type { UploadData } from "../types/upload";
 
 export interface UseUploadDataReturn {
@@ -23,7 +23,7 @@ export function useUploadData(beatId: string | null): UseUploadDataReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await invoke<UploadData>("get_upload_data", { beatId: id });
+      const result = await api.upload.getData(id);
       setData(result);
     } catch (e) {
       setData(null);

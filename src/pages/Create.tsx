@@ -3,8 +3,8 @@
 // BeatOS Archive Portal — Refactored Main Component
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { api } from "../lib/api";
 
 // ─── Component Imports ──────────────────────────────────────────────────────
 import { CreateHeader } from "../components/create/CreateHeader";
@@ -29,13 +29,12 @@ import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
 import { C } from "../lib/theme";
-import { selectBeatFolder, generatePreviewPath, getYearMonthFolder } from "../lib/archive";
+import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 
 // ─── Type Imports ───────────────────────────────────────────────────────────
 import type {
   AudioFileInfo,
   FlpFileInfo,
-  ParsedBeatFolder,
 } from "../types/create";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -130,10 +129,18 @@ export default function Create() {
   });
 
   // ─── Live Preview Values ───────────────────────────────────────────────────
-  const previewPath = useMemo(() => {
+  // The path is built in Rust (preview_archive_path) with the exact same
+  // logic as archive_beat, so preview and result can never diverge.
+  const [previewPath, setPreviewPath] = useState("");
+  useEffect(() => {
     const id = parseInt(catalogId.replace("#", "")) || 0;
     const ym = yearMonth || getYearMonthFolder(new Date());
-    return generatePreviewPath(id, title || "SONGNAME", key || null, parseInt(bpm) || null, ym);
+    let cancelled = false;
+    api.archive
+      .previewPath(id, title || "SONGNAME", key || null, parseInt(bpm) || null, ym)
+      .then(rel => { if (!cancelled) setPreviewPath(`/ARCHIVE/${rel}/`); })
+      .catch(() => { if (!cancelled) setPreviewPath(""); });
+    return () => { cancelled = true; };
   }, [catalogId, title, key, bpm, yearMonth]);
 
   // ─── Reset Button Handler ──────────────────────────────────────────────────
@@ -151,9 +158,7 @@ export default function Create() {
     setSourceFolderPath(folder);
 
     try {
-      const parsed = await invoke<ParsedBeatFolder>("parse_beat_folder_for_create", {
-        folderPath: folder,
-      });
+      const parsed = await api.create.parseBeatFolder(folder);
 
       setTitle(parsed.name);
       setKey(parsed.key || "");
@@ -192,7 +197,7 @@ export default function Create() {
       // Cover (auto-detected from source folder — display only)
       if (parsed.cover_path) {
         try {
-          const coverBase64 = await invoke<string>("read_image_file", { filePath: parsed.cover_path });
+          const coverBase64 = await api.create.readImageFile(parsed.cover_path);
           setCoverImage(coverBase64);
         } catch (err) {
           console.error("Failed to load cover:", err);

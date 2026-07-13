@@ -137,9 +137,7 @@ pub fn get_stats(year: Option<i64>) -> Result<Stats, String> {
 
     // Recent beats
     let mut stmt4 = conn.prepare(
-        "SELECT id, name, path, bpm, key, status, tags, favorite,
-                created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats ORDER BY created_date DESC LIMIT 5",
+        &format!("SELECT {} FROM beats ORDER BY created_date DESC LIMIT 5", crate::db::BEAT_COLUMNS),
     ).map_err(|e| e.to_string())?;
 
     let recent_beats: Vec<Beat> = stmt4
@@ -164,16 +162,3 @@ pub fn get_beat_count() -> Result<i64, String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn get_date_sample() -> Result<Vec<String>, String> {
-    let conn = open_db().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT created_date FROM beats WHERE created_date IS NOT NULL LIMIT 20"
-    ).map_err(|e| e.to_string())?;
-    let dates: Vec<String> = stmt
-        .query_map([], |r| r.get(0))
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(dates)
-}

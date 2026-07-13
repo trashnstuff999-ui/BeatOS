@@ -20,7 +20,7 @@ use commands::{
     // Stats commands
     get_stats,
     get_beat_count,
-    get_date_sample,
+
     // Beat CRUD commands
     get_beats,
     get_beats_paginated,
@@ -41,6 +41,7 @@ use commands::{
     fix_dates,
     check_beat_duplicate,
     archive_beat,
+    preview_archive_path,
     // Create commands
     get_next_beat_id,
     parse_beat_folder_for_create,
@@ -48,9 +49,6 @@ use commands::{
     // Audio commands
     get_beat_audio_path,
     get_beat_cover_path,
-    read_audio_file,
-    get_beat_cover_base64,
-    get_beat_audio_for_streaming,
     // Settings commands
     get_settings,
     save_settings,
@@ -108,7 +106,7 @@ pub fn run() {
             // Stats
             get_stats,
             get_beat_count,
-            get_date_sample,
+
             // Beat CRUD
             get_beats,
             get_beats_paginated,
@@ -129,6 +127,7 @@ pub fn run() {
             fix_dates,
             check_beat_duplicate,
             archive_beat,
+            preview_archive_path,
             // Create
             get_next_beat_id,
             parse_beat_folder_for_create,
@@ -136,9 +135,6 @@ pub fn run() {
             // Audio
             get_beat_audio_path,
             get_beat_cover_path,
-            read_audio_file,
-            get_beat_cover_base64,
-            get_beat_audio_for_streaming,
             // Settings
             get_settings,
             save_settings,

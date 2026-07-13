@@ -3,9 +3,49 @@
 // Beat CRUD Commands
 // ═══════════════════════════════════════════════════════════════════════════════
 
-use crate::db::{open_db, Beat, PaginatedBeatsResponse, UpdateBeatParams, row_to_beat};
+use crate::db::{open_db, Beat, PaginatedBeatsResponse, UpdateBeatParams, row_to_beat, BEAT_COLUMNS};
 use serde::Serialize;
 use std::path::Path;
+
+/// Shared WHERE fragment for the search / status / favorites filters used by
+/// both `get_beats` and `get_beats_paginated`.
+/// Returns (clauses, boxed params, next free parameter index).
+fn base_beat_filters(
+    search: &Option<String>,
+    status_filter: &Option<String>,
+    only_favs: bool,
+) -> (Vec<String>, Vec<Box<dyn rusqlite::ToSql>>, usize) {
+    let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let mut param_idx = 1;
+
+    if let Some(s) = search {
+        let search_lower = s.to_lowercase();
+        if !search_lower.is_empty() {
+            let search_pattern = format!("%{}%", search_lower);
+            where_clauses.push(format!(
+                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
+                idx = param_idx
+            ));
+            params.push(Box::new(search_pattern));
+            param_idx += 1;
+        }
+    }
+
+    if let Some(s) = status_filter {
+        if s != "all" {
+            where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
+            params.push(Box::new(s.clone()));
+            param_idx += 1;
+        }
+    }
+
+    if only_favs {
+        where_clauses.push("favorite = 1".to_string());
+    }
+
+    (where_clauses, params, param_idx)
+}
 
 #[derive(Debug, Serialize)]
 pub struct DeleteBeatResult {
@@ -99,43 +139,13 @@ pub fn get_beats(
     let conn = open_db().map_err(|e| e.to_string())?;
     let lim = limit.unwrap_or(50);
     let off = offset.unwrap_or(0);
-    
-    let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
-    let mut param_idx = 1;
-    
-    if let Some(ref s) = search {
-        let search_lower = s.to_lowercase();
-        if !search_lower.is_empty() {
-            let search_pattern = format!("%{}%", search_lower);
-            where_clauses.push(format!(
-                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
-                idx = param_idx
-            ));
-            params.push(Box::new(search_pattern));
-            param_idx += 1;
-        }
-    }
-    
-    if let Some(ref s) = status_filter {
-        if s != "all" {
-            where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
-            params.push(Box::new(s.clone()));
-            param_idx += 1;
-        }
-    }
-    let _ = param_idx; // suppress unused_assignments if no more filters follow
 
-    if only_favs {
-        where_clauses.push("favorite = 1".to_string());
-    }
+    let (where_clauses, params, _) = base_beat_filters(&search, &status_filter, only_favs);
 
     let where_sql = where_clauses.join(" AND ");
     let sql = format!(
-        "SELECT id, name, path, bpm, key, status, tags, favorite,
-                created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats WHERE {} ORDER BY CAST(id AS INTEGER) DESC LIMIT {} OFFSET {}",
-        where_sql, lim, off
+        "SELECT {} FROM beats WHERE {} ORDER BY CAST(id AS INTEGER) DESC LIMIT {} OFFSET {}",
+        BEAT_COLUMNS, where_sql, lim, off
     );
     
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -166,38 +176,10 @@ pub fn get_beats_paginated(
     let conn = open_db().map_err(|e| e.to_string())?;
     let lim = limit.unwrap_or(50);
     let off = offset.unwrap_or(0);
-    
-    let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
-    let mut param_idx = 1;
-    
-    // Search filter
-    if let Some(ref s) = search {
-        let search_lower = s.to_lowercase();
-        if !search_lower.is_empty() {
-            let search_pattern = format!("%{}%", search_lower);
-            where_clauses.push(format!(
-                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
-                idx = param_idx
-            ));
-            params.push(Box::new(search_pattern));
-            param_idx += 1;
-        }
-    }
-    
-    // Status filter
-    if let Some(ref s) = status_filter {
-        if s != "all" {
-            where_clauses.push(format!("LOWER(status) = LOWER(?{})", param_idx));
-            params.push(Box::new(s.clone()));
-            param_idx += 1;
-        }
-    }
-    
-    if only_favs {
-        where_clauses.push("favorite = 1".to_string());
-    }
-    
+
+    let (mut where_clauses, mut params, mut param_idx) =
+        base_beat_filters(&search, &status_filter, only_favs);
+
     // Key filter
     if let Some(ref keys) = key_filter {
         if !keys.is_empty() {
@@ -264,10 +246,8 @@ pub fn get_beats_paginated(
     };
     
     let sql = format!(
-        "SELECT id, name, path, bpm, key, status, tags, favorite,
-                created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats WHERE {} ORDER BY {} {} LIMIT {} OFFSET {}",
-        where_sql, order_expr, sort_dir, lim, off
+        "SELECT {} FROM beats WHERE {} ORDER BY {} {} LIMIT {} OFFSET {}",
+        BEAT_COLUMNS, where_sql, order_expr, sort_dir, lim, off
     );
     
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -374,9 +354,7 @@ pub fn get_beat_by_id(beat_id: String) -> Result<Option<Beat>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     
     let mut stmt = conn.prepare(
-        "SELECT id, name, path, bpm, key, status, tags, favorite,
-                created_date, modified_date, notes, sold_to, has_artwork, has_video
-         FROM beats WHERE id = ?1"
+        &format!("SELECT {} FROM beats WHERE id = ?1", BEAT_COLUMNS)
     ).map_err(|e| e.to_string())?;
     
     let beat = stmt.query_row([&beat_id], row_to_beat);

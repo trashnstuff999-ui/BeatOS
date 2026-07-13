@@ -2,27 +2,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play, Sparkles, Piano, Star } from "lucide-react";
-import { getStats, normalizeStatus, type Stats } from "../lib/Database";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
+import type { Stats } from "../types/stats";
 import { C, commonStyles } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
-
-const STATUS_CFG = {
-  finished: { text: "#4ade80", bg: "rgba(74,222,128,0.10)", border: "rgba(74,222,128,0.20)" },
-  wip:      { text: "#e48c03", bg: "rgba(228,140,3,0.10)",  border: "rgba(228,140,3,0.20)"  },
-  idea:     { text: "#9492ff", bg: "rgba(148,146,255,0.10)",border: "rgba(148,146,255,0.20)"},
-  sold:     { text: "#ef4444", bg: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.20)"  },
-} as const;
-
-function StatusPill({ status }: { status: string }) {
-  const s = (normalizeStatus(status) ?? "idea") as keyof typeof STATUS_CFG;
-  const cfg = STATUS_CFG[s] ?? STATUS_CFG.idea;
-  return (
-    <span style={{ padding: "3px 10px", borderRadius: 4, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}>
-      {s}
-    </span>
-  );
-}
+import { StatusPill } from "../components/Tagpill";
 
 // ── Hover helper ──────────────────────────────────────────────────────────────
 const cardHover = {
@@ -422,7 +406,7 @@ export default function Dashboard() {
 
   const load = async (year?: number) => {
     setLoading(true); setError(null);
-    try { setStats(await getStats(year)); }
+    try { setStats(await api.stats.get(year ?? null)); }
     catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   };
@@ -468,9 +452,9 @@ export default function Dashboard() {
               if (!confirm("System Repair wird:\n1. Fehlende Beats importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n\nDB-Backup vorhanden?")) return;
               try {
                 // Schritt 1: Fehlende Beats scannen
-                const scan = await invoke<{found:number,imported:number,skipped:number,errors:string[]}>("scan_archive");
+                const scan = await api.archive.scan();
                 // Schritt 2: Alle Dates fixen
-                const fix = await invoke<{updated:number,not_found:number,no_flp:number,errors:string[]}>("fix_dates");
+                const fix = await api.archive.fixDates();
                 alert(
                   `System Repair abgeschlossen\n\n` +
                   `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +

@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../../../lib/api";
 import {
   Search, X, Music, Sparkles, Piano, Star,
   Plus, Trash2, Check, MoveRight,
@@ -35,7 +35,7 @@ const SEED_KEY = "beatos_tags_seeded_v1";
 async function seedTagsIfNeeded(): Promise<CustomTag[]> {
   let tags: CustomTag[];
   try {
-    tags = await invoke<CustomTag[]>("get_custom_tags");
+    tags = await api.tags.getAll();
   } catch (e) {
     console.error("[seedTagsIfNeeded] Failed to load tags:", e);
     return [];
@@ -47,14 +47,14 @@ async function seedTagsIfNeeded(): Promise<CustomTag[]> {
       for (const name of list) {
         const key = name.toLowerCase();
         if (!existing.has(key)) {
-          ops.push(invoke("save_custom_tag", { tag: key, displayName: name, category: cat }).then(() => {}).catch(() => {}));
+          ops.push(api.tags.save(key, name, cat).then(() => {}).catch(() => {}));
         }
       }
     }
     if (ops.length > 0) {
       await Promise.all(ops);
       try {
-        tags = await invoke<CustomTag[]>("get_custom_tags");
+        tags = await api.tags.getAll();
       } catch (e) {
         console.error("[seedTagsIfNeeded] Failed to reload tags after seeding:", e);
       }
@@ -195,7 +195,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     const failed: string[] = [];
     for (const key of staged) {
       try {
-        await invoke("delete_custom_tag", { tag: key });
+        await api.tags.delete(key);
         setAllTags(prev => {
           const next = prev.filter(t => t.tag !== key);
           updateCustomTagsCache(next);
@@ -216,7 +216,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     const cat = newTagCategory;
     setIsCreating(true);
     try {
-      await invoke("save_custom_tag", { tag: key, displayName: name, category: cat });
+      await api.tags.save(key, name, cat);
       const entry: CustomTag = {
         id: Date.now(), tag: key, display_name: name,
         category: cat, usage_count: 1, created_at: new Date().toISOString(),
@@ -248,7 +248,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
       const tag = allTags.find(t => t.tag === key);
       if (!tag || tag.category === targetCat) continue;
       try {
-        await invoke("save_custom_tag", { tag: key, displayName: tag.display_name, category: targetCat });
+        await api.tags.save(key, tag.display_name, targetCat);
         moved.add(key);
       } catch (e) {
         failed.push(`${key}: ${String(e)}`);
@@ -270,7 +270,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     const newCategory = targetKey as TagCategory;
     if (newCategory === tag.category) return;
     try {
-      await invoke("save_custom_tag", { tag: tag.tag, displayName: tag.display_name, category: newCategory });
+      await api.tags.save(tag.tag, tag.display_name, newCategory);
       setAllTags(prev => {
         const next = prev.map(t => t.tag === tag.tag ? { ...t, category: newCategory } : t);
         updateCustomTagsCache(next);
@@ -291,10 +291,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     setEditingTag(null);
     if (newKey === oldKey) return;
     try {
-      await invoke("rename_custom_tag", {
-        oldTag: oldKey, newTag: newKey,
-        newDisplayName: normalized, category: editingTag.original.category,
-      });
+      await api.tags.rename(oldKey, newKey, normalized, editingTag.original.category);
       setAllTags(prev => {
         const next = prev.map(t => t.tag === oldKey ? { ...t, tag: newKey, display_name: normalized } : t);
         updateCustomTagsCache(next);

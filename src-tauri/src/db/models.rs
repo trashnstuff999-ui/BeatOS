@@ -174,19 +174,13 @@ pub struct UpdateBeatParams {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// AUDIO PLAYER MODELS
-// ══════════════════════════════════════════════════════════════════════════════
-
-/// Audio file info for streaming
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StreamingAudioInfo {
-    pub path: String,
-    pub format: String,
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ══════════════════════════════════════════════════════════════════════════════
+
+/// Canonical beats column list — must stay in sync with `row_to_beat` below.
+pub const BEAT_COLUMNS: &str =
+    "id, name, path, bpm, key, status, tags, favorite, \
+     created_date, modified_date, notes, sold_to, has_artwork, has_video";
 
 /// Convert a database row to a Beat struct
 pub fn row_to_beat(row: &rusqlite::Row) -> SqlResult<Beat> {

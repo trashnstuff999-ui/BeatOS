@@ -269,6 +269,43 @@ pub fn check_beat_duplicate(
     })
 }
 
+/// Single source of truth for the archive folder name. Used by the real
+/// archive step and by the live preview in the Create tab, so the preview
+/// can never diverge from what actually lands on disk.
+fn build_archive_folder_name(
+    catalog_id: i32,
+    title: &str,
+    key: Option<&str>,
+    bpm: Option<i32>,
+) -> String {
+    let key_bpm = match (key, bpm) {
+        (Some(k), Some(b)) => format!("[{} {}]", k, b),
+        (Some(k), None) => format!("[{}]", k),
+        (None, Some(b)) => format!("[{}]", b),
+        (None, None) => String::new(),
+    };
+    // Titles come from user input / parsed filenames — strip anything Windows
+    // refuses in a folder name before building the path.
+    let safe_title = crate::utils::sanitize_filename_part(title);
+    crate::utils::sanitize_filename_part(
+        format!("{:04} - {} {}", catalog_id, safe_title, key_bpm).trim(),
+    )
+}
+
+/// Relative archive path preview for the Create tab (e.g.
+/// "2026/07_JULY/0042 - Dark Nights [Am 140]").
+#[tauri::command]
+pub fn preview_archive_path(
+    catalog_id: i32,
+    title: String,
+    key: Option<String>,
+    bpm: Option<i32>,
+    year_month: String,
+) -> Result<String, String> {
+    let folder = build_archive_folder_name(catalog_id, &title, key.as_deref(), bpm);
+    Ok(format!("{}/{}", year_month, folder))
+}
+
 #[tauri::command]
 pub async fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, String> {
     // Copying whole beat folders is heavy I/O — keep it off the IPC thread.
@@ -284,18 +321,11 @@ fn archive_beat_blocking(params: ArchiveBeatParams) -> Result<ArchiveResultFull,
         return Err(format!("Source folder doesn't exist: {}", params.source_folder));
     }
     
-    let key_bpm = match (&params.key, params.bpm) {
-        (Some(k), Some(b)) => format!("[{} {}]", k, b),
-        (Some(k), None) => format!("[{}]", k),
-        (None, Some(b)) => format!("[{}]", b),
-        (None, None) => String::new(),
-    };
-    
-    // Titles come from user input / parsed filenames — strip anything Windows
-    // refuses in a folder name before building the path.
-    let safe_title = crate::utils::sanitize_filename_part(&params.title);
-    let folder_name = crate::utils::sanitize_filename_part(
-        format!("{:04} - {} {}", params.catalog_id, safe_title, key_bpm).trim(),
+    let folder_name = build_archive_folder_name(
+        params.catalog_id,
+        &params.title,
+        params.key.as_deref(),
+        params.bpm,
     );
 
     let archive_base = Path::new(&params.archive_base_path);

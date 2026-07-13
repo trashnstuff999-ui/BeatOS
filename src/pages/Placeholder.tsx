@@ -110,15 +110,11 @@ export function Support() {
       <div style={{ flex: 1, overflowY: "auto", padding: "40px 48px" }}>
         <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* Keyboard Shortcuts */}
+          {/* Keyboard Shortcuts — only list what is actually implemented */}
           <Section icon={Keyboard} title="Keyboard Shortcuts">
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <ShortcutRow keys={["Space"]} description="Play / Pause selected beat" />
-              <ShortcutRow keys={["←", "→"]} description="Seek backward / forward 5 seconds" />
-              <ShortcutRow keys={["↑", "↓"]} description="Select previous / next beat in list" />
-              <ShortcutRow keys={["Esc"]} description="Deselect beat / close modal" />
-              <ShortcutRow keys={["Ctrl", "F"]} description="Focus search bar (Browse)" />
-              <ShortcutRow keys={["Ctrl", "R"]} description="Refresh beat list" />
+              <ShortcutRow keys={["Esc"]} description="Close modal / dialog" />
+              <ShortcutRow keys={["Ctrl", "Enter"]} description="Save in Edit-Beat dialog" />
             </div>
           </Section>
 

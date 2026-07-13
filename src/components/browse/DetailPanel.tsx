@@ -5,11 +5,11 @@
 
 import { useState, useEffect } from "react";
 import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { api } from "../../lib/api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C } from "../../lib/theme";
-import { TagPill } from "./TagPill";
+import { TagPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus } from "../../types/browse";
 import { parseTags, isFavorite } from "../../types/browse";
@@ -113,7 +113,7 @@ export function DetailPanel({
     let cancelled = false;
     (async () => {
       try {
-        const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: beat.path });
+        const coverPath = await api.audio.getCoverPath(beat.path!);
         if (!cancelled && coverPath) {
           setLocalCoverUrl(convertFileSrc(coverPath.replace(/\\/g, "/")));
         }
@@ -261,7 +261,7 @@ export function DetailPanel({
             <div style={labelStyle}>Tags</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
               {sortTagsByCategory(localTags, (tag) => getTagCategoryFromDb(tag) ?? "custom").map(tag => (
-                <TagPill key={tag} tag={tag} size="sm" onRemove={() => handleRemoveTag(tag)} />
+                <TagPill key={tag} tag={tag} size="sm" removable onRemove={() => handleRemoveTag(tag)} />
               ))}
               <button
                 onClick={handleOpenTagManager}

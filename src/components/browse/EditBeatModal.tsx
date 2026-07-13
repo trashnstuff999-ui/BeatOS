@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { X, Save, Loader2 } from "lucide-react";
 import { C } from "../../lib/theme";
-import { TagPill } from "./TagPill";
+import { TagPill } from "../Tagpill";
 import type { Beat, EditFormState, UpdateBeatParams } from "../../types/browse";
 import { beatToEditForm, isFormDirty, stringifyTags } from "../../types/browse";
 
@@ -276,10 +276,11 @@ export function EditBeatModal({ beat, isOpen, onClose, onSave }: EditBeatModalPr
             <label style={labelStyle}>Tags</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
               {form.tags.map(tag => (
-                <TagPill 
-                  key={tag} 
-                  tag={tag} 
-                  onRemove={() => removeTag(tag)} 
+                <TagPill
+                  key={tag}
+                  tag={tag}
+                  removable
+                  onRemove={() => removeTag(tag)}
                 />
               ))}
             </div>

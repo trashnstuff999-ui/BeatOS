@@ -36,26 +36,30 @@ pub fn get_custom_tags() -> Result<Vec<CustomTag>, String> {
     Ok(tags)
 }
 
-/// Save a new custom tag or increment usage_count if it exists
-#[tauri::command]
-pub fn save_custom_tag(tag: String, display_name: String, category: String) -> Result<CustomTag, String> {
-    let conn = open_db().map_err(|e| e.to_string())?;
-    
-    // Validate category
-    if !VALID_CATEGORIES.contains(&category.as_str()) {
-        return Err(format!("Invalid category: {}. Must be one of: {:?}", category, VALID_CATEGORIES));
-    }
-    
-    // INSERT OR UPDATE (UPSERT)
+/// UPSERT one tag row: insert, or bump usage_count and refresh display/category.
+fn upsert_tag(conn: &rusqlite::Connection, tag: &str, display_name: &str, category: &str) -> rusqlite::Result<usize> {
     conn.execute(
         "INSERT INTO custom_tags (tag, display_name, category, usage_count, created_at)
          VALUES (?1, ?2, ?3, 1, datetime('now'))
-         ON CONFLICT(tag) DO UPDATE SET 
+         ON CONFLICT(tag) DO UPDATE SET
             usage_count = usage_count + 1,
             display_name = ?2,
             category = ?3",
         rusqlite::params![tag.to_lowercase(), display_name, category],
-    ).map_err(|e| e.to_string())?;
+    )
+}
+
+/// Save a new custom tag or increment usage_count if it exists
+#[tauri::command]
+pub fn save_custom_tag(tag: String, display_name: String, category: String) -> Result<CustomTag, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+
+    // Validate category
+    if !VALID_CATEGORIES.contains(&category.as_str()) {
+        return Err(format!("Invalid category: {}. Must be one of: {:?}", category, VALID_CATEGORIES));
+    }
+
+    upsert_tag(&conn, &tag, &display_name, &category).map_err(|e| e.to_string())?;
     
     // Return saved tag
     let saved: CustomTag = conn.query_row(
@@ -88,15 +92,7 @@ pub fn save_custom_tags_batch(tags: Vec<(String, String, String)>) -> Result<i64
             continue;
         }
         
-        match conn.execute(
-            "INSERT INTO custom_tags (tag, display_name, category, usage_count, created_at)
-             VALUES (?1, ?2, ?3, 1, datetime('now'))
-             ON CONFLICT(tag) DO UPDATE SET 
-                usage_count = usage_count + 1,
-                display_name = ?2,
-                category = ?3",
-            rusqlite::params![tag.to_lowercase(), display_name, category],
-        ) {
+        match upsert_tag(&conn, &tag, &display_name, &category) {
             Ok(_) => saved_count += 1,
             Err(_) => continue,
         }

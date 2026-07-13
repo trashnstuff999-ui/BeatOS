@@ -13,6 +13,7 @@ import type {
   ParsedBeatFolder,
 } from "../types/create";
 import type { CustomTag } from "./tags";
+import type { Stats } from "../types/stats";
 import type {
   UploadData,
   TypeBeatPreset,
@@ -42,25 +43,10 @@ export const api = {
 
   stats: {
     get: (year: number | null) =>
-      invoke<{
-        total: number;
-        this_month: number;
-        favorites: number;
-        avg_bpm: number;
-        by_status: Record<string, number>;
-        top_keys: Array<{ key: string; count: number }>;
-        top_tags: Array<{ tag: string; count: number }>;
-        beats_per_month: Array<{ month: string; count: number }>;
-        recent_beats: Array<{ id: string; name: string; created_date: string }>;
-        available_years: number[];
-        selected_year: number;
-      }>("get_stats", { year }),
+      invoke<Stats>("get_stats", { year }),
 
     getBeatCount: () =>
       invoke<number>("get_beat_count"),
-
-    getDateSample: () =>
-      invoke<unknown>("get_date_sample"),
   },
 
   // ─── Beats ───────────────────────────────────────────────────────────────
@@ -100,6 +86,9 @@ export const api = {
 
     update: (params: UpdateBeatParams) =>
       invoke<void>("update_beat", { params }),
+
+    delete: (beatId: string, archiveBasePath: string) =>
+      invoke<{ folder_trashed: boolean }>("delete_beat", { beatId, archiveBasePath }),
   },
 
   // ─── Tags ────────────────────────────────────────────────────────────────
@@ -138,6 +127,10 @@ export const api = {
 
     archiveBeat: (params: ArchiveBeatParams) =>
       invoke<ArchiveResult>("archive_beat", { params }),
+
+    /** Relative archive path preview — shares the exact folder-name logic of archive_beat. */
+    previewPath: (catalogId: number, title: string, key: string | null, bpm: number | null, yearMonth: string) =>
+      invoke<string>("preview_archive_path", { catalogId, title, key, bpm, yearMonth }),
   },
 
   // ─── Create ──────────────────────────────────────────────────────────────
@@ -161,15 +154,6 @@ export const api = {
 
     getAudioPath: (beatPath: string) =>
       invoke<string | null>("get_beat_audio_path", { beatPath }),
-
-    readAudioFile: (filePath: string) =>
-      invoke<string>("read_audio_file", { filePath }),
-
-    getCoverBase64: (beatPath: string) =>
-      invoke<string | null>("get_beat_cover_base64", { beatPath }),
-
-    getAudioForStreaming: (beatPath: string) =>
-      invoke<string>("get_beat_audio_for_streaming", { beatPath }),
   },
 
   // ─── Upload ──────────────────────────────────────────────────────────────

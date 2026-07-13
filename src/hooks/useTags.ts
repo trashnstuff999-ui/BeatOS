@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import {
   type TagCategory,
   type CustomTag,
@@ -81,7 +81,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
 
   const loadCustomTags = useCallback(async () => {
     try {
-      const loadedTags = await invoke<CustomTag[]>("get_custom_tags");
+      const loadedTags = await api.tags.getAll();
       setCustomTags(loadedTags);
       updateCustomTagsCache(loadedTags);
     } catch (err) {
@@ -156,11 +156,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     if (!normalized) return;
     const tagKey = normalized.toLowerCase().replace(/\s+/g, "_");
     try {
-      await invoke("save_custom_tag", {
-        tag: tagKey,
-        displayName: normalized,
-        category,
-      });
+      await api.tags.save(tagKey, normalized, category);
     } catch (e) {
       console.error("[useTags] Failed to save custom tag:", e);
       return;
@@ -180,7 +176,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const deleteCustomTag = useCallback(async (displayName: string) => {
     const tagKey = displayName.toLowerCase().replace(/\s+/g, "_");
     try {
-      await invoke("delete_custom_tag", { tag: tagKey });
+      await api.tags.delete(tagKey);
     } catch (e) {
       console.error("[useTags] Failed to delete custom tag:", e);
       return;

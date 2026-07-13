@@ -300,6 +300,14 @@ export default function Studio() {
       }}>
         <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSecondaryFixedVar }}>
           Studio Path: /users/producer/daw/projects
+          <span style={{
+            marginLeft: 12, padding: "3px 10px", borderRadius: 4,
+            fontSize: 9, fontWeight: 800, letterSpacing: "0.1em",
+            background: "rgba(253,161,36,0.12)", color: "#fda124",
+            border: "1px solid rgba(253,161,36,0.25)",
+          }}>
+            PREVIEW — DEMO-DATEN
+          </span>
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>

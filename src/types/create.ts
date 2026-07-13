@@ -77,7 +77,6 @@ export interface ArchiveBeatParams {
   notes: string;
   source_audio_path: string;
   source_flp_path: string;
-  cover_path: string | null;
   year_month: string;
   archive_base_path: string;
 }

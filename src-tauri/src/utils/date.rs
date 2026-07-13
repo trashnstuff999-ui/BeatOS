@@ -83,6 +83,12 @@ pub fn year_month_from_secs(secs: u64) -> String {
     format!("{}/{:02}_{}", year, month, MONTH_NAMES[month_idx])
 }
 
+/// Current year as string (e.g. "2026") — used in templates and filenames
+pub fn current_year_str() -> String {
+    let (year, _, _) = secs_to_ymd(current_secs());
+    year.to_string()
+}
+
 /// Get current time as Unix seconds
 pub fn current_secs() -> u64 {
     SystemTime::now()

@@ -1,10 +1,12 @@
 // src-tauri/src/commands/audio.rs
 // ═══════════════════════════════════════════════════════════════════════════════
 // Audio Player Commands
+// Playback runs over the Tauri asset protocol (convertFileSrc) — these
+// commands only resolve which file to use. The old base64 variants
+// (read_audio_file, get_beat_cover_base64, get_beat_audio_for_streaming)
+// were removed: they loaded whole files into RAM and had no callers.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-use crate::db::StreamingAudioInfo;
-use crate::utils::audio_mime_type;
 use std::path::Path;
 
 /// Find the best audio file to play for a beat
@@ -13,23 +15,23 @@ use std::path::Path;
 pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> {
     let base_path = Path::new(&beat_path);
     let audio_dir = base_path.join("01_AUDIO");
-    
+
     let search_dirs = if audio_dir.exists() {
         vec![audio_dir]
     } else {
         vec![base_path.to_path_buf()]
     };
-    
+
     for dir in search_dirs {
         if !dir.exists() {
             continue;
         }
-        
+
         let entries: Vec<_> = match std::fs::read_dir(&dir) {
             Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
             Err(_) => continue,
         };
-        
+
         let audio_files: Vec<_> = entries.into_iter()
             .filter(|e| {
                 let path = e.path();
@@ -42,11 +44,11 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
                 }
             })
             .collect();
-        
+
         if audio_files.is_empty() {
             continue;
         }
-        
+
         // Priority 1: Untagged
         for entry in &audio_files {
             let name = entry.file_name().to_string_lossy().to_lowercase();
@@ -54,7 +56,7 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
                 return Ok(Some(entry.path().to_string_lossy().to_string()));
             }
         }
-        
+
         // Priority 2: Tagged (but not untagged)
         for entry in &audio_files {
             let name = entry.file_name().to_string_lossy().to_lowercase();
@@ -62,7 +64,7 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
                 return Ok(Some(entry.path().to_string_lossy().to_string()));
             }
         }
-        
+
         // Priority 3: MP3 files first
         for entry in &audio_files {
             let path = entry.path();
@@ -72,10 +74,10 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
                 }
             }
         }
-        
+
         // Priority 4: Newest audio file
         let mut newest: Option<(std::fs::DirEntry, std::time::SystemTime)> = None;
-        
+
         for entry in audio_files {
             if let Ok(metadata) = entry.metadata() {
                 if let Ok(modified) = metadata.modified() {
@@ -89,38 +91,13 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
                 }
             }
         }
-        
+
         if let Some((entry, _)) = newest {
             return Ok(Some(entry.path().to_string_lossy().to_string()));
         }
     }
-    
-    Ok(None)
-}
 
-/// Read audio file and return as base64 data URL
-#[tauri::command]
-pub fn read_audio_file(file_path: String) -> Result<String, String> {
-    let path = Path::new(&file_path);
-    
-    if !path.exists() {
-        return Err("Audio file not found".to_string());
-    }
-    
-    let ext = path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    
-    let mime_type = audio_mime_type(&ext);
-    
-    let data = std::fs::read(&path)
-        .map_err(|e| format!("Failed to read audio file: {}", e))?;
-    
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let encoded = STANDARD.encode(&data);
-    
-    Ok(format!("data:{};base64,{}", mime_type, encoded))
+    Ok(None)
 }
 
 /// Get cover image path for a beat.
@@ -128,7 +105,6 @@ pub fn read_audio_file(file_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> {
     let base_path = Path::new(&beat_path);
-    let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
 
     let mut images: Vec<std::fs::DirEntry> = Vec::new();
     for dir in [base_path.to_path_buf(), base_path.join("02_VISUALS")] {
@@ -139,7 +115,7 @@ pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> 
                 if !path.is_file() { continue; }
                 if let Some(ext) = path.extension() {
                     let ext_lower = ext.to_string_lossy().to_lowercase();
-                    if image_extensions.contains(&ext_lower.as_str()) {
+                    if crate::utils::is_image_extension(&ext_lower) {
                         images.push(entry);
                     }
                 }
@@ -179,140 +155,4 @@ pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> 
 
     // Priority 3: first image file
     Ok(Some(images[0].path().to_string_lossy().to_string()))
-}
-
-/// Get cover image as base64 data URL.
-/// Searches beat root first (new flat layout), then 02_VISUALS/ for legacy archives.
-#[tauri::command]
-pub fn get_beat_cover_base64(beat_path: String) -> Result<Option<String>, String> {
-    let base_path = Path::new(&beat_path);
-    let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
-
-    let mut images: Vec<std::fs::DirEntry> = Vec::new();
-    for dir in [base_path.to_path_buf(), base_path.join("02_VISUALS")] {
-        if !dir.exists() { continue; }
-        if let Ok(rd) = std::fs::read_dir(&dir) {
-            for entry in rd.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if !path.is_file() { continue; }
-                if let Some(ext) = path.extension() {
-                    let ext_lower = ext.to_string_lossy().to_lowercase();
-                    if image_extensions.contains(&ext_lower.as_str()) {
-                        images.push(entry);
-                    }
-                }
-            }
-        }
-    }
-
-    if images.is_empty() {
-        return Ok(None);
-    }
-
-    let cover_file = images.iter()
-        .find(|e| e.file_name().to_string_lossy().to_lowercase().contains("cover"))
-        .or_else(|| images.first());
-
-    let cover_path = match cover_file {
-        Some(e) => e.path(),
-        None => return Ok(None),
-    };
-    
-    let bytes = match std::fs::read(&cover_path) {
-        Ok(b) => b,
-        Err(_) => return Ok(None),
-    };
-    
-    let ext = cover_path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("png")
-        .to_lowercase();
-    
-    let mime_type = match ext.as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        _ => "image/jpeg",
-    };
-    
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let encoded = STANDARD.encode(&bytes);
-    
-    Ok(Some(format!("data:{};base64,{}", mime_type, encoded)))
-}
-
-/// Get audio file info for streaming
-#[tauri::command]
-pub fn get_beat_audio_for_streaming(beat_path: String) -> Result<Option<StreamingAudioInfo>, String> {
-    let base_path = Path::new(&beat_path);
-    let audio_dir = base_path.join("01_AUDIO");
-    
-    let search_dir = if audio_dir.exists() { audio_dir } else { base_path.to_path_buf() };
-    
-    if !search_dir.exists() {
-        return Ok(None);
-    }
-    
-    let entries: Vec<_> = match std::fs::read_dir(&search_dir) {
-        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
-        Err(_) => return Ok(None),
-    };
-    
-    let audio_files: Vec<_> = entries.into_iter()
-        .filter(|e| {
-            let path = e.path();
-            if !path.is_file() { return false; }
-            if let Some(ext) = path.extension() {
-                let ext_lower = ext.to_string_lossy().to_lowercase();
-                ext_lower == "mp3" || ext_lower == "wav" || ext_lower == "m4a" || ext_lower == "flac"
-            } else {
-                false
-            }
-        })
-        .collect();
-    
-    if audio_files.is_empty() {
-        return Ok(None);
-    }
-    
-    // Priority 1: Untagged MP3
-    for entry in &audio_files {
-        let name = entry.file_name().to_string_lossy().to_lowercase();
-        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        if name.contains("untagged") && ext == "mp3" {
-            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
-        }
-    }
-    
-    // Priority 2: Any Untagged
-    for entry in &audio_files {
-        let name = entry.file_name().to_string_lossy().to_lowercase();
-        if name.contains("untagged") {
-            let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("mp3").to_lowercase();
-            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: ext }));
-        }
-    }
-    
-    // Priority 3: Tagged MP3
-    for entry in &audio_files {
-        let name = entry.file_name().to_string_lossy().to_lowercase();
-        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        if name.contains("tagged") && !name.contains("untagged") && ext == "mp3" {
-            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
-        }
-    }
-    
-    // Priority 4: Any MP3
-    for entry in &audio_files {
-        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        if ext == "mp3" {
-            return Ok(Some(StreamingAudioInfo { path: entry.path().to_string_lossy().to_string(), format: "mp3".to_string() }));
-        }
-    }
-    
-    // Priority 5: First audio file
-    let first = &audio_files[0];
-    let ext = first.path().extension().and_then(|e| e.to_str()).unwrap_or("mp3").to_lowercase();
-    Ok(Some(StreamingAudioInfo { path: first.path().to_string_lossy().to_string(), format: ext }))
 }

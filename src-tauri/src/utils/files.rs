@@ -66,31 +66,6 @@ pub fn image_mime_type(ext: &str) -> &'static str {
     }
 }
 
-/// Get MIME type for audio extension
-pub fn audio_mime_type(ext: &str) -> &'static str {
-    match ext.to_lowercase().as_str() {
-        "mp3" => "audio/mpeg",
-        "wav" => "audio/wav",
-        "flac" => "audio/flac",
-        "m4a" => "audio/mp4",
-        "ogg" => "audio/ogg",
-        "aiff" => "audio/aiff",
-        _ => "audio/mpeg",
-    }
-}
-
-#[allow(dead_code)]
-/// Read file and encode as base64 data URL
-pub fn file_to_base64_data_url(path: &Path, mime_type: &str) -> Result<String, String> {
-    let bytes = std::fs::read(path)
-        .map_err(|e| format!("Cannot read file: {}", e))?;
-    
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let encoded = STANDARD.encode(&bytes);
-    
-    Ok(format!("data:{};base64,{}", mime_type, encoded))
-}
-
 /// Check if a string is a valid musical key
 pub fn is_valid_key(s: &str) -> bool {
     let s = s.trim();

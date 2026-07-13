@@ -1,8 +1,7 @@
 // src/pages/Upload.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Upload Tab — orchestrates beat selection + read-only asset checklist.
-// Phase B skeleton — Type-Beat-Info, Upload-Status, and Description cards are
-// placeholders until Phase C / D.
+// Upload Tab — orchestrates beat selection, asset checklist, type-beat info,
+// per-platform upload status, and description rendering/saving.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo } from "react";

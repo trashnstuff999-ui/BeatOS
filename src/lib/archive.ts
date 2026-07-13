@@ -57,28 +57,6 @@ export function getYearMonthFolder(date: Date | string): string {
 }
 
 /**
- * Generate preview path for archive destination
- * @returns e.g. "/ARCHIVE/2025/03_MARCH/0042 - Midnight Drift [Cm 140]/"
- */
-export function generatePreviewPath(
-  id: number,
-  name: string,
-  key: string | null,
-  bpm: number | null,
-  yearMonth: string
-): string {
-  const idStr = String(id).padStart(4, "0");
-  const cleanName = name.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, " ").trim();
-  
-  const parts: string[] = [];
-  if (key) parts.push(key.toUpperCase());
-  if (bpm) parts.push(String(bpm));
-  const suffix = parts.length > 0 ? ` [${parts.join(" ")}]` : "";
-  
-  return `/ARCHIVE/${yearMonth}/${idStr} - ${cleanName}${suffix}/`;
-}
-
-/**
  * Format file size for display
  * @param bytes File size in bytes
  * @returns e.g. "1.5 MB"

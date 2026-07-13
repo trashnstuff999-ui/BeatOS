@@ -4,11 +4,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import { useSettings } from "../contexts/SettingsContext";
 import type {
-  DuplicateCheckResult,
-  ArchiveResult,
   DuplicateDialogState,
   SuccessDialogState,
 } from "../types/create";
@@ -69,12 +67,7 @@ export function useCreateBeat({
       const keyVal = key || null;
 
       if (!forceV2) {
-        const duplicateCheck = await invoke<DuplicateCheckResult>("check_beat_duplicate", {
-          catalogId: catalogIdNum,
-          title,
-          key: keyVal,
-          bpm: bpmNum,
-        });
+        const duplicateCheck = await api.archive.checkDuplicate(catalogIdNum, title, keyVal, bpmNum);
 
         if (duplicateCheck.has_duplicate) {
           setIsArchiving(false);
@@ -103,7 +96,7 @@ export function useCreateBeat({
         archive_base_path: settings.archivePath,
       };
 
-      const result = await invoke<ArchiveResult>("archive_beat", { params });
+      const result = await api.archive.archiveBeat(params);
 
       if (result.success) {
         setSuccessDialog({

@@ -5,8 +5,8 @@
 
 import { useRef, useCallback } from "react";
 import {
-  Play, Pause, SkipBack, SkipForward, Repeat,
-  Volume2, VolumeX, Loader2, Music, Shuffle,
+  Play, Pause, Repeat,
+  Volume2, VolumeX, Loader2, Music,
 } from "lucide-react";
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
@@ -86,11 +86,8 @@ export function GlobalAudioPlayer() {
 
       {/* ── Center: Controls + Progress ──────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-        {/* Buttons */}
+        {/* Buttons — Shuffle/Skip entfallen, bis Queue-Navigation existiert */}
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <IconBtn><Shuffle size={15} color={C.onSecondaryFixedVar} strokeWidth={1.5} /></IconBtn>
-          <IconBtn><SkipBack size={18} color={C.onSurfaceVariant} strokeWidth={1.5} /></IconBtn>
-
           {/* Play / Pause */}
           <button
             onClick={togglePlay}
@@ -112,7 +109,6 @@ export function GlobalAudioPlayer() {
             }
           </button>
 
-          <IconBtn><SkipForward size={18} color={C.onSurfaceVariant} strokeWidth={1.5} /></IconBtn>
           <IconBtn onClick={toggleLoop}>
             <Repeat size={15} color={isLooped ? C.primary : C.onSecondaryFixedVar} strokeWidth={1.5} />
           </IconBtn>

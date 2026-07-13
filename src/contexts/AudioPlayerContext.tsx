@@ -4,8 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo, ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import type { Beat } from "../types/browse";
 
 function formatTime(seconds: number): string {
@@ -89,7 +89,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     } else {
       (async () => {
         try {
-          const p = await invoke<string | null>("get_beat_cover_path", { beatPath });
+          const p = await api.audio.getCoverPath(beatPath);
           if (currentBeatPathRef.current !== beatPath) return;
           if (p) setCoverUrl(pathToAssetUrl(p));
         } catch {}
@@ -100,7 +100,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     (async () => {
       try {
-        const ap = await invoke<string | null>("get_beat_audio_path", { beatPath });
+        const ap = await api.audio.getAudioPath(beatPath);
         if (currentBeatPathRef.current !== beatPath) return;
         if (!ap) { setError("No audio file found"); setIsLoading(false); return; }
         setAudioUrl(pathToAssetUrl(ap));

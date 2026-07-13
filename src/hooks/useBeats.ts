@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type {
   Beat,
@@ -79,7 +79,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     await Promise.allSettled(
       uncached.map(async (beat) => {
         try {
-          const coverPath = await invoke<string | null>("get_beat_cover_path", { beatPath: beat.path });
+          const coverPath = await api.audio.getCoverPath(beat.path!);
           setCoverCache(beat.id, coverPath ? convertFileSrc(coverPath.replace(/\\/g, "/")) : "");
         } catch { /* ignore individual failures */ }
       })
@@ -117,7 +117,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
       const bpmMin = currentFilters.bpmMin ? parseInt(currentFilters.bpmMin) : null;
       const bpmMax = currentFilters.bpmMax ? parseInt(currentFilters.bpmMax) : null;
       
-      const result = await invoke<{ beats: Beat[]; total_count: number }>("get_beats_paginated", {
+      const result = await api.beats.getPaginated({
         search: currentFilters.search || null,
         statusFilter: currentFilters.status !== "all" ? currentFilters.status : null,
         onlyFavs: currentFilters.onlyFavs,
@@ -230,7 +230,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     }
 
     try {
-      await invoke("toggle_favorite", { beatId, favorite: newFavorite });
+      await api.beats.toggleFavorite(beatId, newFavorite);
     } catch (e) {
       // Revert on error
       setBeats(prev => prev.map(b =>
@@ -260,7 +260,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     }
 
     try {
-      await invoke("update_beat_status", { beatId, status });
+      await api.beats.updateStatus(beatId, status);
     } catch (e) {
       // Revert on error
       setBeats(prev => prev.map(b =>
@@ -276,7 +276,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   // ─── Update Beat (Full) ────────────────────────────────────────────────────
   const updateBeat = useCallback(async (params: UpdateBeatParams) => {
     try {
-      await invoke("update_beat", { params });
+      await api.beats.update(params);
     } catch (e) {
       console.error("[useBeats] Failed to update beat:", e);
       return;
@@ -292,10 +292,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
 
   // ─── Delete Beat (folder -> recycle bin, then DB row) ──────────────────────
   const deleteBeat = useCallback(async (beatId: string, archiveBasePath: string) => {
-    const result = await invoke<{ folder_trashed: boolean }>("delete_beat", {
-      beatId,
-      archiveBasePath,
-    });
+    const result = await api.beats.delete(beatId, archiveBasePath);
     setBeats(prev => prev.filter(b => b.id !== beatId));
     if (selectedBeatIdRef.current === beatId) {
       setSelectedBeat(null);
