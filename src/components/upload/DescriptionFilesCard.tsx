@@ -215,7 +215,7 @@ export function DescriptionFilesCard({
           spellCheck={false}
           style={{
             width: "100%",
-            minHeight: 320,
+            minHeight: 560,
             padding: "12px 14px",
             background: C.surfaceContainerLowest,
             border: `1px solid ${C.border20}`,

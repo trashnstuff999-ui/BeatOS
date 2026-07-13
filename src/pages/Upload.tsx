@@ -113,13 +113,19 @@ export default function Upload() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px" }}>
-        <div style={{ maxWidth: 1200, display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ maxWidth: 1720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* Beat Selector */}
-          <BeatSelector selectedBeat={selectedBeat} onSelect={setSelectedBeat} />
-
-          {/* Upload planner — always visible, independent of the selected beat */}
-          <PlannerStrip refreshKey={plannerRefresh} />
+          {/* Top row: beat selector + upload planner side by side */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(320px, 420px) minmax(0, 1fr)",
+            gap: 24,
+            alignItems: "start",
+          }}>
+            <BeatSelector selectedBeat={selectedBeat} onSelect={setSelectedBeat} />
+            {/* Planner — always visible, independent of the selected beat */}
+            <PlannerStrip refreshKey={plannerRefresh} />
+          </div>
 
           {/* Loading / Error / Empty
               LoadingBanner only on the first load (when there's no data yet).
@@ -146,34 +152,41 @@ export default function Upload() {
             />
           )}
 
-          {/* Data view — kept mounted across refreshes so input state survives. */}
+          {/* Data view — kept mounted across refreshes so input state survives.
+              3 columns on wide screens:
+                1) Type-Beat inputs   2) Status + Checklist   3) Description output */}
           {data && !error && (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 24 }}>
-              {/* Left column */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(340px, 4fr) minmax(340px, 4fr) minmax(440px, 5fr)",
+              gap: 24,
+              alignItems: "start",
+            }}>
+              {/* Column 1: What is this beat? */}
+              <TypeBeatCard beat={data.beat} onSaved={refresh} />
+
+              {/* Column 2: Where does it stand? */}
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                <TypeBeatCard beat={data.beat} onSaved={refresh} />
                 <UploadStatusCard
                   beatId={data.beat.id}
                   uploads={data.uploads}
                   onChanged={handleStatusChanged}
                 />
-              </div>
-
-              {/* Right column */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <AssetChecklistCard
                   assets={data.assets}
                   beatPath={data.beat.path}
                   onRefresh={refresh}
                   onConvert={() => setConvertOpen(true)}
                 />
-                <DescriptionFilesCard
-                  beatId={data.beat.id}
-                  uploadFiles={data.assets.upload_files}
-                  onSaved={refresh}
-                  rerenderKey={rerenderKey}
-                />
               </div>
+
+              {/* Column 3: The output — gets the most width */}
+              <DescriptionFilesCard
+                beatId={data.beat.id}
+                uploadFiles={data.assets.upload_files}
+                onSaved={refresh}
+                rerenderKey={rerenderKey}
+              />
             </div>
           )}
 
