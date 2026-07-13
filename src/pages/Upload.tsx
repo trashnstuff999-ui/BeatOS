@@ -18,6 +18,7 @@ import {
   LegacyMigrationBanner,
   ConvertFilenamesDialog,
   PlannerStrip,
+  UploadBeatHeader,
 } from "../components/upload";
 import type { Beat } from "../types/browse";
 
@@ -113,7 +114,7 @@ export default function Upload() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px" }}>
-        <div style={{ maxWidth: 1720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ maxWidth: 1720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
 
           {/* Top row: beat selector + upload planner side by side */}
           <div style={{
@@ -123,9 +124,18 @@ export default function Upload() {
             alignItems: "start",
           }}>
             <BeatSelector selectedBeat={selectedBeat} onSelect={setSelectedBeat} />
-            {/* Planner — always visible, independent of the selected beat */}
-            <PlannerStrip refreshKey={plannerRefresh} />
+            {/* Planner — always visible; click-to-schedule when a beat is selected */}
+            <PlannerStrip
+              refreshKey={plannerRefresh}
+              beatId={data?.beat.id ?? null}
+              beatName={data?.beat.name ?? null}
+              uploads={data?.uploads ?? null}
+              onChanged={handleStatusChanged}
+            />
           </div>
+
+          {/* Beat anchor: cover, title, key/bpm, ready progress */}
+          {data && !error && <UploadBeatHeader data={data} />}
 
           {/* Loading / Error / Empty
               LoadingBanner only on the first load (when there's no data yet).

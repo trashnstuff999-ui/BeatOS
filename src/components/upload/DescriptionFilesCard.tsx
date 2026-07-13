@@ -8,13 +8,28 @@
 import { useState, useEffect } from "react";
 import {
   ShoppingBag, Music2, Youtube, Copy, Save, RefreshCw, FolderOpen,
-  Check, AlertCircle, Loader2, FileText,
+  Check, AlertCircle, Loader2, FileText, ChevronDown,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { C } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { SectionCard, SectionIconBtn } from "./SectionCard";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
+
+/// Display-only: pull the title line out of a rendered description.
+/// Templates put it after a line ending in "TITEL:" ("BEATSTARS TITEL:",
+/// "TITEL:"). Fallback: first non-empty line.
+function extractTitle(content: string): string {
+  const lines = content.split(/\r?\n/);
+  const idx = lines.findIndex(l => /titel:\s*$/i.test(l.trim()));
+  if (idx >= 0) {
+    for (let i = idx + 1; i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (t) return t;
+    }
+  }
+  return lines.map(l => l.trim()).find(Boolean) ?? "";
+}
 
 interface DescriptionFilesCardProps {
   beatId: string;
@@ -30,9 +45,9 @@ type TabKey = UploadPlatform;
 type Banner = { kind: "ok" | "err"; msg: string } | null;
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
-  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: "#ff3366", file: "beatstars.txt"  },
-  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: "#ff7700", file: "soundcloud.txt" },
-  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: "#ff0033", file: "youtube.txt"    },
+  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
+  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
+  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: PLATFORM_CONFIG.youtube.color,    file: "youtube.txt"    },
 ];
 
 export function DescriptionFilesCard({
@@ -100,6 +115,17 @@ export function DescriptionFilesCard({
     }
   };
 
+  const handleCopyTitle = async () => {
+    if (!drafts) return;
+    try {
+      await navigator.clipboard.writeText(extractTitle(drafts[active]));
+      setBanner({ kind: "ok", msg: "Titel kopiert" });
+      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
+    } catch (e) {
+      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
+    }
+  };
+
   const persist = async (which: "current" | "all") => {
     if (!drafts) return;
     setIsSaving(true);
@@ -136,8 +162,14 @@ export function DescriptionFilesCard({
     }
   };
 
+  // Editor collapsed by default — the title panel is the main output.
+  // Stays open while the active tab has unsaved edits so nothing hides.
+  const [editorOpen, setEditorOpen] = useState(false);
+
   const activeContent = drafts?.[active] ?? "";
   const activeTabMeta = TABS.find(t => t.key === active)!;
+  const activeTitle = extractTitle(activeContent);
+  const showEditor = editorOpen || dirty[active];
   const fileExistsMap: Record<TabKey, boolean> = {
     beatstars:  uploadFiles.beatstars_txt,
     soundcloud: uploadFiles.soundcloud_txt,
@@ -145,26 +177,25 @@ export function DescriptionFilesCard({
   };
 
   return (
-    <Card accent={C.tertiary ?? "#9492ff"}>
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <Label>Description Files</Label>
+    <SectionCard
+      icon={FileText}
+      title="Descriptions"
+      actions={
         <div style={{ display: "flex", gap: 6 }}>
-          <SmallBtn
+          <SectionIconBtn
             icon={RefreshCw}
-            label="Re-render"
+            title="Alle 3 Tabs neu aus Templates rendern (verwirft ungespeicherte Edits)"
             onClick={() => renderFromBackend(true)}
             disabled={isLoading}
-            title="Re-render all 3 tabs from templates + current beat data (discards unsaved edits)"
           />
-          <SmallBtn
+          <SectionIconBtn
             icon={FolderOpen}
-            label="Edit Templates"
+            title="Template-Ordner im Explorer öffnen"
             onClick={openTemplatesFolder}
-            title="Open the templates folder in Explorer"
           />
         </div>
-      </div>
+      }
+    >
 
       {/* ─── Tab strip ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
@@ -207,62 +238,126 @@ export function DescriptionFilesCard({
         })}
       </div>
 
-      {/* ─── Editor ──────────────────────────────────────────────────────── */}
-      <div style={{ position: "relative" }}>
-        <textarea
-          value={activeContent}
-          onChange={e => setDraft(active, e.target.value)}
-          spellCheck={false}
-          style={{
-            width: "100%",
-            minHeight: 560,
-            padding: "12px 14px",
-            background: C.surfaceContainerLowest,
-            border: `1px solid ${C.border20}`,
-            borderRadius: 8,
-            outline: "none",
-            color: C.onSurface,
-            fontFamily: "monospace",
-            fontSize: 12,
-            lineHeight: 1.55,
-            resize: "vertical",
-            boxSizing: "border-box",
-            whiteSpace: "pre-wrap",
-          }}
-        />
-        {isLoading && (
+      {/* ─── Title panel — the headline output, always visible ──────────── */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "12px 14px",
+        background: C.surfaceContainerLowest,
+        border: `1px solid ${C.border15}`,
+        borderRadius: 8,
+        marginBottom: 10,
+      }}>
+        <activeTabMeta.icon size={14} color={activeTabMeta.color} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            position: "absolute", inset: 0,
-            background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            borderRadius: 8,
-            color: C.onSurfaceVariant,
-            fontSize: 11, fontWeight: 600,
-            letterSpacing: "0.05em", textTransform: "uppercase",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+            textTransform: "uppercase", color: C.onSecondaryFixedVar,
+            marginBottom: 4,
           }}>
-            <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite", marginRight: 8 }} />
-            Rendering…
+            Titel
           </div>
-        )}
+          <div style={{
+            fontSize: 13, fontWeight: 600, color: C.onSurface,
+            lineHeight: 1.45, wordBreak: "break-word",
+          }}>
+            {isLoading
+              ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.onSurfaceVariant }}>
+                  <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> Rendering…
+                </span>
+              : (activeTitle || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
+            }
+          </div>
+        </div>
+        <SmallBtn icon={Copy} label="Titel kopieren" onClick={handleCopyTitle} disabled={!drafts || isLoading} />
       </div>
 
-      {/* ─── Action bar ──────────────────────────────────────────────────── */}
+      {/* ─── Full text — collapsed by default ───────────────────────────── */}
+      <button
+        onClick={() => setEditorOpen(o => !o)}
+        style={{
+          width: "100%",
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px",
+          background: "transparent",
+          border: `1px solid ${C.border10}`,
+          borderRadius: 8,
+          cursor: "pointer",
+          fontSize: 10, fontWeight: 600,
+          color: C.onSurfaceVariant,
+          letterSpacing: "0.04em",
+        }}
+      >
+        <ChevronDown
+          size={12}
+          style={{ transition: "transform 0.15s", transform: showEditor ? "rotate(180deg)" : "rotate(0)" }}
+        />
+        Volltext anzeigen & bearbeiten
+        {dirty[active] && (
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, color: "#fda124" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fda124" }} />
+            ungespeicherte Änderungen
+          </span>
+        )}
+      </button>
+
+      {showEditor && (
+        <div style={{ position: "relative", marginTop: 8 }}>
+          <textarea
+            value={activeContent}
+            onChange={e => setDraft(active, e.target.value)}
+            spellCheck={false}
+            style={{
+              width: "100%",
+              minHeight: 460,
+              padding: "12px 14px",
+              background: C.surfaceContainerLowest,
+              border: `1px solid ${C.border20}`,
+              borderRadius: 8,
+              outline: "none",
+              color: C.onSurface,
+              fontFamily: "monospace",
+              fontSize: 12,
+              lineHeight: 1.55,
+              resize: "vertical",
+              boxSizing: "border-box",
+              whiteSpace: "pre-wrap",
+            }}
+          />
+          {isLoading && (
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: 8,
+              color: C.onSurfaceVariant,
+              fontSize: 11, fontWeight: 600,
+              letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>
+              <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite", marginRight: 8 }} />
+              Rendering…
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Action bar — ONE primary action: Save All ───────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
         <FileTag tab={activeTabMeta} exists={fileExistsMap[active]} isDirty={dirty[active]} />
         <div style={{ flex: 1 }} />
-        <SmallBtn icon={Copy} label="Copy" onClick={handleCopy} disabled={!drafts} />
+        <SmallBtn icon={Copy} label="Text" onClick={handleCopy} disabled={!drafts} title="Kompletten Text kopieren" />
         <SmallBtn
           icon={Save}
-          label={`Save ${activeTabMeta.label}`}
+          label={activeTabMeta.label}
           onClick={() => persist("current")}
           disabled={!drafts || isSaving}
-          primary
+          title={`Nur ${activeTabMeta.file} speichern`}
         />
         <SmallBtn
           icon={Save}
-          label="Save All"
+          label="Save All (3 Dateien)"
           onClick={() => persist("all")}
           disabled={!drafts || isSaving}
+          primary
         />
       </div>
 
@@ -285,7 +380,7 @@ export function DescriptionFilesCard({
           {banner.msg}
         </div>
       )}
-    </Card>
+    </SectionCard>
   );
 }
 

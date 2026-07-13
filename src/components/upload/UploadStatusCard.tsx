@@ -1,15 +1,16 @@
 // src/components/upload/UploadStatusCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Per-platform upload tracking: status segments, schedule date, final URL.
-// The schedule date is always visible; picking a date on a draft row
-// automatically moves the row to "scheduled" (one upsert). All writes go
-// through update_upload_status.
+// Per-platform upload tracking as a compact table: one row per platform
+// (icon+name | status segments | date), URL row appears under an uploaded
+// platform. Picking a date on a draft row promotes it to "scheduled" in the
+// same write. All writes go through update_upload_status — logic unchanged.
+// Colors come from PLATFORM_CONFIG / UPLOAD_STATUS_CONFIG (theme.ts).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink } from "lucide-react";
-import { C } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink, Send } from "lucide-react";
+import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
+import { SectionCard } from "./SectionCard";
 import { api } from "../../lib/api";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";
 
@@ -19,47 +20,42 @@ interface UploadStatusCardProps {
   onChanged: () => void;
 }
 
-const PLATFORM_META: Record<UploadPlatform, { label: string; icon: React.ElementType; color: string }> = {
-  beatstars:  { label: "Beatstars",  icon: ShoppingBag, color: "#ff3366" },
-  soundcloud: { label: "SoundCloud", icon: Music2,      color: "#ff7700" },
-  youtube:    { label: "YouTube",    icon: Youtube,     color: "#ff0033" },
+const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
+  beatstars: ShoppingBag,
+  soundcloud: Music2,
+  youtube: Youtube,
 };
 
 const STATUS_ORDER: UploadStatus[] = ["draft", "scheduled", "uploaded"];
 
-const STATUS_META: Record<UploadStatus, { label: string; color: string; bg: string }> = {
-  draft:     { label: "Draft",     color: C.onSurfaceVariant, bg: "rgba(255,255,255,0.04)" },
-  scheduled: { label: "Scheduled", color: "#fda124",          bg: "rgba(253,161,36,0.12)" },
-  uploaded:  { label: "Uploaded",  color: "#34d399",          bg: "rgba(52,211,153,0.12)" },
-};
-
 export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCardProps) {
   return (
-    <Card accent="#fda124">
-      <Label style={{ marginBottom: 14 }}>Upload Status</Label>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {uploads.map(row => (
+    <SectionCard icon={Send} title="Upload Status">
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {uploads.map((row, i) => (
           <PlatformRow
             key={row.platform}
             beatId={beatId}
             row={row}
             onChanged={onChanged}
+            isFirst={i === 0}
           />
         ))}
       </div>
-    </Card>
+    </SectionCard>
   );
 }
 
 // ─── Single Platform Row ────────────────────────────────────────────────────
 
-function PlatformRow({ beatId, row, onChanged }: {
+function PlatformRow({ beatId, row, onChanged, isFirst }: {
   beatId: string;
   row: UploadPlatformRow;
   onChanged: () => void;
+  isFirst: boolean;
 }) {
-  const meta = PLATFORM_META[row.platform];
-  const PlatIcon = meta.icon;
+  const meta = PLATFORM_CONFIG[row.platform];
+  const PlatIcon = PLATFORM_ICON[row.platform];
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -111,109 +107,109 @@ function PlatformRow({ beatId, row, onChanged }: {
     }
   };
 
-  const handleOpenUrl = () => {
-    if (row.url) window.open(row.url, "_blank");
-  };
+  const dateValue = row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "");
 
   return (
     <div style={{
-      padding: 12,
-      background: C.surfaceContainerLowest,
-      border: `1px solid ${C.border15}`,
-      borderRadius: 8,
+      borderTop: isFirst ? "none" : `1px solid ${C.border10}`,
+      padding: "10px 0",
     }}>
-      {/* Top line: platform + status segments */}
+      {/* Main row: platform | segments | date */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <PlatIcon size={16} color={meta.color} strokeWidth={1.75} />
         <span style={{
-          flex: 1,
-          fontSize: 12, fontWeight: 700, color: C.onSurface,
-          letterSpacing: "0.03em",
+          display: "flex", alignItems: "center", gap: 8,
+          width: 108, flexShrink: 0,
         }}>
-          {meta.label}
+          <PlatIcon size={14} color={meta.color} strokeWidth={1.75} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
+            {meta.label}
+          </span>
         </span>
 
-        {/* Segmented status control — no more blind cycling */}
+        {/* Segmented status control */}
         <div style={{
-          display: "flex", gap: 2,
+          display: "flex", gap: 2, flexShrink: 0,
           background: "rgba(255,255,255,0.03)",
           border: `1px solid ${C.border15}`,
           borderRadius: 7, padding: 2,
         }}>
           {STATUS_ORDER.map(s => {
             const active = row.status === s;
-            const m = STATUS_META[s];
+            const m = UPLOAD_STATUS_CONFIG[s];
             return (
               <button
                 key={s}
                 onClick={() => setStatus(s)}
                 disabled={isSaving}
+                title={m.label}
                 style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "4px 9px",
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 8px",
                   background: active ? m.bg : "transparent",
                   border: "none",
                   borderRadius: 5,
                   cursor: isSaving ? "wait" : "pointer",
                   fontSize: 9, fontWeight: 700,
                   color: active ? m.color : C.onSecondaryFixedVar,
-                  letterSpacing: "0.06em",
+                  letterSpacing: "0.05em",
                   textTransform: "uppercase",
                   opacity: isSaving ? 0.6 : 1,
                   transition: "all 0.15s",
                 }}
               >
-                {active && (
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: m.color }} />
-                )}
+                {active && <span style={{ width: 4, height: 4, borderRadius: "50%", background: m.color }} />}
                 {m.label}
               </button>
             );
           })}
         </div>
+
+        {/* Date — always visible; ghost label instead of raw TT.mm.jjjj */}
+        <div style={{ flex: 1, position: "relative", minWidth: 120 }}>
+          <Calendar size={12} color={C.onSecondaryFixedVar} strokeWidth={1.5} style={{
+            position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)",
+            pointerEvents: "none",
+          }} />
+          <input
+            type="date"
+            value={dateValue}
+            title={row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
+            onChange={e => row.status === "uploaded"
+              ? persist({ uploaded_at: e.target.value || null })
+              : handleScheduledChange(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "6px 8px 6px 28px",
+              fontSize: 11,
+              background: C.surfaceContainerLowest,
+              border: `1px solid ${C.border15}`,
+              borderRadius: 6,
+              outline: "none",
+              color: dateValue ? C.onSurface : "transparent",
+              colorScheme: "dark",
+              boxSizing: "border-box",
+            }}
+          />
+          {!dateValue && (
+            <span style={{
+              position: "absolute", left: 28, top: "50%", transform: "translateY(-50%)",
+              fontSize: 11, color: C.onSecondaryFixedVar,
+              pointerEvents: "none",
+            }}>
+              Datum wählen
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Scheduled date — always visible; picking a date schedules a draft */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        marginTop: 10, paddingTop: 10,
-        borderTop: `1px solid ${C.border10}`,
-      }}>
-        <Calendar size={13} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, letterSpacing: "0.05em", textTransform: "uppercase", width: 90 }}>
-          {row.status === "uploaded" ? "Uploaded on" : "Scheduled for"}
-        </span>
-        <input
-          type="date"
-          value={row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "")}
-          onChange={e => row.status === "uploaded"
-            ? persist({ uploaded_at: e.target.value || null })
-            : handleScheduledChange(e.target.value)
-          }
-          style={{
-            flex: 1,
-            padding: "6px 10px",
-            fontSize: 12,
-            background: C.surfaceContainer,
-            border: `1px solid ${C.border20}`,
-            borderRadius: 6,
-            outline: "none",
-            color: C.onSurface,
-            colorScheme: "dark",
-          }}
-        />
-      </div>
-
-      {/* URL row (uploaded) */}
+      {/* URL row (uploaded only) */}
       {row.status === "uploaded" && (
         <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          marginTop: 8,
+          display: "flex", alignItems: "center", gap: 8,
+          marginTop: 8, paddingLeft: 118,
         }}>
-          <Link2 size={13} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, letterSpacing: "0.05em", textTransform: "uppercase", width: 90 }}>
-            URL
-          </span>
+          <Link2 size={12} color={C.onSecondaryFixedVar} strokeWidth={1.5} style={{ flexShrink: 0 }} />
           <input
             value={urlDraft}
             onChange={e => setUrlDraft(e.target.value)}
@@ -221,11 +217,11 @@ function PlatformRow({ beatId, row, onChanged }: {
             placeholder={`https://...${row.platform}...`}
             style={{
               flex: 1,
-              padding: "6px 10px",
-              fontSize: 12,
+              padding: "5px 9px",
+              fontSize: 11,
               fontFamily: "monospace",
-              background: C.surfaceContainer,
-              border: `1px solid ${C.border20}`,
+              background: C.surfaceContainerLowest,
+              border: `1px solid ${C.border15}`,
               borderRadius: 6,
               outline: "none",
               color: C.onSurface,
@@ -233,18 +229,18 @@ function PlatformRow({ beatId, row, onChanged }: {
           />
           {row.url && (
             <button
-              onClick={handleOpenUrl}
-              title="Open URL"
+              onClick={() => row.url && window.open(row.url, "_blank")}
+              title="URL öffnen"
               style={{
-                width: 26, height: 26, borderRadius: 5,
-                background: C.surfaceContainer,
-                border: `1px solid ${C.border20}`,
+                width: 24, height: 24, borderRadius: 5, flexShrink: 0,
+                background: "transparent",
+                border: `1px solid ${C.border15}`,
                 cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: C.onSurfaceVariant,
               }}
             >
-              <ExternalLink size={12} />
+              <ExternalLink size={11} />
             </button>
           )}
         </div>

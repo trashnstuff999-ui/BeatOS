@@ -9,3 +9,5 @@ export { PlaceholderCard } from "./PlaceholderCard";
 export { PlannerStrip } from "./PlannerStrip";
 export { ChipListEditor } from "./ChipListEditor";
 export { PresetBar } from "./PresetBar";
+export { SectionCard, SectionIconBtn } from "./SectionCard";
+export { UploadBeatHeader } from "./UploadBeatHeader";

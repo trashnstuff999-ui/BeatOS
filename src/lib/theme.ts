@@ -44,6 +44,27 @@ export const colors = {
 export const C = colors;
 
 // ─────────────────────────────────────────────────────────────────────────────────
+// Upload: Plattform- & Status-Farben — EINZIGE Quelle für den Upload-Bereich.
+// Regeln: Plattformfarben nur an Icons/Punkten (kleine Flächen); Status nur aus
+// der Status-Skala; Amber (primary) exklusiv für Primäraktionen + "Scheduled".
+// ─────────────────────────────────────────────────────────────────────────────────
+
+export type PlatformKey = "beatstars" | "soundcloud" | "youtube";
+
+export const PLATFORM_CONFIG: Record<PlatformKey, { label: string; short: string; color: string }> = {
+  // Magenta statt #ff3366 — war im Planner nicht von YouTube-Rot unterscheidbar
+  beatstars:  { label: "Beatstars",  short: "BS", color: "#f43f8e" },
+  soundcloud: { label: "SoundCloud", short: "SC", color: "#ff7700" },
+  youtube:    { label: "YouTube",    short: "YT", color: "#ff0033" },
+};
+
+export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  draft:     { label: "Draft",     color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
+  scheduled: { label: "Scheduled", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
+  uploaded:  { label: "Uploaded",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────
 // Status Configuration
 // ─────────────────────────────────────────────────────────────────────────────────
 

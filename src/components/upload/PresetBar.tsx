@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, X, Youtube, Music2, Bookmark } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, PLATFORM_CONFIG } from "../../lib/theme";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
 
@@ -93,14 +93,27 @@ export function PresetBar({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
+      {/* Own strip with micro label — visually distinct from the data chips below */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+        background: C.surfaceContainerLowest,
+        border: `1px solid ${C.border10}`,
+        borderRadius: 8,
+        padding: "7px 10px",
       }}>
-        <Bookmark size={11} strokeWidth={2} color={C.onSecondaryFixedVar} style={{ flexShrink: 0 }} />
+        <span style={{
+          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+          color: C.onSecondaryFixedVar, textTransform: "uppercase",
+          marginRight: 4,
+        }}>
+          <Bookmark size={10} strokeWidth={2} />
+          Presets
+        </span>
 
         {presets.length === 0 && (
           <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            Noch keine Presets — aktuelle Infos mit „+" als Preset sichern
+            Noch keine — aktuelle Infos mit „+" sichern
           </span>
         )}
 
@@ -118,10 +131,11 @@ export function PresetBar({
                 p.genre_tags,
               ].filter(Boolean).join("\n")}
               style={{
+                // Ghost/outline — Aktion, klar unterscheidbar von soliden Daten-Chips
                 display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "5px 10px",
-                background: hovered ? C.primary + "15" : C.surfaceContainerLowest,
-                border: `1px solid ${hovered ? C.primary + "50" : C.border20}`,
+                padding: "4px 10px",
+                background: hovered ? C.primary + "12" : "transparent",
+                border: `1px solid ${hovered ? C.primary + "50" : C.border30}`,
                 borderRadius: 9999,
                 fontSize: 11, fontWeight: 600,
                 color: hovered ? C.primary : C.onSurfaceVariant,
@@ -133,8 +147,8 @@ export function PresetBar({
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {p.label}
               </span>
-              {p.soundcloud_tags && <Music2 size={9} color="#ff7700" strokeWidth={2.5} />}
-              {p.youtube_tags && <Youtube size={9} color="#ff5577" strokeWidth={2.5} />}
+              {p.soundcloud_tags && <Music2 size={9} color={PLATFORM_CONFIG.soundcloud.color} strokeWidth={2.5} />}
+              {p.youtube_tags && <Youtube size={9} color={PLATFORM_CONFIG.youtube.color} strokeWidth={2.5} />}
               {p.use_count > 0 && (
                 <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
                   {p.use_count}×
