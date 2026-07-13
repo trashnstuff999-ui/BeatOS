@@ -21,10 +21,12 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "C:/Users/kismo/OneDrive/Dokumente/._BEAT LIBRARY/**",
+          "C:\\Users\\kismo\\OneDrive\\Dokumente\\._BEAT LIBRARY\\**"
+        ]
       },
-      "csp": null
-      
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https://asset.localhost; media-src 'self' blob: asset: https://asset.localhost; connect-src ipc: http://ipc.localhost; font-src 'self' data:"
     }
   },
   "bundle": {

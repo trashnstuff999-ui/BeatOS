@@ -4,6 +4,89 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use crate::db::{open_db, Beat, PaginatedBeatsResponse, UpdateBeatParams, row_to_beat};
+use serde::Serialize;
+use std::path::Path;
+
+#[derive(Debug, Serialize)]
+pub struct DeleteBeatResult {
+    pub success: bool,
+    pub beat_id: String,
+    /// True if the on-disk folder existed and was moved to trash.
+    /// False means the DB row was orphaned (folder already gone) — DB entry was still removed.
+    pub folder_trashed: bool,
+}
+
+/// Delete a beat: move its folder to the OS recycle bin and remove the DB row.
+///
+/// Safety: the beat's stored path must live underneath `archive_base_path` (the
+/// user-configured archive root). This prevents accidentally trashing arbitrary
+/// folders if the DB ever holds a bogus path.
+#[tauri::command]
+pub fn delete_beat(beat_id: String, archive_base_path: String) -> Result<DeleteBeatResult, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+
+    // 1. Look up the beat's path from the DB (single source of truth)
+    let beat_path: String = match conn.query_row(
+        "SELECT path FROM beats WHERE id = ?1",
+        rusqlite::params![beat_id],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(p) => p,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Err(format!("Beat {} not found in database", beat_id));
+        }
+        Err(e) => return Err(format!("DB lookup failed: {}", e)),
+    };
+
+    // 2. Safety check: the folder must live under the configured archive root.
+    //    Canonicalize both sides where possible to handle trailing slashes /
+    //    relative segments. If canonicalize fails (e.g. the beat folder no
+    //    longer exists) we fall back to a string prefix comparison, which is
+    //    still safe — the path can't be empty and must literally start with
+    //    the archive root.
+    let beat_path_buf = Path::new(&beat_path);
+    let archive_root = Path::new(&archive_base_path);
+
+    let canonical_root = archive_root.canonicalize()
+        .map_err(|e| format!("Archive root unreadable ({}): {}", archive_base_path, e))?;
+
+    let under_archive = match beat_path_buf.canonicalize() {
+        Ok(canonical_beat) => canonical_beat.starts_with(&canonical_root),
+        Err(_) => beat_path_buf.starts_with(&archive_root),
+    };
+
+    if !under_archive {
+        return Err(format!(
+            "Refusing to delete: beat path is not inside the configured archive root.\n  beat:    {}\n  archive: {}",
+            beat_path, archive_base_path
+        ));
+    }
+
+    // 3. Trash the folder if it still exists. If it's already gone we just
+    //    clean up the orphan DB row instead of failing the whole operation.
+    let folder_trashed = if beat_path_buf.exists() {
+        if !beat_path_buf.is_dir() {
+            return Err(format!("Beat path is not a directory: {}", beat_path));
+        }
+        trash::delete(beat_path_buf)
+            .map_err(|e| format!("Failed to move folder to recycle bin: {}", e))?;
+        true
+    } else {
+        false
+    };
+
+    // 4. Remove the DB row only after the filesystem step succeeded (or was a no-op).
+    conn.execute(
+        "DELETE FROM beats WHERE id = ?1",
+        rusqlite::params![beat_id],
+    ).map_err(|e| format!("DB delete failed: {}", e))?;
+
+    Ok(DeleteBeatResult {
+        success: true,
+        beat_id,
+        folder_trashed,
+    })
+}
 
 #[tauri::command]
 pub fn get_beats(
@@ -41,6 +124,7 @@ pub fn get_beats(
             param_idx += 1;
         }
     }
+    let _ = param_idx; // suppress unused_assignments if no more filters follow
 
     if only_favs {
         where_clauses.push("favorite = 1".to_string());

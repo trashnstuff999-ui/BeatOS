@@ -40,7 +40,7 @@ export function useCoverDrop(options: UseCoverDropOptions): UseCoverDropReturn {
   
   const [isDragging, setIsDragging] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
-  const [dragCounter, setDragCounter] = useState(0);
+  const [, setDragCounter] = useState(0);
 
   // ─── Drag Handlers ─────────────────────────────────────────────────────────
 

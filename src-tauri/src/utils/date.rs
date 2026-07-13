@@ -83,6 +83,7 @@ pub fn year_month_from_secs(secs: u64) -> String {
     format!("{}/{:02}_{}", year, month, MONTH_NAMES[month_idx])
 }
 
+#[allow(dead_code)]
 /// Get current time as Unix seconds
 pub fn current_secs() -> u64 {
     SystemTime::now()
@@ -91,6 +92,7 @@ pub fn current_secs() -> u64 {
         .unwrap_or(0)
 }
 
+#[allow(dead_code)]
 /// Get creation date from a file path as "YYYY-MM-DD" string
 pub fn file_creation_date(path: &Path) -> Option<String> {
     file_created_secs(path).map(secs_to_date)

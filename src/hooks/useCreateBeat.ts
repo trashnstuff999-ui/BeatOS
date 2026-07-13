@@ -24,7 +24,6 @@ interface UseCreateBeatParams {
   notes: string;
   selectedFile: string;
   selectedFlp: string;
-  coverSourcePath: string | null;
   yearMonth: string;
   onReset: () => void;
   setCatalogId: (id: string) => void;
@@ -41,7 +40,6 @@ export function useCreateBeat({
   notes,
   selectedFile,
   selectedFlp,
-  coverSourcePath,
   yearMonth,
   onReset,
   setCatalogId,
@@ -101,7 +99,6 @@ export function useCreateBeat({
         notes,
         source_audio_path: selectedFile,
         source_flp_path: selectedFlp,
-        cover_path: coverSourcePath,
         year_month: yearMonth,
         archive_base_path: settings.archivePath,
       };
@@ -124,7 +121,7 @@ export function useCreateBeat({
     } finally {
       setIsArchiving(false);
     }
-  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp, coverSourcePath, yearMonth, settings.archivePath]);
+  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp, yearMonth, settings.archivePath]);
 
   const handleDuplicateCreateV2 = useCallback(() => {
     setDuplicateDialog(null);

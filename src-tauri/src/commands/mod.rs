@@ -9,6 +9,8 @@ mod tags;
 mod archive;
 mod create;
 mod audio;
+mod settings;
+mod upload;
 
 pub use beats::*;
 pub use stats::*;
@@ -16,3 +18,5 @@ pub use tags::*;
 pub use archive::*;
 pub use create::*;
 pub use audio::*;
+pub use settings::*;
+pub use upload::*;

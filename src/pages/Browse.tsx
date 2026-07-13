@@ -19,6 +19,7 @@ import {
 } from "../components/browse";
 import type { Beat, UpdateBeatParams } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
+import { useSettings } from "../contexts/SettingsContext";
 
 export default function Browse() {
   const location = useLocation();
@@ -44,10 +45,12 @@ export default function Browse() {
     toggleFavorite,
     updateStatus,
     updateBeat,
+    deleteBeat,
     getCoverUrl,
   } = useBeats(initialFilters);
 
   const { playBeat } = useAudioPlayerContext();
+  const { settings } = useSettings();
 
   // ─── Edit Modal State ──────────────────────────────────────────────────────
   const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
@@ -209,6 +212,12 @@ export default function Browse() {
           preloadedCoverUrl={selectedBeat ? getCoverUrl(selectedBeat.id) : null}
           onUpdateTags={async (beatId, tags) => {
             await updateBeat({ id: beatId, tags: tags.join(", ") });
+          }}
+          onDelete={async (b) => {
+            if (!settings.archivePath) {
+              throw new Error("Archive path is not configured. Open Settings to set it.");
+            }
+            await deleteBeat(b.id, settings.archivePath);
           }}
         />
       )}

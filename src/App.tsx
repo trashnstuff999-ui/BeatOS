@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Browse from "./pages/Browse";
 import Create from "./pages/Create";
 import Studio from "./pages/Studio";
+import Upload from "./pages/Upload";
 import { Settings } from "./pages/Settings";
 import { Support } from "./pages/Placeholder";
 import { useBeatCount } from "./hooks/useStats";
@@ -16,6 +17,7 @@ import { GlobalAudioPlayer } from "./components/GlobalAudioPlayer";
 import { useAudioPlayerContext } from "./contexts/AudioPlayerContext";
 import { TagManagerProvider, useTagManager } from "./contexts/TagManagerContext";
 import { AllTagsModal } from "./components/create/dialogs/AllTagsModal";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function AppRoutes() {
   const location = useLocation();
@@ -24,16 +26,19 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/browse" element={<Browse />} />
-        <Route path="/studio" element={<Studio />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/support" element={<Support />} />
+        <Route path="/" element={<ErrorBoundary fallbackLabel="Dashboard error"><Dashboard /></ErrorBoundary>} />
+        <Route path="/browse" element={<ErrorBoundary fallbackLabel="Browse error"><Browse /></ErrorBoundary>} />
+        <Route path="/studio" element={<ErrorBoundary fallbackLabel="Studio error"><Studio /></ErrorBoundary>} />
+        <Route path="/upload" element={<ErrorBoundary fallbackLabel="Upload error"><Upload /></ErrorBoundary>} />
+        <Route path="/settings" element={<ErrorBoundary fallbackLabel="Settings error"><Settings /></ErrorBoundary>} />
+        <Route path="/support" element={<ErrorBoundary fallbackLabel="Support error"><Support /></ErrorBoundary>} />
       </Routes>
 
       {/* Create — always mounted, hidden when not active */}
       <div style={{ display: currentPath === "/create" ? "block" : "none", height: "100%" }}>
-        <Create />
+        <ErrorBoundary fallbackLabel="Create error">
+          <Create />
+        </ErrorBoundary>
       </div>
     </>
   );

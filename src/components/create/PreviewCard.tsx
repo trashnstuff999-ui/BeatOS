@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
-import { FolderOpen, ImagePlus, Info } from "lucide-react";
+import { FolderOpen, Image as ImageIcon, Info } from "lucide-react";
 import { C } from "../../lib/theme";
 import { Label } from "../ui";
 import { TagPill } from "../Tagpill";
@@ -14,11 +14,9 @@ interface PreviewCardProps {
   keyValue: string;
   bpm: string;
   catalogId: string;
-  status: string;
   tags: string[];
   coverImage: string | null;
   previewPath: string;
-  onSelectCover: () => void;
 }
 
 export const PreviewCard = memo(function PreviewCard({
@@ -26,11 +24,9 @@ export const PreviewCard = memo(function PreviewCard({
   keyValue,
   bpm,
   catalogId,
-  status,
   tags,
   coverImage,
   previewPath,
-  onSelectCover,
 }: PreviewCardProps) {
   const previewTitle = title || "SONGNAME";
   const previewKey = keyValue || "—";
@@ -48,13 +44,11 @@ export const PreviewCard = memo(function PreviewCard({
         boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
         border: `1px solid ${C.border10}`
       }}>
-        {/* Cover */}
+        {/* Cover (auto-detected from source folder) */}
         <div
-          onClick={onSelectCover}
           style={{
             position: "relative", paddingBottom: "100%",
             background: C.surfaceContainerHighest,
-            cursor: "pointer",
           }}
         >
           {/* Gradient Overlay */}
@@ -97,8 +91,8 @@ export const PreviewCard = memo(function PreviewCard({
               alignItems: "center", justifyContent: "center",
               gap: 8, zIndex: 3, pointerEvents: "none"
             }}>
-              <ImagePlus size={24} color={C.onSurfaceVariant} strokeWidth={1.5} style={{ opacity: 0.5 }} />
-              <span style={{ color: C.onSurfaceVariant, fontSize: 10, opacity: 0.5 }}>Click to select cover</span>
+              <ImageIcon size={24} color={C.onSurfaceVariant} strokeWidth={1.5} style={{ opacity: 0.5 }} />
+              <span style={{ color: C.onSurfaceVariant, fontSize: 10, opacity: 0.5 }}>No cover in source folder</span>
             </div>
           )}
 

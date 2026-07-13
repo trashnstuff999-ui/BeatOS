@@ -6,7 +6,7 @@
 import { useState, useMemo } from "react";
 import { Grid3X3, Search } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
-import { sortTagsByCategory, type TagCategory, type CustomTag } from "../../lib/tags";
+import { sortTagsByCategory, type CustomTag } from "../../lib/tags";
 import { Card, Label } from "../ui";
 import { TagPill, TagCategoryRow } from "../Tagpill";
 

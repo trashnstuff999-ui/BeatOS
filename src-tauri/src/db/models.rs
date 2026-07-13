@@ -140,15 +140,6 @@ pub struct DuplicateCheckResult {
     pub existing_name: Option<String>,
 }
 
-/// Ergebnis eines Archive-Vorgangs
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ArchiveResult {
-    pub success: bool,
-    pub beat_id: String,
-    pub archive_path: String,
-    pub message: String,
-}
-
 /// Scan-Ergebnis für Archive-Import
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanResult {

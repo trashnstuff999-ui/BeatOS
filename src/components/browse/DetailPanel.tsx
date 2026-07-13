@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
-import { X, Heart, FolderOpen, Music, Plus, Edit3 } from "lucide-react";
+import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -33,6 +33,7 @@ interface DetailPanelProps {
   onOpenEditModal: (beat: Beat) => void;
   preloadedCoverUrl?: string | null;
   onUpdateTags?: (beatId: string, tags: string[]) => void;
+  onDelete?: (beat: Beat) => Promise<void>;
 }
 
 export function DetailPanel({
@@ -44,11 +45,34 @@ export function DetailPanel({
   onOpenEditModal,
   preloadedCoverUrl,
   onUpdateTags,
+  onDelete,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
   const { openTagManager } = useTagManager();
 
   const [localTags, setLocalTags] = useState<string[]>(parseTags(beat.tags));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConfirmDelete(false);
+    setIsDeleting(false);
+    setDeleteError(null);
+  }, [beat.id]);
+
+  const handleDeleteConfirm = async () => {
+    if (!onDelete || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDelete(beat);
+      // Parent will close panel via selection clear; nothing further needed here.
+    } catch (e) {
+      setDeleteError(String(e));
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     setLocalTags(parseTags(beat.tags));
@@ -243,13 +267,14 @@ export function DetailPanel({
                 onClick={handleOpenTagManager}
                 style={{
                   padding: "4px 10px", borderRadius: 9999,
-                  border: `1px dashed ${C.border30}`,
-                  background: "transparent", cursor: "pointer",
-                  fontSize: 11, fontWeight: 600, color: C.primary,
+                  border: `1px solid ${C.border20}`,
+                  background: C.surfaceContainerLow, cursor: "pointer",
+                  fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant,
                   display: "flex", alignItems: "center", gap: 4,
+                  letterSpacing: "0.05em", textTransform: "uppercase",
                 }}>
-                <Plus size={11} strokeWidth={2.5} />
-                Add Tag
+                <Tag size={10} strokeWidth={2} />
+                Tag Manager
               </button>
             </div>
           </div>
@@ -326,11 +351,142 @@ export function DetailPanel({
             <Heart size={20} fill={fav ? C.primary : "none"} color={C.primary} strokeWidth={1.5} />
           </button>
         </div>
+
+        {/* Delete Beat */}
+        {onDelete && (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            style={{
+              width: "100%", padding: "10px 16px",
+              borderRadius: 10,
+              background: "transparent",
+              border: `1px solid ${DELETE_BORDER}`,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontSize: 11, fontWeight: 700, color: DELETE_COLOR,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              marginTop: 4,
+            }}
+          >
+            <Trash2 size={13} strokeWidth={1.75} />
+            Delete Beat
+          </button>
+        )}
       </div>
+
+      {/* ── Delete Confirmation Overlay ─────────────────────────────────────── */}
+      {confirmDelete && (
+        <div
+          onClick={() => !isDeleting && setConfirmDelete(false)}
+          style={{
+            position: "absolute", inset: 0, zIndex: 30,
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 340,
+              background: C.surfaceContainer,
+              borderRadius: 12,
+              border: `1px solid ${C.border20}`,
+              padding: 20,
+              display: "flex", flexDirection: "column", gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{
+                width: 36, height: 36, flexShrink: 0,
+                borderRadius: 8,
+                background: `${DELETE_COLOR}22`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <AlertTriangle size={18} color={DELETE_COLOR} strokeWidth={2} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface, marginBottom: 4 }}>
+                  Delete this beat?
+                </div>
+                <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+                  <strong style={{ color: C.onSurface }}>#{beat.id}</strong> — {beat.name}
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              padding: 10, borderRadius: 8,
+              background: C.surfaceContainerLow,
+              fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5,
+            }}>
+              The folder will be moved to the system <strong style={{ color: C.onSurface }}>Recycle Bin</strong> and the entry removed from the library. You can restore the files from the Recycle Bin if needed.
+              {beat.path && (
+                <div style={{
+                  marginTop: 8, fontSize: 10, fontFamily: "monospace",
+                  color: C.onSecondaryFixedVar, wordBreak: "break-all",
+                }}>
+                  {beat.path}
+                </div>
+              )}
+            </div>
+
+            {deleteError && (
+              <div style={{
+                padding: 10, borderRadius: 8,
+                background: `${DELETE_COLOR}15`,
+                border: `1px solid ${DELETE_BORDER}`,
+                fontSize: 11, color: DELETE_COLOR, lineHeight: 1.5,
+                whiteSpace: "pre-wrap",
+              }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={isDeleting}
+                style={{
+                  flex: 1, padding: "10px 12px",
+                  borderRadius: 8,
+                  background: C.surfaceContainerHigh,
+                  border: `1px solid ${C.border20}`,
+                  cursor: isDeleting ? "not-allowed" : "pointer",
+                  fontSize: 12, fontWeight: 700, color: C.onSurface,
+                  opacity: isDeleting ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                style={{
+                  flex: 1, padding: "10px 12px",
+                  borderRadius: 8,
+                  background: DELETE_COLOR,
+                  border: "none",
+                  cursor: isDeleting ? "wait" : "pointer",
+                  fontSize: 12, fontWeight: 700, color: "#fff",
+                  opacity: isDeleting ? 0.7 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}
+              >
+                <Trash2 size={13} strokeWidth={2} />
+                {isDeleting ? "Deleting…" : "Move to Recycle Bin"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </aside>
   );
 }
+
+const DELETE_COLOR = "#e5484d";
+const DELETE_BORDER = "rgba(229,72,77,0.35)";
 
 const labelStyle: React.CSSProperties = {
   fontSize: 10,

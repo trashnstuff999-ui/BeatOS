@@ -10,10 +10,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = [
-  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
-] as const;
+function getMonthName(monthIndex: number): string {
+  return new Date(2000, monthIndex, 1)
+    .toLocaleString("en-US", { month: "long" })
+    .toUpperCase();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────────
 // Dialog Functions
@@ -37,30 +38,6 @@ export async function selectBeatFolder(): Promise<string | null> {
   }
 }
 
-/**
- * Open file picker for cover image
- * @returns Selected file path or null if cancelled
- */
-export async function selectCoverImage(): Promise<string | null> {
-  try {
-    const selected = await open({
-      directory: false,
-      multiple: false,
-      title: "Select Cover Image",
-      filters: [
-        {
-          name: "Images",
-          extensions: ["jpg", "jpeg", "png", "webp", "gif"],
-        },
-      ],
-    });
-    return selected as string | null;
-  } catch (err) {
-    console.error("Failed to open file dialog:", err);
-    return null;
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────────
 // Helper Functions
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -75,7 +52,7 @@ export function getYearMonthFolder(date: Date | string): string {
   const year = d.getFullYear();
   const month = d.getMonth(); // 0-indexed
   const monthNum = String(month + 1).padStart(2, "0");
-  const monthName = MONTH_NAMES[month];
+  const monthName = getMonthName(month);
   return `${year}/${monthNum}_${monthName}`;
 }
 

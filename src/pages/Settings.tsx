@@ -3,11 +3,12 @@
 // Settings Page — configure paths and app preferences
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image } from "lucide-react";
+import { FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail, Instagram, Music2, Youtube, ShoppingBag } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
 import { useSettings } from "../contexts/SettingsContext";
+import type { AppSettings } from "../contexts/SettingsContext";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -124,32 +125,109 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
   );
 }
 
+// ─── Text Input (non-path settings) ─────────────────────────────────────────
+
+function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospace, multiline }: {
+  label: string;
+  icon: React.ElementType;
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+  monospace?: boolean;
+  multiline?: boolean;
+}) {
+  const hasValue = value.trim().length > 0;
+  return (
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>
+        {label}
+      </label>
+      <div style={{
+        display: "flex",
+        alignItems: multiline ? "flex-start" : "center",
+        gap: 10,
+        background: C.surfaceContainerHighest,
+        border: `1px solid ${hasValue ? C.primary + "40" : C.border20}`,
+        borderRadius: 8,
+        padding: multiline ? "10px 14px" : "0 14px",
+        transition: "border-color 0.15s",
+      }}>
+        <Icon size={14} color={hasValue ? C.primary : C.onSurfaceVariant} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: multiline ? 4 : 0 }} />
+        {multiline ? (
+          <textarea
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            rows={3}
+            style={{
+              flex: 1,
+              padding: "2px 0",
+              fontSize: 12,
+              fontFamily: monospace ? "monospace" : "inherit",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              resize: "vertical",
+              minHeight: 60,
+              color: hasValue ? C.onSurface : C.onSurfaceVariant,
+            }}
+          />
+        ) : (
+          <input
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            style={{
+              ...commonStyles.input,
+              flex: 1,
+              padding: "12px 0",
+              fontSize: 12,
+              fontFamily: monospace ? "monospace" : "inherit",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: hasValue ? C.onSurface : C.onSurfaceVariant,
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type Draft = AppSettings;
+
 export function Settings() {
-  const { settings, updateSettings } = useSettings();
+  const { settings, isLoaded, updateSettings } = useSettings();
 
   // Local draft state — only applied on Save
-  const [archivePath, setArchivePath] = useState(settings.archivePath);
-  const [productionPath, setProductionPath] = useState(settings.productionPath);
-  const [assetPath, setAssetPath] = useState(settings.assetPath);
+  const [draft, setDraft] = useState<Draft>(settings);
   const [saved, setSaved] = useState(false);
 
-  const isDirty =
-    archivePath !== settings.archivePath ||
-    productionPath !== settings.productionPath ||
-    assetPath !== settings.assetPath;
+  // The authoritative settings arrive async from SQLite; re-seed the draft
+  // once they are in so a Save can never overwrite the DB with stale
+  // localStorage values.
+  useEffect(() => {
+    if (isLoaded) setDraft(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
+  const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    setDraft(prev => ({ ...prev, [key]: value }));
+  };
+
+  const isDirty = (Object.keys(draft) as Array<keyof Draft>).some(k => draft[k] !== settings[k]);
 
   const handleSave = () => {
-    updateSettings({ archivePath, productionPath, assetPath });
+    updateSettings(draft);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
   const handleReset = () => {
-    setArchivePath(settings.archivePath);
-    setProductionPath(settings.productionPath);
-    setAssetPath(settings.assetPath);
+    setDraft(settings);
   };
 
   return (
@@ -194,7 +272,7 @@ export function Settings() {
           )}
           <button
             onClick={handleSave}
-            disabled={!isDirty}
+            disabled={!isDirty || !isLoaded}
             style={{
               padding: "6px 18px", borderRadius: 6,
               fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
@@ -239,35 +317,98 @@ export function Settings() {
               <PathInput
                 label="Archive Path"
                 icon={Archive}
-                value={archivePath}
+                value={draft.archivePath}
                 placeholder="e.g. D:\Beat Library\03_ARCHIVE"
-                onChange={setArchivePath}
+                onChange={v => update("archivePath", v)}
                 onBrowse={async () => {
                   const p = await pickFolder("Select Archive Folder");
-                  if (p) setArchivePath(p);
+                  if (p) update("archivePath", p);
                 }}
               />
               <PathInput
                 label="Active Production Path"
                 icon={HardDrive}
-                value={productionPath}
+                value={draft.productionPath}
                 placeholder="e.g. D:\Beat Library\01_PRODUCTION"
-                onChange={setProductionPath}
+                onChange={v => update("productionPath", v)}
                 onBrowse={async () => {
                   const p = await pickFolder("Select Active Production Folder");
-                  if (p) setProductionPath(p);
+                  if (p) update("productionPath", p);
                 }}
               />
               <PathInput
                 label="Asset Path"
                 icon={Image}
-                value={assetPath}
+                value={draft.assetPath}
                 placeholder="e.g. D:\Beat Library\04_ASSETS\Covers"
-                onChange={setAssetPath}
+                onChange={v => update("assetPath", v)}
                 onBrowse={async () => {
                   const p = await pickFolder("Select Asset Folder");
-                  if (p) setAssetPath(p);
+                  if (p) update("assetPath", p);
                 }}
+              />
+            </div>
+          </Section>
+
+          {/* Producer Info — used by Upload-tab template generation */}
+          <Section
+            title="Producer Info"
+            description="Used by the Upload tab to generate Beatstars, SoundCloud and YouTube descriptions."
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <TextSetting
+                label="Producer Name"
+                icon={User}
+                value={draft.producerName}
+                placeholder="e.g. goodbxy"
+                onChange={v => update("producerName", v)}
+              />
+              <TextSetting
+                label="Contact Email"
+                icon={Mail}
+                value={draft.contactEmail}
+                placeholder="e.g. contact@prod404.com"
+                onChange={v => update("contactEmail", v)}
+              />
+              <TextSetting
+                label="Instagram URL"
+                icon={Instagram}
+                value={draft.instagramUrl}
+                placeholder="https://instagram.com/prod.goodbxy"
+                onChange={v => update("instagramUrl", v)}
+                monospace
+              />
+              <TextSetting
+                label="SoundCloud URL"
+                icon={Music2}
+                value={draft.soundcloudUrl}
+                placeholder="https://soundcloud.com/prodgoodbxy"
+                onChange={v => update("soundcloudUrl", v)}
+                monospace
+              />
+              <TextSetting
+                label="YouTube URL"
+                icon={Youtube}
+                value={draft.youtubeUrl}
+                placeholder="https://youtube.com/@PROD.GOODBXY"
+                onChange={v => update("youtubeUrl", v)}
+                monospace
+              />
+              <TextSetting
+                label="Beatstars URL"
+                icon={ShoppingBag}
+                value={draft.beatstarsUrl}
+                placeholder="https://beatstars.com/prodgoodbxy"
+                onChange={v => update("beatstarsUrl", v)}
+                monospace
+              />
+              <TextSetting
+                label="Default SoundCloud Tags"
+                icon={Music2}
+                value={draft.defaultGenreTags}
+                placeholder={"Hip Hop & Rap, Melodic Trap, Emo Trap"}
+                onChange={v => update("defaultGenreTags", v)}
+                multiline
               />
             </div>
           </Section>

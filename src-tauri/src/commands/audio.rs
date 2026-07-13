@@ -123,118 +123,96 @@ pub fn read_audio_file(file_path: String) -> Result<String, String> {
     Ok(format!("data:{};base64,{}", mime_type, encoded))
 }
 
-/// Get cover image path for a beat
+/// Get cover image path for a beat.
+/// Searches beat root first (new flat layout), then 02_VISUALS/ for legacy archives.
 #[tauri::command]
 pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> {
     let base_path = Path::new(&beat_path);
-    let visuals_dir = base_path.join("02_VISUALS");
-    
-    let search_dirs = if visuals_dir.exists() {
-        vec![visuals_dir]
-    } else {
-        vec![base_path.to_path_buf()]
-    };
-    
     let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
-    
-    for dir in search_dirs {
-        if !dir.exists() {
-            continue;
-        }
-        
-        let entries: Vec<_> = match std::fs::read_dir(&dir) {
-            Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
-            Err(_) => continue,
-        };
-        
-        let images: Vec<_> = entries.into_iter()
-            .filter(|e| {
-                let path = e.path();
-                if !path.is_file() { return false; }
+
+    let mut images: Vec<std::fs::DirEntry> = Vec::new();
+    for dir in [base_path.to_path_buf(), base_path.join("02_VISUALS")] {
+        if !dir.exists() { continue; }
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for entry in rd.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if !path.is_file() { continue; }
                 if let Some(ext) = path.extension() {
                     let ext_lower = ext.to_string_lossy().to_lowercase();
-                    image_extensions.contains(&ext_lower.as_str())
-                } else {
-                    false
-                }
-            })
-            .collect();
-        
-        if images.is_empty() {
-            continue;
-        }
-        
-        // Priority 1: file with "cover" in name
-        for entry in &images {
-            let name = entry.file_name().to_string_lossy().to_lowercase();
-            if name.contains("cover") {
-                return Ok(Some(entry.path().to_string_lossy().to_string()));
-            }
-        }
-        
-        // Priority 2: file with beat name in it
-        if let Some(beat_folder_name) = base_path.file_name() {
-            let beat_name = beat_folder_name.to_string_lossy().to_lowercase();
-            let name_part = beat_name.split('[').next().unwrap_or(&beat_name).trim();
-            let clean_name = if let Some(pos) = name_part.find(" - ") {
-                &name_part[pos + 3..]
-            } else {
-                name_part
-            }.trim().to_lowercase();
-            
-            for entry in &images {
-                let file_name = entry.file_name().to_string_lossy().to_lowercase();
-                if file_name.contains(&clean_name) {
-                    return Ok(Some(entry.path().to_string_lossy().to_string()));
+                    if image_extensions.contains(&ext_lower.as_str()) {
+                        images.push(entry);
+                    }
                 }
             }
         }
-        
-        // Priority 3: first image file
-        return Ok(Some(images[0].path().to_string_lossy().to_string()));
     }
-    
-    Ok(None)
-}
 
-/// Get cover image as base64 data URL
-#[tauri::command]
-pub fn get_beat_cover_base64(beat_path: String) -> Result<Option<String>, String> {
-    let base_path = Path::new(&beat_path);
-    let visuals_dir = base_path.join("02_VISUALS");
-    
-    if !visuals_dir.exists() {
-        return Ok(None);
-    }
-    
-    let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
-    
-    let entries: Vec<_> = match std::fs::read_dir(&visuals_dir) {
-        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
-        Err(_) => return Ok(None),
-    };
-    
-    let images: Vec<_> = entries.into_iter()
-        .filter(|e| {
-            let path = e.path();
-            if !path.is_file() { return false; }
-            if let Some(ext) = path.extension() {
-                let ext_lower = ext.to_string_lossy().to_lowercase();
-                image_extensions.contains(&ext_lower.as_str())
-            } else {
-                false
-            }
-        })
-        .collect();
-    
     if images.is_empty() {
         return Ok(None);
     }
-    
+
+    // Priority 1: file with "cover" in name
+    for entry in &images {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if name.contains("cover") {
+            return Ok(Some(entry.path().to_string_lossy().to_string()));
+        }
+    }
+
+    // Priority 2: file with beat name in it
+    if let Some(beat_folder_name) = base_path.file_name() {
+        let beat_name = beat_folder_name.to_string_lossy().to_lowercase();
+        let name_part = beat_name.split('[').next().unwrap_or(&beat_name).trim();
+        let clean_name = if let Some(pos) = name_part.find(" - ") {
+            &name_part[pos + 3..]
+        } else {
+            name_part
+        }.trim().to_lowercase();
+
+        for entry in &images {
+            let file_name = entry.file_name().to_string_lossy().to_lowercase();
+            if file_name.contains(&clean_name) {
+                return Ok(Some(entry.path().to_string_lossy().to_string()));
+            }
+        }
+    }
+
+    // Priority 3: first image file
+    Ok(Some(images[0].path().to_string_lossy().to_string()))
+}
+
+/// Get cover image as base64 data URL.
+/// Searches beat root first (new flat layout), then 02_VISUALS/ for legacy archives.
+#[tauri::command]
+pub fn get_beat_cover_base64(beat_path: String) -> Result<Option<String>, String> {
+    let base_path = Path::new(&beat_path);
+    let image_extensions = ["jpg", "jpeg", "png", "webp", "gif"];
+
+    let mut images: Vec<std::fs::DirEntry> = Vec::new();
+    for dir in [base_path.to_path_buf(), base_path.join("02_VISUALS")] {
+        if !dir.exists() { continue; }
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for entry in rd.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if !path.is_file() { continue; }
+                if let Some(ext) = path.extension() {
+                    let ext_lower = ext.to_string_lossy().to_lowercase();
+                    if image_extensions.contains(&ext_lower.as_str()) {
+                        images.push(entry);
+                    }
+                }
+            }
+        }
+    }
+
+    if images.is_empty() {
+        return Ok(None);
+    }
+
     let cover_file = images.iter()
         .find(|e| e.file_name().to_string_lossy().to_lowercase().contains("cover"))
         .or_else(|| images.first());
-    
+
     let cover_path = match cover_file {
         Some(e) => e.path(),
         None => return Ok(None),

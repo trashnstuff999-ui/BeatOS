@@ -1,7 +1,7 @@
 // src/components/Sidebar.tsx
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, LibraryBig, PlusSquare, Music, Settings, HelpCircle } from "lucide-react";
+import { LayoutGrid, LibraryBig, PlusSquare, Music, Upload as UploadIcon, Settings, HelpCircle } from "lucide-react";
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 
@@ -9,6 +9,7 @@ const NAV = [
   { to: "/",       icon: LayoutGrid,  label: "Dashboard" },
   { to: "/browse", icon: LibraryBig,  label: "Browse"    },
   { to: "/create", icon: PlusSquare,  label: "Create"    },
+  { to: "/upload", icon: UploadIcon,  label: "Upload"    },
   { to: "/studio", icon: Music,       label: "Studio"    },
 ];
 

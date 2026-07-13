@@ -3,7 +3,7 @@
 // Global Audio Player Context — one instance for the entire app
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Beat } from "../types/browse";
@@ -27,9 +27,6 @@ interface AudioPlayerContextValue {
   isLooped: boolean;
   isMuted: boolean;
   volume: number;
-  progress: number;
-  currentTimeFormatted: string;
-  durationFormatted: string;
   error: string | null;
   playBeat: (beat: Beat, preloadedCoverUrl?: string | null) => void;
   togglePlay: () => void;
@@ -39,7 +36,16 @@ interface AudioPlayerContextValue {
   setVolume: (vol: number) => void;
 }
 
+// The 100 ms playback tick lives in its own context so only the player bar
+// re-renders during playback — everything else consumes the stable context.
+interface AudioProgressContextValue {
+  progress: number;
+  currentTimeFormatted: string;
+  durationFormatted: string;
+}
+
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
+const AudioProgressContext = createContext<AudioProgressContextValue | null>(null);
 
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -144,6 +150,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
     return () => {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      audio.removeEventListener("canplaythrough", onReady);
       audio.removeEventListener("loadedmetadata", onMeta);
       audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("error", onError);
@@ -183,18 +190,27 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   const setVolume = useCallback((vol: number) => setVolumeState(Math.max(0, Math.min(1, vol))), []);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const playerValue = useMemo<AudioPlayerContextValue>(() => ({
+    currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
+    volume, error,
+    playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+  }), [
+    currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
+    volume, error,
+    playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+  ]);
+
+  const progressValue = useMemo<AudioProgressContextValue>(() => ({
+    progress: duration > 0 ? (currentTime / duration) * 100 : 0,
+    currentTimeFormatted: formatTime(currentTime),
+    durationFormatted: formatTime(duration),
+  }), [currentTime, duration]);
 
   return (
-    <AudioPlayerContext.Provider value={{
-      currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
-      volume, progress,
-      currentTimeFormatted: formatTime(currentTime),
-      durationFormatted: formatTime(duration),
-      error,
-      playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
-    }}>
-      {children}
+    <AudioPlayerContext.Provider value={playerValue}>
+      <AudioProgressContext.Provider value={progressValue}>
+        {children}
+      </AudioProgressContext.Provider>
     </AudioPlayerContext.Provider>
   );
 }
@@ -202,5 +218,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 export function useAudioPlayerContext() {
   const ctx = useContext(AudioPlayerContext);
   if (!ctx) throw new Error("useAudioPlayerContext must be used within AudioPlayerProvider");
+  return ctx;
+}
+
+export function useAudioProgress() {
+  const ctx = useContext(AudioProgressContext);
+  if (!ctx) throw new Error("useAudioProgress must be used within AudioPlayerProvider");
   return ctx;
 }

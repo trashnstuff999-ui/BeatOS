@@ -161,28 +161,89 @@ fn parse_name_key_bpm(id: &str, remainder: &str) -> Option<(String, String, Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
+    // ─── parse_audio_filename ────────────────────────────────────────────────
+
     #[test]
-    fn test_parse_audio_filename() {
+    fn test_audio_key_before_bpm() {
         let (name, key, bpm) = parse_audio_filename("Midnight Drift [Cm 140].wav");
         assert_eq!(name, "Midnight Drift");
         assert_eq!(key, Some("Cm".to_string()));
         assert_eq!(bpm, Some(140));
-        
+    }
+
+    #[test]
+    fn test_audio_bpm_before_key_with_suffix() {
         let (name, key, bpm) = parse_audio_filename("Trap Beat [165 F#m]_untagged.mp3");
         assert_eq!(name, "Trap Beat");
         assert_eq!(key, Some("F#m".to_string()));
         assert_eq!(bpm, Some(165));
     }
-    
+
     #[test]
-    fn test_parse_beat_folder() {
-        let result = parse_beat_folder("#0870 PIECES [Bm 135]");
-        assert!(result.is_some());
-        let (id, name, key, bpm) = result.unwrap();
+    fn test_audio_bpm_only() {
+        let (name, key, bpm) = parse_audio_filename("Dark Vibes [140].wav");
+        assert_eq!(name, "Dark Vibes");
+        assert_eq!(key, None);
+        assert_eq!(bpm, Some(140));
+    }
+
+    #[test]
+    fn test_audio_no_bracket() {
+        let (name, key, bpm) = parse_audio_filename("Unnamed Beat.mp3");
+        assert_eq!(name, "Unnamed Beat");
+        assert_eq!(key, None);
+        assert_eq!(bpm, None);
+    }
+
+    #[test]
+    fn test_audio_bpm_out_of_range_ignored() {
+        // BPM must be 40-300; 10 should not be parsed as BPM
+        let (_name, _key, bpm) = parse_audio_filename("Test [10].wav");
+        assert_eq!(bpm, None);
+    }
+
+    // ─── parse_beat_folder ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_folder_hash_prefix() {
+        let (id, name, key, bpm) = parse_beat_folder("#0870 PIECES [Bm 135]").unwrap();
         assert_eq!(id, "0870");
         assert_eq!(name, "PIECES");
         assert_eq!(key, Some("Bm".to_string()));
         assert_eq!(bpm, Some(135.0));
+    }
+
+    #[test]
+    fn test_folder_dash_separator() {
+        let (id, name, key, bpm) = parse_beat_folder("0042 - Dark Summer [Am 128]").unwrap();
+        assert_eq!(id, "0042");
+        assert_eq!(name, "Dark Summer");
+        assert_eq!(key, Some("Am".to_string()));
+        assert_eq!(bpm, Some(128.0));
+    }
+
+    #[test]
+    fn test_folder_no_key_or_bpm() {
+        let (id, name, key, bpm) = parse_beat_folder("0001 - Untitled").unwrap();
+        assert_eq!(id, "0001");
+        assert_eq!(name, "Untitled");
+        assert_eq!(key, None);
+        assert_eq!(bpm, None);
+    }
+
+    #[test]
+    fn test_folder_invalid_returns_none() {
+        assert!(parse_beat_folder("not a valid folder name").is_none());
+        assert!(parse_beat_folder("").is_none());
+    }
+
+    #[test]
+    fn test_folder_bpm_only_in_brackets() {
+        let (id, name, key, bpm) = parse_beat_folder("0010 - Bounce [140]").unwrap();
+        assert_eq!(id, "0010");
+        assert_eq!(name, "Bounce");
+        assert_eq!(key, None);
+        assert_eq!(bpm, Some(140.0));
     }
 }

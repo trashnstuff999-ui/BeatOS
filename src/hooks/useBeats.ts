@@ -43,6 +43,7 @@ interface UseBeatsReturn {
   toggleFavorite: (beatId: string) => Promise<void>;
   updateStatus: (beatId: string, status: BeatStatus) => Promise<void>;
   updateBeat: (params: UpdateBeatParams) => Promise<void>;
+  deleteBeat: (beatId: string, archiveBasePath: string) => Promise<{ folder_trashed: boolean }>;
   getCoverUrl: (beatId: string) => string | null;
 }
 
@@ -274,7 +275,12 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
 
   // ─── Update Beat (Full) ────────────────────────────────────────────────────
   const updateBeat = useCallback(async (params: UpdateBeatParams) => {
-    await invoke("update_beat", { params });
+    try {
+      await invoke("update_beat", { params });
+    } catch (e) {
+      console.error("[useBeats] Failed to update beat:", e);
+      return;
+    }
     // Reload to get fresh data
     loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
   }, [filters, sort, pagination.page, pagination.pageSize, loadBeatsInternal]);
@@ -283,6 +289,20 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   const refresh = useCallback(async () => {
     await loadBeatsInternal(filters, sort, pagination.page, pagination.pageSize);
   }, [filters, sort, pagination.page, pagination.pageSize, loadBeatsInternal]);
+
+  // ─── Delete Beat (folder -> recycle bin, then DB row) ──────────────────────
+  const deleteBeat = useCallback(async (beatId: string, archiveBasePath: string) => {
+    const result = await invoke<{ folder_trashed: boolean }>("delete_beat", {
+      beatId,
+      archiveBasePath,
+    });
+    setBeats(prev => prev.filter(b => b.id !== beatId));
+    if (selectedBeatIdRef.current === beatId) {
+      setSelectedBeat(null);
+    }
+    setPagination(prev => ({ ...prev, totalCount: Math.max(0, prev.totalCount - 1) }));
+    return result;
+  }, []);
 
   return {
     beats,
@@ -303,6 +323,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     toggleFavorite,
     updateStatus,
     updateBeat,
+    deleteBeat,
     getCoverUrl,
   };
 }

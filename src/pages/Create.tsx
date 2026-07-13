@@ -29,7 +29,7 @@ import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
 import { C } from "../lib/theme";
-import { selectBeatFolder, selectCoverImage, generatePreviewPath, getYearMonthFolder } from "../lib/archive";
+import { selectBeatFolder, generatePreviewPath, getYearMonthFolder } from "../lib/archive";
 
 // ─── Type Imports ───────────────────────────────────────────────────────────
 import type {
@@ -66,9 +66,8 @@ export default function Create() {
   const tagsHook = useTags();
   const { tags, clearTags } = tagsHook;
 
-  // ─── Cover State ───────────────────────────────────────────────────────────
+  // ─── Cover State (auto-detected from source folder, display only) ─────────
   const [coverImage, setCoverImage] = useState<string | null>(null);
-  const [coverSourcePath, setCoverSourcePath] = useState<string | null>(null);
 
   // ─── Tag Manager ───────────────────────────────────────────────────────────
   const { openTagManager } = useTagManager();
@@ -99,7 +98,6 @@ export default function Create() {
     setAudioFiles([]);
     setFlpFiles([]);
     setCoverImage(null);
-    setCoverSourcePath(null);
     clearTags();
     setParseError(null);
   }, [clearTags]);
@@ -126,7 +124,6 @@ export default function Create() {
     notes,
     selectedFile,
     selectedFlp,
-    coverSourcePath,
     yearMonth,
     onReset: handleReset,
     setCatalogId,
@@ -192,18 +189,17 @@ export default function Create() {
         setSelectedFlp("");
       }
 
-      // Cover
+      // Cover (auto-detected from source folder — display only)
       if (parsed.cover_path) {
-        setCoverSourcePath(parsed.cover_path);
         try {
           const coverBase64 = await invoke<string>("read_image_file", { filePath: parsed.cover_path });
           setCoverImage(coverBase64);
         } catch (err) {
           console.error("Failed to load cover:", err);
+          setCoverImage(null);
         }
       } else {
         setCoverImage(null);
-        setCoverSourcePath(null);
       }
 
       setParseError(null);
@@ -212,20 +208,6 @@ export default function Create() {
       setParseError(String(err));
     } finally {
       setIsLoading(false);
-    }
-  }, []);
-
-  // ─── Cover Selection Handler ───────────────────────────────────────────────
-  const handleSelectCover = useCallback(async () => {
-    const filePath = await selectCoverImage();
-    if (!filePath) return;
-
-    setCoverSourcePath(filePath);
-    try {
-      const coverBase64 = await invoke<string>("read_image_file", { filePath });
-      setCoverImage(coverBase64);
-    } catch (err) {
-      console.error("Failed to load cover:", err);
     }
   }, []);
 
@@ -317,11 +299,9 @@ export default function Create() {
               keyValue={key}
               bpm={bpm}
               catalogId={catalogId}
-              status={status}
               tags={tags}
               coverImage={coverImage}
               previewPath={previewPath}
-              onSelectCover={handleSelectCover}
             />
           </div>
         </div>

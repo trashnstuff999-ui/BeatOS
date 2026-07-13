@@ -10,16 +10,17 @@ import {
 } from "lucide-react";
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
-import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
+import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
 
 const PLAYER_HEIGHT = 80;
 
 export function GlobalAudioPlayer() {
   const {
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
-    volume, progress, currentTimeFormatted, durationFormatted, error,
+    volume, error,
     togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
   } = useAudioPlayerContext();
+  const { progress, currentTimeFormatted, durationFormatted } = useAudioProgress();
 
   const seekBarRef = useRef<HTMLDivElement>(null);
   const volumeBarRef = useRef<HTMLDivElement>(null);

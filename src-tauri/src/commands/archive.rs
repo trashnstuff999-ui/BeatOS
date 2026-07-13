@@ -5,8 +5,8 @@
 
 use crate::db::{open_db, DuplicateCheckResult, ScanResult};
 use crate::utils::{
-    secs_to_date, file_created_secs, file_modified_secs, 
-    is_audio_extension, is_image_extension
+    secs_to_date, file_created_secs, file_modified_secs,
+    is_audio_extension, is_image_extension, is_video_extension, unique_dest,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -35,7 +35,6 @@ pub struct ArchiveBeatParams {
     pub notes: String,
     pub source_audio_path: String,
     pub source_flp_path: String,
-    pub cover_path: Option<String>,
     pub year_month: String,
     pub archive_base_path: String,
 }
@@ -80,6 +79,16 @@ fn file_accessed_secs(path: &Path) -> Option<u64> {
     let meta = std::fs::metadata(path).ok()?;
     let sys_time = meta.accessed().ok()?;
     Some(sys_time.duration_since(UNIX_EPOCH).ok()?.as_secs())
+}
+
+/// Resolve the FLP subdirectory of a beat: `01_SAVEFILES/` (current) takes
+/// precedence over `03_PROJECTS/` (legacy). Returns None if neither exists.
+fn flp_subdir(beat_root: &Path) -> Option<PathBuf> {
+    let candidates = [
+        beat_root.join("01_SAVEFILES"),
+        beat_root.join("03_PROJECTS"),
+    ];
+    candidates.into_iter().find(|p| p.is_dir())
 }
 
 fn copy_and_verify(source: &Path, dest: &Path) -> Result<(), String> {
@@ -315,152 +324,95 @@ pub fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, Stri
         (None, None) => String::new(),
     };
     
-    let folder_name = format!(
-        "{:04} - {} {}",
-        params.catalog_id,
-        params.title,
-        key_bpm
-    ).trim().to_string();
-    
+    // Titles come from user input / parsed filenames — strip anything Windows
+    // refuses in a folder name before building the path.
+    let safe_title = crate::utils::sanitize_filename_part(&params.title);
+    let folder_name = crate::utils::sanitize_filename_part(
+        format!("{:04} - {} {}", params.catalog_id, safe_title, key_bpm).trim(),
+    );
+
     let archive_base = Path::new(&params.archive_base_path);
     let target_path = archive_base
         .join(&params.year_month)
         .join(&folder_name);
-    
+
     if target_path.exists() {
         return Err(format!("Target folder already exists: {:?}", target_path));
     }
-    
-    let audio_dir = target_path.join("01_AUDIO");
-    let visuals_dir = target_path.join("02_VISUALS");
-    let projects_dir = target_path.join("03_PROJECTS");
-    
-    std::fs::create_dir_all(&audio_dir)
-        .map_err(|e| format!("Cannot create 01_AUDIO: {}", e))?;
-    std::fs::create_dir_all(&visuals_dir)
-        .map_err(|e| format!("Cannot create 02_VISUALS: {}", e))?;
-    std::fs::create_dir_all(&projects_dir)
-        .map_err(|e| format!("Cannot create 03_PROJECTS: {}", e))?;
-    
+
+    let savefiles_dir = target_path.join("01_SAVEFILES");
+
+    // Everything from here on creates state on disk. If any step fails, the
+    // half-written target folder is removed so no orphan archive remains.
+    let result = archive_beat_inner(&params, source_path, &target_path, &savefiles_dir);
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&target_path);
+    }
+    result
+}
+
+fn archive_beat_inner(
+    params: &ArchiveBeatParams,
+    source_path: &Path,
+    target_path: &Path,
+    savefiles_dir: &Path,
+) -> Result<ArchiveResultFull, String> {
+    std::fs::create_dir_all(target_path)
+        .map_err(|e| format!("Cannot create target folder: {}", e))?;
+    std::fs::create_dir_all(savefiles_dir)
+        .map_err(|e| format!("Cannot create 01_SAVEFILES: {}", e))?;
+
     let mut files_copied = 0;
     let mut file_metadata: Vec<FileMetadata> = Vec::new();
-    
+
     let entries: Vec<_> = std::fs::read_dir(source_path)
         .map_err(|e| format!("Cannot read source folder: {}", e))?
         .filter_map(|e| e.ok())
         .collect();
-    
-    let selected_cover = params.cover_path.as_ref().map(|p| Path::new(p));
-    
-    let new_name_base = match (&params.key, params.bpm) {
-        (Some(k), Some(b)) => format!("{} [{} {}]", params.title, k, b),
-        (Some(k), None) => format!("{} [{}]", params.title, k),
-        (None, Some(b)) => format!("{} [{}]", params.title, b),
-        (None, None) => params.title.clone(),
-    };
-    
-    let mut cover_count = 0;
-    
-    // External cover handling
-    if let Some(cover_path_str) = &params.cover_path {
-        let cover_path = Path::new(cover_path_str);
-        let is_external = !cover_path.starts_with(source_path);
-        
-        if is_external && cover_path.exists() {
-            let ext = cover_path.extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("png")
-                .to_lowercase();
-            
-            let cover_name = format!("{}_COVER.{}", params.title, ext);
-            let dest = visuals_dir.join(&cover_name);
-            
-            copy_and_verify(cover_path, &dest)?;
-            files_copied += 1;
-            
-            let created = file_created_secs(cover_path).unwrap_or(0);
-            let modified = file_modified_secs(cover_path).unwrap_or(0);
-            let accessed = file_accessed_secs(cover_path).unwrap_or(0);
-            
-            file_metadata.push(FileMetadata {
-                original_path: cover_path_str.clone(),
-                created_at: secs_to_date(created),
-                modified_at: secs_to_date(modified),
-                accessed_at: secs_to_date(accessed),
-            });
-        }
-    }
-    
+
     for entry in entries {
         let path = entry.path();
         let file_name = match path.file_name().and_then(|n| n.to_str()) {
             Some(n) => n.to_string(),
             None => continue,
         };
-        
+
         let created = file_created_secs(&path).unwrap_or(0);
         let modified = file_modified_secs(&path).unwrap_or(0);
         let accessed = file_accessed_secs(&path).unwrap_or(0);
-        
+
         file_metadata.push(FileMetadata {
             original_path: path.to_string_lossy().to_string(),
             created_at: secs_to_date(created),
             modified_at: secs_to_date(modified),
             accessed_at: secs_to_date(accessed),
         });
-        
+
         if path.is_dir() {
-            let dest = projects_dir.join(&file_name);
+            let dest = unique_dest(&savefiles_dir, &file_name);
             files_copied += copy_dir_recursive(&path, &dest)?;
         } else {
             let ext = path.extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("")
                 .to_lowercase();
-            
-            if is_audio_extension(&ext) {
-                let dest = audio_dir.join(&file_name);
-                copy_and_verify(&path, &dest)?;
-                files_copied += 1;
-            } else if is_image_extension(&ext) {
-                let is_selected_cover = selected_cover
-                    .map(|c| c == path)
-                    .unwrap_or(false);
-                
-                let has_external_cover = params.cover_path.as_ref()
-                    .map(|cp| !Path::new(cp).starts_with(source_path))
-                    .unwrap_or(false);
-                
-                let new_name = if is_selected_cover && !has_external_cover {
-                    format!("{}_COVER.{}", params.title, ext)
-                } else {
-                    cover_count += 1;
-                    format!("{}_COVER_old{}.{}", params.title, cover_count, ext)
-                };
-                
-                let dest = visuals_dir.join(&new_name);
-                copy_and_verify(&path, &dest)?;
-                files_copied += 1;
-            } else if ext == "flp" {
-                let is_selected = path.to_string_lossy() == params.source_flp_path;
-                let is_master = file_name.to_lowercase().contains("master");
-                
-                let new_name = if is_selected {
-                    format!("{}.flp", new_name_base)
-                } else if is_master {
-                    format!("{}_master.flp", new_name_base)
-                } else {
-                    format!("{}_old.flp", new_name_base)
-                };
-                
-                let dest = projects_dir.join(&new_name);
-                copy_and_verify(&path, &dest)?;
-                files_copied += 1;
+
+            // Flat layout:
+            //   audio / video / image  -> beat root, original name
+            //   flp / everything else  -> 01_SAVEFILES/, original name
+            // No renaming happens here; that's the job of the convert tool.
+            let dest_dir = if is_audio_extension(&ext)
+                || is_video_extension(&ext)
+                || is_image_extension(&ext)
+            {
+                &target_path
             } else {
-                let dest = projects_dir.join(&file_name);
-                copy_and_verify(&path, &dest)?;
-                files_copied += 1;
-            }
+                &savefiles_dir
+            };
+
+            let dest = unique_dest(dest_dir, &file_name);
+            copy_and_verify(&path, &dest)?;
+            files_copied += 1;
         }
     }
     
@@ -479,19 +431,21 @@ pub fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, Stri
     let json_content = serde_json::to_string_pretty(&create_date_json)
         .map_err(|e| format!("Cannot create JSON: {}", e))?;
     
-    std::fs::write(projects_dir.join("create_date.json"), json_content)
+    std::fs::write(savefiles_dir.join("create_date.json"), json_content)
         .map_err(|e| format!("Cannot write create_date.json: {}", e))?;
     
-    // Insert into database
-    let conn = open_db().map_err(|e| e.to_string())?;
-    
+    // Insert into database (transaction; on failure the caller removes the
+    // copied folder so DB and filesystem stay consistent)
+    let mut conn = open_db().map_err(|e| e.to_string())?;
+
     let beat_id = format!("{:04}", params.catalog_id);
     let created_date_str = file_created_secs(Path::new(&params.source_flp_path))
         .map(secs_to_date)
         .unwrap_or_else(|| secs_to_date(now_secs));
-    
-    conn.execute(
-        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date) 
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute(
+        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         rusqlite::params![
             beat_id,
@@ -506,7 +460,15 @@ pub fn archive_beat(params: ArchiveBeatParams) -> Result<ArchiveResultFull, Stri
             secs_to_date(now_secs),
         ],
     ).map_err(|e| format!("DB insert error: {}", e))?;
-    
+    tx.commit().map_err(|e| format!("DB commit error: {}", e))?;
+
+    // Refresh the OneDrive snapshot in the background after a successful write.
+    std::thread::spawn(|| {
+        if let Err(e) = crate::db::backup_db() {
+            eprintln!("WARNING: DB backup failed: {}", e);
+        }
+    });
+
     Ok(ArchiveResultFull {
         success: true,
         archive_path: target_path.to_string_lossy().to_string(),
@@ -577,10 +539,11 @@ pub fn scan_archive() -> Result<ScanResult, String> {
                 found += 1;
                 if existing_ids.contains(&id) { skipped += 1; continue; }
 
-                let projects_path = beat_path.join("03_PROJECTS");
-                let created_date = if projects_path.exists() {
+                // FLPs live in 01_SAVEFILES/ (new) or 03_PROJECTS/ (legacy).
+                let flp_dir = flp_subdir(&beat_path);
+                let created_date = if let Some(dir) = flp_dir {
                     let mut flp_dates: Vec<(SystemTime, PathBuf)> = Vec::new();
-                    if let Ok(entries) = std::fs::read_dir(&projects_path) {
+                    if let Ok(entries) = std::fs::read_dir(&dir) {
                         for e in entries.filter_map(|e| e.ok()) {
                             let p = e.path();
                             if p.extension().and_then(|x| x.to_str()) == Some("flp") {
@@ -661,10 +624,11 @@ pub fn fix_dates() -> Result<FixDatesResult, String> {
         let new_date = date_from_archive_path(&beat_path);
 
         let new_date = if new_date.is_none() {
-            let projects_path = beat_path.join("03_PROJECTS");
-            if projects_path.exists() {
+            // FLPs live in 01_SAVEFILES/ (new) or 03_PROJECTS/ (legacy).
+            let flp_dir = flp_subdir(&beat_path);
+            if let Some(dir) = flp_dir {
                 let mut flp_dates: Vec<(SystemTime, PathBuf)> = Vec::new();
-                if let Ok(entries) = std::fs::read_dir(&projects_path) {
+                if let Ok(entries) = std::fs::read_dir(&dir) {
                     for e in entries.filter_map(|e| e.ok()) {
                         let p = e.path();
                         if p.extension().and_then(|x| x.to_str()) == Some("flp") {

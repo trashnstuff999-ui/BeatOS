@@ -1,10 +1,16 @@
-// src-tauri/src/db/mod.rs
+// src/test/setup.ts
 // ═══════════════════════════════════════════════════════════════════════════════
-// Database Module - Connection & Models
+// Vitest global test setup
 // ═══════════════════════════════════════════════════════════════════════════════
 
-mod connection;
-mod models;
+import "@testing-library/jest-dom";
 
-pub use connection::{open_db, init_db, backup_db};
-pub use models::*;
+// Mock Tauri's invoke so tests don't need a running Tauri backend
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+// Mock Tauri dialog plugin
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
+}));

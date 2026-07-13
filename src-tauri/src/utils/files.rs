@@ -15,6 +15,38 @@ pub fn is_image_extension(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif")
 }
 
+/// Check if file extension is a video file (routed to 02_VISUALS)
+pub fn is_video_extension(ext: &str) -> bool {
+    matches!(ext.to_lowercase().as_str(), "mp4" | "mov" | "webm" | "mkv" | "avi")
+}
+
+/// Resolve a destination path that does not collide with an existing file.
+/// If `dir/file_name` exists, returns `dir/{stem}_2.{ext}`, `_3`, ... until a free slot is found.
+/// Never overwrites; guarantees the returned PathBuf does not yet exist.
+pub fn unique_dest(dir: &Path, file_name: &str) -> std::path::PathBuf {
+    let candidate = dir.join(file_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+
+    let path = Path::new(file_name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(file_name);
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    let mut n = 2u32;
+    loop {
+        let new_name = match ext {
+            Some(e) => format!("{}_{}.{}", stem, n, e),
+            None => format!("{}_{}", stem, n),
+        };
+        let candidate = dir.join(&new_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 /// Get MIME type for image extension
 pub fn image_mime_type(ext: &str) -> &'static str {
     match ext.to_lowercase().as_str() {
@@ -39,6 +71,7 @@ pub fn audio_mime_type(ext: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 /// Read file and encode as base64 data URL
 pub fn file_to_base64_data_url(path: &Path, mime_type: &str) -> Result<String, String> {
     let bytes = std::fs::read(path)

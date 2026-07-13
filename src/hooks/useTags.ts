@@ -155,11 +155,16 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     const normalized = normalizeTag(name);
     if (!normalized) return;
     const tagKey = normalized.toLowerCase().replace(/\s+/g, "_");
-    await invoke("save_custom_tag", {
-      tag: tagKey,
-      displayName: normalized,
-      category,
-    });
+    try {
+      await invoke("save_custom_tag", {
+        tag: tagKey,
+        displayName: normalized,
+        category,
+      });
+    } catch (e) {
+      console.error("[useTags] Failed to save custom tag:", e);
+      return;
+    }
     const newEntry: CustomTag = {
       id: Date.now(),
       tag: tagKey,
@@ -174,7 +179,12 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
 
   const deleteCustomTag = useCallback(async (displayName: string) => {
     const tagKey = displayName.toLowerCase().replace(/\s+/g, "_");
-    await invoke("delete_custom_tag", { tag: tagKey });
+    try {
+      await invoke("delete_custom_tag", { tag: tagKey });
+    } catch (e) {
+      console.error("[useTags] Failed to delete custom tag:", e);
+      return;
+    }
     setCustomTags(prev => prev.filter(t => t.display_name !== displayName));
     setTags(prev => prev.filter(t => t !== displayName));
   }, []);

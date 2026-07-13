@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 import { X, Save, Loader2 } from "lucide-react";
 import { C } from "../../lib/theme";
 import { TagPill } from "./TagPill";
-import type { Beat, BeatStatus, EditFormState, UpdateBeatParams } from "../../types/browse";
+import type { Beat, EditFormState, UpdateBeatParams } from "../../types/browse";
 import { beatToEditForm, isFormDirty, stringifyTags } from "../../types/browse";
 
 interface EditBeatModalProps {

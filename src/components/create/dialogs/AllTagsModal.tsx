@@ -33,7 +33,13 @@ const COLUMNS: { key: ColKey; label: string; Icon: React.ElementType }[] = [
 const SEED_KEY = "beatos_tags_seeded_v1";
 
 async function seedTagsIfNeeded(): Promise<CustomTag[]> {
-  let tags = await invoke<CustomTag[]>("get_custom_tags");
+  let tags: CustomTag[];
+  try {
+    tags = await invoke<CustomTag[]>("get_custom_tags");
+  } catch (e) {
+    console.error("[seedTagsIfNeeded] Failed to load tags:", e);
+    return [];
+  }
   if (!localStorage.getItem(SEED_KEY)) {
     const existing = new Set(tags.map(t => t.tag));
     const ops: Promise<void>[] = [];
@@ -47,7 +53,11 @@ async function seedTagsIfNeeded(): Promise<CustomTag[]> {
     }
     if (ops.length > 0) {
       await Promise.all(ops);
-      tags = await invoke<CustomTag[]>("get_custom_tags");
+      try {
+        tags = await invoke<CustomTag[]>("get_custom_tags");
+      } catch (e) {
+        console.error("[seedTagsIfNeeded] Failed to reload tags after seeding:", e);
+      }
     }
     localStorage.setItem(SEED_KEY, "1");
   }

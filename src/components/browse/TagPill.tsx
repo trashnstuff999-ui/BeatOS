@@ -31,6 +31,8 @@ export function TagPill({ tag, onRemove, size = "md" }: TagPillProps) {
         fontSize,
         fontWeight: 600,
         color: colors.text,
+        textTransform: "uppercase" as const,
+        letterSpacing: "0.04em",
       }}
     >
       {tag}

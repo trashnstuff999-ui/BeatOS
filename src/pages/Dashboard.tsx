@@ -116,7 +116,7 @@ const BAR_COLORS = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
 // ── Top Keys ──────────────────────────────────────────────────────────────────
 function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
   const [hov, setHov] = useState<number | null>(null);
-  const [keyMode, setKeyMode] = useState<"major" | "minor" | "others">("major");
+  const [keyMode, setKeyMode] = useState<"major" | "minor" | "others">("minor");
 
   const allKeys = stats.top_keys;
 
