@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 
 // ─── Component Imports ──────────────────────────────────────────────────────
@@ -36,6 +37,8 @@ import type {
   AudioFileInfo,
   FlpFileInfo,
 } from "../types/create";
+import type { TypeBeatPreset } from "../types/upload";
+import { PresetPicker } from "../components/create/PresetPicker";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Component
@@ -54,6 +57,8 @@ export default function Create() {
   const [createdDate, setCreatedDate] = useState<string | null>(null);
   const [yearMonth, setYearMonth] = useState<string>("");
   const [autoRename, setAutoRename] = useState(true);
+  const [trashSource, setTrashSource] = useState(true);
+  const [preset, setPreset] = useState<TypeBeatPreset | null>(null);
 
   // ─── Parsed Folder State ───────────────────────────────────────────────────
   const [audioFiles, setAudioFiles] = useState<AudioFileInfo[]>([]);
@@ -126,6 +131,8 @@ export default function Create() {
     selectedFlp,
     yearMonth,
     autoRename,
+    trashSource,
+    preset,
     onReset: handleReset,
     setCatalogId,
   });
@@ -150,12 +157,11 @@ export default function Create() {
     if (sourceFolderPath) handleReset();
   }, [sourceFolderPath, handleReset]);
 
-  // ─── Folder Selection Handler ──────────────────────────────────────────────
-  const handleSelectFolder = useCallback(async () => {
+  // ─── Folder Loading ─────────────────────────────────────────────────────────
+  // Split: pick (dialog) vs. load (parse flow) — the Studio tab jumps in here
+  // directly with a folder path via router state.
+  const loadFolder = useCallback(async (folder: string) => {
     setParseError(null);
-    const folder = await selectBeatFolder();
-    if (!folder) return;
-
     setIsLoading(true);
     setSourceFolderPath(folder);
 
@@ -218,6 +224,27 @@ export default function Create() {
     }
   }, []);
 
+  const handleSelectFolder = useCallback(async () => {
+    setParseError(null);
+    const folder = await selectBeatFolder();
+    if (!folder) return;
+    await loadFolder(folder);
+  }, [loadFolder]);
+
+  // ─── Studio → Create bridge ─────────────────────────────────────────────────
+  // Studio's "Archivieren" navigates here with { state: { sourceFolder } }.
+  // Create is permanently mounted, so we listen on the location and consume
+  // the state (replace) to avoid re-triggering on later navigations.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const incoming = (location.state as { sourceFolder?: string } | null)?.sourceFolder;
+    if (location.pathname === "/create" && incoming) {
+      loadFolder(incoming);
+      navigate("/create", { replace: true, state: null });
+    }
+  }, [location, loadFolder, navigate]);
+
   // ─── Auto-parse filename when selected audio file changes ─────────────────
   // Using a ref+effect instead of an event wrapper to avoid all closure issues.
   // folderLoadRef is set to true during folder load so the initial auto-selection
@@ -279,6 +306,8 @@ export default function Create() {
               setStatus={setStatus}
             />
 
+            <PresetPicker selected={preset} onSelect={setPreset} />
+
             <TagsCard
               tagsHook={tagsHook}
               onShowAllTags={handleOpenTagManager}
@@ -322,6 +351,8 @@ export default function Create() {
         title={title}
         autoRename={autoRename}
         onAutoRenameChange={setAutoRename}
+        trashSource={trashSource}
+        onTrashSourceChange={setTrashSource}
         onSelectFolder={handleSelectFolder}
         onCreateBeatstructure={() => handleCreateBeatstructure()}
       />
@@ -349,6 +380,7 @@ export default function Create() {
           filesCopied={successDialog.filesCopied}
           sourceFolder={successDialog.sourceFolder}
           warning={successDialog.warning}
+          sourceTrashed={successDialog.sourceTrashed}
           onClose={handleSuccessClose}
         />
       )}

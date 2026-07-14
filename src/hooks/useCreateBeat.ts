@@ -10,6 +10,7 @@ import type {
   DuplicateDialogState,
   SuccessDialogState,
 } from "../types/create";
+import type { TypeBeatPreset } from "../types/upload";
 
 interface UseCreateBeatParams {
   sourceFolderPath: string | null;
@@ -24,6 +25,10 @@ interface UseCreateBeatParams {
   selectedFlp: string;
   yearMonth: string;
   autoRename: boolean;
+  /** Quellordner nach verifizierter Archivierung automatisch in den Papierkorb */
+  trashSource: boolean;
+  /** Type-Beat-Preset, im Create-Flow gewählt (optional) */
+  preset: TypeBeatPreset | null;
   onReset: () => void;
   setCatalogId: (id: string) => void;
 }
@@ -41,6 +46,8 @@ export function useCreateBeat({
   selectedFlp,
   yearMonth,
   autoRename,
+  trashSource,
+  preset,
   onReset,
   setCatalogId,
 }: UseCreateBeatParams) {
@@ -97,18 +104,39 @@ export function useCreateBeat({
         year_month: yearMonth,
         archive_base_path: settings.archivePath,
         auto_rename: autoRename,
+        type_beat_main:      preset?.main_artists ?? null,
+        type_beat_also_fits: preset?.also_fits ?? null,
+        genre_tags:          preset?.genre_tags ?? null,
+        youtube_tags:        preset?.youtube_tags ?? null,
+        soundcloud_tags:     preset?.soundcloud_tags ?? null,
       };
 
       const result = await api.archive.archiveBeat(params);
 
       if (result.success) {
+        // Move semantics: after the verified copy, the source goes to the
+        // recycle bin automatically (checkbox in the footer, default on).
+        // A trash failure never fails the archive — it surfaces as warning.
+        let sourceTrashed = false;
+        let warning = result.error ?? null;
+        if (trashSource) {
+          try {
+            await api.archive.trashSourceFolder(sourceFolderPath, settings.archivePath);
+            sourceTrashed = true;
+          } catch (e) {
+            warning = [warning, `Quellordner-Cleanup fehlgeschlagen: ${String(e)}`]
+              .filter(Boolean).join(" · ");
+          }
+        }
+
         setSuccessDialog({
           show: true,
           archivePath: result.archive_path,
           beatId: result.beat_id,
           filesCopied: result.files_copied,
           sourceFolder: sourceFolderPath,
-          warning: result.error ?? null,
+          warning,
+          sourceTrashed,
         });
       } else {
         setArchiveError(result.error || "Unknown error occurred");

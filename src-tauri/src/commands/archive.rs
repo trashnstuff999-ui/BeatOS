@@ -35,6 +35,18 @@ pub struct ArchiveBeatParams {
     /// Apply the filename convention right after archiving (default: true).
     #[serde(default = "default_true")]
     pub auto_rename: bool,
+    // Optional type-beat info (from a preset picked in the Create flow) —
+    // lands directly on the beats row so the Upload tab starts "Infos ✓".
+    #[serde(default)]
+    pub type_beat_main: Option<String>,
+    #[serde(default)]
+    pub type_beat_also_fits: Option<String>,
+    #[serde(default)]
+    pub genre_tags: Option<String>,
+    #[serde(default)]
+    pub youtube_tags: Option<String>,
+    #[serde(default)]
+    pub soundcloud_tags: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -467,8 +479,9 @@ fn archive_beat_inner(
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date, has_artwork, has_video)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO beats (id, name, path, bpm, key, status, tags, notes, created_date, modified_date, has_artwork, has_video,
+                            type_beat_main, type_beat_also_fits, genre_tags, youtube_tags, soundcloud_tags)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         rusqlite::params![
             beat_id,
             params.title,
@@ -482,6 +495,11 @@ fn archive_beat_inner(
             secs_to_date(now_secs),
             has_artwork as i32,
             has_video as i32,
+            params.type_beat_main,
+            params.type_beat_also_fits,
+            params.genre_tags,
+            params.youtube_tags,
+            params.soundcloud_tags,
         ],
     ).map_err(|e| format!("DB insert error: {}", e))?;
     tx.commit().map_err(|e| format!("DB commit error: {}", e))?;

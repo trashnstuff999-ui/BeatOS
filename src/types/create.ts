@@ -81,6 +81,12 @@ export interface ArchiveBeatParams {
   archive_base_path: string;
   /** Dateien direkt nach Namenskonvention umbenennen (Default: true) */
   auto_rename: boolean;
+  /** Optionale Type-Beat-Infos aus einem Preset (Create-Flow) */
+  type_beat_main?: string | null;
+  type_beat_also_fits?: string | null;
+  genre_tags?: string | null;
+  youtube_tags?: string | null;
+  soundcloud_tags?: string | null;
 }
 
 export interface ArchiveResult {
@@ -115,6 +121,8 @@ export interface SuccessDialogState {
   sourceFolder: string;
   /** Nicht-fatale Warnung aus dem Archivieren (z.B. Auto-Rename-Fehler) */
   warning: string | null;
+  /** true = Quellordner wurde bereits automatisch in den Papierkorb verschoben */
+  sourceTrashed: boolean;
 }
 
 // ─── Form State ─────────────────────────────────────────────────────────────

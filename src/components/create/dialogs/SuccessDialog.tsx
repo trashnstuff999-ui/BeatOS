@@ -4,8 +4,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { CheckCircle, FolderOpen, Trash2, AlertTriangle } from "lucide-react";
+import { CheckCircle, FolderOpen, Trash2, AlertTriangle, Upload } from "lucide-react";
 import { C } from "../../../lib/theme";
 import { api } from "../../../lib/api";
 import { useSettings } from "../../../contexts/SettingsContext";
@@ -16,6 +17,8 @@ interface SuccessDialogProps {
   filesCopied: number;
   sourceFolder: string;
   warning: string | null;
+  /** true = Quelle wurde bereits automatisch in den Papierkorb verschoben */
+  sourceTrashed: boolean;
   onClose: () => void;
 }
 
@@ -25,14 +28,23 @@ export function SuccessDialog({
   filesCopied,
   sourceFolder,
   warning,
+  sourceTrashed,
   onClose,
 }: SuccessDialogProps) {
   const { settings } = useSettings();
+  const navigate = useNavigate();
   const folderName = archivePath.split(/[/\\]/).pop() || archivePath;
 
   // "idle" → Button sichtbar, "done" → erledigt, "error" → Meldung anzeigen
-  const [trashState, setTrashState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [trashState, setTrashState] = useState<"idle" | "busy" | "done" | "error">(
+    sourceTrashed ? "done" : "idle"
+  );
   const [trashError, setTrashError] = useState<string | null>(null);
+
+  const handleGoToUpload = () => {
+    onClose();
+    navigate("/upload", { state: { beatId } });
+  };
 
   const handleOpenFolder = async () => {
     try {
@@ -183,7 +195,7 @@ export function SuccessDialog({
           )}
         </div>
 
-        {/* Buttons */}
+        {/* Buttons — primary action: continue into the upload flow */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={handleOpenFolder}
@@ -198,20 +210,35 @@ export function SuccessDialog({
             }}
           >
             <FolderOpen size={14} />
-            Open Folder
+            Ordner öffnen
           </button>
           <button
             onClick={onClose}
             style={{
               padding: "10px 20px", borderRadius: 6,
               fontSize: 12, fontWeight: 600,
-              background: C.mint,
-              border: "none",
-              color: "#064e3b",
+              background: "transparent",
+              border: `1px solid ${C.border30}`,
+              color: C.onSurfaceVariant,
               cursor: "pointer",
             }}
           >
-            Done
+            Fertig
+          </button>
+          <button
+            onClick={handleGoToUpload}
+            style={{
+              padding: "10px 20px", borderRadius: 6,
+              fontSize: 12, fontWeight: 700,
+              background: C.primary,
+              border: "none",
+              color: C.onPrimary,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <Upload size={14} strokeWidth={2} />
+            → Upload vorbereiten
           </button>
         </div>
       </div>

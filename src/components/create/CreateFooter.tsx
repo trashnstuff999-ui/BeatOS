@@ -10,6 +10,8 @@ interface CreateFooterProps {
   title: string;
   autoRename: boolean;
   onAutoRenameChange: (value: boolean) => void;
+  trashSource: boolean;
+  onTrashSourceChange: (value: boolean) => void;
   onSelectFolder: () => void;
   onCreateBeatstructure: () => void;
 }
@@ -21,6 +23,8 @@ export function CreateFooter({
   title,
   autoRename,
   onAutoRenameChange,
+  trashSource,
+  onTrashSourceChange,
   onSelectFolder,
   onCreateBeatstructure,
 }: CreateFooterProps) {
@@ -71,6 +75,24 @@ export function CreateFooter({
             style={{ accentColor: C.primary, width: 14, height: 14, cursor: "pointer" }}
           />
           AUTO-RENAME
+        </label>
+
+        {/* Source cleanup toggle — move semantics for the studio workflow */}
+        <label
+          title="Nach verifizierter Archivierung wandert der Quellordner in den Papierkorb (wiederherstellbar)"
+          style={{
+            display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+            fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+            color: trashSource ? C.onSurface : C.onSurfaceVariant, userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={trashSource}
+            onChange={e => onTrashSourceChange(e.target.checked)}
+            style={{ accentColor: C.primary, width: 14, height: 14, cursor: "pointer" }}
+          />
+          QUELLE AUFRÄUMEN
         </label>
 
         <button
