@@ -64,6 +64,14 @@ export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string
   uploaded:  { label: "Uploaded",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
 };
 
+/** Studio project workflow: Idee → In Arbeit → Exportiert → Bereit */
+export const STUDIO_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  idea:     { label: "Idee",       color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
+  wip:      { label: "In Arbeit",  color: "#fda124", bg: "rgba(253,161,36,0.12)" },
+  exported: { label: "Exportiert", color: "#9492ff", bg: "rgba(148,146,255,0.12)" },
+  ready:    { label: "Bereit",     color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Status Configuration
 // ─────────────────────────────────────────────────────────────────────────────────

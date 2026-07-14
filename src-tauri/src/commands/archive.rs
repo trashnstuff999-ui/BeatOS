@@ -93,28 +93,7 @@ fn flp_subdir(beat_root: &Path) -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_dir())
 }
 
-fn copy_and_verify(source: &Path, dest: &Path) -> Result<(), String> {
-    std::fs::copy(source, dest)
-        .map_err(|e| format!("Error copying {:?}: {}", source.file_name(), e))?;
-    
-    let source_size = std::fs::metadata(source)
-        .map_err(|e| format!("Cannot read source metadata: {}", e))?
-        .len();
-    
-    let dest_size = std::fs::metadata(dest)
-        .map_err(|e| format!("Cannot read dest metadata: {}", e))?
-        .len();
-    
-    if source_size != dest_size {
-        let _ = std::fs::remove_file(dest);
-        return Err(format!(
-            "Size verification failed for {:?}: {} vs {} bytes",
-            source.file_name(), source_size, dest_size
-        ));
-    }
-    
-    Ok(())
-}
+use crate::utils::copy_and_verify;
 
 fn copy_dir_recursive(source: &Path, dest: &Path) -> Result<i32, String> {
     let mut count = 0;

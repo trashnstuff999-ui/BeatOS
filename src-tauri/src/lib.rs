@@ -53,6 +53,11 @@ use commands::{
     // Settings commands
     get_settings,
     save_settings,
+    // Studio commands
+    scan_studio_projects,
+    update_studio_project,
+    scan_asset_inbox,
+    assign_asset_to_project,
     // Upload commands (Phase A: bootstrap, B: read, C: write, D: render+save)
     get_templates_dir,
     read_template,
@@ -171,6 +176,11 @@ pub fn run() {
             // Settings
             get_settings,
             save_settings,
+            // Studio
+            scan_studio_projects,
+            update_studio_project,
+            scan_asset_inbox,
+            assign_asset_to_project,
             // Upload (Phase A + B + C + D)
             get_templates_dir,
             read_template,

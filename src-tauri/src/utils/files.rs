@@ -20,6 +20,29 @@ pub fn is_video_extension(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "mp4" | "mov" | "webm" | "mkv" | "avi")
 }
 
+/// Copy a file and verify the byte size matches; removes the partial
+/// destination on mismatch. Shared by archive_beat and asset assignment.
+pub fn copy_and_verify(source: &Path, dest: &Path) -> Result<(), String> {
+    std::fs::copy(source, dest)
+        .map_err(|e| format!("Error copying {:?}: {}", source.file_name(), e))?;
+
+    let source_size = std::fs::metadata(source)
+        .map_err(|e| format!("Cannot read source metadata: {}", e))?
+        .len();
+    let dest_size = std::fs::metadata(dest)
+        .map_err(|e| format!("Cannot read dest metadata: {}", e))?
+        .len();
+
+    if source_size != dest_size {
+        let _ = std::fs::remove_file(dest);
+        return Err(format!(
+            "Size verification failed for {:?}: {} vs {} bytes",
+            source.file_name(), source_size, dest_size
+        ));
+    }
+    Ok(())
+}
+
 /// True if the path is an FL Studio project file (case-insensitive `.flp`)
 pub fn is_flp(path: &Path) -> bool {
     path.extension()

@@ -241,6 +241,21 @@ pub fn init_db() -> Result<(), String> {
                     }
                 }
 
+                // Studio tab: per-project status/priority, keyed by folder path
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS studio_projects (
+                        path       TEXT PRIMARY KEY,
+                        status     TEXT NOT NULL DEFAULT 'idea'
+                                   CHECK (status IN ('idea','wip','exported','ready')),
+                        priority   INTEGER NOT NULL DEFAULT 0,
+                        notes      TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create studio_projects table: {}", e));
+                }
+
                 // Data repair: earlier archive scans stored 0.0 / '' instead
                 // of NULL, which poisons avg_bpm stats and BPM filters.
                 // Idempotent, so safe to run on every start.

@@ -14,6 +14,7 @@ import type {
 } from "../types/create";
 import type { CustomTag } from "./tags";
 import type { Stats } from "../types/stats";
+import type { StudioProject, AssetFile, StudioStatus } from "../types/studio";
 import type {
   UploadData,
   ScheduleEntry,
@@ -159,6 +160,23 @@ export const api = {
 
     getAudioPath: (beatPath: string) =>
       invoke<string | null>("get_beat_audio_path", { beatPath }),
+  },
+
+  // ─── Studio ──────────────────────────────────────────────────────────────
+
+  studio: {
+    scanProjects: (paths: string[]) =>
+      invoke<StudioProject[]>("scan_studio_projects", { paths }),
+
+    updateProject: (path: string, status: StudioStatus, priority: number, notes: string | null) =>
+      invoke<void>("update_studio_project", { path, status, priority, notes }),
+
+    scanAssetInbox: (path: string) =>
+      invoke<AssetFile[]>("scan_asset_inbox", { path }),
+
+    /** Moves the asset into the project folder root (collision-safe). */
+    assignAsset: (assetPath: string, assetRoot: string, projectDir: string) =>
+      invoke<string>("assign_asset_to_project", { assetPath, assetRoot, projectDir }),
   },
 
   // ─── Upload ──────────────────────────────────────────────────────────────
