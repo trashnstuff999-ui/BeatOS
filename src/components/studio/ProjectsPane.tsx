@@ -1,27 +1,58 @@
 // src/components/studio/ProjectsPane.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Studio → Projekte: every started FLP project across all production roots.
-// Star = priority, 4-step status segments, asset dots, open-in-DAW,
-// "→ Archivieren" jumps into the Create flow with the folder preloaded.
+// Studio → Projekte: search/filter toolbar, collapsible status sections
+// (Bereit → Exportiert → In Arbeit → Idee → Lange inaktiv), audio preview
+// via the global player, and the notes inspector. Filtering, grouping and
+// sorting are pure client-side derivations over one scan result.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Star, FolderOpen, Play, Archive, RefreshCw, Zap, Loader2, HardDrive,
-} from "lucide-react";
+import { RefreshCw, Loader2, ChevronDown, Moon } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { api } from "../../lib/api";
+import { daysSince } from "../../lib/time";
+import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
+import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
+import { ProjectRow } from "./ProjectRow";
+import { ProjectInspector } from "./ProjectInspector";
 import type { StudioProject, StudioStatus } from "../../types/studio";
+import type { Beat } from "../../types/browse";
 
-const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready"];
+/** Ideen ohne Aktivität länger als das gelten als "Lange inaktiv" */
+const STALE_DAYS = 30;
+
+type SectionKey = StudioStatus | "stale";
+
+const SECTION_ORDER: SectionKey[] = ["ready", "exported", "wip", "idea", "stale"];
+const SECTION_META: Record<SectionKey, { label: string; color: string }> = {
+  ready:    { label: STUDIO_STATUS_CONFIG.ready.label,    color: STUDIO_STATUS_CONFIG.ready.color },
+  exported: { label: STUDIO_STATUS_CONFIG.exported.label, color: STUDIO_STATUS_CONFIG.exported.color },
+  wip:      { label: STUDIO_STATUS_CONFIG.wip.label,      color: STUDIO_STATUS_CONFIG.wip.color },
+  idea:     { label: STUDIO_STATUS_CONFIG.idea.label,     color: STUDIO_STATUS_CONFIG.idea.color },
+  stale:    { label: "Lange inaktiv",                     color: "#8a8a89" },
+};
+
+const LS_COLLAPSED = "beatos_studio_collapsed";
+const LS_SORT = "beatos_studio_sort";
+
+function loadCollapsed(): Set<SectionKey> {
+  try {
+    const raw = localStorage.getItem(LS_COLLAPSED);
+    if (raw) return new Set(JSON.parse(raw) as SectionKey[]);
+  } catch { /* fallthrough to default */ }
+  return new Set<SectionKey>(["idea", "stale"]);
+}
+
+function loadSort(): SortMode {
+  const raw = localStorage.getItem(LS_SORT);
+  return (raw === "modified" || raw === "priority" || raw === "name" || raw === "oldest") ? raw : "modified";
+}
 
 interface ProjectsPaneProps {
   productionPaths: string[];
-  /** bump to trigger a rescan from outside */
   refreshKey: number;
-  /** share scan results upward (AssetsPane braucht die Projektliste) */
   onProjects?: (projects: StudioProject[]) => void;
   /** Auswahl fürs Asset-Zuweisen: Klick auf eine Zeile wählt das Projekt */
   selectedPath?: string | null;
@@ -33,6 +64,21 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { playBeat } = useAudioPlayerContext();
+
+  // Filters & view state
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StudioStatus | null>(null);
+  const [onlyPriority, setOnlyPriority] = useState(false);
+  const [rootFilter, setRootFilter] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>(loadSort);
+  const [collapsed, setCollapsed] = useState<Set<SectionKey>>(loadCollapsed);
+  const [inspectorPath, setInspectorPath] = useState<string | null>(null);
+
+  useEffect(() => { localStorage.setItem(LS_SORT, sortMode); }, [sortMode]);
+  useEffect(() => {
+    localStorage.setItem(LS_COLLAPSED, JSON.stringify([...collapsed]));
+  }, [collapsed]);
 
   const scan = useCallback(async () => {
     if (productionPaths.length === 0) {
@@ -78,6 +124,76 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
     navigate("/create", { state: { sourceFolder: p.path } });
   };
 
+  // Audio preview: pseudo-beat over the project folder — get_beat_audio_path
+  // scans the folder root and finds the exported MP3/WAV.
+  const handlePreview = (p: StudioProject) => {
+    const pseudoBeat: Beat = {
+      id: `studio:${p.path}`,
+      name: p.parsed_name || p.name,
+      path: p.path,
+      bpm: p.bpm, key: p.key,
+      status: null, tags: null, favorite: null,
+      created_date: null, modified_date: null,
+      notes: null, sold_to: null, has_artwork: null, has_video: null,
+    };
+    playBeat(pseudoBeat);
+  };
+
+  // ── Derivations: counts → filter → group → sort ────────────────────────────
+  const counts = {
+    all: projects.length,
+    idea: projects.filter(p => p.status === "idea").length,
+    wip: projects.filter(p => p.status === "wip").length,
+    exported: projects.filter(p => p.status === "exported").length,
+    ready: projects.filter(p => p.status === "ready").length,
+  };
+
+  const q = search.trim().toLowerCase();
+  const visible = projects.filter(p => {
+    if (statusFilter && p.status !== statusFilter) return false;
+    if (onlyPriority && !p.priority) return false;
+    if (rootFilter && p.root !== rootFilter) return false;
+    if (q) {
+      const hay = `${p.parsed_name} ${p.name} ${p.key ?? ""} ${p.bpm ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const isStale = (p: StudioProject) =>
+    p.status === "idea" && daysSince(p.modified_secs) > STALE_DAYS;
+
+  const sortFn = (a: StudioProject, b: StudioProject): number => {
+    switch (sortMode) {
+      case "priority": return b.priority - a.priority || b.modified_secs - a.modified_secs;
+      case "name":     return (a.parsed_name || a.name).localeCompare(b.parsed_name || b.name, "de");
+      case "oldest":   return a.modified_secs - b.modified_secs;
+      default:         return b.modified_secs - a.modified_secs;
+    }
+  };
+
+  const sections = SECTION_ORDER
+    .map(key => ({
+      key,
+      meta: SECTION_META[key],
+      items: visible
+        .filter(p => key === "stale" ? isStale(p) : (p.status === key && !isStale(p)))
+        .sort(sortFn),
+    }))
+    .filter(s => s.items.length > 0);
+
+  const toggleSection = (key: SectionKey) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const inspectorProject = inspectorPath
+    ? projects.find(p => p.path === inspectorPath) ?? null
+    : null;
+
   return (
     <div style={{
       background: C.surfaceContainerLow,
@@ -85,7 +201,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
       borderRadius: 12,
       overflow: "hidden",
     }}>
-      {/* Toolbar */}
+      {/* Top bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "12px 16px",
@@ -117,6 +233,22 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
         </button>
       </div>
 
+      {/* Search / filter / sort */}
+      <ProjectsToolbar
+        search={search}
+        onSearch={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilter={setStatusFilter}
+        counts={counts}
+        onlyPriority={onlyPriority}
+        onOnlyPriority={setOnlyPriority}
+        roots={productionPaths}
+        rootFilter={rootFilter}
+        onRootFilter={setRootFilter}
+        sortMode={sortMode}
+        onSortMode={setSortMode}
+      />
+
       {error && (
         <div style={{ padding: "14px 16px", fontSize: 12, color: C.error }}>{error}</div>
       )}
@@ -127,172 +259,82 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
         </div>
       )}
 
-      {projects.map((p, i) => {
-        const exportDetected = (p.has_mp3 || p.has_wav) && (p.status === "idea" || p.status === "wip");
-        const isSelected = selectedPath === p.path;
+      {!error && !isLoading && projects.length > 0 && visible.length === 0 && (
+        <div style={{ padding: "30px 16px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant }}>
+          Kein Projekt passt zu den Filtern.
+        </div>
+      )}
+
+      {/* Sections */}
+      {sections.map(section => {
+        const forcedOpen = statusFilter !== null || q.length > 0;
+        const isCollapsed = !forcedOpen && collapsed.has(section.key);
         return (
-          <div
-            key={p.path}
-            onClick={() => onSelectPath?.(isSelected ? null : p.path)}
-            title={isSelected ? "Ausgewählt — Assets-Tab weist diesem Projekt zu" : "Klick wählt das Projekt für die Asset-Zuweisung"}
-            style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "12px 16px",
-              borderTop: i > 0 ? `1px solid ${C.border10}` : "none",
-              background: isSelected ? "rgba(253,161,36,0.06)" : "transparent",
-              boxShadow: isSelected ? `inset 3px 0 0 ${C.primary}` : "none",
-              cursor: "pointer",
-              transition: "background 0.15s",
-            }}
-          >
-            {/* Priority star */}
+          <div key={section.key}>
             <button
-              onClick={(e) => { e.stopPropagation(); patchProject(p, { priority: p.priority ? 0 : 1 }); }}
-              title={p.priority ? "Priorität entfernen" : "Als Priorität markieren"}
-              style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 2 }}
+              onClick={() => !forcedOpen && toggleSection(section.key)}
+              style={{
+                width: "100%",
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "9px 16px",
+                background: "rgba(255,255,255,0.02)",
+                border: "none",
+                borderTop: `1px solid ${C.border10}`,
+                cursor: forcedOpen ? "default" : "pointer",
+                textAlign: "left",
+              }}
             >
-              <Star
-                size={15}
-                color={p.priority ? C.primary : C.onSecondaryFixedVar}
-                fill={p.priority ? C.primary : "none"}
-                strokeWidth={1.75}
-              />
+              {section.key === "stale"
+                ? <Moon size={10} color={section.meta.color} strokeWidth={2} />
+                : <span style={{ width: 7, height: 7, borderRadius: "50%", background: section.meta.color }} />
+              }
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+                textTransform: "uppercase", color: C.onSurfaceVariant,
+              }}>
+                {section.meta.label}
+              </span>
+              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+                {section.items.length}
+              </span>
+              <div style={{ flex: 1 }} />
+              {!forcedOpen && (
+                <ChevronDown
+                  size={12}
+                  color={C.onSecondaryFixedVar}
+                  style={{ transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)" }}
+                />
+              )}
             </button>
 
-            {/* Name + meta */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{
-                  fontSize: 13, fontWeight: 600, color: C.onSurface,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {p.parsed_name || p.name}
-                </span>
-                {exportDetected && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); patchProject(p, { status: "exported" }); }}
-                    title="MP3/WAV im Ordner gefunden — Klick setzt Status auf Exportiert"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 4,
-                      padding: "2px 8px", borderRadius: 9999,
-                      background: "rgba(148,146,255,0.12)",
-                      border: "1px solid rgba(148,146,255,0.35)",
-                      color: "#9492ff", fontSize: 9, fontWeight: 700,
-                      cursor: "pointer", flexShrink: 0,
-                    }}
-                  >
-                    <Zap size={9} strokeWidth={2.5} /> Export erkannt
-                  </button>
-                )}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, fontSize: 10, color: C.onSecondaryFixedVar }}>
-                {p.key && <span>{p.key}</span>}
-                {p.bpm != null && <span>{p.bpm} BPM</span>}
-                {p.modified_date && <span>· {p.modified_date}</span>}
-                {p.flp_count > 1 && <span>· {p.flp_count} FLPs</span>}
-                <span title={p.root} style={{ display: "inline-flex", alignItems: "center", gap: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>
-                  <HardDrive size={9} /> {p.root.split(/[/\\]/).pop()}
-                </span>
-              </div>
-            </div>
-
-            {/* Asset dots */}
-            <div style={{ display: "flex", gap: 5, flexShrink: 0 }} title={
-              `MP3 ${p.has_mp3 ? "✓" : "—"} · WAV ${p.has_wav ? "✓" : "—"} · Cover ${p.has_cover ? "✓" : "—"} · Thumbnail ${p.has_thumbnail ? "✓" : "—"} · Video ${p.has_video ? "✓" : "—"}`
-            }>
-              {([["MP3", p.has_mp3], ["WAV", p.has_wav], ["COV", p.has_cover], ["THB", p.has_thumbnail], ["VID", p.has_video]] as const).map(([label, ok]) => (
-                <span key={label} style={{
-                  fontSize: 7, fontWeight: 700, letterSpacing: "0.05em",
-                  padding: "2px 4px", borderRadius: 3,
-                  background: ok ? "rgba(52,211,153,0.12)" : "rgba(255,255,255,0.03)",
-                  color: ok ? C.mint : C.onSecondaryFixedVar,
-                  opacity: ok ? 1 : 0.5,
-                }}>
-                  {label}
-                </span>
-              ))}
-            </div>
-
-            {/* Status segments */}
-            <div style={{
-              display: "flex", gap: 2, flexShrink: 0,
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${C.border15}`,
-              borderRadius: 7, padding: 2,
-            }}>
-              {STATUS_ORDER.map(s => {
-                const active = p.status === s;
-                const m = STUDIO_STATUS_CONFIG[s];
-                return (
-                  <button
-                    key={s}
-                    onClick={(e) => { e.stopPropagation(); patchProject(p, { status: s }); }}
-                    title={m.label}
-                    style={{
-                      padding: "3px 8px",
-                      background: active ? m.bg : "transparent",
-                      border: "none", borderRadius: 5,
-                      cursor: "pointer",
-                      fontSize: 9, fontWeight: 700,
-                      color: active ? m.color : C.onSecondaryFixedVar,
-                      letterSpacing: "0.04em", textTransform: "uppercase",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <RowBtn icon={Play} title="In DAW öffnen (neueste FLP)" onClick={() => handleOpenDaw(p)} accent />
-              <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={() => revealItemInDir(p.path).catch(() => {})} />
-              <button
-                onClick={(e) => { e.stopPropagation(); handleArchive(p); }}
-                title="In den Create-Flow übernehmen und archivieren"
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "6px 10px", borderRadius: 6,
-                  background: p.status === "ready" ? C.primary : "transparent",
-                  border: `1px solid ${p.status === "ready" ? C.primary : C.border15}`,
-                  color: p.status === "ready" ? C.onPrimary : C.onSurfaceVariant,
-                  cursor: "pointer",
-                  fontSize: 10, fontWeight: 700,
-                }}
-              >
-                <Archive size={11} strokeWidth={2} />
-                Archivieren
-              </button>
-            </div>
+            {!isCollapsed && section.items.map(p => (
+              <ProjectRow
+                key={p.path}
+                project={p}
+                isSelected={selectedPath === p.path}
+                dimmed={section.key === "stale"}
+                onSelect={() => onSelectPath?.(selectedPath === p.path ? null : p.path)}
+                onPatch={patch => patchProject(p, patch)}
+                onOpenDaw={() => handleOpenDaw(p)}
+                onPreview={() => handlePreview(p)}
+                onInspect={() => setInspectorPath(inspectorPath === p.path ? null : p.path)}
+                onOpenFolder={() => revealItemInDir(p.path).catch(() => {})}
+                onArchive={() => handleArchive(p)}
+              />
+            ))}
           </div>
         );
       })}
-    </div>
-  );
-}
 
-function RowBtn({ icon: Icon, title, onClick, accent }: {
-  icon: React.ElementType;
-  title: string;
-  onClick: () => void;
-  accent?: boolean;
-}) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={title}
-      style={{
-        width: 28, height: 28, borderRadius: 6,
-        background: "transparent",
-        border: `1px solid ${accent ? C.primary + "50" : C.border15}`,
-        cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: accent ? C.primary : C.onSurfaceVariant,
-      }}
-    >
-      <Icon size={13} strokeWidth={1.75} />
-    </button>
+      {/* Inspector */}
+      {inspectorProject && (
+        <ProjectInspector
+          project={inspectorProject}
+          onPatch={patch => patchProject(inspectorProject, patch)}
+          onArchive={() => handleArchive(inspectorProject)}
+          onClose={() => setInspectorPath(null)}
+        />
+      )}
+    </div>
   );
 }

@@ -5,6 +5,13 @@
 
 export type StudioStatus = "idea" | "wip" | "exported" | "ready";
 
+export interface FlpEntry {
+  path: string;
+  name: string;
+  modified_secs: number;
+  modified_date: string | null;
+}
+
 export interface StudioProject {
   path: string;
   name: string;
@@ -14,6 +21,8 @@ export interface StudioProject {
   bpm: number | null;
   newest_flp: string | null;
   flp_count: number;
+  /** Alle FLP-Versionen, neueste zuerst */
+  flps: FlpEntry[];
   modified_date: string | null;
   modified_secs: number;
   has_mp3: boolean;

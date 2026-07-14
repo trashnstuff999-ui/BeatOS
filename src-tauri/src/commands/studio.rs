@@ -19,6 +19,14 @@ use std::path::{Path, PathBuf};
 pub const STUDIO_STATUSES: [&str; 4] = ["idea", "wip", "exported", "ready"];
 
 #[derive(Debug, Serialize)]
+pub struct FlpEntry {
+    pub path: String,
+    pub name: String,
+    pub modified_secs: u64,
+    pub modified_date: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct StudioProject {
     pub path: String,            // project folder (identity)
     pub name: String,            // folder name
@@ -28,6 +36,8 @@ pub struct StudioProject {
     pub bpm: Option<i32>,
     pub newest_flp: Option<String>,
     pub flp_count: usize,
+    /// All FLP versions, newest first (for the inspector)
+    pub flps: Vec<FlpEntry>,
     pub modified_date: Option<String>, // of newest FLP (fallback: folder)
     pub modified_secs: u64,            // for sorting
     pub has_mp3: bool,
@@ -182,6 +192,18 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
     flps.sort_by_key(|(secs, _)| *secs);
     let (newest_secs, newest_flp) = flps.last().cloned()?;
 
+    // Newest first for the inspector's version list
+    let flp_entries: Vec<FlpEntry> = flps
+        .iter()
+        .rev()
+        .map(|(secs, p)| FlpEntry {
+            path: p.to_string_lossy().to_string(),
+            name: p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+            modified_secs: *secs,
+            modified_date: if *secs > 0 { Some(secs_to_date(*secs)) } else { None },
+        })
+        .collect();
+
     let name = dir.file_name()?.to_str()?.to_string();
     let (parsed_name, key, bpm) = parse_audio_filename(&name);
     let modified_secs = if newest_secs > 0 { newest_secs } else { file_modified_secs(dir).unwrap_or(0) };
@@ -195,6 +217,7 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         bpm,
         newest_flp: Some(newest_flp.to_string_lossy().to_string()),
         flp_count: flps.len(),
+        flps: flp_entries,
         modified_date: if modified_secs > 0 { Some(secs_to_date(modified_secs)) } else { None },
         modified_secs,
         has_mp3,
@@ -390,6 +413,8 @@ mod tests {
         assert!(p.has_cover && p.has_thumbnail && !p.has_video);
         assert_eq!(p.flp_count, 1);
         assert!(p.newest_flp.as_deref().unwrap().to_lowercase().ends_with(".flp"));
+        assert_eq!(p.flps.len(), 1);
+        assert_eq!(p.flps[0].name.to_lowercase(), "memories_v3.flp");
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }
