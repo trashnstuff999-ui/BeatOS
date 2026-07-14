@@ -31,6 +31,30 @@ function extractTitle(content: string): string {
   return lines.map(l => l.trim()).find(Boolean) ?? "";
 }
 
+/// Display-only: everything after the title block — what you paste into the
+/// platform's description field. Leading blank/separator lines (────, ---)
+/// and a "BESCHREIBUNG:"/"DESCRIPTION:" label are stripped.
+function extractDescription(content: string): string {
+  const lines = content.split(/\r?\n/);
+  const labelIdx = lines.findIndex(l => /titel:\s*$/i.test(l.trim()));
+  let start = 0;
+  if (labelIdx >= 0) {
+    // skip the label line + the title line itself
+    start = labelIdx + 1;
+    while (start < lines.length && !lines[start].trim()) start++;
+    start++; // past the title line
+  }
+  // strip leading blanks, separator-only lines and a description label
+  while (start < lines.length) {
+    const t = lines[start].trim();
+    const isSeparator = t.length > 0 && /^[─—\-_=]+$/.test(t);
+    const isLabel = /^(beschreibung|description):?\s*$/i.test(t);
+    if (!t || isSeparator || isLabel) { start++; continue; }
+    break;
+  }
+  return lines.slice(start).join("\n").trimEnd();
+}
+
 interface DescriptionFilesCardProps {
   beatId: string;
   uploadFiles: UploadFilesState;   // from AssetCheck — shows on-disk state per file
@@ -126,6 +150,17 @@ export function DescriptionFilesCard({
     }
   };
 
+  const handleCopyDescription = async () => {
+    if (!drafts) return;
+    try {
+      await navigator.clipboard.writeText(extractDescription(drafts[active]));
+      setBanner({ kind: "ok", msg: "Beschreibung kopiert" });
+      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
+    } catch (e) {
+      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
+    }
+  };
+
   const persist = async (which: "current" | "all") => {
     if (!drafts) return;
     setIsSaving(true);
@@ -169,6 +204,7 @@ export function DescriptionFilesCard({
   const activeContent = drafts?.[active] ?? "";
   const activeTabMeta = TABS.find(t => t.key === active)!;
   const activeTitle = extractTitle(activeContent);
+  const activeDescription = extractDescription(activeContent);
   const showEditor = editorOpen || dirty[active];
   const fileExistsMap: Record<TabKey, boolean> = {
     beatstars:  uploadFiles.beatstars_txt,
@@ -269,6 +305,41 @@ export function DescriptionFilesCard({
           </div>
         </div>
         <SmallBtn icon={Copy} label="Titel kopieren" onClick={handleCopyTitle} disabled={!drafts || isLoading} />
+      </div>
+
+      {/* ─── Description panel — copy without opening the raw text ──────── */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "12px 14px",
+        background: C.surfaceContainerLowest,
+        border: `1px solid ${C.border15}`,
+        borderRadius: 8,
+        marginBottom: 10,
+      }}>
+        <FileText size={14} color={C.onSecondaryFixedVar} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+            textTransform: "uppercase", color: C.onSecondaryFixedVar,
+            marginBottom: 4,
+          }}>
+            Beschreibung
+          </div>
+          <div style={{
+            fontSize: 11, color: C.onSurfaceVariant,
+            lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical" as const,
+            overflow: "hidden",
+          }}>
+            {isLoading
+              ? "Rendering…"
+              : (activeDescription || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
+            }
+          </div>
+        </div>
+        <SmallBtn icon={Copy} label="Beschreibung kopieren" onClick={handleCopyDescription} disabled={!drafts || isLoading} />
       </div>
 
       {/* ─── Full text — collapsed by default ───────────────────────────── */}

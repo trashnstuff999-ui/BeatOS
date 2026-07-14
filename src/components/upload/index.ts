@@ -1,4 +1,3 @@
-export { BeatSelector } from "./BeatSelector";
 export { AssetChecklistCard } from "./AssetChecklistCard";
 export { TypeBeatCard } from "./TypeBeatCard";
 export { UploadStatusCard } from "./UploadStatusCard";

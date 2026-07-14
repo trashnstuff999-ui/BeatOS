@@ -10,7 +10,6 @@ import { Upload as UploadIcon, AlertCircle, Loader2 } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
 import { useUploadData } from "../hooks/useUploadData";
 import {
-  BeatSelector,
   AssetChecklistCard,
   TypeBeatCard,
   UploadStatusCard,
@@ -116,26 +115,21 @@ export default function Upload() {
       <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px" }}>
         <div style={{ maxWidth: 1720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
 
-          {/* Top row: beat selector + upload planner side by side */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(320px, 420px) minmax(0, 1fr)",
-            gap: 24,
-            alignItems: "start",
-          }}>
-            <BeatSelector selectedBeat={selectedBeat} onSelect={setSelectedBeat} />
-            {/* Planner — always visible; click-to-schedule when a beat is selected */}
-            <PlannerStrip
-              refreshKey={plannerRefresh}
-              beatId={data?.beat.id ?? null}
-              beatName={data?.beat.name ?? null}
-              uploads={data?.uploads ?? null}
-              onChanged={handleStatusChanged}
-            />
-          </div>
+          {/* Beat anchor + integrated picker: cover, title, ready progress */}
+          <UploadBeatHeader
+            selectedBeat={selectedBeat}
+            onSelect={setSelectedBeat}
+            data={!error ? data : null}
+          />
 
-          {/* Beat anchor: cover, title, key/bpm, ready progress */}
-          {data && !error && <UploadBeatHeader data={data} />}
+          {/* Planner — always visible; click-to-schedule when a beat is selected */}
+          <PlannerStrip
+            refreshKey={plannerRefresh}
+            beatId={data?.beat.id ?? null}
+            beatName={data?.beat.name ?? null}
+            uploads={data?.uploads ?? null}
+            onChanged={handleStatusChanged}
+          />
 
           {/* Loading / Error / Empty
               LoadingBanner only on the first load (when there's no data yet).

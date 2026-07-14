@@ -1,13 +1,13 @@
 // src/components/upload/PresetBar.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Preset chips row for the Type-Beat card.
-// Presets are always visible as a horizontal chip list (sorted by use_count
-// in the backend) — one click applies. "Save" opens a small popover that
-// captures the current five fields under a label. Same commands/DB as before.
+// Preset picker for the Type-Beat card — ONE dropdown button (user choice:
+// compact beats always-visible chips). The dropdown lists presets (sorted by
+// use_count in the backend, apply on click, delete per row) and carries the
+// "save current as preset" form at its bottom. Same commands/DB as always.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, X, Youtube, Music2, Bookmark } from "lucide-react";
+import { Plus, Trash2, ChevronDown, Youtube, Music2, Bookmark } from "lucide-react";
 import { C, PLATFORM_CONFIG } from "../../lib/theme";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
@@ -30,10 +30,10 @@ export function PresetBar({
   onApply,
 }: PresetBarProps) {
   const [presets, setPresets]     = useState<TypeBeatPreset[]>([]);
+  const [open, setOpen]           = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
   const [showSave, setShowSave]   = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -42,18 +42,23 @@ export function PresetBar({
   };
   useEffect(() => { load(); }, []);
 
-  // Close save popover on outside click
+  // Close on outside click
   useEffect(() => {
-    if (!showSave) return;
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setShowSave(false);
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setShowSave(false);
+        setError(null);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [showSave]);
+  }, [open]);
 
   const handleApply = async (p: TypeBeatPreset) => {
     onApply(p);
+    setOpen(false);
     try {
       await api.upload.bumpPresetUse(p.id);
       load();
@@ -93,163 +98,174 @@ export function PresetBar({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      {/* Own strip with micro label — visually distinct from the data chips below */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
-        background: C.surfaceContainerLowest,
-        border: `1px solid ${C.border10}`,
-        borderRadius: 8,
-        padding: "7px 10px",
-      }}>
-        <span style={{
-          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-          fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
-          color: C.onSecondaryFixedVar, textTransform: "uppercase",
-          marginRight: 4,
-        }}>
-          <Bookmark size={10} strokeWidth={2} />
-          Presets
+      {/* Single dropdown trigger */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%",
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "11px 14px",
+          background: C.surfaceContainerLowest,
+          border: `1px solid ${open ? C.primary + "50" : C.border20}`,
+          borderRadius: 8,
+          cursor: "pointer",
+          fontSize: 12, fontWeight: 600,
+          color: C.onSurfaceVariant,
+          transition: "border-color 0.15s",
+        }}
+      >
+        <Bookmark size={13} strokeWidth={2} />
+        <span style={{ flex: 1, textAlign: "left" }}>
+          Preset wählen
+          {presets.length > 0 && (
+            <span style={{ color: C.onSecondaryFixedVar, marginLeft: 6, fontWeight: 500 }}>
+              ({presets.length})
+            </span>
+          )}
         </span>
+        <ChevronDown
+          size={14}
+          style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
+        />
+      </button>
 
-        {presets.length === 0 && (
-          <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            Noch keine — aktuelle Infos mit „+" sichern
-          </span>
-        )}
-
-        {presets.map(p => {
-          const hovered = hoveredId === p.id;
-          return (
-            <button
-              key={p.id}
-              onClick={() => handleApply(p)}
-              onMouseEnter={() => setHoveredId(p.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              title={[
-                p.main_artists,
-                p.also_fits && `also fits: ${p.also_fits}`,
-                p.genre_tags,
-              ].filter(Boolean).join("\n")}
-              style={{
-                // Ghost/outline — Aktion, klar unterscheidbar von soliden Daten-Chips
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "4px 10px",
-                background: hovered ? C.primary + "12" : "transparent",
-                border: `1px solid ${hovered ? C.primary + "50" : C.border30}`,
-                borderRadius: 9999,
-                fontSize: 11, fontWeight: 600,
-                color: hovered ? C.primary : C.onSurfaceVariant,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                maxWidth: 220,
-              }}
-            >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {p.label}
-              </span>
-              {p.soundcloud_tags && <Music2 size={9} color={PLATFORM_CONFIG.soundcloud.color} strokeWidth={2.5} />}
-              {p.youtube_tags && <Youtube size={9} color={PLATFORM_CONFIG.youtube.color} strokeWidth={2.5} />}
-              {p.use_count > 0 && (
-                <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
-                  {p.use_count}×
-                </span>
-              )}
-              {hovered && (
-                <span
-                  role="button"
-                  onClick={(e) => handleDelete(e, p.id)}
-                  title="Preset löschen"
-                  style={{ display: "flex", color: C.onSecondaryFixedVar }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "#e5484d"; e.stopPropagation(); }}
-                  onMouseLeave={e => { e.currentTarget.style.color = C.onSecondaryFixedVar; }}
-                >
-                  <Trash2 size={10} />
-                </span>
-              )}
-            </button>
-          );
-        })}
-
-        {/* Save current as preset */}
-        <button
-          onClick={() => { setShowSave(s => !s); setError(null); }}
-          title="Aktuelle Infos als Preset speichern"
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 24, height: 24, borderRadius: 9999, flexShrink: 0,
-            background: showSave ? C.primary + "20" : "transparent",
-            border: `1px dashed ${showSave ? C.primary + "60" : C.border30}`,
-            color: showSave ? C.primary : C.onSecondaryFixedVar,
-            cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-        >
-          <Plus size={13} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      {/* Save popover */}
-      {showSave && (
+      {/* Dropdown */}
+      {open && (
         <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0,
-          marginTop: 6,
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
           borderRadius: 8,
           boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-          zIndex: 10,
-          padding: 12,
+          zIndex: 15,
+          maxHeight: 320,
+          display: "flex", flexDirection: "column",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              Aktuelle Infos als Preset speichern
-            </span>
-            <button
-              onClick={() => { setShowSave(false); setError(null); }}
-              style={{ background: "transparent", border: "none", cursor: "pointer", color: C.onSecondaryFixedVar, display: "flex" }}
-            >
-              <X size={12} />
-            </button>
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {presets.length === 0 && (
+              <div style={{ padding: 14, fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
+                Noch keine Presets — unten die aktuellen Infos als Preset sichern.
+              </div>
+            )}
+            {presets.map(p => (
+              <div
+                key={p.id}
+                onClick={() => handleApply(p)}
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  borderBottom: `1px solid ${C.border10}`,
+                  fontSize: 12,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontWeight: 700, color: C.onSurface }}>{p.label}</span>
+                    {p.soundcloud_tags && (
+                      <Music2 size={10} color={PLATFORM_CONFIG.soundcloud.color} strokeWidth={2.5} />
+                    )}
+                    {p.youtube_tags && (
+                      <Youtube size={10} color={PLATFORM_CONFIG.youtube.color} strokeWidth={2.5} />
+                    )}
+                    {p.use_count > 0 && (
+                      <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
+                        {p.use_count}×
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.main_artists}
+                    {p.also_fits && <span style={{ color: C.onSecondaryFixedVar }}> · also fits {p.also_fits}</span>}
+                  </div>
+                  {p.genre_tags && (
+                    <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.genre_tags}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => handleDelete(e, p.id)}
+                  title="Preset löschen"
+                  style={{
+                    flexShrink: 0,
+                    width: 22, height: 22, borderRadius: 4,
+                    background: "transparent", border: "none",
+                    cursor: "pointer", color: C.onSecondaryFixedVar,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = "#e5484d"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = C.onSecondaryFixedVar; }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              autoFocus
-              value={saveLabel}
-              onChange={e => setSaveLabel(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
-              placeholder="Preset-Name (z.B. Dro Kenji x Juice WRLD - dark)"
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                fontSize: 12,
-                background: C.surfaceContainerLowest,
-                border: `1px solid ${C.border20}`,
-                borderRadius: 6,
-                outline: "none",
-                color: C.onSurface,
-              }}
-            />
-            <button
-              onClick={handleSave}
-              style={{
-                padding: "8px 14px",
-                fontSize: 11, fontWeight: 700,
-                background: C.primary,
-                border: "none", borderRadius: 6,
-                color: C.onPrimary,
-                cursor: "pointer",
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-              }}
-            >
-              Save
-            </button>
-          </div>
-          {error && (
-            <div style={{ marginTop: 8, fontSize: 11, color: "#e5484d" }}>{error}</div>
-          )}
-          <div style={{ marginTop: 8, fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.4 }}>
-            Speichert Main Artists, Also Fits, Genres, SoundCloud- und YouTube-Tags.
+
+          {/* Save current as preset — lives at the bottom of the dropdown */}
+          <div style={{ borderTop: `1px solid ${C.border15}`, padding: 10, flexShrink: 0 }}>
+            {!showSave ? (
+              <button
+                onClick={() => { setShowSave(true); setError(null); }}
+                style={{
+                  width: "100%",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "8px 10px",
+                  background: "transparent",
+                  border: `1px dashed ${C.border30}`,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 10, fontWeight: 600,
+                  color: C.onSurfaceVariant,
+                }}
+              >
+                <Plus size={12} strokeWidth={2.5} />
+                Aktuelle Infos als Preset speichern
+              </button>
+            ) : (
+              <div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    autoFocus
+                    value={saveLabel}
+                    onChange={e => setSaveLabel(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
+                    placeholder="Preset-Name…"
+                    style={{
+                      flex: 1,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      background: C.surfaceContainerLowest,
+                      border: `1px solid ${C.border20}`,
+                      borderRadius: 6,
+                      outline: "none",
+                      color: C.onSurface,
+                    }}
+                  />
+                  <button
+                    onClick={handleSave}
+                    style={{
+                      padding: "8px 14px",
+                      fontSize: 11, fontWeight: 700,
+                      background: C.primary,
+                      border: "none", borderRadius: 6,
+                      color: C.onPrimary,
+                      cursor: "pointer",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+                {error && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#e5484d" }}>{error}</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
