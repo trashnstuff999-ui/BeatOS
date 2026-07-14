@@ -1,13 +1,170 @@
-// src/pages/Dashboard.tsx — Live DB Version with Centralized Tag System
+// src/pages/Dashboard.tsx — Aktionszentrale: "Was steht heute an?" + Analytics
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, Wrench, Bell, Archive, TrendingUp, Heart, Music, Play, Sparkles, Piano, Star } from "lucide-react";
+import {
+  RefreshCw, Archive, TrendingUp, Heart, Play, Sparkles, Piano, Star, Music,
+  CalendarClock, Rocket, Disc3, Flame, ArrowRight, Upload as UploadIcon,
+} from "lucide-react";
 import { api } from "../lib/api";
-import type { Stats } from "../types/stats";
-import { C, commonStyles } from "../lib/theme";
+import type { Stats, DashboardActions } from "../types/stats";
+import { C, commonStyles, STUDIO_STATUS_CONFIG } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
 import { StatusPill } from "../components/Tagpill";
-import { useSettings } from "../contexts/SettingsContext";
+
+// ── Aktions-Karte: eine Zahl, eine Handlung, ein Klick ───────────────────────
+function ActionCard({ title, value, hint, icon, color, onClick }: {
+  title: string; value: number; hint: string;
+  icon: React.ReactNode; color: string; onClick: () => void;
+}) {
+  const active = value > 0;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        background: C.surfaceContainerLow,
+        padding: 18, borderRadius: 12,
+        border: `1px solid ${active ? `${color}35` : C.border10}`,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        cursor: "pointer",
+        transition: "border-color 0.2s, transform 0.15s",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = `${color}70`; e.currentTarget.style.transform = "translateY(-1px)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? `${color}35` : C.border10; e.currentTarget.style.transform = "translateY(0)"; }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ color, display: "flex" }}>{icon}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.onSurfaceVariant }}>
+          {title}
+        </span>
+        <ArrowRight size={11} color={C.onSecondaryFixedVar} style={{ marginLeft: "auto" }} />
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: active ? C.onSurface : C.onSecondaryFixedVar, lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 6 }}>{hint}</div>
+    </button>
+  );
+}
+
+// ── Upload-Rhythmus: 8-Wochen-Balken + Serie ─────────────────────────────────
+function RhythmCard({ actions }: { actions: DashboardActions }) {
+  const weeks = actions.uploads_per_week;
+  const max = Math.max(1, ...weeks.map(w => w.count));
+  return (
+    <div style={{
+      background: C.surfaceContainerLow, padding: 18, borderRadius: 12,
+      border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Flame size={14} color={actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar} />
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.onSurfaceVariant }}>
+          Upload-Rhythmus
+        </span>
+        <span style={{
+          marginLeft: "auto",
+          fontSize: 10, fontWeight: 700,
+          color: actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar,
+        }}>
+          {actions.current_streak_weeks > 0
+            ? `${actions.current_streak_weeks} ${actions.current_streak_weeks === 1 ? "Woche" : "Wochen"} Serie`
+            : "keine Serie"}
+        </span>
+      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 5, minHeight: 44 }}>
+        {weeks.map((w, i) => {
+          const isCurrent = i === weeks.length - 1;
+          const h = w.count === 0 ? 3 : Math.max(6, Math.round((w.count / max) * 44));
+          return (
+            <div
+              key={w.week_start}
+              title={`Woche ab ${w.week_start}: ${w.count} Upload${w.count === 1 ? "" : "s"}`}
+              style={{
+                flex: 1, height: h, borderRadius: 3,
+                background: w.count === 0
+                  ? "rgba(255,255,255,0.06)"
+                  : isCurrent ? C.primary : "rgba(253,161,36,0.45)",
+                transition: "height 0.2s",
+              }}
+            />
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 9, color: C.onSecondaryFixedVar, marginTop: 6 }}>
+        letzte 8 Wochen · aktuelle Woche rechts
+      </div>
+    </div>
+  );
+}
+
+// ── Pipeline-Funnel: Studio → Archiv → Geplant → Live ────────────────────────
+function PipelineFunnel({ stats, actions, onNavigate }: {
+  stats: Stats;
+  actions: DashboardActions;
+  onNavigate: (path: string) => void;
+}) {
+  const studioTotal = Object.values(actions.studio_by_status).reduce((a, b) => a + b, 0);
+  const stages: Array<{ label: string; value: number; detail: string; icon: React.ReactNode; color: string; path: string }> = [
+    {
+      label: "Studio", value: studioTotal,
+      detail: (["idea", "wip", "exported", "ready"] as const)
+        .map(s => `${actions.studio_by_status[s] ?? 0} ${STUDIO_STATUS_CONFIG[s].label}`)
+        .join(" · "),
+      icon: <Disc3 size={15} />, color: "#9492ff", path: "/studio",
+    },
+    {
+      label: "Archiv", value: stats.total,
+      detail: `${stats.this_month} neu diesen Monat`,
+      icon: <Archive size={15} />, color: C.primary, path: "/browse",
+    },
+    {
+      label: "Geplant", value: actions.scheduled_total,
+      detail: `${actions.scheduled_next_7} in den nächsten 7 Tagen`,
+      icon: <CalendarClock size={15} />, color: "#fda124", path: "/upload",
+    },
+    {
+      label: "Veröffentlicht", value: actions.published_beats,
+      detail: "Beats mit mind. 1 Upload",
+      icon: <UploadIcon size={15} />, color: C.mint, path: "/upload",
+    },
+  ];
+
+  return (
+    <div style={{
+      background: C.surfaceContainerLow, borderRadius: 12,
+      border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+      padding: "18px 24px",
+      display: "flex", alignItems: "center", gap: 10,
+    }}>
+      {stages.map((stage, i) => (
+        <div key={stage.label} style={{ display: "contents" }}>
+          {i > 0 && <ArrowRight size={16} color={C.onSecondaryFixedVar} style={{ flexShrink: 0, opacity: 0.5 }} />}
+          <button
+            onClick={() => onNavigate(stage.path)}
+            style={{
+              flex: 1, textAlign: "left",
+              background: "transparent", border: "none",
+              cursor: "pointer", padding: "6px 10px", borderRadius: 8,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 7, color: stage.color, marginBottom: 6 }}>
+              {stage.icon}
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSurfaceVariant }}>
+                {stage.label}
+              </span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
+            <div style={{ fontSize: 9, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ── Hover helper ──────────────────────────────────────────────────────────────
 const cardHover = {
@@ -398,9 +555,9 @@ function LatestBeats({ stats }: { stats: Stats }) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [stats, setStats]     = useState<Stats | null>(null);
+  const [actions, setActions] = useState<DashboardActions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
-  const { settings } = useSettings();
   const navigate = useNavigate();
   const handleNavigate = useCallback((filter: object) => {
     navigate("/browse", { state: { initialFilters: filter } });
@@ -408,7 +565,14 @@ export default function Dashboard() {
 
   const load = async (year?: number) => {
     setLoading(true); setError(null);
-    try { setStats(await api.stats.get(year ?? null)); }
+    try {
+      const [s, a] = await Promise.all([
+        api.stats.get(year ?? null),
+        api.stats.getDashboardActions(),
+      ]);
+      setStats(s);
+      setActions(a);
+    }
     catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   };
@@ -439,42 +603,12 @@ export default function Dashboard() {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
-      {/* Header */}
+      {/* Header — entrümpelt: System Repair lebt jetzt in den Settings */}
       <header style={{ height: 64, flexShrink: 0, ...commonStyles.glassHeader, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", borderBottom: `1px solid ${C.border15}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurface }}>Dashboard</h1>
-          <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, letterSpacing: "0.05em" }}>SYSTEM STATUS: NOMINAL</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: "pointer", letterSpacing: "0.05em" }}>
-            <RefreshCw size={12} /> REFRESH
-          </button>
-          <button
-            onClick={async () => {
-              if (!confirm("System Repair wird:\n1. Fehlende Beats importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n\nDB-Backup vorhanden?")) return;
-              try {
-                // Schritt 1: Fehlende Beats scannen
-                const scan = await api.archive.scan(settings.archivePath);
-                // Schritt 2: Alle Dates fixen
-                const fix = await api.archive.fixDates(settings.archivePath);
-                alert(
-                  `System Repair abgeschlossen\n\n` +
-                  `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
-                  `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
-                  `Fehler: ${[...scan.errors, ...fix.errors].length}`
-                );
-              } catch (e) {
-                alert(`System Repair fehlgeschlagen:\n${String(e)}`);
-              }
-              load();
-            }}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", letterSpacing: "0.05em", background: "rgba(255,115,81,0.1)", color: "#ff7351" }}>
-            <Wrench size={12} /> SYSTEM REPAIR
-          </button>
-          <button style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.border10}`, background: "transparent", cursor: "pointer", color: C.onSurfaceVariant }}>
-            <Bell size={14} />
-          </button>
-        </div>
+        <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurface }}>Dashboard</h1>
+        <button onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: "pointer", letterSpacing: "0.05em" }}>
+          <RefreshCw size={12} /> REFRESH
+        </button>
       </header>
 
       {/* Scrollable content — MAX-WIDTH zentriert für Fullscreen */}
@@ -485,12 +619,48 @@ export default function Dashboard() {
           padding: "24px 32px",
           display: "flex", flexDirection: "column", gap: 24,
         }}>
+          {/* Aktions-Zeile: Was steht heute an? */}
+          {actions && (
+            <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+              <ActionCard
+                title="Diese Woche geplant"
+                value={actions.scheduled_next_7}
+                hint="Uploads in den nächsten 7 Tagen"
+                icon={<CalendarClock size={14} />}
+                color="#fda124"
+                onClick={() => navigate("/upload")}
+              />
+              <ActionCard
+                title="Fertig, ohne Termin"
+                value={actions.finished_unscheduled}
+                hint="fertige Beats ohne Upload-Plan"
+                icon={<Rocket size={14} />}
+                color="#f43f8e"
+                onClick={() => handleNavigate({ status: "finished", unpublishedOnly: true })}
+              />
+              <ActionCard
+                title="Studio bereit"
+                value={actions.studio_ready}
+                hint="Projekte bereit zum Archivieren"
+                icon={<Disc3 size={14} />}
+                color="#9492ff"
+                onClick={() => navigate("/studio")}
+              />
+              <RhythmCard actions={actions} />
+            </section>
+          )}
+
+          {/* Pipeline: der ganze Workflow auf einen Blick */}
+          {actions && (
+            <PipelineFunnel stats={stats} actions={actions} onNavigate={(p) => navigate(p)} />
+          )}
+
           {/* KPI Row */}
           <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
             <KpiCard title="Total Archived" value={stats.total}             badgeText="+beats" badgeColor="#22c55e" icon={<Archive size={15} />} />
             <KpiCard title="New This Month" value={stats.this_month}        badgeText="month"  badgeColor="#3b82f6" icon={<TrendingUp size={15} />} />
             <KpiCard title="Favorites"      value={stats.favorites}         badgeText="fav"    badgeColor="#ef4444" icon={<Heart size={15} />} />
-            <KpiCard title="Average BPM"    value={Math.round(stats.avg_bpm)} badgeText="bpm"  badgeColor="#a855f7" icon={<Music size={15} />} />
+            <KpiCard title="Veröffentlicht" value={actions?.published_beats ?? 0} badgeText="live" badgeColor="#34d399" icon={<UploadIcon size={15} />} />
           </section>
 
           {/* Analytics Row 1 */}
