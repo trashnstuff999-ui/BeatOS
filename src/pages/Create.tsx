@@ -271,7 +271,7 @@ export default function Create() {
   // Render
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
 
       {/* Header */}
       <CreateHeader

@@ -240,8 +240,10 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
         />
       )}
 
-      {/* URL row (uploaded only) */}
-      {row.status === "uploaded" && (
+      {/* URL row — uploaded platforms, plus ALWAYS for Beatstars: the link
+          feeds {{BEATSTARS_LINK}} in the SoundCloud/YouTube descriptions,
+          so it must be settable before those uploads happen. */}
+      {(row.status === "uploaded" || row.platform === "beatstars") && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           marginTop: 8, paddingLeft: 118,
@@ -251,7 +253,10 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
             value={urlDraft}
             onChange={e => setUrlDraft(e.target.value)}
             onBlur={handleUrlBlur}
-            placeholder={`https://...${row.platform}...`}
+            title={row.platform === "beatstars" ? "Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert" : undefined}
+            placeholder={row.platform === "beatstars"
+              ? "Beat-Link (z.B. beatstars.com/beat/…) → {{BEATSTARS_LINK}}"
+              : `https://...${row.platform}...`}
             style={{
               flex: 1,
               padding: "5px 9px",

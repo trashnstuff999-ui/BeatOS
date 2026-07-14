@@ -23,9 +23,12 @@ interface ProjectsPaneProps {
   refreshKey: number;
   /** share scan results upward (AssetsPane braucht die Projektliste) */
   onProjects?: (projects: StudioProject[]) => void;
+  /** Auswahl fürs Asset-Zuweisen: Klick auf eine Zeile wählt das Projekt */
+  selectedPath?: string | null;
+  onSelectPath?: (path: string | null) => void;
 }
 
-export function ProjectsPane({ productionPaths, refreshKey, onProjects }: ProjectsPaneProps) {
+export function ProjectsPane({ productionPaths, refreshKey, onProjects, selectedPath, onSelectPath }: ProjectsPaneProps) {
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,18 +129,25 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
 
       {projects.map((p, i) => {
         const exportDetected = (p.has_mp3 || p.has_wav) && (p.status === "idea" || p.status === "wip");
+        const isSelected = selectedPath === p.path;
         return (
           <div
             key={p.path}
+            onClick={() => onSelectPath?.(isSelected ? null : p.path)}
+            title={isSelected ? "Ausgewählt — Assets-Tab weist diesem Projekt zu" : "Klick wählt das Projekt für die Asset-Zuweisung"}
             style={{
               display: "flex", alignItems: "center", gap: 12,
               padding: "12px 16px",
               borderTop: i > 0 ? `1px solid ${C.border10}` : "none",
+              background: isSelected ? "rgba(253,161,36,0.06)" : "transparent",
+              boxShadow: isSelected ? `inset 3px 0 0 ${C.primary}` : "none",
+              cursor: "pointer",
+              transition: "background 0.15s",
             }}
           >
             {/* Priority star */}
             <button
-              onClick={() => patchProject(p, { priority: p.priority ? 0 : 1 })}
+              onClick={(e) => { e.stopPropagation(); patchProject(p, { priority: p.priority ? 0 : 1 }); }}
               title={p.priority ? "Priorität entfernen" : "Als Priorität markieren"}
               style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 2 }}
             >
@@ -160,7 +170,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
                 </span>
                 {exportDetected && (
                   <button
-                    onClick={() => patchProject(p, { status: "exported" })}
+                    onClick={(e) => { e.stopPropagation(); patchProject(p, { status: "exported" }); }}
                     title="MP3/WAV im Ordner gefunden — Klick setzt Status auf Exportiert"
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 4,
@@ -216,7 +226,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
                 return (
                   <button
                     key={s}
-                    onClick={() => patchProject(p, { status: s })}
+                    onClick={(e) => { e.stopPropagation(); patchProject(p, { status: s }); }}
                     title={m.label}
                     style={{
                       padding: "3px 8px",
@@ -240,7 +250,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
               <RowBtn icon={Play} title="In DAW öffnen (neueste FLP)" onClick={() => handleOpenDaw(p)} accent />
               <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={() => revealItemInDir(p.path).catch(() => {})} />
               <button
-                onClick={() => handleArchive(p)}
+                onClick={(e) => { e.stopPropagation(); handleArchive(p); }}
                 title="In den Create-Flow übernehmen und archivieren"
                 style={{
                   display: "flex", alignItems: "center", gap: 5,
@@ -271,7 +281,7 @@ function RowBtn({ icon: Icon, title, onClick, accent }: {
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={title}
       style={{
         width: 28, height: 28, borderRadius: 6,

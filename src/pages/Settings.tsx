@@ -302,7 +302,7 @@ export function Settings() {
 
   return (
     <div style={{
-      height: "100vh",
+      height: "100%",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
@@ -322,40 +322,11 @@ export function Settings() {
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {saved && (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.mint }}>
-              <CheckCircle size={13} />
-              Saved
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.mint }}>
+              <CheckCircle size={14} />
+              Gespeichert
             </span>
           )}
-          {isDirty && !saved && (
-            <button
-              onClick={handleReset}
-              style={{
-                padding: "6px 14px", borderRadius: 6,
-                fontSize: 10, fontWeight: 600, letterSpacing: "0.05em",
-                background: "transparent", border: `1px solid ${C.border30}`,
-                color: C.onSurfaceVariant, cursor: "pointer",
-              }}
-            >
-              Discard
-            </button>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={!isDirty || !isLoaded}
-            style={{
-              padding: "6px 18px", borderRadius: 6,
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-              background: isDirty ? C.primary : C.surfaceContainerHighest,
-              border: "none",
-              color: isDirty ? "#4e2d00" : C.onSecondaryFixedVar,
-              cursor: isDirty ? "pointer" : "not-allowed",
-              opacity: isDirty ? 1 : 0.5,
-              transition: "all 0.15s",
-            }}
-          >
-            Save
-          </button>
         </div>
       </header>
 
@@ -499,6 +470,53 @@ export function Settings() {
 
         </div>
       </div>
+
+      {/* Unsaved-changes bar — unmissable, pinned above the content */}
+      {isDirty && (
+        <div style={{
+          flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 16,
+          padding: "14px 32px",
+          background: "rgba(253,161,36,0.10)",
+          borderTop: `1px solid rgba(253,161,36,0.45)`,
+          backdropFilter: "blur(12px)",
+        }}>
+          <AlertCircle size={18} color={C.primary} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface }}>
+            Ungespeicherte Änderungen
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={handleReset}
+            style={{
+              padding: "10px 20px", borderRadius: 8,
+              fontSize: 12, fontWeight: 600,
+              background: "transparent", border: `1px solid ${C.border30}`,
+              color: C.onSurfaceVariant, cursor: "pointer",
+            }}
+          >
+            Verwerfen
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!isLoaded}
+            style={{
+              padding: "12px 36px", borderRadius: 8,
+              fontSize: 13, fontWeight: 800, letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              background: C.primary,
+              border: "none",
+              color: "#3d2300",
+              cursor: isLoaded ? "pointer" : "wait",
+              boxShadow: "0 4px 16px rgba(253,161,36,0.35)",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            <CheckCircle size={15} strokeWidth={2.5} />
+            Speichern
+          </button>
+        </div>
+      )}
     </div>
   );
 }

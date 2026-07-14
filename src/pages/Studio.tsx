@@ -23,6 +23,9 @@ export default function Studio() {
   const [tab, setTab] = useState<StudioTab>("projects");
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Ziel-Projekt für die Asset-Zuweisung (Klick auf eine Projekt-Zeile)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const selectedProject = projects.find(p => p.path === selectedPath) ?? null;
 
   const productionPaths = useMemo(
     () => parseProductionPaths(settings.productionPath),
@@ -31,7 +34,7 @@ export default function Studio() {
 
   return (
     <div style={{
-      height: "100vh",
+      height: "100%",
       display: "flex", flexDirection: "column",
       overflow: "hidden",
       background: C.background,
@@ -87,12 +90,16 @@ export default function Studio() {
               productionPaths={productionPaths}
               refreshKey={refreshKey}
               onProjects={setProjects}
+              selectedPath={selectedPath}
+              onSelectPath={setSelectedPath}
             />
           </div>
           <div style={{ display: tab === "assets" ? "block" : "none" }}>
             <AssetsPane
               assetPath={settings.assetPath}
               projects={projects}
+              selectedProject={selectedProject}
+              onClearSelection={() => setSelectedPath(null)}
               onAssigned={() => setRefreshKey(k => k + 1)}
             />
           </div>
