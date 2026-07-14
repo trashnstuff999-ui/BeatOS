@@ -181,6 +181,12 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         for e in rd.filter_map(|e| e.ok()) {
             let p = e.path();
             if p.is_dir() {
+                // FL Studio legt Autosaves in "Backup"-Ordnern ab — die sind
+                // nie die Arbeitsversion und werden komplett ignoriert.
+                let dir_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+                if dir_name.contains("backup") {
+                    continue;
+                }
                 scan_files(&p, false); // FLPs in subfolders count, assets only from root
             }
         }
@@ -415,6 +421,24 @@ mod tests {
         assert!(p.newest_flp.as_deref().unwrap().to_lowercase().ends_with(".flp"));
         assert_eq!(p.flps.len(), 1);
         assert_eq!(p.flps[0].name.to_lowercase(), "memories_v3.flp");
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn backup_folder_flps_are_ignored() {
+        let tmp = std::env::temp_dir().join(format!("beatos_studio_backup_{}", std::process::id()));
+        let proj = tmp.join("DRIFT [140 Am]");
+        let backup = proj.join("Backup");
+        std::fs::create_dir_all(&backup).unwrap();
+        std::fs::write(proj.join("drift_v2.flp"), b"flp").unwrap();
+        // Autosave im Backup-Ordner — darf weder zählen noch "neueste" werden
+        std::fs::write(backup.join("drift (autosaved at 12-34).flp"), b"flp").unwrap();
+
+        let p = scan_project_dir(&proj, "root").expect("project detected");
+        assert_eq!(p.flp_count, 1, "Backup-FLPs dürfen nicht mitzählen");
+        assert!(p.newest_flp.as_deref().unwrap().ends_with("drift_v2.flp"));
+        assert_eq!(p.flps.len(), 1);
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }

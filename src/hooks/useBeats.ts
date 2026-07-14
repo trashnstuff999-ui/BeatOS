@@ -77,8 +77,14 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     cache.set(id, url);
   }, []);
 
+  // Bump once per page so views that RENDER covers (grid) re-render when
+  // they land — the cache itself is a ref and would update silently.
+  const [, setCoverVersion] = useState(0);
+
   const preloadCovers = useCallback(async (beatsToLoad: Beat[]) => {
-    const uncached = beatsToLoad.filter(b => b.path && b.has_artwork === 1 && !coverCacheRef.current.has(b.id));
+    // No has_artwork gate: the DB flag can be stale for old beats, the
+    // filesystem scan in get_beat_cover_path is the source of truth.
+    const uncached = beatsToLoad.filter(b => b.path && !coverCacheRef.current.has(b.id));
     if (uncached.length === 0) return;
     await Promise.allSettled(
       uncached.map(async (beat) => {
@@ -88,6 +94,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
         } catch { /* ignore individual failures */ }
       })
     );
+    setCoverVersion(v => v + 1);
   }, [setCoverCache]);
 
   const getCoverUrl = useCallback((beatId: string): string | null => {

@@ -104,7 +104,13 @@ const GridCard = memo(function GridCard({ beat, isSelected, coverUrl, badges, on
         overflow: "hidden",
       }}>
         {coverUrl
-          ? <img src={coverUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ? <img
+              src={coverUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
           : <Music size={32} color={C.onSecondaryFixedVar} strokeWidth={1.25} />
         }
         {/* Play overlay */}
