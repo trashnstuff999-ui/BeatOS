@@ -16,7 +16,7 @@ import { SectionCard, SectionIconBtn } from "./SectionCard";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
 
-import { extractTitle, extractDescription } from "../../lib/descriptions";
+import { extractTitle, extractDescription, extractTags, countTags } from "../../lib/descriptions";
 
 interface DescriptionFilesCardProps {
   beatId: string;
@@ -124,6 +124,17 @@ export function DescriptionFilesCard({
     }
   };
 
+  const handleCopyTags = async () => {
+    if (!drafts) return;
+    try {
+      await navigator.clipboard.writeText(extractTags(drafts[active]));
+      setBanner({ kind: "ok", msg: "Tags kopiert" });
+      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
+    } catch (e) {
+      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
+    }
+  };
+
   const persist = async (which: "current" | "all") => {
     if (!drafts) return;
     setIsSaving(true);
@@ -168,6 +179,8 @@ export function DescriptionFilesCard({
   const activeTabMeta = TABS.find(t => t.key === active)!;
   const activeTitle = extractTitle(activeContent);
   const activeDescription = extractDescription(activeContent);
+  const activeTags = extractTags(activeContent);
+  const activeTagCount = countTags(activeTags);
   const showEditor = editorOpen || dirty[active];
   const fileExistsMap: Record<TabKey, boolean> = {
     beatstars:  uploadFiles.beatstars_txt,
@@ -304,6 +317,51 @@ export function DescriptionFilesCard({
         </div>
         <SmallBtn icon={Copy} label="Beschreibung kopieren" onClick={handleCopyDescription} disabled={!drafts || isLoading} />
       </div>
+
+      {/* ─── Tags panel — SC capped at 9, YouTube comma list ─────────────── */}
+      {activeTags && (
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 10,
+          padding: "12px 14px",
+          background: C.surfaceContainerLowest,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 8,
+          marginBottom: 10,
+        }}>
+          <activeTabMeta.icon size={14} color={activeTabMeta.color} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: C.onSecondaryFixedVar,
+              marginBottom: 4,
+            }}>
+              Tags
+              <span style={{
+                padding: "1px 7px", borderRadius: 9999,
+                fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
+                background: active === "soundcloud" && activeTagCount > 9
+                  ? "rgba(255,115,81,0.15)"
+                  : `${activeTabMeta.color}15`,
+                color: active === "soundcloud" && activeTagCount > 9 ? C.error : activeTabMeta.color,
+              }}>
+                {active === "soundcloud" ? `${activeTagCount}/9` : activeTagCount}
+              </span>
+            </div>
+            <div style={{
+              fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
+              lineHeight: 1.5, wordBreak: "break-word",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical" as const,
+              overflow: "hidden",
+            }}>
+              {activeTags.split(/\r?\n/).join("  ")}
+            </div>
+          </div>
+          <SmallBtn icon={Copy} label="Tags kopieren" onClick={handleCopyTags} disabled={!drafts || isLoading} />
+        </div>
+      )}
 
       {/* ─── Full text — collapsed by default ───────────────────────────── */}
       <button

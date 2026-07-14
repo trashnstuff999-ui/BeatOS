@@ -8,9 +8,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink, Send } from "lucide-react";
+import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink, Send, Rocket } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
 import { SectionCard } from "./SectionCard";
+import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";
 
@@ -58,6 +59,7 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
   const PlatIcon = PLATFORM_ICON[row.platform];
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const persist = async (patch: Partial<UploadPlatformRow>) => {
     setIsSaving(true);
@@ -114,7 +116,7 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
       borderTop: isFirst ? "none" : `1px solid ${C.border10}`,
       padding: "10px 0",
     }}>
-      {/* Main row: platform | segments | date */}
+      {/* Main row: platform | assistant | segments | date */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{
           display: "flex", alignItems: "center", gap: 8,
@@ -125,6 +127,24 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
             {meta.label}
           </span>
         </span>
+
+        {/* Guided upload flow */}
+        {row.status !== "uploaded" && (
+          <button
+            onClick={() => setAssistantOpen(true)}
+            title={`${meta.label}-Upload starten: Seite öffnen, Titel/Beschreibung/Tags kopieren, abhaken`}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+              background: "transparent",
+              border: `1px solid ${meta.color}45`,
+              color: meta.color,
+              cursor: "pointer",
+            }}
+          >
+            <Rocket size={11} strokeWidth={2} />
+          </button>
+        )}
 
         {/* Segmented status control */}
         <div style={{
@@ -202,6 +222,23 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
           )}
         </div>
       </div>
+
+      {/* Guided upload assistant */}
+      {assistantOpen && (
+        <UploadAssistantDialog
+          beatId={beatId}
+          platform={row.platform}
+          onClose={() => setAssistantOpen(false)}
+          onMarkUploaded={(url) => {
+            const patch: Partial<UploadPlatformRow> = {
+              status: "uploaded",
+              url: url ?? row.url,
+            };
+            if (!row.uploaded_at) patch.uploaded_at = todayISO();
+            persist(patch);
+          }}
+        />
+      )}
 
       {/* URL row (uploaded only) */}
       {row.status === "uploaded" && (

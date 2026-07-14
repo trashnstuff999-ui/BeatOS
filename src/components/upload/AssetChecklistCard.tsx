@@ -11,11 +11,13 @@
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, FileAudio, FileImage, FileVideo,
-  FolderOpen, FolderTree, RefreshCw, Wand2, ChevronDown, ListChecks,
+  FolderOpen, FolderTree, RefreshCw, Wand2, ChevronDown, ListChecks, X,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { C } from "../../lib/theme";
 import { SectionCard, SectionIconBtn } from "./SectionCard";
+import { api } from "../../lib/api";
 import type { AssetCheck } from "../../types/upload";
 
 interface AssetChecklistCardProps {
@@ -48,6 +50,19 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
   // Auto-expand when something is missing; collapse when complete.
   const [open, setOpen] = useState(!allOk);
   useEffect(() => { setOpen(!allOk); }, [allOk]);
+
+  // Image preview overlay (Cover / Thumbnail rows)
+  const [preview, setPreview] = useState<{ label: string; path: string } | null>(null);
+
+  const handleRowClick = (row: Row) => {
+    if (!row.filename || !beatPath) return;
+    const fullPath = `${beatPath}\\${row.filename}`;
+    if (row.label === "Cover" || row.label === "Thumbnail") {
+      setPreview({ label: row.label, path: fullPath });
+    } else if (row.label === "Video MP4") {
+      revealItemInDir(fullPath).catch(() => {});
+    }
+  };
 
   const handleOpen = async () => {
     if (!beatPath) return;
@@ -99,7 +114,9 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 3 }}>
           {/* Missing first — that's what needs attention */}
-          {[...missing, ...present].map(row => <AssetRow key={row.label} {...row} />)}
+          {[...missing, ...present].map(row => (
+            <AssetRow key={row.label} {...row} onClick={() => handleRowClick(row)} />
+          ))}
 
           {/* Demoted convert action — rarely needed since auto-rename */}
           <button
@@ -124,21 +141,79 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
           </button>
         </div>
       )}
+
+      {/* Image preview overlay */}
+      {preview && (
+        <div
+          onClick={() => setPreview(null)}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 100, cursor: "zoom-out",
+          }}
+        >
+          <div style={{ position: "relative", maxWidth: "80vw", maxHeight: "82vh" }}>
+            <PreviewImage path={preview.path} />
+            <div style={{
+              position: "absolute", top: -34, left: 0, right: 0,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                {preview.label}
+              </span>
+              <span style={{ flex: 1 }} />
+              <X size={16} color={C.onSurfaceVariant} />
+            </div>
+          </div>
+        </div>
+      )}
     </SectionCard>
   );
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function AssetRow({ label, filename, icon: Icon }: Row) {
-  const ok = filename !== null;
+/** Full-size preview via asset protocol, base64 fallback outside the scope. */
+function PreviewImage({ path }: { path: string }) {
+  const [src, setSrc] = useState<string>(() => convertFileSrc(path.replace(/\\/g, "/")));
+  const [triedBase64, setTriedBase64] = useState(false);
+
+  const handleError = async () => {
+    if (triedBase64) return;
+    setTriedBase64(true);
+    try { setSrc(await api.create.readImageFile(path)); } catch { /* bleibt leer */ }
+  };
+
   return (
-    <div style={{
+    <img
+      src={src}
+      onError={handleError}
+      alt=""
+      style={{
+        maxWidth: "80vw", maxHeight: "82vh",
+        borderRadius: 10, border: `1px solid ${C.border30}`,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+        display: "block",
+      }}
+    />
+  );
+}
+
+function AssetRow({ label, filename, icon: Icon, onClick }: Row & { onClick?: () => void }) {
+  const ok = filename !== null;
+  const clickable = ok && (label === "Cover" || label === "Thumbnail" || label === "Video MP4");
+  return (
+    <div
+      onClick={clickable ? onClick : undefined}
+      title={clickable ? (label === "Video MP4" ? "Im Explorer zeigen" : "Vorschau anzeigen") : undefined}
+      style={{
       display: "flex", alignItems: "center", gap: 10,
       padding: "7px 10px",
       background: ok ? C.surfaceContainerLowest : "rgba(255,115,81,0.04)",
       border: `1px solid ${ok ? C.border10 : "rgba(255,115,81,0.20)"}`,
       borderRadius: 7,
+      cursor: clickable ? "pointer" : "default",
     }}>
       {ok
         ? <CheckCircle2 size={14} color={C.mint} strokeWidth={2} />
