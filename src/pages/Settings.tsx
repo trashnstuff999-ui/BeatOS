@@ -5,9 +5,9 @@
 
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail, Instagram, Music2, Youtube, ShoppingBag } from "lucide-react";
+import { FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail, Instagram, Music2, Youtube, ShoppingBag, X } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
-import { useSettings } from "../contexts/SettingsContext";
+import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -119,6 +119,76 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
         >
           <FolderOpen size={13} strokeWidth={1.5} />
           Browse
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Path List Input (multiple roots, one per line in the stored value) ─────
+
+function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
+  label: string;
+  icon: React.ElementType;
+  value: string;                // newline-separated paths
+  onChange: (v: string) => void;
+  browseTitle: string;
+}) {
+  const paths = parseProductionPaths(value);
+
+  const removeAt = (idx: number) => {
+    onChange(paths.filter((_, i) => i !== idx).join("\n"));
+  };
+
+  const addPath = async () => {
+    const p = await pickFolder(browseTitle);
+    if (p && !paths.includes(p)) onChange([...paths, p].join("\n"));
+  };
+
+  return (
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>
+        {label}
+      </label>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {paths.map((p, i) => (
+          <div key={`${p}-${i}`} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            background: C.surfaceContainerHighest,
+            border: `1px solid ${C.border20}`,
+            borderRadius: 8,
+            padding: "10px 14px",
+          }}>
+            <Icon size={14} color={C.primary} strokeWidth={1.5} />
+            <span style={{ flex: 1, fontSize: 12, fontFamily: "monospace", color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {p}
+            </span>
+            <button
+              onClick={() => removeAt(i)}
+              title="Pfad entfernen"
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: C.onSurfaceVariant, display: "flex", padding: 2,
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={addPath}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "10px 14px", borderRadius: 8,
+            fontSize: 11, fontWeight: 600,
+            background: "transparent",
+            border: `1px dashed ${C.border30}`,
+            color: C.onSurfaceVariant,
+            cursor: "pointer",
+          }}
+        >
+          <FolderOpen size={13} strokeWidth={1.5} />
+          Ordner hinzufügen
         </button>
       </div>
     </div>
@@ -325,16 +395,12 @@ export function Settings() {
                   if (p) update("archivePath", p);
                 }}
               />
-              <PathInput
-                label="Active Production Path"
+              <PathListInput
+                label="Active Production Paths"
                 icon={HardDrive}
                 value={draft.productionPath}
-                placeholder="e.g. D:\Beat Library\01_PRODUCTION"
                 onChange={v => update("productionPath", v)}
-                onBrowse={async () => {
-                  const p = await pickFolder("Select Active Production Folder");
-                  if (p) update("productionPath", p);
-                }}
+                browseTitle="Produktions-Ordner hinzufügen"
               />
               <PathInput
                 label="Asset Path"

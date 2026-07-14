@@ -102,6 +102,36 @@ pub fn run() {
             if let Err(e) = ensure_default_templates(app.handle()) {
                 eprintln!("WARNING: Failed to bootstrap upload templates: {}", e);
             }
+
+            // Production roots and the asset inbox can live outside the beat
+            // library — allow them on the asset protocol so image previews
+            // (convertFileSrc) work there too. Frontend falls back to base64
+            // (read_image_file) if a path is still not covered.
+            {
+                use tauri::Manager;
+                let scope = app.asset_protocol_scope();
+                if let Ok(settings) = commands::get_settings() {
+                    let mut dirs: Vec<String> = Vec::new();
+                    if let Some(prod) = settings.get("production_path") {
+                        dirs.extend(
+                            prod.split(['\n', ';'])
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                                .map(String::from),
+                        );
+                    }
+                    if let Some(asset) = settings.get("asset_path") {
+                        if !asset.trim().is_empty() {
+                            dirs.push(asset.trim().to_string());
+                        }
+                    }
+                    for dir in dirs {
+                        if let Err(e) = scope.allow_directory(&dir, true) {
+                            eprintln!("WARNING: cannot extend asset scope for {}: {}", dir, e);
+                        }
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -81,6 +81,14 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** productionPath stores MULTIPLE roots, one per line (legacy single path = 1 line). */
+export function parseProductionPaths(s: string): string[] {
+  return s
+    .split(/\r?\n|;/)
+    .map(p => p.trim())
+    .filter(Boolean);
+}
+
 function loadFromLocalStorage(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

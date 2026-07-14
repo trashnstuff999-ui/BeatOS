@@ -16,44 +16,7 @@ import { SectionCard, SectionIconBtn } from "./SectionCard";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
 
-/// Display-only: pull the title line out of a rendered description.
-/// Templates put it after a line ending in "TITEL:" ("BEATSTARS TITEL:",
-/// "TITEL:"). Fallback: first non-empty line.
-function extractTitle(content: string): string {
-  const lines = content.split(/\r?\n/);
-  const idx = lines.findIndex(l => /titel:\s*$/i.test(l.trim()));
-  if (idx >= 0) {
-    for (let i = idx + 1; i < lines.length; i++) {
-      const t = lines[i].trim();
-      if (t) return t;
-    }
-  }
-  return lines.map(l => l.trim()).find(Boolean) ?? "";
-}
-
-/// Display-only: everything after the title block — what you paste into the
-/// platform's description field. Leading blank/separator lines (────, ---)
-/// and a "BESCHREIBUNG:"/"DESCRIPTION:" label are stripped.
-function extractDescription(content: string): string {
-  const lines = content.split(/\r?\n/);
-  const labelIdx = lines.findIndex(l => /titel:\s*$/i.test(l.trim()));
-  let start = 0;
-  if (labelIdx >= 0) {
-    // skip the label line + the title line itself
-    start = labelIdx + 1;
-    while (start < lines.length && !lines[start].trim()) start++;
-    start++; // past the title line
-  }
-  // strip leading blanks, separator-only lines and a description label
-  while (start < lines.length) {
-    const t = lines[start].trim();
-    const isSeparator = t.length > 0 && /^[─—\-_=]+$/.test(t);
-    const isLabel = /^(beschreibung|description):?\s*$/i.test(t);
-    if (!t || isSeparator || isLabel) { start++; continue; }
-    break;
-  }
-  return lines.slice(start).join("\n").trimEnd();
-}
+import { extractTitle, extractDescription } from "../../lib/descriptions";
 
 interface DescriptionFilesCardProps {
   beatId: string;
