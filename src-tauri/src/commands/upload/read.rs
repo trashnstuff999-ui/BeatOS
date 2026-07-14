@@ -21,11 +21,28 @@ pub struct ScheduleEntry {
     pub beat_name: String,
 }
 
+/// A "scheduled" entry whose date has passed: promote it to
+/// "uploaded" and stamp uploaded_at with the planned day. Idempotent —
+/// runs before every read so the data stays honest even across midnight.
+/// Entries scheduled for TODAY stay "scheduled" until the day is over.
+pub fn promote_past_scheduled(conn: &rusqlite::Connection) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE beat_uploads
+         SET status = 'uploaded',
+             uploaded_at = COALESCE(uploaded_at, scheduled_at)
+         WHERE status = 'scheduled'
+           AND scheduled_at IS NOT NULL AND scheduled_at != ''
+           AND scheduled_at < date('now','localtime')",
+        [],
+    )
+}
+
 /// All scheduled/uploaded platform entries between two dates (inclusive).
 /// Dates are YYYY-MM-DD strings, so a plain string BETWEEN is correct.
 #[tauri::command]
 pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<ScheduleEntry>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
+    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
         "SELECT u.scheduled_at, u.platform, u.status, b.id, b.name
          FROM beat_uploads u JOIN beats b ON b.id = u.beat_id
@@ -110,6 +127,7 @@ pub struct UploadData {
 #[tauri::command]
 pub fn get_upload_data(beat_id: String) -> Result<UploadData, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
+    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
 
     // ─── Beat metadata ───────────────────────────────────────────────────
     let beat = conn.query_row(
@@ -311,3 +329,76 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
     }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::promote_past_scheduled;
+    use rusqlite::Connection;
+
+    fn test_conn() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE beat_uploads (
+                beat_id      TEXT NOT NULL,
+                platform     TEXT NOT NULL,
+                status       TEXT NOT NULL DEFAULT 'draft',
+                scheduled_at TEXT,
+                uploaded_at  TEXT,
+                url          TEXT,
+                PRIMARY KEY (beat_id, platform)
+            );",
+        ).unwrap();
+        conn
+    }
+
+    fn insert(conn: &Connection, beat: &str, platform: &str, status: &str, scheduled: Option<&str>, uploaded: Option<&str>) {
+        conn.execute(
+            "INSERT INTO beat_uploads (beat_id, platform, status, scheduled_at, uploaded_at) VALUES (?1,?2,?3,?4,?5)",
+            rusqlite::params![beat, platform, status, scheduled, uploaded],
+        ).unwrap();
+    }
+
+    fn row(conn: &Connection, beat: &str, platform: &str) -> (String, Option<String>) {
+        conn.query_row(
+            "SELECT status, uploaded_at FROM beat_uploads WHERE beat_id=?1 AND platform=?2",
+            rusqlite::params![beat, platform],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap()
+    }
+
+    #[test]
+    fn past_scheduled_becomes_uploaded_with_stamped_date() {
+        let conn = test_conn();
+        insert(&conn, "0001", "youtube", "scheduled", Some("2020-01-15"), None);
+        promote_past_scheduled(&conn).unwrap();
+        let (status, uploaded_at) = row(&conn, "0001", "youtube");
+        assert_eq!(status, "uploaded");
+        assert_eq!(uploaded_at.as_deref(), Some("2020-01-15"));
+    }
+
+    #[test]
+    fn future_and_today_stay_scheduled() {
+        let conn = test_conn();
+        let today: String = conn.query_row("SELECT date('now','localtime')", [], |r| r.get(0)).unwrap();
+        insert(&conn, "0002", "soundcloud", "scheduled", Some("2099-12-31"), None);
+        insert(&conn, "0003", "soundcloud", "scheduled", Some(&today), None);
+        promote_past_scheduled(&conn).unwrap();
+        assert_eq!(row(&conn, "0002", "soundcloud").0, "scheduled");
+        assert_eq!(row(&conn, "0003", "soundcloud").0, "scheduled");
+    }
+
+    #[test]
+    fn drafts_and_existing_uploads_untouched() {
+        let conn = test_conn();
+        insert(&conn, "0004", "beatstars", "draft", None, None);
+        insert(&conn, "0005", "beatstars", "uploaded", Some("2020-01-01"), Some("2020-01-02"));
+        promote_past_scheduled(&conn).unwrap();
+        assert_eq!(row(&conn, "0004", "beatstars").0, "draft");
+        // an existing uploaded_at is never overwritten
+        assert_eq!(row(&conn, "0005", "beatstars").1.as_deref(), Some("2020-01-02"));
+    }
+}

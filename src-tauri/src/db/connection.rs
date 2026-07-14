@@ -247,6 +247,14 @@ pub fn init_db() -> Result<(), String> {
                 for sql in [
                     "UPDATE beats SET bpm = NULL WHERE bpm = 0",
                     "UPDATE beats SET key = NULL WHERE key = ''",
+                    // Past-scheduled uploads have happened: promote to uploaded.
+                    // (Same rule as promote_past_scheduled in upload/read.rs —
+                    // this catches old data right at startup.)
+                    "UPDATE beat_uploads
+                     SET status = 'uploaded', uploaded_at = COALESCE(uploaded_at, scheduled_at)
+                     WHERE status = 'scheduled'
+                       AND scheduled_at IS NOT NULL AND scheduled_at != ''
+                       AND scheduled_at < date('now','localtime')",
                 ] {
                     if let Err(e) = conn.execute(sql, []) {
                         // `beats` is created externally; a brand-new DB may not have it yet.
