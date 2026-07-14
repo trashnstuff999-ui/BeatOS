@@ -83,6 +83,14 @@ pub fn open_db() -> SqlResult<Connection> {
     Ok(conn)
 }
 
+/// Where the OneDrive-synced backup snapshot lives.
+pub fn backup_target_path() -> PathBuf {
+    Path::new(LEGACY_DB_PATH)
+        .parent()
+        .map(|d| d.join("beats.backup.db"))
+        .unwrap_or_else(|| PathBuf::from("beats.backup.db"))
+}
+
 /// Write a consistent single-file snapshot of the live DB into the OneDrive
 /// library folder (`beats.backup.db`). Uses VACUUM INTO on a temp file and an
 /// atomic swap so the synced file is never a half-written database.
@@ -93,7 +101,7 @@ pub fn backup_db() -> Result<(), String> {
     if !backup_dir.exists() {
         return Err(format!("backup directory missing: {}", backup_dir.display()));
     }
-    let final_path = backup_dir.join("beats.backup.db");
+    let final_path = backup_target_path();
     let tmp_path = backup_dir.join("beats.backup.db.tmp");
     let _ = std::fs::remove_file(&tmp_path);
 

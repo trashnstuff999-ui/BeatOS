@@ -13,7 +13,7 @@ import type {
   ParsedBeatFolder,
 } from "../types/create";
 import type { CustomTag } from "./tags";
-import type { Stats } from "../types/stats";
+import type { Stats, DashboardActions } from "../types/stats";
 import type { StudioProject, AssetFile, StudioStatus } from "../types/studio";
 import type {
   UploadData,
@@ -39,6 +39,12 @@ export const api = {
 
     save: (settings: Record<string, string>) =>
       invoke<void>("save_settings", { settings }),
+
+    getBackupInfo: () =>
+      invoke<{ db_path: string; backup_path: string; last_backup_secs: number | null }>("get_backup_info"),
+
+    backupNow: () =>
+      invoke<{ db_path: string; backup_path: string; last_backup_secs: number | null }>("backup_db_now"),
   },
 
   // ─── Stats ───────────────────────────────────────────────────────────────
@@ -49,6 +55,10 @@ export const api = {
 
     getBeatCount: () =>
       invoke<number>("get_beat_count"),
+
+    /** Aktions-Zahlen + Upload-Rhythmus fürs Dashboard */
+    getDashboardActions: () =>
+      invoke<DashboardActions>("get_dashboard_actions"),
   },
 
   // ─── Beats ───────────────────────────────────────────────────────────────
@@ -74,8 +84,13 @@ export const api = {
       sortDirection: SortDirection;
       limit: number;
       offset: number;
+      unpublishedOnly?: boolean;
     }) =>
       invoke<{ beats: Beat[]; total_count: number }>("get_beats_paginated", params),
+
+    /** Plattform-Badges (scheduled/uploaded) für eine Seite Beats */
+    getUploadBadges: (beatIds: string[]) =>
+      invoke<Array<{ beat_id: string; platform: string; status: string }>>("get_upload_badges", { beatIds }),
 
     getById: (beatId: string) =>
       invoke<Beat | null>("get_beat_by_id", { beatId }),

@@ -5,6 +5,24 @@
 
 import type { Beat } from "./browse";
 
+export interface WeekCount {
+  week_start: string; // Montag, YYYY-MM-DD
+  count: number;
+}
+
+/** "Was steht heute an?" — Aktions-Zahlen fürs Dashboard */
+export interface DashboardActions {
+  scheduled_next_7: number;
+  finished_unscheduled: number;
+  studio_ready: number;
+  unpublished_finished: number;
+  published_beats: number;
+  scheduled_total: number;
+  studio_by_status: Record<string, number>;
+  uploads_per_week: WeekCount[];
+  current_streak_weeks: number;
+}
+
 export interface Stats {
   total: number;
   this_month: number;

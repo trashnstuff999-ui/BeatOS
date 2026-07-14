@@ -172,6 +172,7 @@ pub fn get_beats_paginated(
     sort_direction: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
+    unpublished_only: Option<bool>,
 ) -> Result<PaginatedBeatsResponse, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     let lim = limit.unwrap_or(50);
@@ -179,6 +180,14 @@ pub fn get_beats_paginated(
 
     let (mut where_clauses, mut params, mut param_idx) =
         base_beat_filters(&search, &status_filter, only_favs);
+
+    // "Unveröffentlicht": no platform has been uploaded for this beat yet
+    if unpublished_only.unwrap_or(false) {
+        where_clauses.push(
+            "NOT EXISTS (SELECT 1 FROM beat_uploads u WHERE u.beat_id = beats.id AND u.status = 'uploaded')"
+                .to_string(),
+        );
+    }
 
     // Key filter
     if let Some(ref keys) = key_filter {
@@ -347,6 +356,43 @@ pub fn update_beat(params: UpdateBeatParams) -> Result<(), String> {
         .map_err(|e| format!("Failed to update beat: {}", e))?;
     
     Ok(())
+}
+
+/// Platform badges for the Browse table: which platforms are scheduled or
+/// uploaded per beat. Drafts are skipped — nothing to show for them.
+#[derive(Debug, Serialize)]
+pub struct UploadBadge {
+    pub beat_id: String,
+    pub platform: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn get_upload_badges(beat_ids: Vec<String>) -> Result<Vec<UploadBadge>, String> {
+    if beat_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let placeholders: Vec<String> = (1..=beat_ids.len()).map(|i| format!("?{}", i)).collect();
+    let sql = format!(
+        "SELECT beat_id, platform, status FROM beat_uploads
+         WHERE status != 'draft' AND beat_id IN ({})",
+        placeholders.join(",")
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = beat_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let badges: Vec<UploadBadge> = stmt
+        .query_map(param_refs.as_slice(), |r| {
+            Ok(UploadBadge {
+                beat_id: r.get(0)?,
+                platform: r.get(1)?,
+                status: r.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(badges)
 }
 
 #[tauri::command]

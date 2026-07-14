@@ -20,6 +20,7 @@ use commands::{
     // Stats commands
     get_stats,
     get_beat_count,
+    get_dashboard_actions,
 
     // Beat CRUD commands
     get_beats,
@@ -29,6 +30,7 @@ use commands::{
     update_beat,
     get_beat_by_id,
     delete_beat,
+    get_upload_badges,
     // Tags commands
     get_custom_tags,
     save_custom_tag,
@@ -53,6 +55,8 @@ use commands::{
     // Settings commands
     get_settings,
     save_settings,
+    get_backup_info,
+    backup_db_now,
     // Studio commands
     scan_studio_projects,
     update_studio_project,
@@ -143,6 +147,7 @@ pub fn run() {
             // Stats
             get_stats,
             get_beat_count,
+            get_dashboard_actions,
 
             // Beat CRUD
             get_beats,
@@ -152,6 +157,7 @@ pub fn run() {
             update_beat,
             get_beat_by_id,
             delete_beat,
+            get_upload_badges,
             // Tags
             get_custom_tags,
             save_custom_tag,
@@ -176,6 +182,8 @@ pub fn run() {
             // Settings
             get_settings,
             save_settings,
+            get_backup_info,
+            backup_db_now,
             // Studio
             scan_studio_projects,
             update_studio_project,

@@ -83,6 +83,32 @@ pub fn year_month_from_secs(secs: u64) -> String {
     format!("{}/{:02}_{}", year, month, MONTH_NAMES[month_idx])
 }
 
+/// Parse "YYYY-MM-DD" into days since Unix epoch (civil-from-days algorithm).
+/// Returns None for malformed strings.
+pub fn date_str_to_days(s: &str) -> Option<i64> {
+    let mut parts = s.trim().splitn(3, '-');
+    let y: i64 = parts.next()?.parse().ok()?;
+    let m: i64 = parts.next()?.parse().ok()?;
+    let d: i64 = parts.next()?.parse().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    // Howard Hinnant's days_from_civil
+    let y_adj = if m <= 2 { y - 1 } else { y };
+    let era = if y_adj >= 0 { y_adj } else { y_adj - 399 } / 400;
+    let yoe = y_adj - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// Monday-based week index for a days-since-epoch value.
+/// 1970-01-01 was a Thursday, so shifting by +3 aligns week starts to Monday.
+pub fn week_index(days: i64) -> i64 {
+    (days + 3).div_euclid(7)
+}
+
 /// Current year as string (e.g. "2026") — used in templates and filenames
 pub fn current_year_str() -> String {
     let (year, _, _) = secs_to_ymd(current_secs());
@@ -119,4 +145,33 @@ pub fn oldest_flp_date(dir: &Path) -> Option<String> {
     }
     flps.sort_by_key(|(t, _)| *t);
     flps.first().and_then(|(_, p)| file_creation_date(p))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn date_str_roundtrips_with_secs_to_date() {
+        for secs in [0u64, 86_400, 1_700_000_000, 1_800_000_000] {
+            let s = secs_to_date(secs);
+            let days = date_str_to_days(&s).expect("parse");
+            assert_eq!(days as u64, secs / 86_400, "roundtrip failed for {}", s);
+        }
+    }
+
+    #[test]
+    fn date_str_rejects_garbage() {
+        assert!(date_str_to_days("").is_none());
+        assert!(date_str_to_days("2026-13-01").is_none());
+        assert!(date_str_to_days("not-a-date").is_none());
+    }
+
+    #[test]
+    fn week_index_is_monday_based() {
+        // 1970-01-01 = Thursday (day 0), 1970-01-05 = Monday (day 4)
+        assert_eq!(week_index(0), 0);
+        assert_eq!(week_index(3), 0);  // Sunday 1970-01-04
+        assert_eq!(week_index(4), 1);  // Monday 1970-01-05 starts week 1
+    }
 }

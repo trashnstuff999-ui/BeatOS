@@ -45,6 +45,41 @@ pub fn save_settings(settings: HashMap<String, String>) -> Result<(), String> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Maintenance (Settings → Wartung)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, serde::Serialize)]
+pub struct BackupInfo {
+    pub db_path: String,
+    pub backup_path: String,
+    /// Unix-Sekunden der letzten Backup-Datei (None = noch kein Backup)
+    pub last_backup_secs: Option<u64>,
+}
+
+#[tauri::command]
+pub fn get_backup_info() -> Result<BackupInfo, String> {
+    let backup_path = crate::db::backup_target_path();
+    let last_backup_secs = std::fs::metadata(&backup_path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    Ok(BackupInfo {
+        db_path: crate::db::get_db_path().to_string_lossy().to_string(),
+        backup_path: backup_path.to_string_lossy().to_string(),
+        last_backup_secs,
+    })
+}
+
+/// Manually trigger a DB snapshot to the OneDrive folder.
+#[tauri::command]
+pub fn backup_db_now() -> Result<BackupInfo, String> {
+    crate::db::backup_db()?;
+    get_backup_info()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
