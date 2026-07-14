@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Filter, RotateCcw, Heart, ChevronDown, X } from "lucide-react";
+import { Filter, RotateCcw, Heart, ChevronDown, X, UploadCloud } from "lucide-react";
 import { C } from "../../lib/theme";
 import type { FilterState, BeatStatus } from "../../types/browse";
 import { MINOR_KEYS, MAJOR_KEYS } from "../../types/browse";
@@ -298,34 +298,67 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
           </div>
         </div>
 
-        {/* Favorites */}
+        {/* Quick toggles */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={labelStyle}>Favorites</label>
-          <button
-            onClick={() => updateFilter("onlyFavs", !filters.onlyFavs)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 2,
-              background: filters.onlyFavs ? "rgba(253,161,36,0.15)" : C.surfaceContainerLowest,
-              border: filters.onlyFavs ? "1px solid rgba(253,161,36,0.3)" : "1px solid transparent",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              color: filters.onlyFavs ? C.primary : C.onSurfaceVariant,
-            }}
-          >
-            <Heart
-              size={12}
-              fill={filters.onlyFavs ? C.primary : "none"}
-              color={filters.onlyFavs ? C.primary : C.onSurfaceVariant}
-              strokeWidth={1.5}
-            />
-            Only Favs
-          </button>
+          <label style={labelStyle}>Filter</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => updateFilter("onlyFavs", !filters.onlyFavs)}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "8px 10px",
+                borderRadius: 2,
+                background: filters.onlyFavs ? "rgba(253,161,36,0.15)" : C.surfaceContainerLowest,
+                border: filters.onlyFavs ? "1px solid rgba(253,161,36,0.3)" : "1px solid transparent",
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                color: filters.onlyFavs ? C.primary : C.onSurfaceVariant,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Heart
+                size={12}
+                fill={filters.onlyFavs ? C.primary : "none"}
+                color={filters.onlyFavs ? C.primary : C.onSurfaceVariant}
+                strokeWidth={1.5}
+              />
+              Favs
+            </button>
+            <button
+              onClick={() => updateFilter("unpublishedOnly", !filters.unpublishedOnly)}
+              title="Nur Beats, die auf keiner Plattform hochgeladen wurden"
+              style={{
+                flex: 1.4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "8px 10px",
+                borderRadius: 2,
+                background: filters.unpublishedOnly ? "rgba(52,211,153,0.12)" : C.surfaceContainerLowest,
+                border: filters.unpublishedOnly ? "1px solid rgba(52,211,153,0.35)" : "1px solid transparent",
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                color: filters.unpublishedOnly ? C.mint : C.onSurfaceVariant,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <UploadCloud
+                size={12}
+                color={filters.unpublishedOnly ? C.mint : C.onSurfaceVariant}
+                strokeWidth={1.75}
+              />
+              Unveröffentlicht
+            </button>
+          </div>
         </div>
       </div>
     </section>

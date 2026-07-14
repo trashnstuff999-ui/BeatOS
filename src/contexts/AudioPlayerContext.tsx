@@ -34,6 +34,11 @@ interface AudioPlayerContextValue {
   toggleMute: () => void;
   seekPercent: (percent: number) => void;
   setVolume: (vol: number) => void;
+  /** Hör-Queue (z.B. die aktuell gefilterte Browse-Liste) für Skip-Buttons */
+  setQueue: (beats: Beat[] | null) => void;
+  playNext: () => void;
+  playPrev: () => void;
+  hasQueue: boolean;
 }
 
 // The 100 ms playback tick lives in its own context so only the player bar
@@ -190,14 +195,38 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   const setVolume = useCallback((vol: number) => setVolumeState(Math.max(0, Math.min(1, vol))), []);
 
+  // ── Listen queue (skip buttons navigate the list that started playback) ────
+  const queueRef = useRef<Beat[] | null>(null);
+  const [queueLength, setQueueLength] = useState(0);
+
+  const setQueue = useCallback((beats: Beat[] | null) => {
+    queueRef.current = beats && beats.length > 0 ? beats : null;
+    setQueueLength(queueRef.current?.length ?? 0);
+  }, []);
+
+  const playOffset = useCallback((offset: number) => {
+    const queue = queueRef.current;
+    const currentId = currentBeatPathRef.current;
+    if (!queue || queue.length === 0) return;
+    const idx = queue.findIndex(b => b.path === currentId);
+    // Not in queue anymore (filter changed): start at the beginning
+    const nextIdx = idx < 0 ? 0 : (idx + offset + queue.length) % queue.length;
+    playBeat(queue[nextIdx]);
+  }, [playBeat]);
+
+  const playNext = useCallback(() => playOffset(1), [playOffset]);
+  const playPrev = useCallback(() => playOffset(-1), [playOffset]);
+
   const playerValue = useMemo<AudioPlayerContextValue>(() => ({
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+    setQueue, playNext, playPrev, hasQueue: queueLength > 1,
   }), [
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+    setQueue, playNext, playPrev, queueLength,
   ]);
 
   const progressValue = useMemo<AudioProgressContextValue>(() => ({

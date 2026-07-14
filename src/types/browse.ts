@@ -62,6 +62,8 @@ export interface FilterState {
   bpmMin: string;
   bpmMax: string;
   onlyFavs: boolean;
+  /** Nur Beats ohne eine hochgeladene Plattform */
+  unpublishedOnly: boolean;
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -71,7 +73,19 @@ export const DEFAULT_FILTERS: FilterState = {
   bpmMin: "",
   bpmMax: "",
   onlyFavs: false,
+  unpublishedOnly: false,
 };
+
+// ─── Upload-Badges (Plattform-Punkte in der Tabelle/Grid) ───────────────────
+
+export interface UploadBadge {
+  beat_id: string;
+  platform: string;  // beatstars | soundcloud | youtube
+  status: string;    // scheduled | uploaded
+}
+
+/** beat_id → Badges */
+export type UploadBadgeMap = Record<string, UploadBadge[]>;
 
 // ─── Key Options für Multi-Select ───────────────────────────────────────────
 

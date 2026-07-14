@@ -5,7 +5,7 @@
 
 import { useRef, useCallback } from "react";
 import {
-  Play, Pause, Repeat,
+  Play, Pause, Repeat, SkipBack, SkipForward,
   Volume2, VolumeX, Loader2, Music,
 } from "lucide-react";
 import { C } from "../lib/theme";
@@ -19,6 +19,7 @@ export function GlobalAudioPlayer() {
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+    playNext, playPrev, hasQueue,
   } = useAudioPlayerContext();
   const { progress, currentTimeFormatted, durationFormatted } = useAudioProgress();
 
@@ -86,8 +87,13 @@ export function GlobalAudioPlayer() {
 
       {/* ── Center: Controls + Progress ──────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-        {/* Buttons — Shuffle/Skip entfallen, bis Queue-Navigation existiert */}
+        {/* Buttons — Skip navigiert die Hör-Queue (gefilterte Browse-Liste) */}
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          {hasQueue && (
+            <IconBtn onClick={playPrev} title="Vorheriger Beat in der Liste">
+              <SkipBack size={18} color={C.onSurfaceVariant} strokeWidth={1.5} />
+            </IconBtn>
+          )}
           {/* Play / Pause */}
           <button
             onClick={togglePlay}
@@ -109,6 +115,11 @@ export function GlobalAudioPlayer() {
             }
           </button>
 
+          {hasQueue && (
+            <IconBtn onClick={playNext} title="Nächster Beat in der Liste">
+              <SkipForward size={18} color={C.onSurfaceVariant} strokeWidth={1.5} />
+            </IconBtn>
+          )}
           <IconBtn onClick={toggleLoop}>
             <Repeat size={15} color={isLooped ? C.primary : C.onSecondaryFixedVar} strokeWidth={1.5} />
           </IconBtn>
@@ -174,10 +185,11 @@ export function GlobalAudioPlayer() {
   );
 }
 
-function IconBtn({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) {
   return (
     <button
       onClick={onClick}
+      title={title}
       style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 4 }}
     >
       {children}

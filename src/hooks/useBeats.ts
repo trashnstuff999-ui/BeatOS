@@ -17,6 +17,7 @@ import type {
   SortColumn,
   PaginationState,
   UpdateBeatParams,
+  UploadBadgeMap,
 } from "../types/browse";
 import {
   DEFAULT_FILTERS,
@@ -45,6 +46,8 @@ interface UseBeatsReturn {
   updateBeat: (params: UpdateBeatParams) => Promise<void>;
   deleteBeat: (beatId: string, archiveBasePath: string) => Promise<{ folder_trashed: boolean }>;
   getCoverUrl: (beatId: string) => string | null;
+  /** Plattform-Badges (scheduled/uploaded) der aktuellen Seite */
+  uploadBadges: UploadBadgeMap;
 }
 
 export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn {
@@ -55,6 +58,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   const [filters, setFilters] = useState<FilterState>({ ...DEFAULT_FILTERS, ...initialFilters });
   const [sort, setSortState] = useState<SortState>(DEFAULT_SORT);
   const [pagination, setPagination] = useState<PaginationState>(DEFAULT_PAGINATION);
+  const [uploadBadges, setUploadBadges] = useState<UploadBadgeMap>({});
 
   // Refs mirror state for use in callbacks without being deps
   // (avoids recreating toggleFavorite/updateStatus on every beats/selection change)
@@ -102,6 +106,19 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
   const prevFiltersRef = useRef<string>(JSON.stringify(DEFAULT_FILTERS));
   const loadIdRef = useRef(0); // Prevent stale responses
 
+  // Platform badges for the visible page (scheduled/uploaded per beat)
+  const loadUploadBadges = useCallback(async (beatIds: string[], loadId: number) => {
+    try {
+      const badges = await api.beats.getUploadBadges(beatIds);
+      if (loadId !== loadIdRef.current) return;
+      const map: UploadBadgeMap = {};
+      for (const b of badges) {
+        (map[b.beat_id] ??= []).push(b);
+      }
+      setUploadBadges(map);
+    } catch { /* badges sind nice-to-have */ }
+  }, []);
+
   // ─── Load Beats (internal, called by effect) ─────────────────────────────────
   const loadBeatsInternal = useCallback(async (
     currentFilters: FilterState,
@@ -128,14 +145,16 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
         sortDirection: currentSort.direction,
         limit: currentPageSize,
         offset: (currentPage - 1) * currentPageSize,
+        unpublishedOnly: currentFilters.unpublishedOnly || undefined,
       });
-      
+
       // Ignore stale responses
       if (loadId !== loadIdRef.current) return;
-      
+
       setBeats(result.beats);
       setPagination(prev => ({ ...prev, totalCount: result.total_count }));
       preloadCovers(result.beats);
+      loadUploadBadges(result.beats.map(b => b.id), loadId);
     } catch (e) {
       if (loadId !== loadIdRef.current) return;
       console.error("Failed to load beats:", e);
@@ -322,5 +341,6 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     updateBeat,
     deleteBeat,
     getCoverUrl,
+    uploadBadges,
   };
 }

@@ -5,8 +5,8 @@
 
 import { memo } from "react";
 import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
-import { C, STATUS_CONFIG } from "../../lib/theme";
-import type { Beat, BeatStatus, SortState, SortColumn } from "../../types/browse";
+import { C, STATUS_CONFIG, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
+import type { Beat, BeatStatus, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 
 interface BeatTableProps {
@@ -17,7 +17,37 @@ interface BeatTableProps {
   onPlayBeat: (beat: Beat) => void;
   sort: SortState;
   onSort: (column: SortColumn) => void;
+  uploadBadges: UploadBadgeMap;
 }
+
+// ─── Platform dots: uploaded = solid, scheduled = ring ───────────────────────
+
+export const PlatformDots = memo(function PlatformDots({ badges }: { badges: UploadBadge[] | undefined }) {
+  if (!badges || badges.length === 0) {
+    return <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
+  }
+  const byPlatform = new Map(badges.map(b => [b.platform, b.status]));
+  return (
+    <span
+      title={badges.map(b => `${PLATFORM_CONFIG[b.platform as PlatformKey]?.label ?? b.platform}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}`).join("\n")}
+      style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
+    >
+      {(["beatstars", "soundcloud", "youtube"] as PlatformKey[]).map(p => {
+        const status = byPlatform.get(p);
+        if (!status) return <span key={p} style={{ width: 7, height: 7, borderRadius: "50%", border: `1px solid ${C.border20}`, boxSizing: "border-box" }} />;
+        const color = PLATFORM_CONFIG[p].color;
+        return (
+          <span key={p} style={{
+            width: 7, height: 7, borderRadius: "50%",
+            background: status === "uploaded" ? color : "transparent",
+            border: `2px solid ${color}`,
+            boxSizing: "border-box",
+          }} />
+        );
+      })}
+    </span>
+  );
+});
 
 // ─── Status Pill ─────────────────────────────────────────────────────────────
 
@@ -86,9 +116,10 @@ interface BeatRowProps {
   onSelectBeat: (beat: Beat) => void;
   onToggleFavorite: (beatId: string) => void;
   onPlayBeat: (beat: Beat) => void;
+  badges: UploadBadge[] | undefined;
 }
 
-const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggleFavorite, onPlayBeat }: BeatRowProps) {
+const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggleFavorite, onPlayBeat, badges }: BeatRowProps) {
   const isFav = beat.favorite === 1;
   const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
   const isCurrentBeat = currentBeat?.id === beat.id;
@@ -177,6 +208,11 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
         <StatusPill status={beat.status as BeatStatus} />
       </div>
 
+      {/* Upload platforms */}
+      <div style={{ width: 70, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+        <PlatformDots badges={badges} />
+      </div>
+
       {/* Favorite */}
       <div style={{ width: 44, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
         <button
@@ -192,7 +228,7 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
 
 // ─── Beat Table ──────────────────────────────────────────────────────────────
 
-export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, sort, onSort }: BeatTableProps) {
+export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, sort, onSort, uploadBadges }: BeatTableProps) {
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* Header Row */}
@@ -219,6 +255,13 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
           <ColHeader label="Status" column="status" currentSort={sort} onSort={onSort} align="center" />
         </div>
         <div style={{
+          width: 70, flexShrink: 0, textAlign: "center",
+          fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.15em", color: C.onSecondaryFixedVar,
+        }}>
+          Live
+        </div>
+        <div style={{
           width: 44, flexShrink: 0, textAlign: "right",
           fontSize: 10, fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.15em", color: C.onSecondaryFixedVar,
@@ -238,6 +281,7 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
             onSelectBeat={onSelectBeat}
             onToggleFavorite={onToggleFavorite}
             onPlayBeat={onPlayBeat}
+            badges={uploadBadges[beat.id]}
           />
         ))}
 

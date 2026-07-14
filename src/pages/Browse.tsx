@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, LayoutGrid, List, Shuffle } from "lucide-react";
 import { C } from "../lib/theme";
 import { useBeats } from "../hooks/useBeats";
 import type { FilterState } from "../types/browse";
@@ -17,6 +17,7 @@ import {
   EditBeatModal,
   Pagination,
 } from "../components/browse";
+import { BeatGrid } from "../components/browse/BeatGrid";
 import type { Beat, UpdateBeatParams } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -47,13 +48,20 @@ export default function Browse() {
     updateBeat,
     deleteBeat,
     getCoverUrl,
+    uploadBadges,
   } = useBeats(initialFilters);
 
-  const { playBeat } = useAudioPlayerContext();
+  const { playBeat, setQueue } = useAudioPlayerContext();
   const { settings } = useSettings();
 
   // ─── Edit Modal State ──────────────────────────────────────────────────────
   const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
+
+  // ─── View Mode: Tabelle ⇄ Cover-Grid (persistiert) ─────────────────────────
+  const [viewMode, setViewMode] = useState<"table" | "grid">(
+    () => (localStorage.getItem("beatos_browse_view") === "grid" ? "grid" : "table")
+  );
+  useEffect(() => { localStorage.setItem("beatos_browse_view", viewMode); }, [viewMode]);
 
   // ─── Panel Animation: keep last beat visible during slide-out ─────────────
   const [displayBeat, setDisplayBeat] = useState<Beat | null>(null);
@@ -67,7 +75,17 @@ export default function Browse() {
   };
 
   const handlePlayBeat = (beat: Beat) => {
+    // Die aktuell gefilterte Liste wird zur Hör-Queue (Skip-Buttons im Player)
+    setQueue(beats);
     playBeat(beat, getCoverUrl(beat.id));
+  };
+
+  const handleRandomBeat = () => {
+    if (beats.length === 0) return;
+    const random = beats[Math.floor(Math.random() * beats.length)];
+    setQueue(beats);
+    playBeat(random, getCoverUrl(random.id));
+    selectBeat(random);
   };
 
   const handleOpenEditModal = (beat: Beat) => {
@@ -170,17 +188,83 @@ export default function Browse() {
             </div>
           )}
 
-          {/* Beat Table with Sortable Headers */}
+          {/* View toolbar: Tabelle ⇄ Grid + Zufalls-Beat */}
           {!isLoading && !error && (
-            <BeatTable
-              beats={beats}
-              selectedBeatId={selectedBeat?.id || null}
-              onSelectBeat={handleSelectBeat}
-              onToggleFavorite={toggleFavorite}
-              onPlayBeat={handlePlayBeat}
-              sort={sort}
-              onSort={setSort}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{
+                display: "flex", gap: 2,
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${C.border15}`,
+                borderRadius: 7, padding: 2,
+              }}>
+                {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    title={label}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "5px 11px",
+                      background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
+                      border: "none", borderRadius: 5,
+                      cursor: "pointer",
+                      fontSize: 10, fontWeight: 700,
+                      color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}
+                  >
+                    <Icon size={12} strokeWidth={2} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={handleRandomBeat}
+                disabled={beats.length === 0}
+                title="Zufälligen Beat aus der aktuellen Liste abspielen"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: 7,
+                  background: "transparent",
+                  border: `1px solid ${C.border15}`,
+                  color: C.onSurfaceVariant,
+                  cursor: beats.length === 0 ? "not-allowed" : "pointer",
+                  fontSize: 10, fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                  opacity: beats.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <Shuffle size={12} strokeWidth={2} />
+                Zufall
+              </button>
+            </div>
+          )}
+
+          {/* Beats: Tabelle oder Cover-Grid */}
+          {!isLoading && !error && (
+            viewMode === "table" ? (
+              <BeatTable
+                beats={beats}
+                selectedBeatId={selectedBeat?.id || null}
+                onSelectBeat={handleSelectBeat}
+                onToggleFavorite={toggleFavorite}
+                onPlayBeat={handlePlayBeat}
+                sort={sort}
+                onSort={setSort}
+                uploadBadges={uploadBadges}
+              />
+            ) : (
+              <BeatGrid
+                beats={beats}
+                selectedBeatId={selectedBeat?.id || null}
+                onSelectBeat={handleSelectBeat}
+                onToggleFavorite={toggleFavorite}
+                onPlayBeat={handlePlayBeat}
+                getCoverUrl={getCoverUrl}
+                uploadBadges={uploadBadges}
+              />
+            )
           )}
 
           {/* Pagination - inside scrollable area */}
