@@ -5,10 +5,19 @@
 
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail, Instagram, Music2, Youtube, ShoppingBag, X } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import {
+  FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
+  Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
+} from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
 import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
+import { api } from "../lib/api";
+import { formatRelativeTime } from "../lib/time";
+import { ChipListEditor } from "../components/upload/ChipListEditor";
+
+type SettingsSection = "paths" | "producer" | "maintenance" | "about";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -265,6 +274,221 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
   );
 }
 
+// ─── Template-Vorschau: so landen die Producer-Werte im gerenderten Text ────
+
+function TemplatePreview({ draft }: { draft: AppSettings }) {
+  const lines: Array<[string, string]> = [
+    ["{{PRODUCER_PROD}}", draft.producerName ? `prod. ${draft.producerName}` : "—"],
+    ["{{EMAIL}}", draft.contactEmail || "—"],
+    ["{{IG_URL}}", draft.instagramUrl || "—"],
+    ["{{SC_URL}}", draft.soundcloudUrl || "—"],
+    ["{{BS_URL}}", draft.beatstarsUrl || "—"],
+  ];
+  return (
+    <div style={{
+      padding: "14px 16px",
+      background: C.surfaceContainerHighest,
+      border: `1px solid ${C.border15}`,
+      borderRadius: 8,
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6,
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+        textTransform: "uppercase", color: C.onSecondaryFixedVar,
+        marginBottom: 10,
+      }}>
+        <FileText size={10} strokeWidth={2} />
+        Vorschau — so landen die Werte in den Beschreibungen
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {lines.map(([placeholder, value]) => (
+          <div key={placeholder} style={{ display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" }}>
+            <span style={{ color: C.onSecondaryFixedVar, width: 150, flexShrink: 0 }}>{placeholder}</span>
+            <span style={{ color: value === "—" ? C.onSecondaryFixedVar : C.mint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Wartung: Backup, System Repair, Templates ───────────────────────────────
+
+function MaintenancePane({ archivePath }: { archivePath: string }) {
+  const [info, setInfo] = useState<{ db_path: string; backup_path: string; last_backup_secs: number | null } | null>(null);
+  const [busy, setBusy] = useState<"backup" | "repair" | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.settings.getBackupInfo().then(setInfo).catch(() => setInfo(null));
+  }, []);
+
+  const handleBackup = async () => {
+    setBusy("backup");
+    setMessage(null);
+    try {
+      setInfo(await api.settings.backupNow());
+      setMessage("Backup erstellt ✓");
+    } catch (e) {
+      setMessage(`Backup fehlgeschlagen: ${String(e)}`);
+    } finally {
+      setBusy(null);
+      setTimeout(() => setMessage(null), 3500);
+    }
+  };
+
+  const handleRepair = async () => {
+    if (!confirm("System Repair wird:\n1. Fehlende Beats aus dem Archiv importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n3. has_artwork/has_video auffrischen\n\nFortfahren?")) return;
+    setBusy("repair");
+    try {
+      const scan = await api.archive.scan(archivePath);
+      const fix = await api.archive.fixDates(archivePath);
+      alert(
+        `System Repair abgeschlossen\n\n` +
+        `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
+        `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
+        `Fehler: ${[...scan.errors, ...fix.errors].length}`
+      );
+    } catch (e) {
+      alert(`System Repair fehlgeschlagen:\n${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleOpenTemplates = async () => {
+    try {
+      const dir = await api.upload.getTemplatesDir();
+      await revealItemInDir(dir);
+    } catch (e) {
+      alert(`Template-Ordner konnte nicht geöffnet werden: ${String(e)}`);
+    }
+  };
+
+  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" };
+  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 11 };
+
+  return (
+    <Section
+      title="Wartung"
+      description="Backup, Reparatur und Vorlagen — alles Administrative an einem Ort."
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Backup */}
+        <div style={{
+          padding: "16px 18px",
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <DatabaseBackup size={14} color={C.mint} strokeWidth={1.75} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Datenbank-Backup</span>
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              color: info?.last_backup_secs ? C.mint : C.error,
+              marginLeft: "auto",
+            }}>
+              {info?.last_backup_secs
+                ? `Letztes Backup: ${formatRelativeTime(info.last_backup_secs)}`
+                : "Noch kein Backup gefunden"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
+            <div style={row}><span style={rowLabel}>Live-DB</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.db_path ?? "…"}</span></div>
+            <div style={row}><span style={rowLabel}>Backup → OneDrive</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.backup_path ?? "…"}</span></div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={handleBackup}
+              disabled={busy !== null}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 16px", borderRadius: 7,
+                background: C.mint, border: "none",
+                color: "#064e3b", cursor: busy ? "wait" : "pointer",
+                fontSize: 11, fontWeight: 700,
+              }}
+            >
+              {busy === "backup" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <DatabaseBackup size={12} strokeWidth={2} />}
+              Jetzt sichern
+            </button>
+            {message && <span style={{ fontSize: 11, color: message.includes("✓") ? C.mint : C.error }}>{message}</span>}
+          </div>
+          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
+            Läuft zusätzlich automatisch bei jedem App-Start und nach jeder Archivierung.
+          </div>
+        </div>
+
+        {/* System Repair */}
+        <div style={{
+          padding: "16px 18px",
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Wrench size={14} color="#ff7351" strokeWidth={1.75} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>System Repair</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
+            Importiert Beats, die im Archiv-Ordner liegen, aber in der Datenbank fehlen,
+            und liest alle Erstell-Daten aus den FLP-Dateien neu.
+          </div>
+          <button
+            onClick={handleRepair}
+            disabled={busy !== null || !archivePath}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 16px", borderRadius: 7,
+              background: "rgba(255,115,81,0.12)",
+              border: "1px solid rgba(255,115,81,0.35)",
+              color: "#ff7351", cursor: busy ? "wait" : "pointer",
+              fontSize: 11, fontWeight: 700,
+            }}
+          >
+            {busy === "repair" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <Wrench size={12} strokeWidth={2} />}
+            Repair ausführen
+          </button>
+        </div>
+
+        {/* Templates */}
+        <div style={{
+          padding: "16px 18px",
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 8,
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <FileText size={14} color={C.tertiary ?? "#9492ff"} strokeWidth={1.75} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Templates</div>
+            <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2 }}>
+              beatstars / soundcloud / youtube .template — Änderungen wirken beim nächsten Re-Render
+            </div>
+          </div>
+          <button
+            onClick={handleOpenTemplates}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 14px", borderRadius: 7,
+              background: "transparent", border: `1px solid ${C.border20}`,
+              color: C.onSurfaceVariant, cursor: "pointer",
+              fontSize: 11, fontWeight: 600,
+            }}
+          >
+            <FolderOpen size={12} strokeWidth={1.75} />
+            Ordner öffnen
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </Section>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type Draft = AppSettings;
@@ -275,6 +499,7 @@ export function Settings() {
   // Local draft state — only applied on Save
   const [draft, setDraft] = useState<Draft>(settings);
   const [saved, setSaved] = useState(false);
+  const [section, setSection] = useState<SettingsSection>("paths");
 
   // The authoritative settings arrive async from SQLite; re-seed the draft
   // once they are in so a Save can never overwrite the DB with stale
@@ -330,12 +555,47 @@ export function Settings() {
         </div>
       </header>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "40px 48px" }}>
+      {/* Content: Sektions-Navigation links, aktive Sektion rechts */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
+        {/* Nav */}
+        <nav style={{
+          width: 190, flexShrink: 0,
+          borderRight: `1px solid ${C.border10}`,
+          padding: "24px 16px",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          {([
+            ["paths", FolderOpen, "Pfade"],
+            ["producer", User, "Producer"],
+            ["maintenance", Wrench, "Wartung"],
+            ["about", Info, "Info"],
+          ] as const).map(([key, Icon, label]) => (
+            <button
+              key={key}
+              onClick={() => setSection(key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 12px", borderRadius: 8,
+                background: section === key ? C.surfaceContainerHigh : "transparent",
+                border: "none",
+                cursor: "pointer", textAlign: "left",
+                fontSize: 12, fontWeight: section === key ? 700 : 500,
+                color: section === key ? C.onSurface : C.onSurfaceVariant,
+                transition: "all 0.15s",
+              }}
+            >
+              <Icon size={14} strokeWidth={1.75} />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Pane */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
         <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* Warning if paths not set */}
-          {(!settings.archivePath) && (
+          {section === "paths" && !settings.archivePath && (
             <div style={{
               display: "flex", alignItems: "center", gap: 12,
               padding: "14px 18px", borderRadius: 8,
@@ -350,6 +610,7 @@ export function Settings() {
           )}
 
           {/* Paths */}
+          {section === "paths" && (
           <Section
             title="Paths"
             description="Configure where BeatOS reads and writes your beat files."
@@ -386,8 +647,10 @@ export function Settings() {
               />
             </div>
           </Section>
+          )}
 
           {/* Producer Info — used by Upload-tab template generation */}
+          {section === "producer" && (
           <Section
             title="Producer Info"
             description="Used by the Upload tab to generate Beatstars, SoundCloud and YouTube descriptions."
@@ -439,18 +702,29 @@ export function Settings() {
                 onChange={v => update("beatstarsUrl", v)}
                 monospace
               />
-              <TextSetting
+              {/* Default-Tags als Chips — gespeichert weiterhin als Komma-Liste */}
+              <ChipListEditor
                 label="Default SoundCloud Tags"
-                icon={Music2}
-                value={draft.defaultGenreTags}
-                placeholder={"Hip Hop & Rap, Melodic Trap, Emo Trap"}
-                onChange={v => update("defaultGenreTags", v)}
-                multiline
+                values={draft.defaultGenreTags.split(",").map(t => t.trim()).filter(Boolean)}
+                onChange={vals => update("defaultGenreTags", vals.join(", "))}
+                separatorLabel=","
+                placeholder="Tag eingeben, Enter drücken … (z.B. Melodic Trap)"
+                hint="werden bei SoundCloud immer vorangestellt"
               />
+
+              {/* Live-Vorschau: so landen die Werte in den Templates */}
+              <TemplatePreview draft={draft} />
             </div>
           </Section>
+          )}
+
+          {/* Wartung */}
+          {section === "maintenance" && (
+            <MaintenancePane archivePath={settings.archivePath} />
+          )}
 
           {/* App Info */}
+          {section === "about" && (
           <Section
             title="About"
             description="BeatOS application information."
@@ -467,7 +741,9 @@ export function Settings() {
               ))}
             </div>
           </Section>
+          )}
 
+        </div>
         </div>
       </div>
 
