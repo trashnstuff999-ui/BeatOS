@@ -8,13 +8,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  X, Star, StickyNote, Disc3, FolderOpen, Archive, Check, Loader2, FileMusic,
+  X, Star, StickyNote, Disc3, FolderOpen, Archive, Check, Loader2, FileMusic, Folder,
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { AssetPipeline } from "./ProjectRow";
+import { projectDisplayName, projectFolderLabel } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 
 const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready"];
@@ -29,6 +30,7 @@ interface ProjectInspectorProps {
 export function ProjectInspector({ project: p, onPatch, onArchive, onClose }: ProjectInspectorProps) {
   const { currentBeat } = useAudioPlayerContext();
   const playerVisible = !!currentBeat;
+  const folderLabel = projectFolderLabel(p);
 
   // ── Notes: local draft, 600ms debounced save ───────────────────────────────
   const [notes, setNotes] = useState(p.notes ?? "");
@@ -80,8 +82,18 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onClose }: Pr
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.onSurface, lineHeight: 1.3, wordBreak: "break-word" }}>
-            {p.parsed_name || p.name}
+            {projectDisplayName(p)}
           </div>
+          {folderLabel && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 3,
+              wordBreak: "break-all",
+            }}>
+              <Folder size={9} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+              {folderLabel}
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
             {p.key && <MetaPill>{p.key}</MetaPill>}
             {p.bpm != null && <MetaPill>{p.bpm} BPM</MetaPill>}

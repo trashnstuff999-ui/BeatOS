@@ -9,7 +9,7 @@
 
 use crate::db::open_db;
 use crate::utils::{
-    file_modified_secs, is_audio_extension, is_flp, is_image_extension,
+    file_modified_secs, is_flp, is_image_extension,
     is_video_extension, parse_audio_filename, secs_to_date,
 };
 use serde::Serialize;
@@ -31,7 +31,10 @@ pub struct StudioProject {
     pub path: String,            // project folder (identity)
     pub name: String,            // folder name
     pub root: String,            // which production root it came from
-    pub parsed_name: String,     // name without [Key BPM]
+    pub parsed_name: String,     // folder name without [Key BPM]
+    /// Song title parsed from the exported MP3/WAV — the real name of the
+    /// track when the project folder is still called "project_187".
+    pub song_name: Option<String>,
     pub key: Option<String>,
     pub bpm: Option<i32>,
     pub newest_flp: Option<String>,
@@ -148,6 +151,10 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
     let mut has_cover = false;
     let mut has_thumbnail = false;
     let mut has_video = false;
+    // Exported audio: (rank, modified, filename) — rank 1 = mp3 beats wav.
+    // The export filename carries the real song title ("MEMORIES [156 Fm].mp3")
+    // even when the project folder is still called "project_187".
+    let mut audio_exports: Vec<(u8, u64, String)> = Vec::new();
 
     // Folder root + one level of subdirs (01_SAVEFILES etc.)
     let mut scan_files = |d: &Path, collect_assets: bool| {
@@ -165,10 +172,14 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
                 continue;
             }
             let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
-            let name_lower = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+            let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let name_lower = file_name.to_lowercase();
             if ext == "mp3" { has_mp3 = true; }
             if ext == "wav" { has_wav = true; }
-            if is_audio_extension(&ext) { /* covered by mp3/wav flags */ }
+            if ext == "mp3" || ext == "wav" {
+                let rank = if ext == "mp3" { 1 } else { 0 };
+                audio_exports.push((rank, file_modified_secs(&p).unwrap_or(0), file_name));
+            }
             if is_image_extension(&ext) {
                 if name_lower.contains("thumb") { has_thumbnail = true; } else { has_cover = true; }
             }
@@ -211,14 +222,31 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         .collect();
 
     let name = dir.file_name()?.to_str()?.to_string();
-    let (parsed_name, key, bpm) = parse_audio_filename(&name);
+    let (parsed_name, folder_key, folder_bpm) = parse_audio_filename(&name);
     let modified_secs = if newest_secs > 0 { newest_secs } else { file_modified_secs(dir).unwrap_or(0) };
+
+    // Song title from the best export (mp3 first, then newest). Key/BPM from
+    // the filename fill in whatever the folder name didn't provide.
+    audio_exports.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    let (song_name, key, bpm) = match audio_exports.last() {
+        Some((_, _, file_name)) => {
+            let (song, song_key, song_bpm) = parse_audio_filename(file_name);
+            let song = song.trim().to_string();
+            (
+                if song.is_empty() { None } else { Some(song) },
+                folder_key.or(song_key),
+                folder_bpm.or(song_bpm),
+            )
+        }
+        None => (None, folder_key, folder_bpm),
+    };
 
     Some(StudioProject {
         path: dir.to_string_lossy().to_string(),
         name,
         root: root.to_string(),
         parsed_name,
+        song_name,
         key,
         bpm,
         newest_flp: Some(newest_flp.to_string_lossy().to_string()),
@@ -421,6 +449,54 @@ mod tests {
         assert!(p.newest_flp.as_deref().unwrap().to_lowercase().ends_with(".flp"));
         assert_eq!(p.flps.len(), 1);
         assert_eq!(p.flps[0].name.to_lowercase(), "memories_v3.flp");
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn song_name_comes_from_export_and_fills_key_bpm() {
+        let tmp = std::env::temp_dir().join(format!("beatos_studio_song_{}", std::process::id()));
+        // Folder name carries no title info — the export does.
+        let proj = tmp.join("project_187");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("session.flp"), b"flp").unwrap();
+        std::fs::write(proj.join("MEMORIES [156 Fm]_tagged.mp3"), b"mp3").unwrap();
+
+        let p = scan_project_dir(&proj, "root").expect("project detected");
+        assert_eq!(p.song_name.as_deref(), Some("MEMORIES"));
+        assert_eq!(p.key.as_deref(), Some("Fm"), "Key aus dem Dateinamen");
+        assert_eq!(p.bpm, Some(156), "BPM aus dem Dateinamen");
+        assert_eq!(p.parsed_name, "project_187", "Ordnername bleibt erhalten");
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn folder_key_bpm_wins_over_export_and_mp3_wins_over_wav() {
+        let tmp = std::env::temp_dir().join(format!("beatos_studio_song2_{}", std::process::id()));
+        let proj = tmp.join("0042 - DRIFT [Am 140]");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("session.flp"), b"flp").unwrap();
+        std::fs::write(proj.join("OLD NAME [90 Cm].wav"), b"wav").unwrap();
+        std::fs::write(proj.join("DRIFT FINAL [140 Am].mp3"), b"mp3").unwrap();
+
+        let p = scan_project_dir(&proj, "root").expect("project detected");
+        assert_eq!(p.song_name.as_deref(), Some("DRIFT FINAL"), "MP3 schlägt WAV");
+        assert_eq!(p.key.as_deref(), Some("Am"));
+        assert_eq!(p.bpm, Some(140));
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn no_export_means_no_song_name() {
+        let tmp = std::env::temp_dir().join(format!("beatos_studio_song3_{}", std::process::id()));
+        let proj = tmp.join("Skizze");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("session.flp"), b"flp").unwrap();
+
+        let p = scan_project_dir(&proj, "root").expect("project detected");
+        assert!(p.song_name.is_none());
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }

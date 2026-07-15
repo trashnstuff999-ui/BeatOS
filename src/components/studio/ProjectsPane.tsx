@@ -17,6 +17,7 @@ import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectInspector } from "./ProjectInspector";
+import { projectDisplayName } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 import type { Beat } from "../../types/browse";
 
@@ -129,7 +130,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
   const handlePreview = (p: StudioProject) => {
     const pseudoBeat: Beat = {
       id: `studio:${p.path}`,
-      name: p.parsed_name || p.name,
+      name: projectDisplayName(p),
       path: p.path,
       bpm: p.bpm, key: p.key,
       status: null, tags: null, favorite: null,
@@ -154,7 +155,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
     if (onlyPriority && !p.priority) return false;
     if (rootFilter && p.root !== rootFilter) return false;
     if (q) {
-      const hay = `${p.parsed_name} ${p.name} ${p.key ?? ""} ${p.bpm ?? ""}`.toLowerCase();
+      // Songtitel zuerst — danach sucht man, nicht nach "project_187"
+      const hay = `${p.song_name ?? ""} ${p.parsed_name} ${p.name} ${p.key ?? ""} ${p.bpm ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -166,7 +168,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
   const sortFn = (a: StudioProject, b: StudioProject): number => {
     switch (sortMode) {
       case "priority": return b.priority - a.priority || b.modified_secs - a.modified_secs;
-      case "name":     return (a.parsed_name || a.name).localeCompare(b.parsed_name || b.name, "de");
+      case "name":     return projectDisplayName(a).localeCompare(projectDisplayName(b), "de");
       case "oldest":   return a.modified_secs - b.modified_secs;
       default:         return b.modified_secs - a.modified_secs;
     }

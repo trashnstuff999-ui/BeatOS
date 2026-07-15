@@ -5,6 +5,19 @@
 
 export type StudioStatus = "idea" | "wip" | "exported" | "ready";
 
+/** Was in der Liste groß steht: Songtitel wenn exportiert, sonst Ordnername. */
+export function projectDisplayName(p: StudioProject): string {
+  return p.song_name?.trim() || p.parsed_name || p.name;
+}
+
+/** Ordnername als Sekundär-Info — null, wenn er nichts Neues sagt. */
+export function projectFolderLabel(p: StudioProject): string | null {
+  const song = p.song_name?.trim();
+  if (!song) return null;
+  const folder = p.parsed_name || p.name;
+  return folder.toLowerCase() === song.toLowerCase() ? null : folder;
+}
+
 export interface FlpEntry {
   path: string;
   name: string;
@@ -16,7 +29,10 @@ export interface StudioProject {
   path: string;
   name: string;
   root: string;
+  /** Ordnername ohne [Key BPM] */
   parsed_name: string;
+  /** Songtitel aus der exportierten MP3/WAV — null, wenn noch nichts exportiert */
+  song_name: string | null;
   key: string | null;
   bpm: number | null;
   newest_flp: string | null;

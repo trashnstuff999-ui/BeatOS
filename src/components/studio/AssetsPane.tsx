@@ -18,6 +18,7 @@ import {
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { C } from "../../lib/theme";
 import { api } from "../../lib/api";
+import { projectDisplayName } from "../../types/studio";
 import type { AssetFile, StudioProject } from "../../types/studio";
 
 const ROLE_META: Record<AssetFile["guessed_role"], { label: string; color: string }> = {
@@ -100,7 +101,7 @@ export function AssetsPane({ assetPath, projects, selectedProject, onClearSelect
         await api.studio.assignAsset(f.path, assetPath, project.path);
       }
       setOpenPickerFor(null);
-      setToast(`${label} → ${project.parsed_name || project.name}`);
+      setToast(`${label} → ${projectDisplayName(project)}`);
       setTimeout(() => setToast(null), 2800);
       scan();
       onAssigned();
@@ -165,7 +166,7 @@ export function AssetsPane({ assetPath, projects, selectedProject, onClearSelect
           <>
             <span style={{ fontSize: 11, color: C.onSurfaceVariant }}>Zuweisen an:</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: C.primary }}>
-              {selectedProject.parsed_name || selectedProject.name}
+              {projectDisplayName(selectedProject)}
             </span>
             <button
               onClick={onClearSelection}
@@ -404,7 +405,7 @@ function AssignButton({ selectedProject, isAssigning, pickerOpen, onTogglePicker
       onClick={() => direct ? onAssign(selectedProject!) : onTogglePicker()}
       disabled={isAssigning}
       title={direct
-        ? `Zuweisen an „${selectedProject!.parsed_name || selectedProject!.name}"`
+        ? `Zuweisen an „${projectDisplayName(selectedProject!)}"`
         : "Projekt wählen und zuweisen"}
       style={{
         display: "flex", alignItems: "center", gap: 5,
@@ -445,7 +446,7 @@ function ProjectPickerPopover({ projects, onPick, onClose }: {
   }, []);
 
   const filtered = projects.filter(p =>
-    !query.trim() || (p.parsed_name || p.name).toLowerCase().includes(query.toLowerCase())
+    !query.trim() || projectDisplayName(p).toLowerCase().includes(query.toLowerCase())
   );
 
   return (
@@ -493,7 +494,7 @@ function ProjectPickerPopover({ projects, onPick, onClose }: {
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
           >
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {p.parsed_name || p.name}
+              {projectDisplayName(p)}
             </span>
             {p.key && <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, flexShrink: 0 }}>{p.key}</span>}
             {p.bpm != null && <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, flexShrink: 0 }}>{p.bpm}</span>}

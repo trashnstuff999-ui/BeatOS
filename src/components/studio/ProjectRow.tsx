@@ -3,14 +3,26 @@
 // One Studio project row. Row click = pick as asset-assignment target;
 // every inner control stops propagation. Play = audio preview (export in
 // the global player), Disc = open newest FLP in the DAW, Info = inspector.
+//
+// Layout: one loud line (song title from the export, folder name as
+// fallback), one dimmed meta line. Pipeline/status/actions sit in fixed
+// columns so they line up across rows; actions fade in on hover — only
+// "Archivieren" stays visible for projects that are ready.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Star, FolderOpen, Play, Archive, Zap, Disc3, Info, HardDrive } from "lucide-react";
+import { useState } from "react";
+import { Star, FolderOpen, Play, Archive, Zap, Disc3, Info, HardDrive, Folder } from "lucide-react";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
+import { projectDisplayName, projectFolderLabel } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 
 const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready"];
+
+// Fixed column widths — keep the right half aligned across all rows
+const COL_PIPELINE = 104;
+const COL_STATUS = 258;
+const COL_ACTIONS = 218;
 
 interface ProjectRowProps {
   project: StudioProject;
@@ -29,18 +41,26 @@ export function ProjectRow({
   project: p, isSelected, dimmed,
   onSelect, onPatch, onOpenDaw, onPreview, onInspect, onOpenFolder, onArchive,
 }: ProjectRowProps) {
+  const [hovered, setHovered] = useState(false);
   const exportDetected = (p.has_mp3 || p.has_wav) && (p.status === "idea" || p.status === "wip");
   const canPreview = p.has_mp3 || p.has_wav;
+  const title = projectDisplayName(p);
+  const folderLabel = projectFolderLabel(p);
+  const isReady = p.status === "ready";
 
   return (
     <div
       onClick={onSelect}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title={isSelected ? "Ausgewählt — Assets-Tab weist diesem Projekt zu" : "Klick wählt das Projekt für die Asset-Zuweisung"}
       style={{
         display: "flex", alignItems: "center", gap: 12,
-        padding: "11px 16px",
+        padding: "13px 16px",
         borderTop: `1px solid ${C.border10}`,
-        background: isSelected ? "rgba(253,161,36,0.06)" : "transparent",
+        background: isSelected
+          ? "rgba(253,161,36,0.06)"
+          : hovered ? "rgba(255,255,255,0.02)" : "transparent",
         boxShadow: isSelected ? `inset 3px 0 0 ${C.primary}` : "none",
         cursor: "pointer",
         opacity: dimmed ? 0.55 : 1,
@@ -79,14 +99,18 @@ export function ProjectRow({
         <Play size={11} fill={canPreview ? C.mint : "none"} strokeWidth={1.5} style={{ marginLeft: 1 }} />
       </button>
 
-      {/* Name + meta */}
+      {/* ── Line 1: title · Line 2: everything secondary ─────────────────── */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{
-            fontSize: 13, fontWeight: 600, color: C.onSurface,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {p.parsed_name || p.name}
+          <span
+            title={title}
+            style={{
+              fontSize: 14, fontWeight: 700, color: C.onSurface,
+              letterSpacing: "-0.01em",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}
+          >
+            {title}
           </span>
           {exportDetected && (
             <button
@@ -105,26 +129,50 @@ export function ProjectRow({
             </button>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, fontSize: 10, color: C.onSecondaryFixedVar }}>
-          {p.key && <span>{p.key}</span>}
-          {p.bpm != null && <span>{p.bpm} BPM</span>}
-          <span title={p.modified_date ?? undefined}>· {formatRelativeTime(p.modified_secs)}</span>
-          {p.flp_count > 1 && <span>· {p.flp_count} FLPs</span>}
-          <span title={p.root} style={{ display: "inline-flex", alignItems: "center", gap: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-            <HardDrive size={9} /> {p.root.split(/[/\\]/).filter(Boolean).pop()}
-          </span>
+
+        <div style={{
+          display: "flex", alignItems: "center", gap: 7,
+          marginTop: 4,
+          fontSize: 10, color: C.onSecondaryFixedVar,
+          overflow: "hidden", whiteSpace: "nowrap",
+        }}>
+          {folderLabel && (
+            <span
+              title={`Ordner: ${folderLabel}`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                overflow: "hidden", textOverflow: "ellipsis", maxWidth: 190,
+              }}
+            >
+              <Folder size={9} strokeWidth={1.75} />
+              {folderLabel}
+            </span>
+          )}
+          {p.key && <MetaItem>{p.key}</MetaItem>}
+          {p.bpm != null && <MetaItem>{p.bpm} BPM</MetaItem>}
+          <MetaItem title={p.modified_date ?? undefined}>{formatRelativeTime(p.modified_secs)}</MetaItem>
+          {p.flp_count > 1 && <MetaItem>{p.flp_count} FLPs</MetaItem>}
+          <MetaItem title={p.root}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}>
+              <HardDrive size={9} /> {p.root.split(/[/\\]/).filter(Boolean).pop()}
+            </span>
+          </MetaItem>
         </div>
       </div>
 
-      {/* Asset pipeline */}
-      <AssetPipeline project={p} />
+      {/* Asset pipeline — fixed column */}
+      <div style={{ width: COL_PIPELINE, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+        <AssetPipeline project={p} />
+      </div>
 
-      {/* Status segments */}
+      {/* Status segments — fixed column */}
       <div style={{
-        display: "flex", gap: 2, flexShrink: 0,
+        width: COL_STATUS, flexShrink: 0,
+        display: "flex", gap: 2,
         background: "rgba(255,255,255,0.03)",
         border: `1px solid ${C.border15}`,
         borderRadius: 7, padding: 2,
+        boxSizing: "border-box",
       }}>
         {STATUS_ORDER.map(s => {
           const active = p.status === s;
@@ -135,7 +183,8 @@ export function ProjectRow({
               onClick={(e) => { e.stopPropagation(); onPatch({ status: s }); }}
               title={m.label}
               style={{
-                padding: "3px 8px",
+                flex: 1,
+                padding: "3px 4px",
                 background: active ? m.bg : "transparent",
                 border: "none", borderRadius: 5,
                 cursor: "pointer",
@@ -143,6 +192,7 @@ export function ProjectRow({
                 color: active ? m.color : C.onSecondaryFixedVar,
                 letterSpacing: "0.04em", textTransform: "uppercase",
                 transition: "all 0.15s",
+                whiteSpace: "nowrap",
               }}
             >
               {m.label}
@@ -151,29 +201,57 @@ export function ProjectRow({
         })}
       </div>
 
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <RowBtn icon={Disc3} title="In FL Studio öffnen (neueste FLP)" onClick={onOpenDaw} accent />
-        <RowBtn icon={Info} title="Details & Notizen" onClick={onInspect} />
-        <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={onOpenFolder} />
-        <button
-          onClick={(e) => { e.stopPropagation(); onArchive(); }}
-          title="In den Create-Flow übernehmen und archivieren"
-          style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "6px 10px", borderRadius: 6,
-            background: p.status === "ready" ? C.primary : "transparent",
-            border: `1px solid ${p.status === "ready" ? C.primary : C.border15}`,
-            color: p.status === "ready" ? C.onPrimary : C.onSurfaceVariant,
-            cursor: "pointer",
-            fontSize: 10, fontWeight: 700,
-          }}
-        >
-          <Archive size={11} strokeWidth={2} />
-          Archivieren
-        </button>
+      {/* Actions — fixed column, fade in on hover */}
+      <div style={{
+        width: COL_ACTIONS, flexShrink: 0,
+        display: "flex", gap: 6, justifyContent: "flex-end",
+      }}>
+        <div style={{
+          display: "flex", gap: 6,
+          opacity: hovered ? 1 : 0,
+          pointerEvents: hovered ? "auto" : "none",
+          transition: "opacity 0.15s",
+        }}>
+          <RowBtn icon={Disc3} title="In FL Studio öffnen (neueste FLP)" onClick={onOpenDaw} accent />
+          <RowBtn icon={Info} title="Details & Notizen" onClick={onInspect} />
+          <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={onOpenFolder} />
+        </div>
+        {/* Ready projects keep their call to action visible */}
+        <div style={{
+          opacity: isReady || hovered ? 1 : 0,
+          pointerEvents: isReady || hovered ? "auto" : "none",
+          transition: "opacity 0.15s",
+        }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onArchive(); }}
+            title="In den Create-Flow übernehmen und archivieren"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "6px 10px", borderRadius: 6,
+              background: isReady ? C.primary : "transparent",
+              border: `1px solid ${isReady ? C.primary : C.border15}`,
+              color: isReady ? C.onPrimary : C.onSurfaceVariant,
+              cursor: "pointer",
+              fontSize: 10, fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Archive size={11} strokeWidth={2} />
+            Archivieren
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+/** Meta item with a leading separator dot. */
+function MetaItem({ children, title }: { children: React.ReactNode; title?: string }) {
+  return (
+    <>
+      <span style={{ opacity: 0.4 }}>·</span>
+      <span title={title} style={{ flexShrink: 0 }}>{children}</span>
+    </>
   );
 }
 
