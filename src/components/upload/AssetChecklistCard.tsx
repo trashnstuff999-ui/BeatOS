@@ -16,7 +16,7 @@ import {
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { C } from "../../lib/theme";
-import { SectionCard, SectionIconBtn } from "./SectionCard";
+import { SectionCard, SectionIconBtn } from "../ui/SectionCard";
 import { api } from "../../lib/api";
 import type { AssetCheck } from "../../types/upload";
 

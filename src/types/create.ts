@@ -31,7 +31,11 @@ export interface ParsedBeatFolder {
   year_month: string;
   audio_files: AudioFileInfo[];
   all_files: string[];
+  /** Bild ohne "thumb" im Namen */
   cover_path: string | null;
+  /** Bild mit "thumb" im Namen */
+  thumbnail_path: string | null;
+  video_path: string | null;
   source_path: string;
   suggested_id: number;
 }

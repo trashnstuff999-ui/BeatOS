@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink, Send, Rocket } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
-import { SectionCard } from "./SectionCard";
+import { SectionCard } from "../ui/SectionCard";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";

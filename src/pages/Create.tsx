@@ -39,6 +39,8 @@ import type {
 } from "../types/create";
 import type { TypeBeatPreset } from "../types/upload";
 import { PresetPicker } from "../components/create/PresetPicker";
+import { CreateAssetsCard } from "../components/create/CreateAssetsCard";
+import { useSettings } from "../contexts/SettingsContext";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Component
@@ -71,11 +73,17 @@ export default function Create() {
   const tagsHook = useTags();
   const { tags, clearTags } = tagsHook;
 
-  // ─── Cover State (auto-detected from source folder, display only) ─────────
-  const [coverImage, setCoverImage] = useState<string | null>(null);
+  // ─── Asset-Slots (Cover/Thumbnail/Video im Beat-Ordner) ────────────────────
+  const [coverImage, setCoverImage] = useState<string | null>(null);   // base64-Preview
+  const [coverPath, setCoverPath] = useState<string | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailPath, setThumbnailPath] = useState<string | null>(null);
+  const [videoPath, setVideoPath] = useState<string | null>(null);
+  const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
 
   // ─── Tag Manager ───────────────────────────────────────────────────────────
   const { openTagManager } = useTagManager();
+  const { settings } = useSettings();
   const handleOpenTagManager = useCallback(() => {
     openTagManager({
       initialSelected: tags,
@@ -103,6 +111,11 @@ export default function Create() {
     setAudioFiles([]);
     setFlpFiles([]);
     setCoverImage(null);
+    setCoverPath(null);
+    setThumbnailPreview(null);
+    setThumbnailPath(null);
+    setVideoPath(null);
+    setPreset(null);
     clearTags();
     setParseError(null);
   }, [clearTags]);
@@ -133,6 +146,7 @@ export default function Create() {
     autoRename,
     trashSource,
     preset,
+    assets: { hasCover: Boolean(coverPath), hasThumbnail: Boolean(thumbnailPath), hasVideo: Boolean(videoPath) },
     onReset: handleReset,
     setCatalogId,
   });
@@ -156,6 +170,46 @@ export default function Create() {
   const handleResetClick = useCallback(() => {
     if (sourceFolderPath) handleReset();
   }, [sourceFolderPath, handleReset]);
+
+  // ─── Asset-Slots aus einem Parse-Ergebnis übernehmen ───────────────────────
+  // Bewusst getrennt vom Formular: Nach dem Zuweisen von Cover/Thumbnail/Video
+  // wird nur DAS hier aktualisiert — Titel, Key, BPM, Tags und Notizen bleiben
+  // stehen, auch wenn der Nutzer sie schon getippt hat.
+  const applyAssetSlots = useCallback(async (parsed: {
+    cover_path: string | null;
+    thumbnail_path: string | null;
+    video_path: string | null;
+  }) => {
+    setCoverPath(parsed.cover_path);
+    setThumbnailPath(parsed.thumbnail_path);
+    setVideoPath(parsed.video_path);
+
+    const loadPreview = async (path: string | null) => {
+      if (!path) return null;
+      try { return await api.create.readImageFile(path); }
+      catch { return null; }
+    };
+    const [cover, thumb] = await Promise.all([
+      loadPreview(parsed.cover_path),
+      loadPreview(parsed.thumbnail_path),
+    ]);
+    setCoverImage(cover);
+    setThumbnailPreview(thumb);
+  }, []);
+
+  /** Nach einer Asset-Zuweisung: Ordner neu lesen, aber nur die Slots setzen. */
+  const refreshAssets = useCallback(async () => {
+    if (!sourceFolderPath) return;
+    setIsRefreshingAssets(true);
+    try {
+      const parsed = await api.create.parseBeatFolder(sourceFolderPath);
+      await applyAssetSlots(parsed);
+    } catch (err) {
+      console.error("Failed to refresh assets:", err);
+    } finally {
+      setIsRefreshingAssets(false);
+    }
+  }, [sourceFolderPath, applyAssetSlots]);
 
   // ─── Folder Loading ─────────────────────────────────────────────────────────
   // Split: pick (dialog) vs. load (parse flow) — the Studio tab jumps in here
@@ -202,18 +256,7 @@ export default function Create() {
         setSelectedFlp("");
       }
 
-      // Cover (auto-detected from source folder — display only)
-      if (parsed.cover_path) {
-        try {
-          const coverBase64 = await api.create.readImageFile(parsed.cover_path);
-          setCoverImage(coverBase64);
-        } catch (err) {
-          console.error("Failed to load cover:", err);
-          setCoverImage(null);
-        }
-      } else {
-        setCoverImage(null);
-      }
+      await applyAssetSlots(parsed);
 
       setParseError(null);
     } catch (err) {
@@ -281,10 +324,10 @@ export default function Create() {
 
       {/* Scrollable Main Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px", paddingBottom: 100 }}>
-        <div style={{ maxWidth: 1400, display: "flex", gap: 40 }}>
+        <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", gap: 24, alignItems: "flex-start" }}>
 
-          {/* Left Column: Form Cards */}
-          <div style={{ flex: "0 0 58%", display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Links: Was wird archiviert? */}
+          <div style={{ flex: "0 0 55%", display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
 
             {parseError && <ErrorBanner message={parseError} />}
 
@@ -301,16 +344,34 @@ export default function Create() {
               yearMonth={yearMonth}
             />
 
-            <StatusCard
-              status={status}
-              setStatus={setStatus}
-            />
-
-            <PresetPicker selected={preset} onSelect={setPreset} />
+            {/* Status + Preset teilen sich eine Zeile — beide sind schmal */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+              <StatusCard
+                status={status}
+                setStatus={setStatus}
+              />
+              <PresetPicker selected={preset} onSelect={setPreset} />
+            </div>
 
             <TagsCard
               tagsHook={tagsHook}
               onShowAllTags={handleOpenTagManager}
+            />
+
+            <NotesCard
+              notes={notes}
+              setNotes={setNotes}
+            />
+          </div>
+
+          {/* Rechts: Womit? — Assets zuerst, Preview klebt beim Scrollen */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
+            <CreateAssetsCard
+              assets={{ coverPreview: coverImage, coverPath, thumbnailPreview, thumbnailPath, videoPath }}
+              sourceFolderPath={sourceFolderPath}
+              assetPath={settings.assetPath}
+              isRefreshing={isRefreshingAssets}
+              onRefresh={refreshAssets}
             />
 
             <SourceFilesCard
@@ -322,23 +383,17 @@ export default function Create() {
               setSelectedFlp={setSelectedFlp}
             />
 
-            <NotesCard
-              notes={notes}
-              setNotes={setNotes}
-            />
-          </div>
-
-          {/* Right Column: Preview */}
-          <div style={{ flex: 1 }}>
-            <PreviewCard
-              title={title}
-              keyValue={key}
-              bpm={bpm}
-              catalogId={catalogId}
-              tags={tags}
-              coverImage={coverImage}
-              previewPath={previewPath}
-            />
+            <div style={{ position: "sticky", top: 0 }}>
+              <PreviewCard
+                title={title}
+                keyValue={key}
+                bpm={bpm}
+                catalogId={catalogId}
+                tags={tags}
+                coverImage={coverImage}
+                previewPath={previewPath}
+              />
+            </div>
           </div>
         </div>
       </div>

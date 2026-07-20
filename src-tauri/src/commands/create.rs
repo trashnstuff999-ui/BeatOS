@@ -178,22 +178,14 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
         (None, None, year_month_from_secs(now_secs))
     };
     
-    // Find cover image (any supported image format, not just PNG)
-    let cover_path = entries
-        .iter()
-        .find(|e| {
-            let ext = e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            crate::utils::is_image_extension(&ext)
-        })
-        .map(|e| e.path().to_string_lossy().to_string());
-    
+    // Asset slots — cover and thumbnail are told apart by the "thumb" marker
+    // in the filename (same rule as the Studio scan). Taking "the first
+    // image" would show the thumbnail as cover whenever it sorts first.
+    let (cover_path, thumbnail_path, video_path) = find_asset_slots(&entries);
+
     // Get next beat ID
     let suggested_id = get_next_beat_id().unwrap_or(1);
-    
+
     Ok(ParsedBeatFolder {
         name,
         key,
@@ -205,9 +197,45 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
         audio_files,
         all_files,
         cover_path,
+        thumbnail_path,
+        video_path,
         source_path: folder_path,
         suggested_id,
     })
+}
+
+/// Split the folder's visual files into (cover, thumbnail, video).
+/// A file counts as thumbnail when its name contains "thumb"; every other
+/// image is a cover candidate. Nothing is guessed: a folder holding only a
+/// thumbnail reports no cover.
+fn find_asset_slots(
+    entries: &[std::fs::DirEntry],
+) -> (Option<String>, Option<String>, Option<String>) {
+    let mut cover: Option<String> = None;
+    let mut thumbnail: Option<String> = None;
+    let mut video: Option<String> = None;
+
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+        let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+        let name_lower = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+        let as_string = || path.to_string_lossy().to_string();
+
+        if crate::utils::is_image_extension(&ext) {
+            if name_lower.contains("thumb") {
+                thumbnail.get_or_insert_with(as_string);
+            } else {
+                cover.get_or_insert_with(as_string);
+            }
+        } else if crate::utils::is_video_extension(&ext) {
+            video.get_or_insert_with(as_string);
+        }
+    }
+
+    (cover, thumbnail, video)
 }
 
 /// Read an image file and return as base64 data URL
@@ -238,4 +266,50 @@ pub fn read_image_file(file_path: String) -> Result<String, String> {
     let encoded = STANDARD.encode(&bytes);
     
     Ok(format!("data:{};base64,{}", mime_type, encoded))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::find_asset_slots;
+
+    fn entries(dir: &std::path::Path) -> Vec<std::fs::DirEntry> {
+        let mut v: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).collect();
+        v.sort_by_key(|e| e.file_name());
+        v
+    }
+
+    #[test]
+    fn splits_cover_thumbnail_and_video() {
+        let tmp = std::env::temp_dir().join(format!("beatos_slots_{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Thumbnail sorts BEFORE the cover — the old "first image" rule got this wrong
+        std::fs::write(tmp.join("MEMORIES_Cover_2000x2000.png"), b"png").unwrap();
+        std::fs::write(tmp.join("AAA_MEMORIES_Thumbnail_1920x1080.png"), b"png").unwrap();
+        std::fs::write(tmp.join("MEMORIES.mp4"), b"mp4").unwrap();
+
+        let (cover, thumb, video) = find_asset_slots(&entries(&tmp));
+        assert!(cover.as_deref().unwrap().ends_with("MEMORIES_Cover_2000x2000.png"));
+        assert!(thumb.as_deref().unwrap().contains("Thumbnail"));
+        assert!(video.as_deref().unwrap().ends_with("MEMORIES.mp4"));
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn thumbnail_only_leaves_cover_empty() {
+        let tmp = std::env::temp_dir().join(format!("beatos_slots2_{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join("X_Thumbnail.png"), b"png").unwrap();
+
+        let (cover, thumb, video) = find_asset_slots(&entries(&tmp));
+        assert!(cover.is_none(), "ein Thumbnail ist kein Cover");
+        assert!(thumb.is_some());
+        assert!(video.is_none());
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
 }

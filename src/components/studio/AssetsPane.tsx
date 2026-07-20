@@ -19,6 +19,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { C } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { projectDisplayName } from "../../types/studio";
+import { groupAssets, type AssetGroup } from "../../lib/assetGroups";
 import type { AssetFile, StudioProject } from "../../types/studio";
 
 const ROLE_META: Record<AssetFile["guessed_role"], { label: string; color: string }> = {
@@ -27,17 +28,6 @@ const ROLE_META: Record<AssetFile["guessed_role"], { label: string; color: strin
   video:     { label: "Video",     color: "#ff7351" },
   image:     { label: "Bild",      color: "#8a8a89" },
 };
-
-/** Group key = last number in the filename ("Cover_17.png" → "17"). */
-function extractGroupKey(name: string): string | null {
-  const matches = name.match(/\d+/g);
-  return matches ? matches[matches.length - 1] : null;
-}
-
-interface AssetGroup {
-  key: string;
-  items: AssetFile[];
-}
 
 interface AssetsPaneProps {
   assetPath: string;
@@ -76,22 +66,8 @@ export function AssetsPane({ assetPath, projects, selectedProject, onClearSelect
 
   useEffect(() => { scan(); }, [scan]);
 
-  // ── Grouping: same trailing number = one group ─────────────────────────────
-  const groupMap = new Map<string, AssetFile[]>();
-  const singles: AssetFile[] = [];
-  for (const a of assets) {
-    const key = extractGroupKey(a.name);
-    if (key === null) { singles.push(a); continue; }
-    const list = groupMap.get(key) ?? [];
-    list.push(a);
-    groupMap.set(key, list);
-  }
-  const groups: AssetGroup[] = [];
-  for (const [key, items] of groupMap) {
-    if (items.length >= 2) groups.push({ key, items });
-    else singles.push(...items);
-  }
-  groups.sort((a, b) => Math.max(...b.items.map(i => i.modified_secs)) - Math.max(...a.items.map(i => i.modified_secs)));
+  // ── Grouping: same trailing number = one group (shared with Create) ────────
+  const { groups, singles } = groupAssets(assets);
 
   // ── Assignment ─────────────────────────────────────────────────────────────
   const assignFiles = async (files: AssetFile[], project: StudioProject, label: string) => {

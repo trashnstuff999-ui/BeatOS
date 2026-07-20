@@ -29,6 +29,8 @@ interface UseCreateBeatParams {
   trashSource: boolean;
   /** Type-Beat-Preset, im Create-Flow gewählt (optional) */
   preset: TypeBeatPreset | null;
+  /** Was im Beat-Ordner liegt — für die Rückfrage vor dem Archivieren */
+  assets: { hasCover: boolean; hasThumbnail: boolean; hasVideo: boolean };
   onReset: () => void;
   setCatalogId: (id: string) => void;
 }
@@ -48,6 +50,7 @@ export function useCreateBeat({
   autoRename,
   trashSource,
   preset,
+  assets,
   onReset,
   setCatalogId,
 }: UseCreateBeatParams) {
@@ -64,6 +67,20 @@ export function useCreateBeat({
     if (!settings.archivePath) {
       setArchiveError("Archive path is not configured. Please set it in Settings.");
       return;
+    }
+
+    // Ohne Cover nachfragen — sonst landet der Beat ohne Artwork im Archiv
+    // und fällt erst beim Upload auf. Nur beim ersten Versuch fragen
+    // (forceV2 = Nutzer hat den Duplikat-Dialog schon bestätigt).
+    if (!forceV2 && !assets.hasCover) {
+      const alsoMissing = [
+        !assets.hasThumbnail && "Thumbnail",
+        !assets.hasVideo && "Video",
+      ].filter(Boolean).join(", ");
+      const lines = ["Kein Cover zugewiesen."];
+      if (alsoMissing) lines.push(`Fehlt außerdem: ${alsoMissing}`);
+      lines.push("", "Trotzdem archivieren?");
+      if (!confirm(lines.join("\n"))) return;
     }
 
     setArchiveError(null);

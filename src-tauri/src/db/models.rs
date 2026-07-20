@@ -122,7 +122,11 @@ pub struct ParsedBeatFolder {
     pub year_month: String,
     pub audio_files: Vec<AudioFileInfo>,
     pub all_files: Vec<String>,
+    /// Bild ohne "thumb" im Namen
     pub cover_path: Option<String>,
+    /// Bild mit "thumb" im Namen
+    pub thumbnail_path: Option<String>,
+    pub video_path: Option<String>,
     pub source_path: String,
     pub suggested_id: i32,
 }

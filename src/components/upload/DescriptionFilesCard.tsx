@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, PLATFORM_CONFIG } from "../../lib/theme";
-import { SectionCard, SectionIconBtn } from "./SectionCard";
+import { SectionCard, SectionIconBtn } from "../ui/SectionCard";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
 
