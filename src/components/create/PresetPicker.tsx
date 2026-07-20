@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Bookmark, ChevronDown, X, Youtube, Music2 } from "lucide-react";
 import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { SectionCard } from "../ui/SectionCard";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
 
@@ -42,16 +43,8 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
   };
 
   return (
+    <SectionCard icon={Bookmark} title="Type-Beat Preset">
     <div ref={containerRef} style={{ position: "relative" }}>
-      <label style={{
-        fontSize: 10, fontWeight: 700,
-        color: C.onSecondaryFixedVar,
-        textTransform: "uppercase", letterSpacing: "0.1em",
-        display: "block", marginBottom: 6,
-      }}>
-        Type-Beat Preset
-      </label>
-
       {selected ? (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
@@ -137,6 +130,12 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
           ))}
         </div>
       )}
+      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
+        {selected
+          ? "Artists, Genres und Plattform-Tags werden mit archiviert."
+          : "Optional — spart das Nachtragen im Upload-Tab."}
+      </div>
     </div>
+    </SectionCard>
   );
 }

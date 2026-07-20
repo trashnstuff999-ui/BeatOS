@@ -3,9 +3,9 @@
 // Beat Information Card - Title, Key, BPM, Catalog ID
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Music } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { SectionCard } from "../ui/SectionCard";
 
 interface BeatInfoCardProps {
   title: string;
@@ -33,8 +33,14 @@ export function BeatInfoCard({
   yearMonth,
 }: BeatInfoCardProps) {
   return (
-    <Card accent={C.primary}>
-      <Label>Track Title</Label>
+    <SectionCard icon={Music} title="Beat-Info">
+      <label style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.15em",
+        textTransform: "uppercase", color: C.onSecondaryFixedVar,
+        display: "block", marginBottom: 10,
+      }}>
+        Track Title
+      </label>
       <div style={{
         display: "flex", alignItems: "center",
         background: C.surfaceContainerLowest,
@@ -64,7 +70,7 @@ export function BeatInfoCard({
           <span style={{ opacity: 0.7 }}>{yearMonth}</span>
         </div>
       )}
-    </Card>
+    </SectionCard>
   );
 }
 

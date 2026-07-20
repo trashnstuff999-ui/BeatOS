@@ -4,10 +4,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo } from "react";
-import { Grid3X3, Search } from "lucide-react";
+import { Grid3X3, Search, Tag } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
 import { sortTagsByCategory, type CustomTag } from "../../lib/tags";
-import { Card, Label } from "../ui";
+import { SectionCard } from "../ui/SectionCard";
 import { TagPill, TagCategoryRow } from "../Tagpill";
 
 interface TagsHook {
@@ -59,17 +59,12 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
   );
 
   return (
-    <Card accent={C.mint}>
-      {/* Header */}
+    <SectionCard icon={Tag} title="Tags">
+      {/* Zeile über den Tags: Anzahl + Tag-Manager */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Label style={{ marginBottom: 0 }}>Tags</Label>
-          {tags.length > 0 && (
-            <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, background: C.surfaceContainerHighest, padding: "2px 8px", borderRadius: 4 }}>
-              {tags.length} selected
-            </span>
-          )}
-        </div>
+        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+          {tags.length > 0 ? `${tags.length} ausgewählt` : "Noch keine Tags"}
+        </span>
         <button
           onClick={onShowAllTags}
           style={{
@@ -137,6 +132,6 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
           No tags found for "{searchQuery}"
         </span>
       ) : null}
-    </Card>
+    </SectionCard>
   );
 }

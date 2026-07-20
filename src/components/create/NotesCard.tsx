@@ -3,8 +3,9 @@
 // Notes Card - Internal production notes
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { C, commonStyles } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { commonStyles } from "../../lib/theme";
+import { SectionCard } from "../ui/SectionCard";
+import { StickyNote } from "lucide-react";
 
 interface NotesCardProps {
   notes: string;
@@ -13,8 +14,7 @@ interface NotesCardProps {
 
 export function NotesCard({ notes, setNotes }: NotesCardProps) {
   return (
-    <Card accent={C.onSecondaryFixedVar}>
-      <Label>Internal Production Notes</Label>
+    <SectionCard icon={StickyNote} title="Notizen">
       <textarea
         value={notes}
         onChange={e => setNotes(e.target.value)}
@@ -30,6 +30,6 @@ export function NotesCard({ notes, setNotes }: NotesCardProps) {
           boxSizing: "border-box",
         }}
       />
-    </Card>
+    </SectionCard>
   );
 }

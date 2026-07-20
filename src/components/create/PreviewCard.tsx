@@ -4,9 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
-import { FolderOpen, Image as ImageIcon, Info } from "lucide-react";
+import { FolderOpen, Image as ImageIcon, Info, Eye } from "lucide-react";
 import { C } from "../../lib/theme";
-import { Label } from "../ui";
 import { TagPill } from "../Tagpill";
 
 interface PreviewCardProps {
@@ -34,8 +33,15 @@ export const PreviewCard = memo(function PreviewCard({
   const previewId = catalogId || "#0000";
 
   return (
-    <div style={{ position: "sticky", top: 0, alignSelf: "flex-start" }}>
-      <Label style={{ color: C.primary, letterSpacing: "0.3em", marginBottom: 16 }}>Registry Preview</Label>
+    <div>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+      }}>
+        <Eye size={14} color={C.onSecondaryFixedVar} strokeWidth={1.75} />
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.onSurface }}>
+          Vorschau
+        </h3>
+      </div>
 
       <div style={{
         background: C.surfaceContainer,

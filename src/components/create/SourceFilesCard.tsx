@@ -5,7 +5,7 @@
 
 import { FileAudio, FileCode, Timer, CheckCircle, Star, FolderOpen } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { SectionCard } from "../ui/SectionCard";
 import type { AudioFileInfo, FlpFileInfo } from "../../types/create";
 
 interface SourceFilesCardProps {
@@ -34,8 +34,7 @@ export function SourceFilesCard({
   const hasFiles = audioFiles.length > 0 || flpFiles.length > 0;
 
   return (
-    <Card accent={C.onSecondaryFixedVar}>
-      <Label>Source Files</Label>
+    <SectionCard icon={FolderOpen} title="Quelldateien">
 
       {hasFiles ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -132,7 +131,7 @@ export function SourceFilesCard({
           </p>
         </div>
       )}
-    </Card>
+    </SectionCard>
   );
 }
 

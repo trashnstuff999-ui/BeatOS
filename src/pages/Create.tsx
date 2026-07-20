@@ -29,6 +29,7 @@ import { useCreateBeat } from "../hooks/useCreateBeat";
 import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
+import { FolderPlus } from "lucide-react";
 import { C } from "../lib/theme";
 import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 
@@ -324,6 +325,45 @@ export default function Create() {
 
       {/* Scrollable Main Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px", paddingBottom: 100 }}>
+        {/* Leerzustand: eine ruhige Karte statt sechs leerer Formulare */}
+        {!sourceFolderPath && !isLoading && (
+          <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 14, padding: "80px 20px",
+              background: C.surfaceContainerLowest,
+              border: `1px dashed ${C.border20}`,
+              borderRadius: 12,
+            }}>
+              <FolderPlus size={34} color={C.onSecondaryFixedVar} strokeWidth={1.25} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.onSurface }}>
+                Beat-Ordner wählen
+              </div>
+              <div style={{ fontSize: 12, color: C.onSurfaceVariant, textAlign: "center", maxWidth: 420, lineHeight: 1.6 }}>
+                Wähle unten den Ordner deines fertigen Beats — BeatOS liest Titel, Key, BPM,
+                Audio- und FLP-Dateien automatisch aus. Aus dem Studio-Tab landest du mit
+                „Archivieren" direkt hier.
+              </div>
+              <button
+                onClick={handleSelectFolder}
+                style={{
+                  marginTop: 6,
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "11px 24px", borderRadius: 8,
+                  background: C.primary, border: "none",
+                  color: C.onPrimary, cursor: "pointer",
+                  fontSize: 12, fontWeight: 700,
+                  letterSpacing: "0.05em", textTransform: "uppercase",
+                }}
+              >
+                <FolderPlus size={14} strokeWidth={2} />
+                Ordner auswählen
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(sourceFolderPath || isLoading) && (
         <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", gap: 24, alignItems: "flex-start" }}>
 
           {/* Links: Was wird archiviert? */}
@@ -396,6 +436,7 @@ export default function Create() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Footer */}

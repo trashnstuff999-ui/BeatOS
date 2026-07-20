@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { C, STATUS_ITEMS } from "../../lib/theme";
-import { Card, Label } from "../ui";
+import { SectionCard } from "../ui/SectionCard";
+import { Flag } from "lucide-react";
 
 interface StatusCardProps {
   status: string;
@@ -13,8 +14,7 @@ interface StatusCardProps {
 
 export function StatusCard({ status, setStatus }: StatusCardProps) {
   return (
-    <Card accent={C.tertiary}>
-      <Label>Production Status</Label>
+    <SectionCard icon={Flag} title="Status">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
         {STATUS_ITEMS.map((item) => {
           const isActive = status === item.key;
@@ -37,6 +37,6 @@ export function StatusCard({ status, setStatus }: StatusCardProps) {
           );
         })}
       </div>
-    </Card>
+    </SectionCard>
   );
 }
