@@ -12,10 +12,9 @@ import { CreateHeader } from "../components/create/CreateHeader";
 import { CreateFooter } from "../components/create/CreateFooter";
 import { BeatInfoCard } from "../components/create/BeatInfoCard";
 import { StatusCard } from "../components/create/StatusCard";
-import { TagsCard } from "../components/create/TagsCard";
 import { SourceFilesCard } from "../components/create/SourceFilesCard";
-import { NotesCard } from "../components/create/NotesCard";
 import { PreviewCard } from "../components/create/PreviewCard";
+import { CreateSidePanel } from "../components/create/CreateSidePanel";
 import { ErrorBanner } from "../components/create/ErrorBanner";
 import { ErrorToast } from "../components/create/ErrorToast";
 import {
@@ -69,6 +68,9 @@ export default function Create() {
   const [selectedFlp, setSelectedFlp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+
+  // Tags & Notizen leben in der ausklappbaren rechten Leiste
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ─── Tags Hook ─────────────────────────────────────────────────────────────
   const tagsHook = useTags();
@@ -321,6 +323,10 @@ export default function Create() {
       <CreateHeader
         hasData={Boolean(sourceFolderPath)}
         onResetClick={handleResetClick}
+        tagCount={tags.length}
+        hasNotes={notes.trim().length > 0}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(o => !o)}
       />
 
       {/* Scrollable Main Content */}
@@ -366,10 +372,29 @@ export default function Create() {
         {(sourceFolderPath || isLoading) && (
         <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", gap: 24, alignItems: "flex-start" }}>
 
-          {/* Links: Was wird archiviert? */}
+          {/* Links: Status + Preset oben, dann Vorschau, dann Beat Info */}
           <div style={{ flex: "0 0 55%", display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
 
             {parseError && <ErrorBanner message={parseError} />}
+
+            {/* Status + Preset teilen sich eine Zeile — beide sind schmal */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+              <StatusCard
+                status={status}
+                setStatus={setStatus}
+              />
+              <PresetPicker selected={preset} onSelect={setPreset} />
+            </div>
+
+            <PreviewCard
+              title={title}
+              keyValue={key}
+              bpm={bpm}
+              catalogId={catalogId}
+              tags={tags}
+              coverImage={coverImage}
+              previewPath={previewPath}
+            />
 
             <BeatInfoCard
               title={title}
@@ -383,28 +408,9 @@ export default function Create() {
               createdDate={createdDate}
               yearMonth={yearMonth}
             />
-
-            {/* Status + Preset teilen sich eine Zeile — beide sind schmal */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
-              <StatusCard
-                status={status}
-                setStatus={setStatus}
-              />
-              <PresetPicker selected={preset} onSelect={setPreset} />
-            </div>
-
-            <TagsCard
-              tagsHook={tagsHook}
-              onShowAllTags={handleOpenTagManager}
-            />
-
-            <NotesCard
-              notes={notes}
-              setNotes={setNotes}
-            />
           </div>
 
-          {/* Rechts: Womit? — Assets zuerst, Preview klebt beim Scrollen */}
+          {/* Rechts: Cover & Assets oben, direkt drunter Quelldateien */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
             <BeatAssetsCard
               assets={{ coverPreview: coverImage, coverPath, thumbnailPreview, thumbnailPath, videoPath }}
@@ -422,18 +428,6 @@ export default function Create() {
               selectedFlp={selectedFlp}
               setSelectedFlp={setSelectedFlp}
             />
-
-            <div style={{ position: "sticky", top: 0 }}>
-              <PreviewCard
-                title={title}
-                keyValue={key}
-                bpm={bpm}
-                catalogId={catalogId}
-                tags={tags}
-                coverImage={coverImage}
-                previewPath={previewPath}
-              />
-            </div>
           </div>
         </div>
         )}
@@ -483,6 +477,17 @@ export default function Create() {
 
       {archiveError && (
         <ErrorToast message={archiveError} onClose={clearError} />
+      )}
+
+      {/* Tags & Notizen — ausklappbare rechte Leiste */}
+      {sidebarOpen && (
+        <CreateSidePanel
+          tagsHook={tagsHook}
+          onShowAllTags={handleOpenTagManager}
+          notes={notes}
+          setNotes={setNotes}
+          onClose={() => setSidebarOpen(false)}
+        />
       )}
     </div>
   );

@@ -1,14 +1,18 @@
 // src/components/create/CreateHeader.tsx
 
-import { RefreshCw, Search, Bell, RotateCcw } from "lucide-react";
+import { Tag, RotateCcw } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
 
 interface CreateHeaderProps {
   hasData: boolean;
   onResetClick: () => void;
+  tagCount: number;
+  hasNotes: boolean;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
 }
 
-export function CreateHeader({ hasData, onResetClick }: CreateHeaderProps) {
+export function CreateHeader({ hasData, onResetClick, tagCount, hasNotes, sidebarOpen, onToggleSidebar }: CreateHeaderProps) {
   return (
     <header style={{
       height: 64, flexShrink: 0,
@@ -44,15 +48,38 @@ export function CreateHeader({ hasData, onResetClick }: CreateHeaderProps) {
         )}
       </div>
 
-      {/* Right: Icons */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, color: C.onSurfaceVariant }}>
-        <RefreshCw size={18} strokeWidth={1.5} style={{ cursor: "pointer" }} />
-        <Search size={18} strokeWidth={1.5} style={{ cursor: "pointer" }} />
-        <div style={{ position: "relative" }}>
-          <Bell size={18} strokeWidth={1.5} style={{ cursor: "pointer" }} />
-          <span style={{ position: "absolute", top: 0, right: 0, width: 8, height: 8, background: C.primary, borderRadius: "50%", border: `2px solid ${C.background}` }} />
-        </div>
-      </div>
+      {/* Right: Tags & Notizen ausklappen */}
+      <button
+        onClick={onToggleSidebar}
+        data-create-sidebar-toggle
+        title="Tags & Notizen"
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 14px", borderRadius: 8,
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+          background: sidebarOpen ? C.surfaceContainerHigh : "transparent",
+          border: `1px solid ${sidebarOpen ? C.border30 : C.border15}`,
+          color: sidebarOpen ? C.onSurface : C.onSurfaceVariant,
+          cursor: "pointer",
+          transition: "all 0.15s",
+        }}
+      >
+        <Tag size={14} strokeWidth={2} />
+        Tags & Notizen
+        {tagCount > 0 && (
+          <span style={{
+            minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9,
+            background: C.primary, color: C.onPrimary,
+            fontSize: 10, fontWeight: 800,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            {tagCount}
+          </span>
+        )}
+        {tagCount === 0 && hasNotes && (
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary }} />
+        )}
+      </button>
     </header>
   );
 }
