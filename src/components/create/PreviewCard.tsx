@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
-import { FolderOpen, Image as ImageIcon, Info, Eye } from "lucide-react";
+import { FolderOpen, Image as ImageIcon, Eye } from "lucide-react";
 import { C } from "../../lib/theme";
 import { TagPill } from "../Tagpill";
 
@@ -152,19 +152,6 @@ export const PreviewCard = memo(function PreviewCard({
             <span>{previewPath}</span>
           </div>
         </div>
-      </div>
-
-      {/* Info Box */}
-      <div style={{
-        marginTop: 24, padding: 16, borderRadius: 8,
-        background: "rgba(148,146,255,0.05)",
-        border: "1px solid rgba(148,146,255,0.10)",
-        display: "flex", gap: 16, alignItems: "flex-start"
-      }}>
-        <Info size={18} color={C.tertiary} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} />
-        <p style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0 }}>
-          BeatOS will automatically generate standardized subfolders for Stems, MIDI, and Masters once structured.
-        </p>
       </div>
     </div>
   );

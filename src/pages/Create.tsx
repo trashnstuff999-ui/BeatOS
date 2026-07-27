@@ -28,7 +28,7 @@ import { useCreateBeat } from "../hooks/useCreateBeat";
 import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, Info } from "lucide-react";
 import { C } from "../lib/theme";
 import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 
@@ -377,8 +377,8 @@ export default function Create() {
 
             {parseError && <ErrorBanner message={parseError} />}
 
-            {/* Status + Preset teilen sich eine Zeile — beide sind schmal */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+            {/* Status + Preset teilen sich eine Zeile — stretch = gleiche Höhe */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "stretch" }}>
               <StatusCard
                 status={status}
                 setStatus={setStatus}
@@ -428,6 +428,19 @@ export default function Create() {
               selectedFlp={selectedFlp}
               setSelectedFlp={setSelectedFlp}
             />
+
+            {/* Hinweis: Unterordner werden beim Archivieren automatisch angelegt */}
+            <div style={{
+              padding: 16, borderRadius: 8,
+              background: "rgba(148,146,255,0.05)",
+              border: "1px solid rgba(148,146,255,0.10)",
+              display: "flex", gap: 16, alignItems: "flex-start",
+            }}>
+              <Info size={18} color={C.tertiary} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0 }}>
+                BeatOS will automatically generate standardized subfolders for Stems, MIDI, and Masters once structured.
+              </p>
+            </div>
           </div>
         </div>
         )}
