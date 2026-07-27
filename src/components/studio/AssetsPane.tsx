@@ -20,6 +20,8 @@ import { C } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { projectDisplayName } from "../../types/studio";
 import { groupAssets, type AssetGroup } from "../../lib/assetGroups";
+import { useFolderAssets } from "../../hooks/useFolderAssets";
+import { BeatAssetsCard } from "../BeatAssetsCard";
 import type { AssetFile, StudioProject } from "../../types/studio";
 
 const ROLE_META: Record<AssetFile["guessed_role"], { label: string; color: string }> = {
@@ -65,6 +67,9 @@ export function AssetsPane({ assetPath, projects, selectedProject, onClearSelect
   }, [assetPath]);
 
   useEffect(() => { scan(); }, [scan]);
+
+  // Drei-Slot-Ansicht des gewählten Projekts (Cover/Thumbnail/Video)
+  const folderAssets = useFolderAssets(selectedProject?.path ?? null);
 
   // ── Grouping: same trailing number = one group (shared with Create) ────────
   const { groups, singles } = groupAssets(assets);
@@ -158,6 +163,21 @@ export function AssetsPane({ assetPath, projects, selectedProject, onClearSelect
           </span>
         )}
       </div>
+
+      {/* Drei-Slot-Karte fürs gewählte Projekt: Cover / Thumbnail / Video */}
+      {selectedProject && (
+        <div style={{ padding: 16, borderBottom: `1px solid ${C.border10}` }}>
+          <BeatAssetsCard
+            assets={folderAssets.assets}
+            folderPath={selectedProject.path}
+            assetPath={assetPath}
+            isRefreshing={folderAssets.isRefreshing}
+            onRefresh={() => { folderAssets.refresh(); scan(); onAssigned(); }}
+            title={`Assets für „${projectDisplayName(selectedProject)}"`}
+            showArchiveWarning={false}
+          />
+        </div>
+      )}
 
       {error && <div style={{ padding: "14px 16px", fontSize: 12, color: C.error }}>{error}</div>}
 

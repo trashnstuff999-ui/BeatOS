@@ -1,48 +1,44 @@
-// src/components/create/CreateAssetsCard.tsx
+// src/components/BeatAssetsCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Cover / Thumbnail / Video direkt im Create-Flow zuweisen — damit nichts
-// ohne Artwork ins Archiv wandert. Zuweisen verschiebt die Datei aus dem
-// Asset-Ordner in den Beat-Ordner (gleicher Command wie im Studio-Tab);
-// Cover+Thumbnail kommen als Gruppe in einem Klick.
+// Cover / Thumbnail / Video slots for a beat or studio-project folder.
+// Assigning opens the shared AssetPickerDialog (moves the file out of the
+// asset inbox into the folder). Used by the Create tab (before archiving)
+// and the Studio assets tab (for the selected project).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
 import { Images, Film, Plus, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
-import { C } from "../../lib/theme";
-import { SectionCard } from "../ui/SectionCard";
-import { AssetPickerDialog } from "../AssetPickerDialog";
+import { C } from "../lib/theme";
+import { SectionCard } from "./ui/SectionCard";
+import { AssetPickerDialog } from "./AssetPickerDialog";
+import type { FolderAssets } from "../hooks/useFolderAssets";
 
-export interface CreateAssets {
-  /** base64-Vorschau des Covers (aus read_image_file) */
-  coverPreview: string | null;
-  coverPath: string | null;
-  thumbnailPreview: string | null;
-  thumbnailPath: string | null;
-  videoPath: string | null;
-}
-
-interface CreateAssetsCardProps {
-  assets: CreateAssets;
-  /** Beat-Ordner (Ziel der Zuweisung) — null solange kein Ordner gewählt ist */
-  sourceFolderPath: string | null;
+interface BeatAssetsCardProps {
+  assets: FolderAssets;
+  /** Ordner (Ziel der Zuweisung) — null solange kein Ordner gewählt ist */
+  folderPath: string | null;
   assetPath: string;
   isRefreshing: boolean;
   onRefresh: () => void;
+  title?: string;
+  /** Create: Hinweis, dass beim Archivieren nachgefragt wird. Studio: aus. */
+  showArchiveWarning?: boolean;
 }
 
-export function CreateAssetsCard({
-  assets, sourceFolderPath, assetPath, isRefreshing, onRefresh,
-}: CreateAssetsCardProps) {
+export function BeatAssetsCard({
+  assets, folderPath, assetPath, isRefreshing, onRefresh,
+  title = "Cover & Assets", showArchiveWarning = true,
+}: BeatAssetsCardProps) {
   const [picker, setPicker] = useState<null | { kind: "image" | "video"; title: string }>(null);
 
-  const noFolder = !sourceFolderPath;
+  const noFolder = !folderPath;
   const noAssetPath = !assetPath.trim();
   const missingCover = !assets.coverPath;
 
   return (
     <SectionCard
       icon={Images}
-      title="Cover & Assets"
+      title={title}
       actions={
         <button
           onClick={onRefresh}
@@ -64,8 +60,8 @@ export function CreateAssetsCard({
         </button>
       }
     >
-      {/* Warnhinweis, solange kein Cover da ist */}
-      {!noFolder && missingCover && (
+      {/* Warnhinweis, solange kein Cover da ist (nur im Create-Flow) */}
+      {showArchiveWarning && !noFolder && missingCover && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "9px 12px", marginBottom: 12,
@@ -106,15 +102,15 @@ export function CreateAssetsCard({
 
       <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
         {noFolder
-          ? "Erst einen Beat-Ordner wählen."
+          ? "Erst einen Ordner wählen."
           : noAssetPath
-            ? "Kein Asset-Pfad in den Settings gesetzt — dort den Export-Ordner (04_UPLOAD) eintragen."
-            : "Cover + Thumbnail mit gleicher Nummer werden als Gruppe zugewiesen. Die Dateien wandern in den Beat-Ordner."}
+            ? "Kein Asset-Pfad in den Settings gesetzt — dort den Media-Ordner eintragen."
+            : "Cover + Thumbnail mit gleicher Nummer werden als Gruppe zugewiesen. Die Dateien wandern in den Ordner."}
       </div>
 
-      {picker && sourceFolderPath && (
+      {picker && folderPath && (
         <AssetPickerDialog
-          targetDir={sourceFolderPath}
+          targetDir={folderPath}
           assetRoot={assetPath}
           filterKind={picker.kind}
           title={picker.title}

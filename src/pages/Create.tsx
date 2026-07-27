@@ -40,7 +40,7 @@ import type {
 } from "../types/create";
 import type { TypeBeatPreset } from "../types/upload";
 import { PresetPicker } from "../components/create/PresetPicker";
-import { CreateAssetsCard } from "../components/create/CreateAssetsCard";
+import { BeatAssetsCard } from "../components/BeatAssetsCard";
 import { useSettings } from "../contexts/SettingsContext";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -406,9 +406,9 @@ export default function Create() {
 
           {/* Rechts: Womit? — Assets zuerst, Preview klebt beim Scrollen */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
-            <CreateAssetsCard
+            <BeatAssetsCard
               assets={{ coverPreview: coverImage, coverPath, thumbnailPreview, thumbnailPath, videoPath }}
-              sourceFolderPath={sourceFolderPath}
+              folderPath={sourceFolderPath}
               assetPath={settings.assetPath}
               isRefreshing={isRefreshingAssets}
               onRefresh={refreshAssets}
