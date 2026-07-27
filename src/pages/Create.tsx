@@ -377,15 +377,6 @@ export default function Create() {
 
             {parseError && <ErrorBanner message={parseError} />}
 
-            {/* Status + Preset teilen sich eine Zeile — stretch = gleiche Höhe */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "stretch" }}>
-              <StatusCard
-                status={status}
-                setStatus={setStatus}
-              />
-              <PresetPicker selected={preset} onSelect={setPreset} />
-            </div>
-
             <PreviewCard
               title={title}
               keyValue={key}
@@ -395,6 +386,15 @@ export default function Create() {
               coverImage={coverImage}
               previewPath={previewPath}
             />
+
+            {/* Status + Preset teilen sich eine Zeile — stretch = gleiche Höhe */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "stretch" }}>
+              <StatusCard
+                status={status}
+                setStatus={setStatus}
+              />
+              <PresetPicker selected={preset} onSelect={setPreset} />
+            </div>
 
             <BeatInfoCard
               title={title}
