@@ -97,7 +97,6 @@ export default function Studio() {
           <div style={{ display: tab === "assets" ? "block" : "none" }}>
             <AssetsPane
               assetPath={settings.assetPath}
-              projects={projects}
               selectedProject={selectedProject}
               onClearSelection={() => setSelectedPath(null)}
               onAssigned={() => setRefreshKey(k => k + 1)}
