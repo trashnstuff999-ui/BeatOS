@@ -1,11 +1,14 @@
 // src/components/create/PreviewCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Preview Card - Beat registry preview with cover and metadata
+// Preview Card — Beat-Registry-Vorschau + Pre-Flight-Check. Zeigt nicht nur,
+// wie der archivierte Beat aussieht (Cover, ID, Titel/Key/BPM, Status, Tags),
+// sondern auch, was noch fehlt (Audio/FLP/Cover/Thumbnail/Video), damit man
+// vor dem Archivieren auf einen Blick sieht, ob alles bereit ist.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
-import { FolderOpen, Image as ImageIcon, Eye } from "lucide-react";
-import { C } from "../../lib/theme";
+import { FolderOpen, Image as ImageIcon, Eye, Check, X, AlertTriangle } from "lucide-react";
+import { C, STATUS_CONFIG, normalizeStatus } from "../../lib/theme";
 import { TagPill } from "../Tagpill";
 
 interface PreviewCardProps {
@@ -13,9 +16,15 @@ interface PreviewCardProps {
   keyValue: string;
   bpm: string;
   catalogId: string;
+  status: string;
   tags: string[];
   coverImage: string | null;
   previewPath: string;
+  hasAudio: boolean;
+  hasFlp: boolean;
+  hasCover: boolean;
+  hasThumbnail: boolean;
+  hasVideo: boolean;
 }
 
 export const PreviewCard = memo(function PreviewCard({
@@ -23,14 +32,30 @@ export const PreviewCard = memo(function PreviewCard({
   keyValue,
   bpm,
   catalogId,
+  status,
   tags,
   coverImage,
   previewPath,
+  hasAudio,
+  hasFlp,
+  hasCover,
+  hasThumbnail,
+  hasVideo,
 }: PreviewCardProps) {
   const previewTitle = title || "SONGNAME";
   const previewKey = keyValue || "—";
   const previewBpm = bpm || "—";
   const previewId = catalogId || "#0000";
+  const statusMeta = STATUS_CONFIG[normalizeStatus(status)];
+
+  // Cover fehlt = wichtig (orange Warnung), Rest = neutral grau, wenn leer.
+  const checks = [
+    { label: "Audio", ok: hasAudio },
+    { label: "FLP", ok: hasFlp },
+    { label: "Cover", ok: hasCover, important: true },
+    { label: "Thumbnail", ok: hasThumbnail },
+    { label: "Video", ok: hasVideo },
+  ];
 
   return (
     <div>
@@ -102,6 +127,23 @@ export const PreviewCard = memo(function PreviewCard({
             </div>
           )}
 
+          {/* Status-Chip (oben links, gespiegelt zur ID) */}
+          <div style={{
+            position: "absolute", top: 16, left: 16, zIndex: 4,
+            display: "flex", alignItems: "center", gap: 6,
+            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+            border: `1px solid ${statusMeta.border}`,
+            padding: "4px 9px", borderRadius: 999,
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusMeta.color }} />
+            <span style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: statusMeta.color,
+            }}>
+              {statusMeta.label}
+            </span>
+          </div>
+
           {/* ID Badge */}
           <div style={{
             position: "absolute", top: 16, right: 16, zIndex: 4,
@@ -117,7 +159,9 @@ export const PreviewCard = memo(function PreviewCard({
             <h3 style={{
               fontSize: 24, fontWeight: 900,
               textTransform: "uppercase", letterSpacing: "-0.02em",
-              color: "#fff", marginBottom: 6, lineHeight: 1
+              color: "#fff", marginBottom: 6, lineHeight: 1.05,
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              overflow: "hidden", wordBreak: "break-word",
             }}>
               {previewTitle.toUpperCase()}
             </h3>
@@ -127,6 +171,16 @@ export const PreviewCard = memo(function PreviewCard({
               <span>{previewBpm} BPM</span>
             </div>
           </div>
+        </div>
+
+        {/* Pre-Flight: was ist schon da, was fehlt? */}
+        <div style={{
+          display: "flex", flexWrap: "wrap", gap: 6,
+          padding: "12px 16px", borderBottom: `1px solid ${C.border10}`,
+        }}>
+          {checks.map(c => (
+            <ReadinessChip key={c.label} label={c.label} ok={c.ok} important={c.important} />
+          ))}
         </div>
 
         {/* Tags Preview */}
@@ -156,3 +210,27 @@ export const PreviewCard = memo(function PreviewCard({
     </div>
   );
 });
+
+// ─── Ein Readiness-Chip ────────────────────────────────────────────────────────
+
+function ReadinessChip({ label, ok, important }: { label: string; ok: boolean; important?: boolean }) {
+  // vorhanden = grün, fehlt+wichtig = orange Warnung, fehlt = dezent grau
+  const color = ok ? "#22c55e" : important ? C.primary : C.onSecondaryFixedVar;
+  const bg = ok ? "rgba(34,197,94,0.10)" : important ? "rgba(253,161,36,0.10)" : "rgba(255,255,255,0.03)";
+  const Icon = ok ? Check : important ? AlertTriangle : X;
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      padding: "3px 8px", borderRadius: 999,
+      background: bg,
+      border: `1px solid ${color}30`,
+      fontSize: 10, fontWeight: 700, letterSpacing: "0.02em",
+      color,
+      opacity: ok || important ? 1 : 0.7,
+    }}>
+      <Icon size={10} strokeWidth={2.5} />
+      {label}
+    </span>
+  );
+}

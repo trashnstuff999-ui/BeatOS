@@ -382,9 +382,15 @@ export default function Create() {
               keyValue={key}
               bpm={bpm}
               catalogId={catalogId}
+              status={status}
               tags={tags}
               coverImage={coverImage}
               previewPath={previewPath}
+              hasAudio={audioFiles.length > 0}
+              hasFlp={flpFiles.length > 0}
+              hasCover={Boolean(coverPath)}
+              hasThumbnail={Boolean(thumbnailPath)}
+              hasVideo={Boolean(videoPath)}
             />
 
             {/* Status + Preset teilen sich eine Zeile — stretch = gleiche Höhe */}
