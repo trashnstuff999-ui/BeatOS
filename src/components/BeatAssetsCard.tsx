@@ -79,11 +79,14 @@ export function BeatAssetsCard({
         </div>
       )}
 
-      {/* Cover (1:1) links groß, Thumbnail + Video (16:9) rechts gestapelt */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
+      {/* Cover (1:1) links groß, Thumbnail + Video (16:9) rechts gestapelt.
+          Die Cover-Spalte ist breiter, damit das Quadrat so hoch wird wie
+          die zwei 16:9-Slots — und der Cover-Slot füllt die volle Zellenhöhe,
+          sodass die Unterkanten links/rechts exakt bündig sind. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
         <AssetSlot
           label="Cover"
-          aspect="1 / 1"
+          fill
           preview={assets.coverPreview}
           fileName={fileNameOf(assets.coverPath)}
           disabled={noFolder || noAssetPath}
@@ -134,9 +137,12 @@ export function BeatAssetsCard({
 
 // ─── Ein Slot ────────────────────────────────────────────────────────────────
 
-function AssetSlot({ label, aspect, preview, fileName, icon: Icon, disabled, onPick }: {
+function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disabled, onPick }: {
   label: string;
-  aspect: string;
+  /** Festes Seitenverhältnis (z.B. "16 / 9"); ignoriert wenn fill gesetzt ist */
+  aspect?: string;
+  /** Füllt die volle Höhe der Grid-Zelle statt eines festen Seitenverhältnisses */
+  fill?: boolean;
   preview: string | null;
   fileName: string | null;
   icon?: React.ElementType;
@@ -147,7 +153,7 @@ function AssetSlot({ label, aspect, preview, fileName, icon: Icon, disabled, onP
   const filled = Boolean(fileName);
 
   return (
-    <div>
+    <div style={fill ? { display: "flex", flexDirection: "column", height: "100%" } : undefined}>
       <div style={{
         fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
@@ -162,7 +168,8 @@ function AssetSlot({ label, aspect, preview, fileName, icon: Icon, disabled, onP
         onMouseLeave={() => setHovered(false)}
         title={filled ? `${fileName} — Klick zum Ersetzen` : disabled ? undefined : `${label} zuweisen`}
         style={{
-          width: "100%", aspectRatio: aspect,
+          width: "100%",
+          ...(fill ? { flex: 1, minHeight: 180 } : { aspectRatio: aspect }),
           background: filled ? C.surfaceContainerHigh : "transparent",
           border: filled
             ? `1px solid ${C.border20}`
