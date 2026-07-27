@@ -10,8 +10,12 @@ import { useState } from "react";
 import { Images, Film, Plus, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { C } from "../lib/theme";
 import { SectionCard } from "./ui/SectionCard";
-import { AssetPickerDialog } from "./AssetPickerDialog";
+import { AssetPickerDialog, type AssetSlotKind } from "./AssetPickerDialog";
 import type { FolderAssets } from "../hooks/useFolderAssets";
+
+const SLOT_TITLE: Record<AssetSlotKind, string> = {
+  cover: "Cover", thumbnail: "Thumbnail", video: "Video",
+};
 
 interface BeatAssetsCardProps {
   assets: FolderAssets;
@@ -29,7 +33,7 @@ export function BeatAssetsCard({
   assets, folderPath, assetPath, isRefreshing, onRefresh,
   title = "Cover & Assets", showArchiveWarning = true,
 }: BeatAssetsCardProps) {
-  const [picker, setPicker] = useState<null | { kind: "image" | "video"; title: string }>(null);
+  const [picker, setPicker] = useState<null | { slot: AssetSlotKind }>(null);
 
   const noFolder = !folderPath;
   const noAssetPath = !assetPath.trim();
@@ -75,29 +79,35 @@ export function BeatAssetsCard({
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+      {/* Cover (1:1) links groß, Thumbnail + Video (16:9) rechts gestapelt */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
         <AssetSlot
           label="Cover"
+          aspect="1 / 1"
           preview={assets.coverPreview}
           fileName={fileNameOf(assets.coverPath)}
           disabled={noFolder || noAssetPath}
-          onPick={() => setPicker({ kind: "image", title: "Cover & Thumbnail zuweisen" })}
+          onPick={() => setPicker({ slot: "cover" })}
         />
-        <AssetSlot
-          label="Thumbnail"
-          preview={assets.thumbnailPreview}
-          fileName={fileNameOf(assets.thumbnailPath)}
-          disabled={noFolder || noAssetPath}
-          onPick={() => setPicker({ kind: "image", title: "Cover & Thumbnail zuweisen" })}
-        />
-        <AssetSlot
-          label="Video"
-          preview={null}
-          icon={Film}
-          fileName={fileNameOf(assets.videoPath)}
-          disabled={noFolder || noAssetPath}
-          onPick={() => setPicker({ kind: "video", title: "Video zuweisen" })}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <AssetSlot
+            label="Thumbnail"
+            aspect="16 / 9"
+            preview={assets.thumbnailPreview}
+            fileName={fileNameOf(assets.thumbnailPath)}
+            disabled={noFolder || noAssetPath}
+            onPick={() => setPicker({ slot: "thumbnail" })}
+          />
+          <AssetSlot
+            label="Video"
+            aspect="16 / 9"
+            preview={null}
+            icon={Film}
+            fileName={fileNameOf(assets.videoPath)}
+            disabled={noFolder || noAssetPath}
+            onPick={() => setPicker({ slot: "video" })}
+          />
+        </div>
       </div>
 
       <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
@@ -105,15 +115,15 @@ export function BeatAssetsCard({
           ? "Erst einen Ordner wählen."
           : noAssetPath
             ? "Kein Asset-Pfad in den Settings gesetzt — dort den Media-Ordner eintragen."
-            : "Cover + Thumbnail mit gleicher Nummer werden als Gruppe zugewiesen. Die Dateien wandern in den Ordner."}
+            : "Cover = „cover\" im Namen, Thumbnail = „thumbnail\", Video = Videodatei. Die Datei wandert in den Ordner."}
       </div>
 
       {picker && folderPath && (
         <AssetPickerDialog
           targetDir={folderPath}
           assetRoot={assetPath}
-          filterKind={picker.kind}
-          title={picker.title}
+          slot={picker.slot}
+          title={`${SLOT_TITLE[picker.slot]} zuweisen`}
           onAssigned={() => onRefresh()}
           onClose={() => setPicker(null)}
         />
@@ -124,8 +134,9 @@ export function BeatAssetsCard({
 
 // ─── Ein Slot ────────────────────────────────────────────────────────────────
 
-function AssetSlot({ label, preview, fileName, icon: Icon, disabled, onPick }: {
+function AssetSlot({ label, aspect, preview, fileName, icon: Icon, disabled, onPick }: {
   label: string;
+  aspect: string;
   preview: string | null;
   fileName: string | null;
   icon?: React.ElementType;
@@ -151,7 +162,7 @@ function AssetSlot({ label, preview, fileName, icon: Icon, disabled, onPick }: {
         onMouseLeave={() => setHovered(false)}
         title={filled ? `${fileName} — Klick zum Ersetzen` : disabled ? undefined : `${label} zuweisen`}
         style={{
-          width: "100%", aspectRatio: "1 / 1",
+          width: "100%", aspectRatio: aspect,
           background: filled ? C.surfaceContainerHigh : "transparent",
           border: filled
             ? `1px solid ${C.border20}`
@@ -165,7 +176,7 @@ function AssetSlot({ label, preview, fileName, icon: Icon, disabled, onPick }: {
         }}
       >
         {preview ? (
-          <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
         ) : filled ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: C.mint }}>
             {Icon ? <Icon size={22} strokeWidth={1.5} /> : <Images size={22} strokeWidth={1.5} />}
