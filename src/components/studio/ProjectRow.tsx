@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Star, FolderOpen, Play, Archive, Zap, Disc3, Info, HardDrive, Folder } from "lucide-react";
+import { Star, FolderOpen, Play, Archive, Zap, Disc3, Info, HardDrive, Folder, Trash2 } from "lucide-react";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { projectDisplayName, projectFolderLabel } from "../../types/studio";
@@ -22,7 +22,7 @@ const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready"];
 // Fixed column widths — keep the right half aligned across all rows
 const COL_PIPELINE = 104;
 const COL_STATUS = 258;
-const COL_ACTIONS = 218;
+const COL_ACTIONS = 252;
 
 interface ProjectRowProps {
   project: StudioProject;
@@ -35,11 +35,12 @@ interface ProjectRowProps {
   onInspect: () => void;
   onOpenFolder: () => void;
   onArchive: () => void;
+  onTrash: () => void;
 }
 
 export function ProjectRow({
   project: p, isSelected, dimmed,
-  onSelect, onPatch, onOpenDaw, onPreview, onInspect, onOpenFolder, onArchive,
+  onSelect, onPatch, onOpenDaw, onPreview, onInspect, onOpenFolder, onArchive, onTrash,
 }: ProjectRowProps) {
   const [hovered, setHovered] = useState(false);
   const exportDetected = (p.has_mp3 || p.has_wav) && (p.status === "idea" || p.status === "wip");
@@ -215,6 +216,7 @@ export function ProjectRow({
           <RowBtn icon={Disc3} title="In FL Studio öffnen (neueste FLP)" onClick={onOpenDaw} accent />
           <RowBtn icon={Info} title="Details & Notizen" onClick={onInspect} />
           <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={onOpenFolder} />
+          <RowBtn icon={Trash2} title="Projektordner in den Papierkorb" onClick={onTrash} danger />
         </div>
         {/* Ready projects keep their call to action visible */}
         <div style={{
@@ -295,23 +297,29 @@ export function AssetPipeline({ project: p, large }: { project: StudioProject; l
   );
 }
 
-function RowBtn({ icon: Icon, title, onClick, accent }: {
+function RowBtn({ icon: Icon, title, onClick, accent, danger }: {
   icon: React.ElementType;
   title: string;
   onClick: () => void;
   accent?: boolean;
+  danger?: boolean;
 }) {
+  const [h, setH] = useState(false);
+  const color = danger ? C.error : accent ? C.primary : C.onSurfaceVariant;
+  const border = danger ? C.error + (h ? "" : "40") : accent ? C.primary + "50" : C.border15;
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
       title={title}
       style={{
         width: 28, height: 28, borderRadius: 6,
-        background: "transparent",
-        border: `1px solid ${accent ? C.primary + "50" : C.border15}`,
+        background: danger && h ? "rgba(229,72,77,0.12)" : "transparent",
+        border: `1px solid ${border}`,
         cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: accent ? C.primary : C.onSurfaceVariant,
+        color,
       }}
     >
       <Icon size={13} strokeWidth={1.75} />

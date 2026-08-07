@@ -14,6 +14,7 @@ import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectInspector } from "./ProjectInspector";
@@ -66,6 +67,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { playBeat } = useAudioPlayerContext();
+  const { settings } = useSettings();
 
   // Filters & view state
   const [search, setSearch] = useState("");
@@ -123,6 +125,28 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
 
   const handleArchive = (p: StudioProject) => {
     navigate("/create", { state: { sourceFolder: p.path } });
+  };
+
+  // Junk-Projekt in den Papierkorb (wiederherstellbar). Rückfrage, dann
+  // optimistisch aus der Liste nehmen; die Auswahl/Inspector ggf. lösen.
+  const handleTrash = async (p: StudioProject) => {
+    const name = projectDisplayName(p);
+    const ok = window.confirm(
+      `„${name}" in den Papierkorb verschieben?\n\n` +
+      `Der komplette Projektordner wandert in den Windows-Papierkorb ` +
+      `(wiederherstellbar):\n${p.path}`
+    );
+    if (!ok) return;
+    try {
+      await api.archive.trashSourceFolder(p.path, settings.archivePath);
+      const remaining = projects.filter(x => x.path !== p.path);
+      setProjects(remaining);
+      onProjects?.(remaining);
+      if (selectedPath === p.path) onSelectPath?.(null);
+      if (inspectorPath === p.path) setInspectorPath(null);
+    } catch (e) {
+      alert(`Löschen fehlgeschlagen: ${String(e)}`);
+    }
   };
 
   // Audio preview: pseudo-beat over the project folder — get_beat_audio_path
@@ -322,6 +346,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
                 onInspect={() => setInspectorPath(inspectorPath === p.path ? null : p.path)}
                 onOpenFolder={() => revealItemInDir(p.path).catch(() => {})}
                 onArchive={() => handleArchive(p)}
+                onTrash={() => handleTrash(p)}
               />
             ))}
           </div>
