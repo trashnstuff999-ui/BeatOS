@@ -76,10 +76,12 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
             : "keine Serie"}
         </span>
       </div>
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 5, minHeight: 44 }}>
+      {/* Hoehen in Prozent statt fester Pixel — so fuellen die Balken die Karte,
+          statt in einem 44px-Streifen zu kleben. */}
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 5, minHeight: 56 }}>
         {weeks.map((w, i) => {
           const isCurrent = i === weeks.length - 1;
-          const h = w.count === 0 ? 3 : Math.max(6, Math.round((w.count / max) * 44));
+          const h = w.count === 0 ? "6%" : `${Math.max((w.count / max) * 100, 14)}%`;
           return (
             <div
               key={w.week_start}
@@ -198,9 +200,11 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
   // unbekanntem Status — damit haetten die Prozente nie 100 % ergeben.
   const total = bars.reduce((sum, b) => sum + b.count, 0) || 1;
   return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s" }} {...commonStyles.cardHoverHandlers}>
-      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 32 }}>Status-Verteilung</h4>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", display: "flex", flexDirection: "column" }} {...commonStyles.cardHoverHandlers}>
+      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 20, flexShrink: 0 }}>Status-Verteilung</h4>
+      {/* Die Zeilen verteilen sich ueber die volle Kartenhoehe — die Karte wird
+          neben "Tonarten" gestreckt und stand vorher unten leer. */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-around" }}>
         {bars.map(({ key, label, color, count }) => (
           <div key={key}
             style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 0.15s", margin: "0 -10px" }}
@@ -215,8 +219,10 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
               </span>
               <span>{count}</span>
             </div>
-            <div style={{ height: 8, background: C.surfaceContainerHighest, borderRadius: 999, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${Math.round((count / total) * 100)}%`, background: color, borderRadius: 999, transition: "width 0.6s ease" }} />
+            <div style={{ height: 10, background: C.surfaceContainerHighest, borderRadius: 999, overflow: "hidden" }}>
+              {/* Mindestens 1.5 %, sonst verschwindet "Sold" mit 2 von 204 zu
+                  einem unsichtbaren Splitter. */}
+              <div style={{ height: "100%", width: count === 0 ? 0 : `${Math.max((count / total) * 100, 1.5)}%`, background: color, borderRadius: 999, transition: "width 0.6s ease" }} />
             </div>
           </div>
         ))}
@@ -241,9 +247,14 @@ const MINOR_CHROMATIC = [...MINOR_KEYS].sort(byChromatic);
  *  Kreuz-Liste fehlten. */
 const CANONICAL_KEYS = new Set<string>([...MAJOR_KEYS, ...MINOR_KEYS]);
 
-const BAR_COLORS = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
-                    "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
-                    "#8b5cf6", "#14b8a6"];
+/** Ein Farbton, Helligkeit nach Haeufigkeit: die Farbe kodiert damit die Zahl
+ *  statt nur die Position. Vorher lagen hier zwoelf willkuerliche Farbtoene —
+ *  Cm war nicht "oranger" als Dm, die Farbe trug schlicht keine Information. */
+function keyShade(ratio: number): string {
+  const t = 0.35 + 0.65 * ratio;                       // nie bis zur Unsichtbarkeit
+  const mix = (fg: number) => Math.round(38 + (fg - 38) * t);   // 38 = Kartenraster
+  return `rgb(${mix(253)}, ${mix(161)}, ${mix(36)})`;  // Ziel: C.primary #fda124
+}
 
 // ── Balkendiagramm ────────────────────────────────────────────────────────────
 // Gemeinsame Basis fuer "Top Keys" und "Beats pro Monat": Zahl ueber dem Balken,
@@ -258,28 +269,32 @@ export interface Bar {
   count: number;
 }
 
+/** Damit zwei Balken nicht den halben Kartenbreite einnehmen. Bei zwoelf
+ *  Balken greift die Grenze nicht — die sind ohnehin schmaler. */
+const BAR_MAX_WIDTH = 120;
+
 function BarChart({ data, color, onBarClick }: {
   data: Bar[];
-  /** Ein String faerbt alle Balken gleich, eine Funktion je Index. */
-  color: string | ((index: number) => string);
+  /** Ein String faerbt alle Balken gleich, eine Funktion je Balken. */
+  color: string | ((bar: Bar, index: number) => string);
   onBarClick?: (bar: Bar) => void;
 }) {
   const [hov, setHov] = useState<number | null>(null);
   const max = Math.max(...data.map(d => d.count), 1);
-  const colorAt = (i: number) => (typeof color === "string" ? color : color(i));
+  const colorAt = (bar: Bar, i: number) => (typeof color === "string" ? color : color(bar, i));
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, flex: 1, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 4, flex: 1, marginBottom: 8 }}>
         {data.map((bar, i) => {
-          const c         = colorAt(i);
+          const c         = colorAt(bar, i);
           const isEmpty   = bar.count === 0;
           const isHov     = hov === i;
           const clickable = !!onBarClick && !isEmpty;
           return (
             <div key={bar.key}
               title={`${bar.label}: ${bar.count}`}
-              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, padding: "0 2px", cursor: clickable ? "pointer" : "default" }}
+              style={{ flex: 1, maxWidth: BAR_MAX_WIDTH, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, padding: "0 2px", cursor: clickable ? "pointer" : "default" }}
               onMouseEnter={() => !isEmpty && setHov(i)}
               onMouseLeave={() => setHov(null)}
               onClick={() => clickable && onBarClick(bar)}
@@ -300,11 +315,11 @@ function BarChart({ data, color, onBarClick }: {
           );
         })}
       </div>
-      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 4, flexShrink: 0 }}>
         {data.map((bar, i) => (
           <span key={bar.key} style={{
-            flex: 1, textAlign: "center", fontSize: 9, fontWeight: 700,
-            color: hov === i ? colorAt(i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
+            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 9, fontWeight: 700,
+            color: hov === i ? colorAt(bar, i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
             transition: "color 0.15s", lineHeight: 1.2, overflow: "hidden",
           }}>
             {bar.label}
@@ -349,7 +364,7 @@ function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
         <BarChart
           key={keyMode}                       /* Hover-Zustand beim Wechsel zuruecksetzen */
           data={bars}
-          color={i => BAR_COLORS[i % BAR_COLORS.length]}
+          color={bar => keyShade(bar.count / Math.max(...bars.map(b => b.count), 1))}
           onBarClick={bar => onNavigate({ keys: [bar.key] })}
         />
       )}
@@ -481,7 +496,10 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const { playBeat, setQueue, currentBeat } = useAudioPlayerContext();
   const beats = stats.recent_beats;
-  const grid  = "44px 1fr 70px 60px 100px 100px";
+  // Der Name bekommt eine Obergrenze und die letzte Spalte schluckt den Rest —
+  // sonst schob "1fr" die Metadaten auf breiten Monitoren ans andere Ende des
+  // Bildschirms und man musste fuer eine Zeile quer ueber den Schirm lesen.
+  const grid  = "44px minmax(180px, 520px) 80px 70px 110px 110px 1fr";
 
   const play = (beat: Beat) => {
     setQueue(beats);          // weiter/zurueck bleibt in dieser Liste
@@ -500,7 +518,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
-        <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span>
+        <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
       </div>
       {beats.map((beat, i) => {
         const isCurrent = currentBeat?.id === beat.id;
@@ -531,6 +549,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
             <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
             <span><StatusPill status={beat.status ?? "idea"} /></span>
             <span style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
+            <span />
           </div>
         );
       })}
@@ -635,7 +654,7 @@ export default function Dashboard() {
       {/* Scrollable content — MAX-WIDTH zentriert für Fullscreen */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div style={{
-          maxWidth: 1400,      // nie breiter als 1400px
+          maxWidth: 1800,      // nie breiter als 1800px
           margin: "0 auto",   // zentriert auf großen Monitoren
           padding: "24px 32px",
           display: "flex", flexDirection: "column", gap: 24,

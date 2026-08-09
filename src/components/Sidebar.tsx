@@ -99,7 +99,7 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
         {/* Beat count */}
         <div style={{ padding: "8px 16px", marginBottom: 8 }}>
           <div style={{ background: "rgba(38,38,38,0.5)", borderRadius: 8, padding: 12 }}>
-            <p style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Total Beats</p>
+            <p style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Beats gesamt</p>
             <p style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{beatCount.toLocaleString()}</p>
           </div>
         </div>
