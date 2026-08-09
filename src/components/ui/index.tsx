@@ -31,6 +31,47 @@ export function Card({ children, accent, style }: CardProps) {
   );
 }
 
+// ─── Select ─────────────────────────────────────────────────────────────────
+// Dunkles Dropdown mit eigenem Chevron (appearance: none blendet das native aus).
+
+interface SelectProps<T extends string> {
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}
+
+export function Select<T extends string>({ value, options, onChange }: SelectProps<T>) {
+  return (
+    <div style={{ position: "relative" }}>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value as T)}
+        style={{
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.border20}`,
+          borderRadius: 6,
+          padding: "4px 28px 4px 10px",
+          fontSize: 11, fontWeight: 700,
+          color: C.primary,
+          appearance: "none", cursor: "pointer", outline: "none",
+        }}
+      >
+        {options.map(o => (
+          <option key={o.value} value={o.value}
+            style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ─── Label ──────────────────────────────────────────────────────────────────
 
 interface LabelProps {

@@ -1,15 +1,19 @@
 // src/pages/Dashboard.tsx — Aktionszentrale: "Was steht heute an?" + Analytics
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  RefreshCw, Archive, TrendingUp, Heart, Play, Sparkles, Piano, Star, Music,
+  RefreshCw, Archive, Play, Sparkles, Piano, Star, Music,
   CalendarClock, Rocket, Disc3, Flame, ArrowRight, Upload as UploadIcon,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Stats, DashboardActions } from "../types/stats";
-import { C, commonStyles, STUDIO_STATUS_CONFIG } from "../lib/theme";
+import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
+import type { Beat } from "../types/browse";
+import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
+import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
 import { StatusPill } from "../components/Tagpill";
+import { Select } from "../components/ui";
 
 // ── Aktions-Karte: eine Zahl, eine Handlung, ein Klick ───────────────────────
 function ActionCard({ title, value, hint, icon, color, onClick }: {
@@ -21,9 +25,9 @@ function ActionCard({ title, value, hint, icon, color, onClick }: {
     <button
       onClick={onClick}
       style={{
+        ...commonStyles.card,
         textAlign: "left",
-        background: C.surfaceContainerLow,
-        padding: 18, borderRadius: 12,
+        padding: 18,
         border: `1px solid ${active ? `${color}35` : C.border10}`,
         boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         cursor: "pointer",
@@ -53,8 +57,8 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
   const max = Math.max(1, ...weeks.map(w => w.count));
   return (
     <div style={{
-      background: C.surfaceContainerLow, padding: 18, borderRadius: 12,
-      border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+      ...commonStyles.card, padding: 18,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
       display: "flex", flexDirection: "column",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -99,23 +103,38 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
 }
 
 // ── Pipeline-Funnel: Studio → Archiv → Geplant → Live ────────────────────────
-function PipelineFunnel({ stats, actions, onNavigate }: {
+const STUDIO_STAGES = ["idea", "wip", "exported", "ready"] as const;
+
+function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
   stats: Stats;
   actions: DashboardActions;
   onNavigate: (path: string) => void;
+  onFilter: (filter: object) => void;
 }) {
-  const studioTotal = Object.values(actions.studio_by_status).reduce((a, b) => a + b, 0);
-  const stages: Array<{ label: string; value: number; detail: string; icon: React.ReactNode; color: string; path: string }> = [
+  // Summe und Aufschluesselung aus derselben Quelle — sonst passt die grosse Zahl
+  // nicht zur Zeile darunter, sobald ein weiterer Studio-Status dazukommt.
+  const studioCounts = STUDIO_STAGES.map(s => actions.studio_by_status[s] ?? 0);
+  const studioTotal = studioCounts.reduce((a, b) => a + b, 0);
+
+  const stages: Array<{ label: string; value: number; detail: React.ReactNode; icon: React.ReactNode; color: string; path: string }> = [
     {
       label: "Studio", value: studioTotal,
-      detail: (["idea", "wip", "exported", "ready"] as const)
-        .map(s => `${actions.studio_by_status[s] ?? 0} ${STUDIO_STATUS_CONFIG[s].label}`)
-        .join(" · "),
+      detail: STUDIO_STAGES.map((s, i) => `${studioCounts[i]} ${STUDIO_STATUS_CONFIG[s].label}`).join(" · "),
       icon: <Disc3 size={15} />, color: "#9492ff", path: "/studio",
     },
     {
       label: "Archiv", value: stats.total,
-      detail: `${stats.this_month} neu diesen Monat`,
+      detail: (
+        <>
+          {stats.this_month} neu diesen Monat ·{" "}
+          <span
+            onClick={e => { e.stopPropagation(); onFilter({ onlyFavs: true }); }}
+            style={{ color: C.error, fontWeight: 700, cursor: "pointer" }}
+          >
+            {stats.favorites} Favoriten
+          </span>
+        </>
+      ),
       icon: <Archive size={15} />, color: C.primary, path: "/browse",
     },
     {
@@ -132,8 +151,8 @@ function PipelineFunnel({ stats, actions, onNavigate }: {
 
   return (
     <div style={{
-      background: C.surfaceContainerLow, borderRadius: 12,
-      border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+      ...commonStyles.card,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
       padding: "18px 24px",
       display: "flex", alignItems: "center", gap: 10,
     }}>
@@ -166,54 +185,21 @@ function PipelineFunnel({ stats, actions, onNavigate }: {
   );
 }
 
-// ── Hover helper ──────────────────────────────────────────────────────────────
-const cardHover = {
-  onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) =>
-    (e.currentTarget.style.borderColor = "rgba(72,72,71,0.30)"),
-  onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) =>
-    (e.currentTarget.style.borderColor = "rgba(72,72,71,0.10)"),
-};
-
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ title, value, badgeText, badgeColor, icon }: {
-  title: string; value: string | number; badgeText: string; badgeColor: string; icon: React.ReactNode;
-}) {
-  return (
-    <div style={{ background: C.surfaceContainerLow, padding: 20, borderRadius: 12, border: `1px solid ${C.border10}`, boxShadow: "0 1px 3px rgba(0,0,0,0.3)", cursor: "pointer", transition: "border-color 0.2s, transform 0.15s" }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(253,161,36,0.3)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border10; e.currentTarget.style.transform = "translateY(0)"; }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurfaceVariant }}>{title}</span>
-        <span style={{ color: badgeColor, display: "flex" }}>{icon}</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <h3 style={{ fontSize: 30, fontWeight: 700, color: C.onSurface, lineHeight: 1 }}>
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </h3>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", padding: "2px 6px", borderRadius: 4, color: badgeColor, background: `${badgeColor}20` }}>
-          {badgeText}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ── Status Breakdown ──────────────────────────────────────────────────────────
+// ── Status-Verteilung ─────────────────────────────────────────────────────────
 function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  const total = stats.total || 1;
-  const bars = [
-    { key: "idea",     label: "Idea",     color: C.tertiary,  count: stats.by_status.idea },
-    { key: "wip",      label: "WIP",      color: C.primary,   count: stats.by_status.wip },
-    { key: "finished", label: "Finished", color: "#22c55e",   count: stats.by_status.finished },
-    { key: "sold",     label: "Sold",     color: "#ef4444",   count: stats.by_status.sold },
-  ];
+  // Labels und Farben aus STATUS_CONFIG — dieselbe Quelle wie die Status-Pillen
+  // in Browse und in "Zuletzt hinzugefuegt". Vorher stand "Sold" hier auf
+  // #ef4444, die Pille daneben auf #ff7351.
+  const bars = STATUS_ITEMS.map(s => ({
+    ...s,
+    count: stats.by_status[s.key as keyof Stats["by_status"]] ?? 0,
+  }));
+  // Nenner = Summe der gezeigten Balken. stats.total zaehlt auch Beats mit
+  // unbekanntem Status — damit haetten die Prozente nie 100 % ergeben.
+  const total = bars.reduce((sum, b) => sum + b.count, 0) || 1;
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s" }} {...cardHover}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Status Breakdown</h4>
-        <span style={{ color: C.onSurfaceVariant, fontSize: 18 }}>⋮</span>
-      </div>
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s" }} {...commonStyles.cardHoverHandlers}>
+      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 32 }}>Status-Verteilung</h4>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {bars.map(({ key, label, color, count }) => (
           <div key={key}
@@ -239,200 +225,173 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
   );
 }
 
-// ── Key Classification ─────────────────────────────────────────────────────────
-function keyType(raw: string): "major" | "minor" | "others" {
-  const s = raw.trim();
-  if (!s) return "others";
-  if (/m$/i.test(s) && !/maj/i.test(s)) return "minor";
-  if (/^[A-Ga-g][#b]?$/.test(s)) return "major";
-  return "others";
-}
+// ── Tonarten ──────────────────────────────────────────────────────────────────
+// Welche Tonarten es gibt, steht in types/browse.ts — dieselbe Liste, die der
+// Browse-Filter anbietet. Hier nur die chromatische Reihenfolge fuers Diagramm.
+const CHROMATIC_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const byChromatic = (a: string, b: string) =>
+  CHROMATIC_ROOTS.indexOf(a.replace(/m$/, "")) - CHROMATIC_ROOTS.indexOf(b.replace(/m$/, ""));
 
-// Canonical chromatic order
-const CHROMATIC_MAJOR = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const CHROMATIC_MINOR = ["Cm", "C#m", "Dm", "D#m", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "A#m", "Bm"];
+const MAJOR_CHROMATIC = [...MAJOR_KEYS].sort(byChromatic);
+const MINOR_CHROMATIC = [...MINOR_KEYS].sort(byChromatic);
+
+/** "Others" ist die Gegenmenge: alles, was in keiner der beiden Listen steht.
+ *  Dadurch kann kein Wert mehr lautlos verschwinden — frueher fielen Eintraege
+ *  wie "Db" durch alle drei Ansichten, weil sie als Dur galten, aber in der
+ *  Kreuz-Liste fehlten. */
+const CANONICAL_KEYS = new Set<string>([...MAJOR_KEYS, ...MINOR_KEYS]);
+
 const BAR_COLORS = [C.primary, "#3b82f6", "#22c55e", "#a855f7", "#ef4444",
                     "#f97316", "#06b6d4", "#ec4899", "#84cc16", "#eab308",
                     "#8b5cf6", "#14b8a6"];
 
-// ── Top Keys ──────────────────────────────────────────────────────────────────
-function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  const [hov, setHov] = useState<number | null>(null);
-  const [keyMode, setKeyMode] = useState<"major" | "minor" | "others">("minor");
+// ── Balkendiagramm ────────────────────────────────────────────────────────────
+// Gemeinsame Basis fuer "Top Keys" und "Beats pro Monat": Zahl ueber dem Balken,
+// Beschriftung darunter, Balken auf 0 bleiben als Stummel sichtbar.
+// Die Hoehen sind Prozent der Zeile — das setzt voraus, dass der Eltern-Container
+// eine aufgeloeste Hoehe hat (hier ueber flex: 1).
 
-  const allKeys = stats.top_keys;
-
-  // Build display list: all 12 for major/minor (fill gaps with 0), raw for others
-  const displayKeys: { key: string; count: number }[] =
-    keyMode === "major" ? CHROMATIC_MAJOR.map(k => ({ key: k, count: allKeys.find(x => x.key === k)?.count ?? 0 })) :
-    keyMode === "minor" ? CHROMATIC_MINOR.map(k => ({ key: k, count: allKeys.find(x => x.key === k)?.count ?? 0 })) :
-    allKeys.filter(k => keyType(k.key) === "others");
-
-  const max = Math.max(...displayKeys.map(k => k.count), 1);
-
-  return (
-    <div style={{ background: C.surfaceContainer, padding: "16px 20px", borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...cardHover}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Keys</h4>
-        <div style={{ position: "relative" }}>
-          <select
-            value={keyMode}
-            onChange={e => { setKeyMode(e.target.value as typeof keyMode); setHov(null); }}
-            style={{ background: C.surfaceContainerHighest, border: `1px solid rgba(72,72,71,0.20)`, borderRadius: 6, padding: "4px 28px 4px 10px", fontSize: 11, fontWeight: 700, color: C.primary, appearance: "none", cursor: "pointer", outline: "none" }}
-          >
-            <option value="major" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Major</option>
-            <option value="minor" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Minor</option>
-            <option value="others" style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>Others</option>
-          </select>
-          <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-        </div>
-      </div>
-
-      {displayKeys.length === 0 ? (
-        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>No {keyMode} key data</p>
-      ) : (
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {/* Bars row — flex:1 fills all remaining space */}
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, flex: 1, marginBottom: 8 }}>
-            {displayKeys.map(({ key, count }, i) => {
-              const color   = BAR_COLORS[i % BAR_COLORS.length];
-              const isEmpty = count === 0;
-              const isHov   = hov === i;
-              // Heights as % of the flex container — works because parent has resolved height via flex:1
-              const barPct  = isEmpty ? "3%" : `${Math.max((count / max) * 100, 2)}%`;
-              return (
-                <div key={key}
-                  style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: isEmpty ? "default" : "pointer" }}
-                  onMouseEnter={() => !isEmpty && setHov(i)}
-                  onMouseLeave={() => setHov(null)}
-                  onClick={() => !isEmpty && onNavigate({ keys: [key] })}>
-                  {/* Count label — hidden for 0 */}
-                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "monospace", color: isHov ? color : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
-                    {count}
-                  </span>
-                  {/* Bar */}
-                  <div style={{
-                    width: "100%", height: barPct,
-                    background: isEmpty ? C.surfaceContainerHighest : color,
-                    borderRadius: "3px 3px 0 0",
-                    opacity: isEmpty ? 0.4 : isHov ? 1 : 0.78,
-                    transition: "opacity 0.15s, box-shadow 0.15s",
-                    boxShadow: isHov ? `0 0 12px ${color}70` : "none",
-                  }} />
-                </div>
-              );
-            })}
-          </div>
-          {/* Labels */}
-          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-            {displayKeys.map(({ key, count }, i) => (
-              <span key={key} style={{
-                flex: 1, textAlign: "center", fontSize: 9, fontWeight: 700,
-                color: hov === i ? BAR_COLORS[i % BAR_COLORS.length] : count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
-                transition: "color 0.15s", lineHeight: 1.2,
-                overflow: "hidden",
-              }}>
-                {key}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+export interface Bar {
+  /** Stabiler React-Key und Nutzlast fuers Klicken. */
+  key: string;
+  label: string;
+  count: number;
 }
 
-// ── Beats Per Month ───────────────────────────────────────────────────────────
-function BeatsPerMonth({ stats, onYearChange }: {
-  stats: Stats;
-  onYearChange: (year: number) => void;
+function BarChart({ data, color, onBarClick }: {
+  data: Bar[];
+  /** Ein String faerbt alle Balken gleich, eine Funktion je Index. */
+  color: string | ((index: number) => string);
+  onBarClick?: (bar: Bar) => void;
 }) {
-  const data  = stats.beats_per_month;
-  const max   = Math.max(...data.map(d => d.count), 1);
   const [hov, setHov] = useState<number | null>(null);
-
-  const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const monthLabel = (s: string) => MONTHS[parseInt(s.split("-")[1] ?? "1") - 1] ?? s;
+  const max = Math.max(...data.map(d => d.count), 1);
+  const colorAt = (i: number) => (typeof color === "string" ? color : color(i));
 
   return (
-    <div style={{
-      background: C.surfaceContainer, padding: 24, borderRadius: 12,
-      border: `1px solid ${C.border10}`, transition: "border-color 0.2s",
-      minHeight: 360, display: "flex", flexDirection: "column", boxSizing: "border-box",
-    }} {...cardHover}>
-      {/* Header + Jahr-Dropdown */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexShrink: 0 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats Per Month</h4>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
-          <div style={{ position: "relative" }}>
-            <select
-              value={stats.selected_year}
-              onChange={e => onYearChange(parseInt(e.target.value))}
-              style={{
-                background: C.surfaceContainerHighest,
-                border: `1px solid rgba(72,72,71,0.20)`,
-                borderRadius: 6, padding: "4px 28px 4px 10px",
-                fontSize: 11, fontWeight: 700, color: C.primary,
-                appearance: "none", cursor: "pointer", outline: "none",
-              }}
-            >
-              {stats.available_years.map(y => (
-                <option key={y} value={y} style={{ background: C.surfaceContainerHighest, color: C.onSurface }}>{y}</option>
-              ))}
-            </select>
-            <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bars — flex: 1 fills remaining card height */}
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 8 }}>
-        {data.map(({ month, count }, i) => {
-          const isHov = hov === i;
-          const isEmpty = count === 0;
-          const barPct = isEmpty ? 1.5 : Math.max((count / max) * 100, 3);
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, flex: 1, marginBottom: 8 }}>
+        {data.map((bar, i) => {
+          const c         = colorAt(i);
+          const isEmpty   = bar.count === 0;
+          const isHov     = hov === i;
+          const clickable = !!onBarClick && !isEmpty;
           return (
-            <div key={month}
-              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, cursor: isEmpty ? "default" : "pointer", padding: "0 2px" }}
-              onMouseEnter={() => !isEmpty && setHov(i)} onMouseLeave={() => setHov(null)}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, fontFamily: "monospace",
-                color: isHov ? C.primary : C.onSurfaceVariant,
-                opacity: isEmpty ? 0 : 1,
-                transition: "all 0.15s", lineHeight: 1,
-              }}>
-                {count}
+            <div key={bar.key}
+              title={`${bar.label}: ${bar.count}`}
+              style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, padding: "0 2px", cursor: clickable ? "pointer" : "default" }}
+              onMouseEnter={() => !isEmpty && setHov(i)}
+              onMouseLeave={() => setHov(null)}
+              onClick={() => clickable && onBarClick(bar)}
+            >
+              <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "monospace", color: isHov ? c : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
+                {bar.count}
               </span>
               <div style={{
-                width: "100%", height: `${barPct}%`,
-                background: isEmpty ? C.surfaceContainerHighest : C.primary,
+                width: "100%",
+                height: isEmpty ? "2%" : `${Math.max((bar.count / max) * 100, 3)}%`,
+                background: isEmpty ? C.surfaceContainerHighest : c,
                 borderRadius: "3px 3px 0 0",
-                opacity: isEmpty ? 0.4 : isHov ? 1 : 0.72,
-                transition: "all 0.15s",
-                boxShadow: isHov ? `0 0 10px ${C.primary}50` : "none",
+                opacity: isEmpty ? 0.4 : isHov ? 1 : 0.75,
+                transition: "opacity 0.15s, box-shadow 0.15s",
+                boxShadow: isHov ? `0 0 12px ${c}70` : "none",
               }} />
             </div>
           );
         })}
       </div>
-
-      {/* Month labels */}
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-        {data.map(({ month }, i) => (
-          <span key={month} style={{
-            flex: 1, textAlign: "center", fontSize: 9,
-            color: hov === i ? C.primary : C.onSurfaceVariant,
-            textTransform: "uppercase", fontWeight: hov === i ? 700 : 500,
-            letterSpacing: "0.04em", transition: "color 0.15s",
-          }}>{monthLabel(month)}</span>
+        {data.map((bar, i) => (
+          <span key={bar.key} style={{
+            flex: 1, textAlign: "center", fontSize: 9, fontWeight: 700,
+            color: hov === i ? colorAt(i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
+            transition: "color 0.15s", lineHeight: 1.2, overflow: "hidden",
+          }}>
+            {bar.label}
+          </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Tonarten ──────────────────────────────────────────────────────────────────
+const KEY_MODES = [
+  { value: "major",  label: "Dur" },
+  { value: "minor",  label: "Moll" },
+  { value: "others", label: "Sonstige" },
+] as const;
+
+function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
+  const [keyMode, setKeyMode] = useState<(typeof KEY_MODES)[number]["value"]>("minor");
+
+  // Dur/Moll: alle 12 Balken, Luecken mit 0 gefuellt. Sonstige: die Gegenmenge.
+  const bars: Bar[] =
+    keyMode === "others"
+      ? stats.top_keys
+          .filter(k => !CANONICAL_KEYS.has(k.key))
+          .map(k => ({ key: k.key, label: k.key, count: k.count }))
+      : (keyMode === "major" ? MAJOR_CHROMATIC : MINOR_CHROMATIC)
+          .map(k => ({ key: k, label: k, count: stats.top_keys.find(x => x.key === k)?.count ?? 0 }));
+
+  return (
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: "16px 20px", transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...commonStyles.cardHoverHandlers}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Tonarten</h4>
+        <Select value={keyMode} options={KEY_MODES} onChange={setKeyMode} />
+      </div>
+
+      {bars.length === 0 ? (
+        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>
+          Keine Beats in dieser Gruppe
+        </p>
+      ) : (
+        <BarChart
+          key={keyMode}                       /* Hover-Zustand beim Wechsel zuruecksetzen */
+          data={bars}
+          color={i => BAR_COLORS[i % BAR_COLORS.length]}
+          onBarClick={bar => onNavigate({ keys: [bar.key] })}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Beats pro Monat ───────────────────────────────────────────────────────────
+const MONTHS = ["JAN","FEB","MÄR","APR","MAI","JUN","JUL","AUG","SEP","OKT","NOV","DEZ"];
+
+function BeatsPerMonth({ stats, onYearChange }: {
+  stats: Stats;
+  onYearChange: (year: number) => void;
+}) {
+  // "2026-03" → "MÄR"
+  const bars: Bar[] = stats.beats_per_month.map(({ month, count }) => ({
+    key: month,
+    label: MONTHS[parseInt(month.split("-")[1] ?? "1") - 1] ?? month,
+    count,
+  }));
+
+  const years = stats.available_years.map(y => ({ value: String(y), label: String(y) }));
+
+  return (
+    <div style={{
+      ...commonStyles.card, background: C.surfaceContainer, padding: 24,
+      transition: "border-color 0.2s",
+      minHeight: 360, display: "flex", flexDirection: "column", boxSizing: "border-box",
+    }} {...commonStyles.cardHoverHandlers}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexShrink: 0 }}>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats pro Monat</h4>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
+          <Select
+            value={String(stats.selected_year)}
+            options={years}
+            onChange={v => onYearChange(parseInt(v))}
+          />
+        </div>
+      </div>
+
+      <BarChart data={bars} color={C.primary} />
     </div>
   );
 }
@@ -440,30 +399,29 @@ function BeatsPerMonth({ stats, onYearChange }: {
 // ══════════════════════════════════════════════════════════════════════════════
 // Top Tags — Category rows with icons, like Create tab
 // ══════════════════════════════════════════════════════════════════════════════
-const TAG_ROW_ORDER: TagCategory[] = ["genre", "vibe", "instrument", "other"];
+const TAG_ROW_ORDER = ["genre", "vibe", "instrument", "other"] as const;
+type TagRow = (typeof TAG_ROW_ORDER)[number];
 
-const TAG_ROW_META: Record<TagCategory, { label: string; icon: React.ReactNode }> = {
+// "custom" wird beim Gruppieren auf "other" gemappt — hier stehen nur die Zeilen, die wirklich rendern.
+const TAG_ROW_META: Record<TagRow, { label: string; icon: React.ReactNode }> = {
   genre:      { label: "Genre",       icon: <Music size={11} /> },
   vibe:       { label: "Vibe",        icon: <Sparkles size={11} /> },
-  instrument: { label: "Instruments", icon: <Piano size={11} /> },
-  custom:     { label: "Custom",      icon: <Star size={11} /> },
-  other:      { label: "Custom",      icon: <Star size={11} /> },
+  instrument: { label: "Instrumente", icon: <Piano size={11} /> },
+  other:      { label: "Eigene",      icon: <Star size={11} /> },
 };
 
 function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  const grouped = Object.fromEntries(TAG_ROW_ORDER.map(cat => [cat, [] as typeof stats.top_tags])) as Record<TagCategory, typeof stats.top_tags>;
+  const grouped = Object.fromEntries(TAG_ROW_ORDER.map(cat => [cat, [] as typeof stats.top_tags])) as Record<TagRow, typeof stats.top_tags>;
   for (const item of stats.top_tags) {
-    const cat = getTagCategoryFromDb(item.tag) ?? "custom";
-    const bucket = cat === "custom" ? "other" : cat;
-    if (grouped[bucket]) grouped[bucket].push(item);
-    else grouped["other"].push(item);
+    const cat: TagCategory = getTagCategoryFromDb(item.tag) ?? "custom";
+    grouped[cat === "custom" ? "other" : cat].push(item);
   }
   TAG_ROW_ORDER.forEach(cat => grouped[cat].sort((a, b) => b.count - a.count));
 
   return (
-    <div style={{ background: C.surfaceContainer, padding: 24, borderRadius: 12, border: `1px solid ${C.border10}`, transition: "border-color 0.2s", minHeight: 360, boxSizing: "border-box" }} {...cardHover}>
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", minHeight: 360, boxSizing: "border-box" }} {...commonStyles.cardHoverHandlers}>
       <div style={{ marginBottom: 18 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top Tags</h4>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top-Tags</h4>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -517,36 +475,67 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
   );
 }
 
-// ── Latest Beats ──────────────────────────────────────────────────────────────
-function LatestBeats({ stats }: { stats: Stats }) {
+// ── Zuletzt hinzugefuegt ─────────────────────────────────────────────────────
+/** `onOpen()` ohne Beat oeffnet das Archiv ungefiltert. */
+function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) => void }) {
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const { playBeat, setQueue, currentBeat } = useAudioPlayerContext();
   const beats = stats.recent_beats;
   const grid  = "44px 1fr 70px 60px 100px 100px";
 
+  const play = (beat: Beat) => {
+    setQueue(beats);          // weiter/zurueck bleibt in dieser Liste
+    playBeat(beat);
+  };
+
   return (
-    <section style={{ background: C.surfaceContainer, borderRadius: 12, border: `1px solid ${C.border10}`, overflow: "hidden" }}>
+    <section style={{ ...commonStyles.card, background: C.surfaceContainer, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px", borderBottom: `1px solid ${C.border10}` }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Latest Beats</h4>
-        <button style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}>VIEW ALL ›</button>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
+        <button
+          onClick={() => onOpen()}
+          style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
+        >
+          ALLE ANZEIGEN ›
+        </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
-        <span /><span>Name</span><span>Key</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Date</span>
+        <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span>
       </div>
-      {beats.map((beat, i) => (
-        <div key={beat.id} style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 24px", alignItems: "center", borderTop: i > 0 ? `1px solid rgba(72,72,71,0.05)` : undefined, cursor: "pointer", background: hoveredRow === i ? C.surfaceContainerHigh : "transparent", transition: "background 0.15s" }}
-          onMouseEnter={() => setHoveredRow(i)} onMouseLeave={() => setHoveredRow(null)}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.surfaceContainerHighest, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Play size={10} fill={C.onSurfaceVariant} color={C.onSurfaceVariant} />
+      {beats.map((beat, i) => {
+        const isCurrent = currentBeat?.id === beat.id;
+        const active = hoveredRow === i || isCurrent;
+        return (
+          <div key={beat.id}
+            onClick={() => onOpen(beat)}
+            title="Im Archiv öffnen"
+            style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 24px", alignItems: "center", borderTop: i > 0 ? `1px solid rgba(72,72,71,0.05)` : undefined, cursor: "pointer", background: hoveredRow === i ? C.surfaceContainerHigh : "transparent", transition: "background 0.15s" }}
+            onMouseEnter={() => setHoveredRow(i)} onMouseLeave={() => setHoveredRow(null)}>
+            <button
+              onClick={e => { e.stopPropagation(); play(beat); }}
+              title={`${beat.name} abspielen`}
+              style={{
+                width: 28, height: 28, borderRadius: "50%", padding: 0,
+                background: isCurrent ? C.primary : C.surfaceContainerHighest,
+                border: "none", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s",
+              }}
+            >
+              <Play size={10}
+                fill={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant}
+                color={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant} />
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: isCurrent ? C.primary : C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{beat.name}</span>
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.key ?? "–"}</span>
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
+            <span><StatusPill status={beat.status ?? "idea"} /></span>
+            <span style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{beat.name}</span>
-          <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.key ?? "–"}</span>
-          <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
-          <span><StatusPill status={beat.status ?? "idea"} /></span>
-          <span style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
-        </div>
-      ))}
+        );
+      })}
       {beats.length === 0 && (
-        <div style={{ padding: 40, textAlign: "center", color: C.onSecondaryFixedVar, fontSize: 13 }}>No beats found</div>
+        <div style={{ padding: 40, textAlign: "center", color: C.onSecondaryFixedVar, fontSize: 13 }}>Noch keine Beats im Archiv</div>
       )}
     </section>
   );
@@ -556,45 +545,56 @@ function LatestBeats({ stats }: { stats: Stats }) {
 export default function Dashboard() {
   const [stats, setStats]     = useState<Stats | null>(null);
   const [actions, setActions] = useState<DashboardActions | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [busy, setBusy]       = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const navigate = useNavigate();
   const handleNavigate = useCallback((filter: object) => {
     navigate("/browse", { state: { initialFilters: filter } });
   }, [navigate]);
 
-  const load = async (year?: number) => {
-    setLoading(true); setError(null);
+  // Nur die zuletzt gestartete Anfrage darf schreiben — sonst kann bei schnellem
+  // Klicken eine aeltere Antwort die neuere ueberschreiben.
+  const reqId = useRef(0);
+
+  /** `yearOnly`: nur die jahresabhaengigen Zahlen nachladen. Die Aktions-Kacheln
+   *  haengen nicht vom Jahr ab und bleiben beim Jahreswechsel unangetastet. */
+  const load = useCallback(async (year: number | null, yearOnly = false) => {
+    const id = ++reqId.current;
+    setBusy(true); setError(null);
     try {
       const [s, a] = await Promise.all([
-        api.stats.get(year ?? null),
-        api.stats.getDashboardActions(),
+        api.stats.get(year),
+        yearOnly ? null : api.stats.getDashboardActions(),
       ]);
+      if (id !== reqId.current) return;   // eine neuere Anfrage hat uebernommen
       setStats(s);
-      setActions(a);
+      if (a) setActions(a);
     }
-    catch (e) { setError(String(e)); }
-    finally { setLoading(false); }
-  };
+    catch (e) { if (id === reqId.current) setError(String(e)); }
+    finally  { if (id === reqId.current) setBusy(false); }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(null); }, [load]);
 
-  if (loading) return (
+  // Vollbild-Spinner nur, solange ueberhaupt nichts da ist. Beim Nachladen
+  // bleiben die Zahlen stehen — sonst flackert die ganze Seite beim Jahreswechsel.
+  if (busy && !stats) return (
     <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: C.background }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ width: 40, height: 40, border: `3px solid ${C.surfaceContainerHighest}`, borderTopColor: C.primary, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-        <p style={{ fontSize: 12, color: C.onSurfaceVariant }}>Loading database...</p>
+        <p style={{ fontSize: 12, color: C.onSurfaceVariant }}>Datenbank wird geladen …</p>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 
-  if (error) return (
+  // Vollbild-Fehler nur, wenn es nichts anzuzeigen gibt. Schlaegt erst ein
+  // spaeteres Nachladen fehl, bleibt das Dashboard stehen und meldet es im Header.
+  if (error && !stats) return (
     <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: C.background }}>
       <div style={{ textAlign: "center", maxWidth: 400 }}>
-        <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Database Error</p>
+        <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Datenbankfehler</p>
         <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: 8 }}>{error}</p>
-        <button onClick={() => load()} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>Retry</button>
+        <button onClick={() => load(null)} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>Erneut versuchen</button>
       </div>
     </div>
   );
@@ -606,9 +606,30 @@ export default function Dashboard() {
       {/* Header — entrümpelt: System Repair lebt jetzt in den Settings */}
       <header style={{ height: 64, flexShrink: 0, ...commonStyles.glassHeader, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", borderBottom: `1px solid ${C.border15}` }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurface }}>Dashboard</h1>
-        <button onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: "pointer", letterSpacing: "0.05em" }}>
-          <RefreshCw size={12} /> REFRESH
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Fehler beim Nachladen — die angezeigten Zahlen bleiben stehen */}
+          {error && (
+            <span
+              title={error}
+              style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                color: C.error, background: "rgba(255,115,81,0.12)",
+                border: "1px solid rgba(255,115,81,0.35)",
+                padding: "4px 10px", borderRadius: 6,
+                maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}
+            >
+              Nicht aktualisiert
+            </span>
+          )}
+          <button
+            onClick={() => load(stats.selected_year)}
+            disabled={busy}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, letterSpacing: "0.05em" }}
+          >
+            <RefreshCw size={12} style={busy ? { animation: "spin 0.8s linear infinite" } : undefined} /> AKTUALISIEREN
+          </button>
+        </div>
       </header>
 
       {/* Scrollable content — MAX-WIDTH zentriert für Fullscreen */}
@@ -650,18 +671,15 @@ export default function Dashboard() {
             </section>
           )}
 
-          {/* Pipeline: der ganze Workflow auf einen Blick */}
+          {/* Pipeline: der ganze Workflow auf einen Blick — trägt auch Total, Neu, Favoriten, Live */}
           {actions && (
-            <PipelineFunnel stats={stats} actions={actions} onNavigate={(p) => navigate(p)} />
+            <PipelineFunnel
+              stats={stats}
+              actions={actions}
+              onNavigate={(p) => navigate(p)}
+              onFilter={handleNavigate}
+            />
           )}
-
-          {/* KPI Row */}
-          <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-            <KpiCard title="Total Archived" value={stats.total}             badgeText="+beats" badgeColor="#22c55e" icon={<Archive size={15} />} />
-            <KpiCard title="New This Month" value={stats.this_month}        badgeText="month"  badgeColor="#3b82f6" icon={<TrendingUp size={15} />} />
-            <KpiCard title="Favorites"      value={stats.favorites}         badgeText="fav"    badgeColor="#ef4444" icon={<Heart size={15} />} />
-            <KpiCard title="Veröffentlicht" value={actions?.published_beats ?? 0} badgeText="live" badgeColor="#34d399" icon={<UploadIcon size={15} />} />
-          </section>
 
           {/* Analytics Row 1 */}
           <section style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, alignItems: "stretch" }}>
@@ -671,12 +689,15 @@ export default function Dashboard() {
 
           {/* Analytics Row 2 */}
           <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
-            <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr)} />
+            <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr, true)} />
             <TopTags stats={stats} onNavigate={handleNavigate} />
           </section>
 
-          {/* Latest Beats */}
-          <LatestBeats stats={stats} />
+          {/* Zuletzt hinzugefügt */}
+          <LatestBeats
+            stats={stats}
+            onOpen={(beat) => beat ? handleNavigate({ search: beat.name }) : navigate("/browse")}
+          />
         </div>
       </div>
     </div>
