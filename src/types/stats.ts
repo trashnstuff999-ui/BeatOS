@@ -15,7 +15,6 @@ export interface DashboardActions {
   scheduled_next_7: number;
   finished_unscheduled: number;
   studio_ready: number;
-  unpublished_finished: number;
   published_beats: number;
   scheduled_total: number;
   studio_by_status: Record<string, number>;
@@ -27,7 +26,6 @@ export interface Stats {
   total: number;
   this_month: number;
   favorites: number;
-  avg_bpm: number;
   by_status: {
     idea: number;
     wip: number;

@@ -265,7 +265,7 @@ pub fn init_db() -> Result<(), String> {
                 }
 
                 // Data repair: earlier archive scans stored 0.0 / '' instead
-                // of NULL, which poisons avg_bpm stats and BPM filters.
+                // of NULL, which poisons BPM filters.
                 // Idempotent, so safe to run on every start.
                 for sql in [
                     "UPDATE beats SET bpm = NULL WHERE bpm = 0",

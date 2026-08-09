@@ -47,7 +47,6 @@ pub struct Stats {
     pub total: i64,
     pub this_month: i64,
     pub favorites: i64,
-    pub avg_bpm: f64,
     pub by_status: ByStatus,
     pub top_keys: Vec<KeyCount>,
     pub top_tags: Vec<TagCount>,

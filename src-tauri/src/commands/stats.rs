@@ -48,13 +48,6 @@ pub fn get_stats(year: Option<i64>) -> Result<Stats, String> {
         .query_row("SELECT COUNT(*) FROM beats WHERE favorite = 1", [], |r| r.get(0))
         .unwrap_or(0);
 
-    let avg_bpm: f64 = conn
-        .query_row(
-            "SELECT COALESCE(AVG(CAST(bpm AS REAL)), 0) FROM beats WHERE bpm IS NOT NULL AND bpm != ''",
-            [], |r| r.get(0),
-        )
-        .unwrap_or(0.0);
-
     // Status counts
     let count_status = |s: &str| -> i64 {
         conn.query_row(
@@ -148,7 +141,6 @@ pub fn get_stats(year: Option<i64>) -> Result<Stats, String> {
 
     Ok(Stats {
         total, this_month, favorites,
-        avg_bpm: (avg_bpm * 10.0).round() / 10.0,
         by_status, top_keys, top_tags,
         beats_per_month, recent_beats,
         available_years, selected_year,
@@ -177,7 +169,6 @@ pub struct DashboardActions {
     pub scheduled_next_7: i64,       // Uploads geplant heute..+6 Tage
     pub finished_unscheduled: i64,   // fertige Beats ohne Termin/Upload
     pub studio_ready: i64,           // Studio-Projekte mit Status 'ready'
-    pub unpublished_finished: i64,   // fertige Beats ohne einen Upload
     pub published_beats: i64,        // Beats mit >=1 hochgeladener Plattform
     pub scheduled_total: i64,
     pub studio_by_status: std::collections::HashMap<String, i64>,
@@ -203,10 +194,6 @@ pub fn get_dashboard_actions() -> Result<DashboardActions, String> {
         "SELECT COUNT(*) FROM beats b WHERE LOWER(b.status) = 'finished'
            AND NOT EXISTS (SELECT 1 FROM beat_uploads u WHERE u.beat_id = b.id
                 AND (u.status = 'uploaded' OR (u.scheduled_at IS NOT NULL AND u.scheduled_at != '')))",
-    );
-    let unpublished_finished = count(
-        "SELECT COUNT(*) FROM beats b WHERE LOWER(b.status) = 'finished'
-           AND NOT EXISTS (SELECT 1 FROM beat_uploads u WHERE u.beat_id = b.id AND u.status = 'uploaded')",
     );
     let published_beats = count(
         "SELECT COUNT(DISTINCT beat_id) FROM beat_uploads WHERE status = 'uploaded'",
@@ -271,7 +258,6 @@ pub fn get_dashboard_actions() -> Result<DashboardActions, String> {
         scheduled_next_7,
         finished_unscheduled,
         studio_ready,
-        unpublished_finished,
         published_beats,
         scheduled_total,
         studio_by_status,

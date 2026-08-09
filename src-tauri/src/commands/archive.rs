@@ -612,7 +612,7 @@ fn scan_archive_blocking(archive_base_path: &str) -> Result<ScanResult, String> 
                 let (has_artwork, has_video) = detect_assets(&beat_path);
 
                 // key/bpm stay NULL when unknown — 0.0/'' would poison
-                // avg_bpm stats and BPM range filters.
+                // BPM range filters.
                 match conn.execute(
                     "INSERT OR IGNORE INTO beats (id, name, path, key, bpm, status, created_date, favorite, has_artwork, has_video)
                      VALUES (?1,?2,?3,?4,?5,'idea',?6,0,?7,?8)",
