@@ -244,7 +244,12 @@ pub fn get_beats_paginated(
         "name" => "LOWER(name)",
         "bpm" => "COALESCE(bpm, 0)",
         "key" => "COALESCE(LOWER(key), 'zzz')",
-        "status" => "COALESCE(status, 'zzz')",
+        // Nach Workflow, nicht nach Alphabet — alphabetisch kaeme
+        // finished/idea/sold/wip heraus, was keiner Reihenfolge entspricht.
+        // Leeres/unbekanntes Status sortiert ans Ende.
+        "status" => "CASE LOWER(COALESCE(status, '')) \
+                       WHEN 'idea' THEN 0 WHEN 'wip' THEN 1 \
+                       WHEN 'finished' THEN 2 WHEN 'sold' THEN 3 ELSE 4 END",
         _ => "CAST(id AS INTEGER)",
     };
     

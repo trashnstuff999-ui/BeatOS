@@ -3,7 +3,7 @@
 // Header with Search, Refresh, and User Avatar
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { RefreshCw, Bell, Search } from "lucide-react";
+import { RefreshCw, Search, LibraryBig } from "lucide-react";
 import { C, commonStyles } from "../../lib/theme";
 
 interface BrowseHeaderProps {
@@ -40,16 +40,16 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: B
       borderBottom: `1px solid ${C.border15}`,
     }}>
       {/* Title */}
-      <h2 style={{
-        fontSize: 18,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.15em",
-        color: C.onSurface,
-        margin: 0,
-      }}>
-        Browse
-      </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <LibraryBig size={16} color={C.primary} strokeWidth={1.75} />
+        <span style={{
+          fontSize: 12, fontWeight: 700,
+          letterSpacing: "0.2em", textTransform: "uppercase",
+          color: C.onSurfaceVariant,
+        }}>
+          Browse
+        </span>
+      </div>
 
       {/* Right Side */}
       <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
@@ -93,35 +93,8 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: B
               if (!isLoading) e.currentTarget.style.color = C.onSurfaceVariant;
             }}
           />
-          <Bell
-            size={18}
-            strokeWidth={1.5}
-            style={{ cursor: "pointer" }}
-            onMouseEnter={e => (e.currentTarget.style.color = C.onSurface)}
-            onMouseLeave={e => (e.currentTarget.style.color = C.onSurfaceVariant)}
-          />
-          <div style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            background: C.surfaceContainerHighest,
-            border: `1px solid ${C.border20}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 12,
-            fontWeight: 700,
-            color: C.primary,
-          }}>
-            JD
-          </div>
         </div>
       </div>
-
-      {/* Keyframes for spinner */}
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </header>
   );
 }

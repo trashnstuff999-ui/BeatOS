@@ -9,6 +9,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C } from "../../lib/theme";
+import { BROWSE_PANEL_WIDTH } from "../../lib/constants";
 import { TagPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus } from "../../types/browse";
@@ -137,7 +138,7 @@ export function DetailPanel({
       right: 0,
       top: 0,
       height: playerActive ? "calc(100vh - 80px)" : "100vh",
-      width: 380,
+      width: BROWSE_PANEL_WIDTH,
       background: C.background,
       display: "flex",
       flexDirection: "column",

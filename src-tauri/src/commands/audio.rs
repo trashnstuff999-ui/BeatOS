@@ -11,7 +11,10 @@ use std::path::Path;
 
 /// Find the best audio file to play for a beat
 /// Priority: Untagged > Tagged > MP3 > Newest audio file
-#[tauri::command]
+///
+/// `(async)`: both commands here hit the filesystem. Without it Tauri runs a
+/// sync command on the main thread, so a page of directory scans blocks the UI.
+#[tauri::command(async)]
 pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> {
     let base_path = Path::new(&beat_path);
     let audio_dir = base_path.join("01_AUDIO");
@@ -102,7 +105,7 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
 
 /// Get cover image path for a beat.
 /// Searches beat root first (new flat layout), then 02_VISUALS/ for legacy archives.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> {
     let base_path = Path::new(&beat_path);
 

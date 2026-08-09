@@ -3,9 +3,9 @@
 // Advanced Filtering Bar with Multi-Select Key Filter
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Filter, RotateCcw, Heart, ChevronDown, X, UploadCloud } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, STATUS_CONFIG } from "../../lib/theme";
 import type { FilterState, BeatStatus } from "../../types/browse";
 import { MINOR_KEYS, MAJOR_KEYS } from "../../types/browse";
 
@@ -16,8 +16,46 @@ interface FilterBarProps {
   resultCount: number;
 }
 
+/** Aktive Filter als einzeln abwerfbare Chips — sichtbar auch wenn eingeklappt. */
+function activeChips(filters: FilterState, set: (patch: Partial<FilterState>) => void) {
+  const chips: { label: string; clear: () => void }[] = [];
+
+  if (filters.search) {
+    chips.push({ label: `Suche: ${filters.search}`, clear: () => set({ search: "" }) });
+  }
+  if (filters.status !== "all") {
+    chips.push({
+      label: STATUS_CONFIG[filters.status]?.label ?? filters.status,
+      clear: () => set({ status: "all" }),
+    });
+  }
+  for (const key of filters.keys) {
+    chips.push({ label: key, clear: () => set({ keys: filters.keys.filter(k => k !== key) }) });
+  }
+  if (filters.bpmMin || filters.bpmMax) {
+    const label = filters.bpmMin && filters.bpmMax
+      ? `BPM ${filters.bpmMin}–${filters.bpmMax}`
+      : filters.bpmMin ? `BPM ab ${filters.bpmMin}` : `BPM bis ${filters.bpmMax}`;
+    chips.push({ label, clear: () => set({ bpmMin: "", bpmMax: "" }) });
+  }
+  if (filters.onlyFavs) {
+    chips.push({ label: "Favoriten", clear: () => set({ onlyFavs: false }) });
+  }
+  if (filters.unpublishedOnly) {
+    chips.push({ label: "Unveröffentlicht", clear: () => set({ unpublishedOnly: false }) });
+  }
+
+  return chips;
+}
+
 export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBarProps) {
   const [keyDropdownOpen, setKeyDropdownOpen] = useState(false);
+
+  // Eingeklappt spart ~150px ueber der Liste; die Chips zeigen trotzdem, was aktiv ist.
+  const [open, setOpen] = useState(() => localStorage.getItem("beatos_browse_filters_open") === "1");
+  useEffect(() => {
+    localStorage.setItem("beatos_browse_filters_open", open ? "1" : "0");
+  }, [open]);
 
   const inputStyle: React.CSSProperties = {
     background: C.surfaceContainerLowest,
@@ -43,6 +81,8 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
     onChange({ ...filters, [key]: value });
   };
 
+  const chips = activeChips(filters, patch => onChange({ ...filters, ...patch }));
+
   const toggleKey = (key: string) => {
     const newKeys = filters.keys.includes(key)
       ? filters.keys.filter(k => k !== key)
@@ -62,9 +102,15 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
       padding: 16,
       border: `1px solid ${C.border10}`,
     }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Header — klickbar zum Auf-/Zuklappen */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "none", border: "none", padding: 0, cursor: "pointer",
+          }}
+        >
           <Filter size={14} color={C.primary} strokeWidth={1.5} />
           <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", color: C.onSurface, margin: 0 }}>
             Advanced Filtering
@@ -72,7 +118,12 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
           <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
             ({resultCount} beats)
           </span>
-        </div>
+          <ChevronDown
+            size={14}
+            color={C.onSecondaryFixedVar}
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+          />
+        </button>
         <button
           onClick={onReset}
           style={{
@@ -95,8 +146,36 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
         </button>
       </div>
 
+      {/* Aktive Filter — auch im eingeklappten Zustand sichtbar */}
+      {chips.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+          {chips.map(chip => (
+            <button
+              key={chip.label}
+              onClick={chip.clear}
+              title="Filter entfernen"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "3px 8px", borderRadius: 9999,
+                background: "rgba(253,161,36,0.12)",
+                border: "1px solid rgba(253,161,36,0.3)",
+                color: C.primary, cursor: "pointer",
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.03em",
+                maxWidth: 240,
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {chip.label}
+              </span>
+              <X size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filter Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr", gap: 24 }}>
+      {open && (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr", gap: 24, marginTop: 16 }}>
         {/* Status */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <label style={labelStyle}>Status</label>
@@ -361,6 +440,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
           </div>
         </div>
       </div>
+      )}
     </section>
   );
 }

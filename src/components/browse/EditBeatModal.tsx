@@ -415,11 +415,6 @@ export function EditBeatModal({ beat, isOpen, onClose, onSave }: EditBeatModalPr
           </div>
         </div>
       </div>
-
-      {/* Spinner Animation */}
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 }

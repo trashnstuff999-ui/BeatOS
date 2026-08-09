@@ -103,16 +103,6 @@ export interface EditFormState {
   sold_to: string;
 }
 
-export interface EditModalState {
-  isOpen: boolean;
-  beat: Beat | null;
-  form: EditFormState;
-  isDirty: boolean;
-  isSaving: boolean;
-  error: string | null;
-}
-
-
 // ─── Update Params (for API) ────────────────────────────────────────────────
 
 export interface UpdateBeatParams {
@@ -172,15 +162,4 @@ export function isFormDirty(form: EditFormState, originalBeat: Beat): boolean {
     form.sold_to !== original.sold_to ||
     JSON.stringify(form.tags) !== JSON.stringify(original.tags)
   );
-}
-
-/** Normalize key for comparison (handle variations like "C#m", "C# minor", "C#min") */
-export function normalizeKey(key: string): string {
-  return key
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace("minor", "m")
-    .replace("min", "m")
-    .replace("major", "")
-    .replace("maj", "");
 }

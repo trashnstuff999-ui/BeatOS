@@ -178,11 +178,19 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; }
   }, []);
 
+  // Stabil halten: die Browse-Zeilen bekommen togglePlay als Prop, und eine
+  // wechselnde Identität würde bei jedem Play/Pause die ganze Liste neu
+  // rendern. Der Pause-Zustand kommt direkt vom Element statt aus dem
+  // gespiegelten State — das ist ohnehin die verlässlichere Quelle.
+  const audioUrlRef = useRef<string | null>(null);
+  useEffect(() => { audioUrlRef.current = audioUrl; }, [audioUrl]);
+
   const togglePlay = useCallback(() => {
-    if (!audioRef.current || !audioUrl) return;
-    if (isPlaying) audioRef.current.pause();
-    else audioRef.current.play().catch(() => setError("Play failed"));
-  }, [isPlaying, audioUrl]);
+    const audio = audioRef.current;
+    if (!audio || !audioUrlRef.current) return;
+    if (audio.paused) audio.play().catch(() => setError("Play failed"));
+    else audio.pause();
+  }, []);
 
   const toggleLoop = useCallback(() => setIsLooped(p => !p), []);
   const toggleMute = useCallback(() => setIsMuted(p => !p), []);

@@ -5,8 +5,9 @@
 
 import { memo } from "react";
 import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
-import { C, STATUS_CONFIG, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
-import type { Beat, BeatStatus, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
+import { C, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
+import type { Beat, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
+import { StatusPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 
 interface BeatTableProps {
@@ -21,8 +22,10 @@ interface BeatTableProps {
 }
 
 // ─── Platform dots: uploaded = solid, scheduled = ring ───────────────────────
+// Kein memo: sitzt nur in BeatRow/GridCard, die selbst memo sind — es rendert
+// also ohnehin nur, wenn die Zeile rendert.
 
-export const PlatformDots = memo(function PlatformDots({ badges }: { badges: UploadBadge[] | undefined }) {
+export function PlatformDots({ badges }: { badges: UploadBadge[] | undefined }) {
   if (!badges || badges.length === 0) {
     return <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
   }
@@ -47,32 +50,7 @@ export const PlatformDots = memo(function PlatformDots({ badges }: { badges: Upl
       })}
     </span>
   );
-});
-
-// ─── Status Pill ─────────────────────────────────────────────────────────────
-
-const StatusPill = memo(function StatusPill({ status }: { status: BeatStatus | null }) {
-  const cfg = STATUS_CONFIG[(status as BeatStatus) || "idea"] || STATUS_CONFIG.idea;
-  return (
-    <span style={{
-      padding: "3px 10px",
-      borderRadius: 9999,
-      fontSize: 9,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.05em",
-      background: cfg.bg,
-      color: cfg.color,
-      border: `1px solid ${cfg.border}`,
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
-      {cfg.label}
-    </span>
-  );
-});
+}
 
 // ─── Column Header ────────────────────────────────────────────────────────────
 
@@ -113,23 +91,30 @@ function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left
 interface BeatRowProps {
   beat: Beat;
   isSelected: boolean;
+  /** Laeuft dieser Beat gerade im Player? */
+  isCurrentBeat: boolean;
+  isThisPlaying: boolean;
+  isThisLoading: boolean;
   onSelectBeat: (beat: Beat) => void;
   onToggleFavorite: (beatId: string) => void;
   onPlayBeat: (beat: Beat) => void;
+  onTogglePlay: () => void;
   badges: UploadBadge[] | undefined;
 }
 
-const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggleFavorite, onPlayBeat, badges }: BeatRowProps) {
+// Der Audio-State kommt bewusst als Props von oben statt per Context: ein
+// Context-Abo in jeder Zeile umgeht memo, und dann rendert schon das Ziehen am
+// Lautstaerkeregler die ganze Seite neu.
+const BeatRow = memo(function BeatRow({
+  beat, isSelected, isCurrentBeat, isThisPlaying, isThisLoading,
+  onSelectBeat, onToggleFavorite, onPlayBeat, onTogglePlay, badges,
+}: BeatRowProps) {
   const isFav = beat.favorite === 1;
-  const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
-  const isCurrentBeat = currentBeat?.id === beat.id;
-  const isThisPlaying = isCurrentBeat && isPlaying;
-  const isThisLoading = isCurrentBeat && isLoading;
 
   const handlePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isCurrentBeat) {
-      togglePlay();
+      onTogglePlay();
     } else {
       onPlayBeat(beat);
     }
@@ -137,7 +122,14 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
 
   return (
     <div
+      data-beat-id={beat.id}
       onClick={() => onSelectBeat(beat)}
+      // Doppelklick spielt ab — ausser auf den Buttons, die schon eigene
+      // Klick-Bedeutungen haben.
+      onDoubleClick={e => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        onPlayBeat(beat);
+      }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -145,6 +137,8 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
         borderRadius: 10,
         background: isSelected ? C.surfaceContainerHigh : C.surfaceContainerLow,
         border: isSelected ? `1px solid ${C.border30}` : "1px solid transparent",
+        // Laufender Beat: Akzentbalken links, ohne das Layout zu verschieben.
+        boxShadow: isCurrentBeat ? `inset 3px 0 0 ${C.primary}` : "none",
         cursor: "pointer",
         transition: "background 0.12s, border-color 0.12s",
         gap: 0,
@@ -186,7 +180,8 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
       {/* Name */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
         <span style={{
-          fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface,
+          fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+          color: isCurrentBeat ? C.primary : C.onSurface,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
           {beat.name}
@@ -205,7 +200,7 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
 
       {/* Status */}
       <div style={{ width: 100, flexShrink: 0, display: "flex", justifyContent: "center" }}>
-        <StatusPill status={beat.status as BeatStatus} />
+        <StatusPill status={beat.status ?? "idea"} />
       </div>
 
       {/* Upload platforms */}
@@ -229,6 +224,9 @@ const BeatRow = memo(function BeatRow({ beat, isSelected, onSelectBeat, onToggle
 // ─── Beat Table ──────────────────────────────────────────────────────────────
 
 export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, sort, onSort, uploadBadges }: BeatTableProps) {
+  // Einmal abonnieren, nicht pro Zeile.
+  const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
+
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* Header Row */}
@@ -273,29 +271,25 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
 
       {/* Rows */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {beats.map(beat => (
-          <BeatRow
-            key={beat.id}
-            beat={beat}
-            isSelected={selectedBeatId === beat.id}
-            onSelectBeat={onSelectBeat}
-            onToggleFavorite={onToggleFavorite}
-            onPlayBeat={onPlayBeat}
-            badges={uploadBadges[beat.id]}
-          />
-        ))}
-
-        {beats.length === 0 && (
-          <div style={{
-            padding: 48, textAlign: "center",
-            color: C.onSecondaryFixedVar, fontSize: 13, fontStyle: "italic",
-            background: "#181717", borderRadius: 10,
-          }}>
-            No beats found
-          </div>
-        )}
+        {beats.map(beat => {
+          const isCurrentBeat = currentBeat?.id === beat.id;
+          return (
+            <BeatRow
+              key={beat.id}
+              beat={beat}
+              isSelected={selectedBeatId === beat.id}
+              isCurrentBeat={isCurrentBeat}
+              isThisPlaying={isCurrentBeat && isPlaying}
+              isThisLoading={isCurrentBeat && isLoading}
+              onSelectBeat={onSelectBeat}
+              onToggleFavorite={onToggleFavorite}
+              onPlayBeat={onPlayBeat}
+              onTogglePlay={togglePlay}
+              badges={uploadBadges[beat.id]}
+            />
+          );
+        })}
       </div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </section>
   );
 }
