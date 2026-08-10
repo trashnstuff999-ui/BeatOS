@@ -39,7 +39,7 @@ export function BeatInfoCard({
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         display: "block", marginBottom: 10,
       }}>
-        Track Title
+        Beat-Titel
       </label>
       <div style={{
         display: "flex", alignItems: "center",
@@ -51,15 +51,15 @@ export function BeatInfoCard({
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
-          placeholder="ENTER BEAT NAME..."
+          placeholder="Beat-Namen eingeben …"
           style={{ ...commonStyles.input, flex: 1, padding: 16, fontSize: 20, fontWeight: 500 }}
         />
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, marginTop: 24 }}>
-        <SmallInput label="Key" value={keyValue} onChange={setKey} placeholder="Cm" width={80} />
+        <SmallInput label="Tonart" value={keyValue} onChange={setKey} placeholder="Cm" width={80} />
         <SmallInput label="BPM" value={bpm} onChange={setBpm} placeholder="140" width={80} />
-        <SmallInput label="Catalog ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" width={96} mono />
+        <SmallInput label="Katalog-ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" width={96} mono />
       </div>
 
       {createdDate && (

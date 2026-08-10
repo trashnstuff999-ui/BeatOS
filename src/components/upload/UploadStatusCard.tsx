@@ -31,7 +31,7 @@ const STATUS_ORDER: UploadStatus[] = ["draft", "scheduled", "uploaded"];
 
 export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCardProps) {
   return (
-    <SectionCard icon={Send} title="Upload Status">
+    <SectionCard icon={Send} title="Upload-Status">
       <div style={{ display: "flex", flexDirection: "column" }}>
         {uploads.map((row, i) => (
           <PlatformRow

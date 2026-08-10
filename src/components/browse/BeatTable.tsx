@@ -241,10 +241,10 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
           <ColHeader label="ID" column="id" currentSort={sort} onSort={onSort} />
         </div>
         <div style={{ flex: 1 }}>
-          <ColHeader label="Beat Name" column="name" currentSort={sort} onSort={onSort} />
+          <ColHeader label="Name" column="name" currentSort={sort} onSort={onSort} />
         </div>
         <div style={{ width: 90, flexShrink: 0 }}>
-          <ColHeader label="Key" column="key" currentSort={sort} onSort={onSort} />
+          <ColHeader label="Tonart" column="key" currentSort={sort} onSort={onSort} />
         </div>
         <div style={{ width: 60, flexShrink: 0 }}>
           <ColHeader label="BPM" column="bpm" currentSort={sort} onSort={onSort} />

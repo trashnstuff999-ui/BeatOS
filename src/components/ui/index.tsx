@@ -8,6 +8,14 @@
 import React from "react";
 import { C } from "../../lib/theme";
 
+export { Button, IconButton } from "./Button";
+export type { ButtonVariant, ButtonSize } from "./Button";
+export { Modal } from "./Modal";
+export { PageHeader, PAGE_HEADER_HEIGHT } from "./PageHeader";
+export { PageBody } from "./PageBody";
+export { EmptyState } from "./EmptyState";
+export { SectionCard, SectionIconBtn } from "./SectionCard";
+
 // ─── Card ───────────────────────────────────────────────────────────────────
 
 interface CardProps {

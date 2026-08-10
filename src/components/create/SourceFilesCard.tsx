@@ -75,7 +75,7 @@ export function SourceFilesCard({
                 })()}
               </>
             ) : (
-              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>No audio files found</span>
+              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine Audiodateien gefunden</span>
             )}
           </div>
 
@@ -127,7 +127,7 @@ export function SourceFilesCard({
         }}>
           <FolderOpen size={24} color={C.onSecondaryFixedVar} style={{ opacity: 0.5, marginBottom: 8 }} />
           <p style={{ margin: 0, fontSize: 12, color: C.onSecondaryFixedVar }}>
-            Select a folder to detect source files
+            Ordner wählen, um Quelldateien zu erkennen
           </p>
         </div>
       )}

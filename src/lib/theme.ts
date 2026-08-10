@@ -59,9 +59,9 @@ export const PLATFORM_CONFIG: Record<PlatformKey, { label: string; short: string
 };
 
 export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  draft:     { label: "Draft",     color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  scheduled: { label: "Scheduled", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
-  uploaded:  { label: "Uploaded",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  draft:     { label: "Entwurf",     color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
+  scheduled: { label: "Geplant", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
+  uploaded:  { label: "Hochgeladen",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
 };
 
 /** Studio project workflow: Idee → In Arbeit → Exportiert → Bereit */
@@ -87,28 +87,28 @@ export interface StatusConfig {
 export const STATUS_CONFIG: Record<string, StatusConfig> = {
   idea: {
     key: "idea",
-    label: "Idea",
+    label: "Idee",
     color: "#9492ff",
     bg: "rgba(148,146,255,0.10)",
     border: "rgba(148,146,255,0.20)",
   },
   wip: {
     key: "wip",
-    label: "WIP",
+    label: "In Arbeit",
     color: "#fda124",
     bg: "rgba(253,161,36,0.10)",
     border: "rgba(253,161,36,0.20)",
   },
   finished: {
     key: "finished",
-    label: "Finished",
+    label: "Fertig",
     color: "#22c55e",
     bg: "rgba(34,197,94,0.10)",
     border: "rgba(34,197,94,0.20)",
   },
   sold: {
     key: "sold",
-    label: "Sold",
+    label: "Verkauft",
     color: "#ff7351",
     bg: "rgba(255,115,81,0.10)",
     border: "rgba(255,115,81,0.20)",
@@ -127,27 +127,18 @@ export function normalizeStatus(status: string | null | undefined): keyof typeof
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
-// Spacing System (8px Grid)
-// ─────────────────────────────────────────────────────────────────────────────────
-
-export const spacing = {
-  xs:  4,
-  sm:  8,
-  md:  16,
-  lg:  24,
-  xl:  32,
-  xxl: 48,
-} as const;
-
-// ─────────────────────────────────────────────────────────────────────────────────
-// Border Radius
+// Border Radius — drei Stufen, mehr braucht die App nicht.
+// Vorher lagen im Code zehn verschiedene Werte (2,4,5,6,7,8,9,10,12,14,16), weil
+// jede Komponente ihren eigenen erfunden hat. Wer hier einen vierten Wert
+// vermisst, greift zur naechstliegenden Stufe.
 // ─────────────────────────────────────────────────────────────────────────────────
 
 export const radius = {
-  sm:   4,
-  md:   8,
-  lg:   12,
-  xl:   16,
+  /** Buttons, Inputs, Chips, kleine Icon-Flaechen */
+  control: 6,
+  /** Karten, Panels, Dialoge */
+  card: 12,
+  /** Pillen, Punkte, Avatare */
   full: 9999,
 } as const;
 
@@ -184,7 +175,7 @@ export const commonStyles = {
   // Card Base
   card: {
     background: colors.surfaceContainerLow,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     border: `1px solid ${colors.border10}`,
   } as React.CSSProperties,
 
@@ -202,7 +193,7 @@ export const commonStyles = {
   input: {
     background: colors.surfaceContainerLowest,
     border: `1px solid ${colors.border20}`,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     color: colors.onSurface,
     fontFamily: typography.fontFamily,
     outline: "none",

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
+import { Button } from "../ui";
 import { formatRelativeTime } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { AssetPipeline } from "./ProjectRow";
@@ -271,20 +272,9 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onClose }: Pr
           <FolderOpen size={12} strokeWidth={1.75} />
           Ordner
         </button>
-        <button
-          onClick={onArchive}
-          style={{
-            flex: 1,
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            padding: "9px 12px", borderRadius: 7,
-            background: C.primary, border: "none",
-            color: C.onPrimary, cursor: "pointer",
-            fontSize: 11, fontWeight: 700,
-          }}
-        >
-          <Archive size={12} strokeWidth={2} />
+        <Button variant="primary" size="sm" icon={Archive} onClick={onArchive} style={{ flex: 1 }}>
           Archivieren
-        </button>
+        </Button>
       </div>
     </aside>
   );

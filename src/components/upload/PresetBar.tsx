@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ChevronDown, Youtube, Music2, Bookmark } from "lucide-react";
 import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { Button } from "../ui";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
 
@@ -233,7 +234,7 @@ export function PresetBar({
                     value={saveLabel}
                     onChange={e => setSaveLabel(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
-                    placeholder="Preset-Name…"
+                    placeholder="Preset-Name …"
                     style={{
                       flex: 1,
                       padding: "8px 12px",
@@ -245,21 +246,9 @@ export function PresetBar({
                       color: C.onSurface,
                     }}
                   />
-                  <button
-                    onClick={handleSave}
-                    style={{
-                      padding: "8px 14px",
-                      fontSize: 11, fontWeight: 700,
-                      background: C.primary,
-                      border: "none", borderRadius: 6,
-                      color: C.onPrimary,
-                      cursor: "pointer",
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Save
-                  </button>
+                  <Button variant="primary" size="sm" onClick={handleSave}>
+                    Speichern
+                  </Button>
                 </div>
                 {error && (
                   <div style={{ marginTop: 6, fontSize: 11, color: "#e5484d" }}>{error}</div>

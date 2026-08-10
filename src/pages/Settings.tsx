@@ -9,8 +9,10 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
+import { PageHeader, PageBody, Button } from "../components/ui";
 import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
@@ -127,7 +129,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
           }}
         >
           <FolderOpen size={13} strokeWidth={1.5} />
-          Browse
+          Durchsuchen
         </button>
       </div>
     </div>
@@ -431,7 +433,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <Wrench size={14} color="#ff7351" strokeWidth={1.75} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>System Repair</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>System-Reparatur</span>
           </div>
           <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
             Importiert Beats, die im Archiv-Ordner liegen, aber in der Datenbank fehlen,
@@ -450,7 +452,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             }}
           >
             {busy === "repair" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <Wrench size={12} strokeWidth={2} />}
-            Repair ausführen
+            Reparatur starten
           </button>
         </div>
 
@@ -534,26 +536,16 @@ export function Settings() {
       background: C.background,
     }}>
       {/* Header */}
-      <header style={{
-        height: 64, flexShrink: 0,
-        ...commonStyles.glassHeader,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 32px",
-        borderBottom: `1px solid ${C.border15}`,
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
-          Settings
-        </span>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {saved && (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.mint }}>
-              <CheckCircle size={14} />
-              Gespeichert
-            </span>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        icon={SettingsIcon}
+        title="Einstellungen"
+        actions={saved && (
+          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.mint }}>
+            <CheckCircle size={14} />
+            Gespeichert
+          </span>
+        )}
+      />
 
       {/* Content: Sektions-Navigation links, aktive Sektion rechts */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
@@ -591,8 +583,7 @@ export function Settings() {
         </nav>
 
         {/* Pane */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
-        <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 24 }}>
+        <PageBody width="reading">
 
           {/* Warning if paths not set */}
           {section === "paths" && !settings.archivePath && (
@@ -604,7 +595,7 @@ export function Settings() {
             }}>
               <AlertCircle size={16} color={C.primary} />
               <span style={{ fontSize: 12, color: C.primary }}>
-                Archive path is not configured. The Create tab cannot archive beats until this is set.
+                Es ist kein Archiv-Ordner gesetzt. Ohne ihn kann unter „Neuer Beat“ nichts archiviert werden.
               </span>
             </div>
           )}
@@ -612,36 +603,36 @@ export function Settings() {
           {/* Paths */}
           {section === "paths" && (
           <Section
-            title="Paths"
-            description="Configure where BeatOS reads and writes your beat files."
+            title="Pfade"
+            description="Wo BeatOS deine Beat-Dateien liest und ablegt."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <PathInput
-                label="Archive Path"
+                label="Archiv-Ordner"
                 icon={Archive}
                 value={draft.archivePath}
-                placeholder="e.g. D:\Beat Library\03_ARCHIVE"
+                placeholder="z.B. D:\Beat Library\03_ARCHIVE"
                 onChange={v => update("archivePath", v)}
                 onBrowse={async () => {
-                  const p = await pickFolder("Select Archive Folder");
+                  const p = await pickFolder("Archiv-Ordner wählen");
                   if (p) update("archivePath", p);
                 }}
               />
               <PathListInput
-                label="Active Production Paths"
+                label="Produktions-Ordner"
                 icon={HardDrive}
                 value={draft.productionPath}
                 onChange={v => update("productionPath", v)}
                 browseTitle="Produktions-Ordner hinzufügen"
               />
               <PathInput
-                label="Asset Path"
+                label="Asset-Ordner"
                 icon={Image}
                 value={draft.assetPath}
-                placeholder="e.g. D:\Beat Library\04_ASSETS\Covers"
+                placeholder="z.B. D:\Beat Library\04_ASSETS\Covers"
                 onChange={v => update("assetPath", v)}
                 onBrowse={async () => {
-                  const p = await pickFolder("Select Asset Folder");
+                  const p = await pickFolder("Asset-Ordner wählen");
                   if (p) update("assetPath", p);
                 }}
               />
@@ -652,22 +643,22 @@ export function Settings() {
           {/* Producer Info — used by Upload-tab template generation */}
           {section === "producer" && (
           <Section
-            title="Producer Info"
-            description="Used by the Upload tab to generate Beatstars, SoundCloud and YouTube descriptions."
+            title="Producer-Infos"
+            description="Werden im Upload-Tab für die Beatstars-, SoundCloud- und YouTube-Beschreibungen eingesetzt."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <TextSetting
-                label="Producer Name"
+                label="Producer-Name"
                 icon={User}
                 value={draft.producerName}
-                placeholder="e.g. goodbxy"
+                placeholder="z.B. goodbxy"
                 onChange={v => update("producerName", v)}
               />
               <TextSetting
-                label="Contact Email"
+                label="Kontakt-E-Mail"
                 icon={Mail}
                 value={draft.contactEmail}
-                placeholder="e.g. contact@prod404.com"
+                placeholder="z.B. contact@prod404.com"
                 onChange={v => update("contactEmail", v)}
               />
               <TextSetting
@@ -704,7 +695,7 @@ export function Settings() {
               />
               {/* Default-Tags als Chips — gespeichert weiterhin als Komma-Liste */}
               <ChipListEditor
-                label="Default SoundCloud Tags"
+                label="Standard-Tags für SoundCloud"
                 values={draft.defaultGenreTags.split(",").map(t => t.trim()).filter(Boolean)}
                 onChange={vals => update("defaultGenreTags", vals.join(", "))}
                 separatorLabel=","
@@ -726,13 +717,13 @@ export function Settings() {
           {/* App Info */}
           {section === "about" && (
           <Section
-            title="About"
-            description="BeatOS application information."
+            title="Über die App"
+            description="Informationen zur Anwendung."
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 ["Version", "0.1.0"],
-                ["Platform", "Tauri + React"],
+                ["Plattform", "Tauri + React"],
               ].map(([label, value]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                   <span style={{ color: C.onSurfaceVariant }}>{label}</span>
@@ -743,8 +734,7 @@ export function Settings() {
           </Section>
           )}
 
-        </div>
-        </div>
+        </PageBody>
       </div>
 
       {/* Unsaved-changes bar — unmissable, pinned above the content */}
@@ -762,35 +752,18 @@ export function Settings() {
             Ungespeicherte Änderungen
           </span>
           <div style={{ flex: 1 }} />
-          <button
-            onClick={handleReset}
-            style={{
-              padding: "10px 20px", borderRadius: 8,
-              fontSize: 12, fontWeight: 600,
-              background: "transparent", border: `1px solid ${C.border30}`,
-              color: C.onSurfaceVariant, cursor: "pointer",
-            }}
-          >
+          <Button variant="secondary" onClick={handleReset}>
             Verwerfen
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            icon={CheckCircle}
             onClick={handleSave}
             disabled={!isLoaded}
-            style={{
-              padding: "12px 36px", borderRadius: 8,
-              fontSize: 13, fontWeight: 800, letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              background: C.primary,
-              border: "none",
-              color: "#3d2300",
-              cursor: isLoaded ? "pointer" : "wait",
-              boxShadow: "0 4px 16px rgba(253,161,36,0.35)",
-              display: "flex", alignItems: "center", gap: 8,
-            }}
+            style={{ padding: "10px 28px" }}
           >
-            <CheckCircle size={15} strokeWidth={2.5} />
             Speichern
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }}>
         <div style={{ fontSize: 32 }}>⚠</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: colors.onSurface }}>
-          {this.props.fallbackLabel ?? "Something went wrong"}
+          {this.props.fallbackLabel ?? "Da ist etwas schiefgelaufen"}
         </div>
         <div style={{
           fontSize: 12,
@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
           borderRadius: 6,
           wordBreak: "break-word",
         }}>
-          {this.state.error?.message ?? "Unknown error"}
+          {this.state.error?.message ?? "Unbekannter Fehler"}
         </div>
         <button
           onClick={this.reset}
@@ -70,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
             cursor: "pointer",
           }}
         >
-          Retry
+          Erneut versuchen
         </button>
       </div>
     );

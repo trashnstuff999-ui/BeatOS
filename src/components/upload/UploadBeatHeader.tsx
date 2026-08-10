@@ -242,7 +242,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data }: UploadBeatHea
               autoFocus
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Suche nach ID, Titel, Key, Tag…"
+              placeholder="Suche nach ID, Titel, Tonart, Tag …"
               style={{
                 flex: 1,
                 background: "transparent",

@@ -47,10 +47,10 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
     try {
       const result = await api.upload.migrateLegacyBeatStructure(beatId);
       const parts: string[] = [];
-      if (result.moved_files > 0)         parts.push(`${result.moved_files} file(s) moved`);
+      if (result.moved_files > 0)         parts.push(`${result.moved_files} Datei(en) verschoben`);
       if (result.renamed_savefiles)       parts.push("03_PROJECTS → 01_SAVEFILES");
-      if (result.removed_subfolders.length) parts.push(`removed ${result.removed_subfolders.join(", ")}`);
-      setSuccess(parts.length > 0 ? parts.join(" · ") : "Nothing to migrate");
+      if (result.removed_subfolders.length) parts.push(`${result.removed_subfolders.join(", ")} entfernt`);
+      setSuccess(parts.length > 0 ? parts.join(" · ") : "Nichts zu migrieren");
       setOpen(false);
       onMigrated();
       setTimeout(() => setSuccess(null), 4000);
@@ -90,7 +90,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: blocked ? "#e5484d" : "#fda124", marginBottom: 2 }}>
-            Legacy folder structure detected
+            Alte Ordnerstruktur erkannt
           </div>
           <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4 }}>
             {moveSummary}
@@ -113,7 +113,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
           }}
         >
           <ArrowRightLeft size={12} strokeWidth={2} />
-          {blocked ? "Review" : "Migrate"}
+          {blocked ? "Prüfen" : "Migrieren"}
         </button>
       </div>
 
@@ -138,20 +138,20 @@ function summarizePlan(p: LegacyStructure): string {
   if (p.planned_moves.length > 0) {
     const subdirs = new Set(p.planned_moves.map(m => m.from_subdir));
     const folderCount = p.planned_moves.filter(m => m.is_dir).length;
-    const itemWord = p.planned_moves.length === 1 ? "item" : "items";
-    const folderHint = folderCount > 0 ? ` (incl. ${folderCount} folder${folderCount === 1 ? "" : "s"})` : "";
-    parts.push(`${p.planned_moves.length} ${itemWord} in ${[...subdirs].join(", ")} will move to root${folderHint}`);
+    const itemWord = p.planned_moves.length === 1 ? "Eintrag" : "Einträge";
+    const folderHint = folderCount > 0 ? ` (davon ${folderCount} Ordner)` : "";
+    parts.push(`${p.planned_moves.length} ${itemWord} aus ${[...subdirs].join(", ")} wandern in den Hauptordner${folderHint}`);
   }
   if (p.has_03_projects && !p.savefiles_conflict) {
     parts.push("03_PROJECTS → 01_SAVEFILES");
   }
   if (p.savefiles_conflict) {
-    parts.push("⚠️ both 03_PROJECTS and 01_SAVEFILES exist — manual merge needed");
+    parts.push("⚠️ 03_PROJECTS und 01_SAVEFILES existieren beide — muss von Hand zusammengeführt werden");
   }
   if (p.collisions.length > 0) {
-    parts.push(`⚠️ ${p.collisions.length} name collision(s) with root entries`);
+    parts.push(`⚠️ ${p.collisions.length} Namenskonflikt(e) mit dem Hauptordner`);
   }
-  return parts.join(" · ") || "Nothing to migrate";
+  return parts.join(" · ") || "Nichts zu migrieren";
 }
 
 // ─── Confirmation dialog ───────────────────────────────────────────────────
@@ -202,10 +202,10 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface, marginBottom: 2 }}>
-              Migrate folder structure
+              Ordnerstruktur migrieren
             </div>
             <div style={{ fontSize: 11, color: C.onSurfaceVariant }}>
-              Files are moved (rename), never copied + deleted. Nothing is overwritten.
+              Dateien werden verschoben (umbenannt), nie kopiert und gelöscht. Nichts wird überschrieben.
             </div>
           </div>
           <button
@@ -226,17 +226,18 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
         <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Blockers first */}
           {plan.savefiles_conflict && (
-            <BlockBox color="#e5484d" title="Both 03_PROJECTS/ and 01_SAVEFILES/ exist">
-              These two folders can't coexist after migration. Merge their contents manually in your file
-              explorer (move everything from 03_PROJECTS into 01_SAVEFILES, then delete the empty
-              03_PROJECTS folder), then re-open this dialog.
+            <BlockBox color="#e5484d" title="03_PROJECTS/ und 01_SAVEFILES/ existieren beide">
+              Beide Ordner können nach der Migration nicht nebeneinander bestehen. Führe sie von Hand im
+              Explorer zusammen (alles aus 03_PROJECTS nach 01_SAVEFILES verschieben, dann den leeren
+              03_PROJECTS-Ordner löschen) und öffne diesen Dialog danach erneut.
             </BlockBox>
           )}
 
           {plan.collisions.length > 0 && (
-            <BlockBox color="#e5484d" title={`${plan.collisions.length} filename collision(s)`}>
-              These files exist in both a legacy subfolder and the beat root. Migration is refused
-              because moving them would silently overwrite the root file. Resolve manually first:
+            <BlockBox color="#e5484d" title={`${plan.collisions.length} Namenskonflikt(e)`}>
+              Diese Dateien liegen sowohl in einem alten Unterordner als auch im Hauptordner des Beats.
+              Die Migration bricht ab, weil das Verschieben die Datei im Hauptordner stillschweigend
+              überschreiben würde. Bitte zuerst von Hand auflösen:
               <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 11, fontFamily: "monospace", color: C.onSurface }}>
                 {plan.collisions.map(c => <li key={c}>{c}</li>)}
               </ul>
@@ -295,7 +296,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
                 letterSpacing: "0.1em", textTransform: "uppercase",
                 marginBottom: 8,
               }}>
-                Folder rename
+                Ordner wird umbenannt
               </div>
               <div style={{
                 padding: "10px 12px",
@@ -405,7 +406,7 @@ function SuccessToast({ text }: { text: string }) {
       fontSize: 12, color: "#34d399",
     }}>
       <Check size={14} strokeWidth={2.5} />
-      Migration successful — {text}
+      Migration erfolgreich — {text}
     </div>
   );
 }

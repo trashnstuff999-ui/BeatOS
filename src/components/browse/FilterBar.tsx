@@ -113,10 +113,10 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
         >
           <Filter size={14} color={C.primary} strokeWidth={1.5} />
           <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", color: C.onSurface, margin: 0 }}>
-            Advanced Filtering
+            Filter
           </h3>
           <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            ({resultCount} beats)
+            ({resultCount} Beats)
           </span>
           <ChevronDown
             size={14}
@@ -127,22 +127,21 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
         <button
           onClick={onReset}
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: C.onSurfaceVariant,
             background: "none",
             border: "none",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
-            gap: 4,
-            textTransform: "uppercase",
-            fontWeight: 700,
-            letterSpacing: "0.15em",
+            gap: 6,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
           }}
           onMouseEnter={e => (e.currentTarget.style.color = C.onSurface)}
           onMouseLeave={e => (e.currentTarget.style.color = C.onSurfaceVariant)}
         >
-          Reset All <RotateCcw size={12} />
+          Alle zurücksetzen <RotateCcw size={12} />
         </button>
       </div>
 
@@ -184,17 +183,17 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
             onChange={e => updateFilter("status", e.target.value as BeatStatus | "all")}
             style={inputStyle}
           >
-            <option value="all">All Statuses</option>
-            <option value="idea">Idea</option>
-            <option value="wip">WIP</option>
-            <option value="finished">Finished</option>
-            <option value="sold">Sold</option>
+            <option value="all">Alle Status</option>
+            <option value="idea">Idee</option>
+            <option value="wip">In Arbeit</option>
+            <option value="finished">Fertig</option>
+            <option value="sold">Verkauft</option>
           </select>
         </div>
 
         {/* Musical Key - Multi-Select Dropdown */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
-          <label style={labelStyle}>Musical Key</label>
+          <label style={labelStyle}>Tonart</label>
           <button
             onClick={() => setKeyDropdownOpen(!keyDropdownOpen)}
             style={{
@@ -213,10 +212,10 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
               flex: 1,
             }}>
               {filters.keys.length === 0 
-                ? "Any Key" 
+                ? "Alle Tonarten" 
                 : filters.keys.length <= 3 
                   ? filters.keys.join(", ")
-                  : `${filters.keys.length} keys selected`
+                  : `${filters.keys.length} Tonarten gewählt`
               }
             </span>
             <ChevronDown size={14} style={{ 
@@ -358,18 +357,18 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
 
         {/* BPM Range */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={labelStyle}>BPM Range</label>
+          <label style={labelStyle}>BPM-Bereich</label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               type="number"
-              placeholder="MIN"
+              placeholder="min."
               value={filters.bpmMin}
               onChange={e => updateFilter("bpmMin", e.target.value)}
               style={{ ...inputStyle, width: "50%" }}
             />
             <input
               type="number"
-              placeholder="MAX"
+              placeholder="max."
               value={filters.bpmMax}
               onChange={e => updateFilter("bpmMax", e.target.value)}
               style={{ ...inputStyle, width: "50%" }}

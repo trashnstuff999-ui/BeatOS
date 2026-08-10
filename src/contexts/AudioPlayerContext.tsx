@@ -107,11 +107,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       try {
         const ap = await api.audio.getAudioPath(beatPath);
         if (currentBeatPathRef.current !== beatPath) return;
-        if (!ap) { setError("No audio file found"); setIsLoading(false); return; }
+        if (!ap) { setError("Keine Audiodatei gefunden"); setIsLoading(false); return; }
         setAudioUrl(pathToAssetUrl(ap));
       } catch {
         if (currentBeatPathRef.current !== beatPath) return;
-        setError("Failed to load audio");
+        setError("Audio konnte nicht geladen werden");
         setIsLoading(false);
       }
     })();
@@ -130,7 +130,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
     const onMeta = () => { setDuration(audio.duration); setIsLoading(false); setError(null); };
     const onEnded = () => { if (!isLoopedRef.current) { setIsPlaying(false); setCurrentTime(0); } };
-    const onError = () => { setError("Audio playback failed"); setIsLoading(false); };
+    const onError = () => { setError("Wiedergabe fehlgeschlagen"); setIsLoading(false); };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onCanPlay = () => setIsLoading(false);
@@ -188,7 +188,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrlRef.current) return;
-    if (audio.paused) audio.play().catch(() => setError("Play failed"));
+    if (audio.paused) audio.play().catch(() => setError("Wiedergabe fehlgeschlagen"));
     else audio.pause();
   }, []);
 

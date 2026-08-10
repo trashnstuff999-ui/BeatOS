@@ -1,10 +1,11 @@
 // src/components/browse/BrowseHeader.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Header with Search, Refresh, and User Avatar
+// Kopfzeile von Browse: Suche + Refresh. Die Huelle kommt aus ui/PageHeader.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { RefreshCw, Search, LibraryBig } from "lucide-react";
-import { C, commonStyles } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
+import { PageHeader, IconButton } from "../ui";
 
 interface BrowseHeaderProps {
   search: string;
@@ -14,87 +15,49 @@ interface BrowseHeaderProps {
 }
 
 export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: BrowseHeaderProps) {
-  const inputStyle: React.CSSProperties = {
-    background: C.surfaceContainerLowest,
-    border: "none",
-    borderRadius: 2,
-    padding: "8px 10px",
-    paddingLeft: 36,
-    width: 256,
-    letterSpacing: "0.15em",
-    fontSize: 12,
-    fontWeight: 500,
-    color: C.onSurface,
-    outline: "none",
-  };
-
   return (
-    <header style={{
-      height: 64,
-      flexShrink: 0,
-      ...commonStyles.glassHeader,
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "0 32px",
-      borderBottom: `1px solid ${C.border15}`,
-    }}>
-      {/* Title */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <LibraryBig size={16} color={C.primary} strokeWidth={1.75} />
-        <span style={{
-          fontSize: 12, fontWeight: 700,
-          letterSpacing: "0.2em", textTransform: "uppercase",
-          color: C.onSurfaceVariant,
-        }}>
-          Browse
-        </span>
-      </div>
+    <PageHeader
+      icon={LibraryBig}
+      title="Archiv"
+      actions={
+        <>
+          {/* Suche */}
+          <div style={{ position: "relative" }}>
+            <Search
+              size={14}
+              color={C.onSurfaceVariant}
+              style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}
+            />
+            <input
+              value={search}
+              onChange={e => onSearchChange(e.target.value)}
+              placeholder="Archiv durchsuchen …"
+              style={{
+                background: C.surfaceContainerLowest,
+                border: `1px solid ${C.border20}`,
+                borderRadius: radius.control,
+                padding: "8px 10px 8px 36px",
+                width: 256,
+                fontSize: 12,
+                fontWeight: 500,
+                color: C.onSurface,
+                outline: "none",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.primary)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border20)}
+            />
+          </div>
 
-      {/* Right Side */}
-      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        {/* Search */}
-        <div style={{ position: "relative" }}>
-          <Search
-            size={14}
-            color={C.onSurfaceVariant}
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-            }}
+          <IconButton
+            icon={RefreshCw}
+            title="Neu laden"
+            onClick={onRefresh}
+            disabled={isLoading}
+            style={isLoading ? { animation: "spin 1s linear infinite" } : undefined}
           />
-          <input
-            value={search}
-            onChange={e => onSearchChange(e.target.value)}
-            placeholder="SEARCH CATALOG..."
-            style={inputStyle}
-            onFocus={e => (e.currentTarget.style.boxShadow = `0 0 0 1px ${C.primary}`)}
-            onBlur={e => (e.currentTarget.style.boxShadow = "none")}
-          />
-        </div>
-
-        {/* Icons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, color: C.onSurfaceVariant }}>
-          <RefreshCw
-            size={18}
-            strokeWidth={1.5}
-            style={{
-              cursor: isLoading ? "not-allowed" : "pointer",
-              opacity: isLoading ? 0.5 : 1,
-              animation: isLoading ? "spin 1s linear infinite" : "none",
-            }}
-            onClick={isLoading ? undefined : onRefresh}
-            onMouseEnter={e => {
-              if (!isLoading) e.currentTarget.style.color = C.onSurface;
-            }}
-            onMouseLeave={e => {
-              if (!isLoading) e.currentTarget.style.color = C.onSurfaceVariant;
-            }}
-          />
-        </div>
-      </div>
-    </header>
+        </>
+      }
+    />
   );
 }

@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, Loader2, ChevronDown, Moon } from "lucide-react";
+import { RefreshCw, Loader2, ChevronDown, Moon, FolderKanban } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { api } from "../../lib/api";
@@ -16,6 +16,7 @@ import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
+import { EmptyState } from "../ui";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectInspector } from "./ProjectInspector";
 import { projectDisplayName } from "../../types/studio";
@@ -280,15 +281,16 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, selected
       )}
 
       {!error && !isLoading && projects.length === 0 && (
-        <div style={{ padding: "40px 16px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant }}>
-          Keine FLP-Projekte gefunden. Projekte = Ordner mit mindestens einer .flp-Datei.
-        </div>
+        <EmptyState
+          variant="inline"
+          icon={FolderKanban}
+          title="Keine FLP-Projekte gefunden"
+          description="Ein Projekt ist ein Ordner mit mindestens einer .flp-Datei."
+        />
       )}
 
       {!error && !isLoading && projects.length > 0 && visible.length === 0 && (
-        <div style={{ padding: "30px 16px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant }}>
-          Kein Projekt passt zu den Filtern.
-        </div>
+        <EmptyState variant="inline" title="Kein Projekt passt zu den Filtern." />
       )}
 
       {/* Sections */}

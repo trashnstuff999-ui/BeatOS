@@ -7,7 +7,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Upload as UploadIcon, AlertCircle, Loader2 } from "lucide-react";
-import { C, commonStyles } from "../lib/theme";
+import { C } from "../lib/theme";
+import { PageHeader, PageBody, EmptyState } from "../components/ui";
 import { useUploadData } from "../hooks/useUploadData";
 import {
   AssetChecklistCard,
@@ -94,26 +95,10 @@ export default function Upload() {
       background: C.background,
     }}>
       {/* Header */}
-      <header style={{
-        height: 64, flexShrink: 0,
-        ...commonStyles.glassHeader,
-        display: "flex", alignItems: "center", gap: 16,
-        padding: "0 32px",
-        borderBottom: `1px solid ${C.border15}`,
-      }}>
-        <UploadIcon size={16} color={C.primary} strokeWidth={1.75} />
-        <span style={{
-          fontSize: 12, fontWeight: 700,
-          letterSpacing: "0.2em", textTransform: "uppercase",
-          color: C.onSurfaceVariant,
-        }}>
-          Upload
-        </span>
-      </header>
+      <PageHeader icon={UploadIcon} title="Upload" />
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "32px 48px" }}>
-        <div style={{ maxWidth: 1720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
+      <PageBody gap={32}>
 
           {/* Beat anchor + integrated picker: cover, title, ready progress */}
           <UploadBeatHeader
@@ -137,7 +122,7 @@ export default function Upload() {
               that would steal input focus and feel like the page is flashing.
           */}
           {!selectedBeat && (
-            <EmptyState />
+            <UploadEmptyState />
           )}
           {selectedBeat && isLoading && !data && (
             <LoadingBanner />
@@ -196,8 +181,7 @@ export default function Upload() {
 
           {/* Bottom spacer */}
           <div style={{ height: 40, flexShrink: 0 }} />
-        </div>
-      </div>
+      </PageBody>
 
       {/* Convert-filenames dialog (modal overlay) */}
       {convertOpen && data && (
@@ -213,25 +197,13 @@ export default function Upload() {
 
 // ─── Sub-views ───────────────────────────────────────────────────────────────
 
-function EmptyState() {
+function UploadEmptyState() {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "80px 20px",
-      background: C.surfaceContainerLowest,
-      border: `1px dashed ${C.border20}`,
-      borderRadius: 12,
-    }}>
-      <div style={{ textAlign: "center", maxWidth: 360 }}>
-        <UploadIcon size={32} color={C.onSecondaryFixedVar} strokeWidth={1.25} style={{ marginBottom: 12 }} />
-        <div style={{ fontSize: 13, color: C.onSurface, fontWeight: 600, marginBottom: 4 }}>
-          No beat selected
-        </div>
-        <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
-          Pick an archived beat above to start preparing it for upload.
-        </div>
-      </div>
-    </div>
+    <EmptyState
+      icon={UploadIcon}
+      title="Kein Beat ausgewählt"
+      description="Wähle oben einen archivierten Beat, um ihn für den Upload vorzubereiten."
+    />
   );
 }
 
@@ -245,8 +217,8 @@ function LoadingBanner() {
       borderRadius: 10,
       fontSize: 12, color: C.onSurfaceVariant,
     }}>
-      <Loader2 size={14} color={C.primary} className="spin" style={{ animation: "spin 0.8s linear infinite" }} />
-      Loading beat data…
+      <Loader2 size={14} color={C.primary} style={{ animation: "spin 0.8s linear infinite" }} />
+      Beat-Daten werden geladen …
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -261,8 +233,8 @@ function ErrorBanner({ message }: { message: string }) {
       border: "1px solid rgba(229,72,77,0.30)",
       borderRadius: 10,
     }}>
-      <AlertCircle size={16} color="#e5484d" strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />
-      <span style={{ fontSize: 12, color: "#e5484d", lineHeight: 1.5 }}>
+      <AlertCircle size={16} color={C.error} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />
+      <span style={{ fontSize: 12, color: C.error, lineHeight: 1.5 }}>
         {message}
       </span>
     </div>

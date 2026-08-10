@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Loader2, AlertCircle, LayoutGrid, List, Shuffle, RotateCcw } from "lucide-react";
+import { Loader2, AlertCircle, LayoutGrid, List, Shuffle, RotateCcw, LibraryBig } from "lucide-react";
 import { C } from "../lib/theme";
 import { BROWSE_PANEL_WIDTH } from "../lib/constants";
 import { useBeats } from "../hooks/useBeats";
@@ -19,6 +19,7 @@ import {
   Pagination,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
+import { PageBody, EmptyState, Button } from "../components/ui";
 import type { Beat, UpdateBeatParams } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -212,21 +213,10 @@ export default function Browse() {
       {/* ═══════════════════════════════════════════════════════════════════════
           Main Content (Scrollable)
       ═══════════════════════════════════════════════════════════════════════ */}
-      <div ref={scrollRef} style={{
-        flex: 1,
-        overflowY: "auto",
-        overflowX: "hidden",
-        display: "flex",
-        flexDirection: "column",
-      }}>
-        {/* Inner content with padding */}
-        <div style={{
-          padding: 32,
-          display: "flex",
-          flexDirection: "column",
-          gap: 24,
-          minHeight: "min-content",
-        }}>
+      {/* „full": das Cover-Raster braucht jede Spalte, deshalb keine
+          Maximalbreite — Innenabstand und Abstaende kommen trotzdem aus
+          derselben Quelle wie auf allen anderen Seiten. */}
+      <PageBody ref={scrollRef} width="full">
           {/* Filter Bar */}
           <FilterBar
             filters={filters}
@@ -251,7 +241,7 @@ export default function Browse() {
                 style={{ animation: "spin 1s linear infinite" }}
               />
               <span style={{ marginLeft: 12, color: C.onSurfaceVariant }}>
-                Loading beats...
+                Beats werden geladen …
               </span>
             </div>
           )}
@@ -292,9 +282,9 @@ export default function Browse() {
                       background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
                       border: "none", borderRadius: 5,
                       cursor: "pointer",
-                      fontSize: 10, fontWeight: 700,
+                      fontSize: 11, fontWeight: 600,
                       color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
-                      textTransform: "uppercase", letterSpacing: "0.04em",
+                      letterSpacing: "0.02em",
                     }}
                   >
                     <Icon size={12} strokeWidth={2} />
@@ -314,8 +304,8 @@ export default function Browse() {
                   border: `1px solid ${C.border15}`,
                   color: C.onSurfaceVariant,
                   cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
-                  fontSize: 10, fontWeight: 700,
-                  textTransform: "uppercase", letterSpacing: "0.04em",
+                  fontSize: 11, fontWeight: 600,
+                  letterSpacing: "0.02em",
                   opacity: pagination.totalCount === 0 ? 0.5 : 1,
                 }}
               >
@@ -336,7 +326,7 @@ export default function Browse() {
               transition: "opacity 0.15s",
             }}>
               {beats.length === 0 ? (
-                <EmptyState hasFilters={hasActiveFilters} onReset={resetFilters} />
+                <BrowseEmptyState hasFilters={hasActiveFilters} onReset={resetFilters} />
               ) : viewMode === "table" ? (
                 <BeatTable
                   beats={beats}
@@ -373,8 +363,7 @@ export default function Browse() {
 
           {/* Bottom spacer for comfortable scrolling */}
           <div style={{ height: 32, flexShrink: 0 }} />
-        </div>
-      </div>
+      </PageBody>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Detail Panel (Read-Only + Status Toggles)
@@ -393,7 +382,7 @@ export default function Browse() {
           }}
           onDelete={async (b) => {
             if (!settings.archivePath) {
-              throw new Error("Archive path is not configured. Open Settings to set it.");
+              throw new Error("Kein Archiv-Ordner gesetzt. Unter Einstellungen festlegen.");
             }
             await deleteBeat(b.id, settings.archivePath);
           }}
@@ -417,35 +406,17 @@ export default function Browse() {
 }
 
 /** Leer ist nicht gleich leer — "nichts gefunden" braucht einen Ausweg. */
-function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
+function BrowseEmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return (
-    <div style={{
-      padding: 48, textAlign: "center", borderRadius: 10,
-      background: "#181717",
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
-    }}>
-      <div style={{ color: C.onSurfaceVariant, fontSize: 13 }}>
-        {hasFilters
-          ? "Keine Beats passen zu diesen Filtern."
-          : "Noch keine Beats in der Bibliothek."}
-      </div>
-      {hasFilters && (
-        <button
-          onClick={onReset}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 7,
-            background: "transparent",
-            border: `1px solid ${C.border30}`,
-            color: C.onSurface, cursor: "pointer",
-            fontSize: 10, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: "0.04em",
-          }}
-        >
-          <RotateCcw size={12} strokeWidth={2} />
+    <EmptyState
+      icon={LibraryBig}
+      title={hasFilters ? "Keine Beats passen zu diesen Filtern." : "Noch keine Beats im Archiv."}
+      description={hasFilters ? undefined : "Lege unter „Neuer Beat“ deinen ersten Beat an."}
+      action={hasFilters && (
+        <Button variant="secondary" size="sm" icon={RotateCcw} onClick={onReset}>
           Filter zurücksetzen
-        </button>
+        </Button>
       )}
-    </div>
+    />
   );
 }

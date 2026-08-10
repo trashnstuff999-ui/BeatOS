@@ -145,7 +145,7 @@ export function AssetPickerDialog({
               autoFocus
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Datei suchen…"
+              placeholder="Datei suchen …"
               style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.onSurface, fontSize: 12 }}
             />
           </div>

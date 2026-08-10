@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, Archive, Play, Sparkles, Piano, Star, Music,
-  CalendarClock, Rocket, Disc3, Flame, ArrowRight, Upload as UploadIcon,
+  CalendarClock, Rocket, Disc3, Flame, ArrowRight, Upload as UploadIcon, LayoutGrid,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Stats, DashboardActions } from "../types/stats";
@@ -11,9 +11,9 @@ import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
 import type { Beat } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS } from "../lib/theme";
-import { getTagCategoryFromDb, TAG_COLORS, type TagCategory } from "../lib/tags";
+import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
 import { StatusPill } from "../components/Tagpill";
-import { Select } from "../components/ui";
+import { Select, Button, PageHeader, PageBody, EmptyState } from "../components/ui";
 
 // ── Aktions-Karte: eine Zahl, eine Handlung, ein Klick ───────────────────────
 function ActionCard({ title, value, hint, icon, color, onClick }: {
@@ -418,11 +418,12 @@ const TAG_ROW_ORDER = ["genre", "vibe", "instrument", "other"] as const;
 type TagRow = (typeof TAG_ROW_ORDER)[number];
 
 // "custom" wird beim Gruppieren auf "other" gemappt — hier stehen nur die Zeilen, die wirklich rendern.
+// Namen aus CATEGORY_LABELS, damit Dashboard und Tag-Dialog dieselben zeigen.
 const TAG_ROW_META: Record<TagRow, { label: string; icon: React.ReactNode }> = {
-  genre:      { label: "Genre",       icon: <Music size={11} /> },
-  vibe:       { label: "Vibe",        icon: <Sparkles size={11} /> },
-  instrument: { label: "Instrumente", icon: <Piano size={11} /> },
-  other:      { label: "Eigene",      icon: <Star size={11} /> },
+  genre:      { label: CATEGORY_LABELS.genre,      icon: <Music size={11} /> },
+  vibe:       { label: CATEGORY_LABELS.vibe,       icon: <Sparkles size={11} /> },
+  instrument: { label: CATEGORY_LABELS.instrument, icon: <Piano size={11} /> },
+  other:      { label: CATEGORY_LABELS.other,      icon: <Star size={11} /> },
 };
 
 function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
@@ -514,7 +515,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
           onClick={() => onOpen()}
           style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
         >
-          ALLE ANZEIGEN ›
+          Alle anzeigen ›
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
@@ -554,7 +555,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
         );
       })}
       {beats.length === 0 && (
-        <div style={{ padding: 40, textAlign: "center", color: C.onSecondaryFixedVar, fontSize: 13 }}>Noch keine Beats im Archiv</div>
+        <EmptyState variant="inline" title="Noch keine Beats im Archiv" />
       )}
     </section>
   );
@@ -623,42 +624,40 @@ export default function Dashboard() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
       {/* Header — entrümpelt: System Repair lebt jetzt in den Settings */}
-      <header style={{ height: 64, flexShrink: 0, ...commonStyles.glassHeader, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", borderBottom: `1px solid ${C.border15}` }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurface }}>Dashboard</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Fehler beim Nachladen — die angezeigten Zahlen bleiben stehen */}
-          {error && (
-            <span
-              title={error}
-              style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                color: C.error, background: "rgba(255,115,81,0.12)",
-                border: "1px solid rgba(255,115,81,0.35)",
-                padding: "4px 10px", borderRadius: 6,
-                maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}
+      <PageHeader
+        icon={LayoutGrid}
+        title="Übersicht"
+        actions={
+          <>
+            {/* Fehler beim Nachladen — die angezeigten Zahlen bleiben stehen */}
+            {error && (
+              <span
+                title={error}
+                style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                  color: C.error, background: "rgba(255,115,81,0.12)",
+                  border: "1px solid rgba(255,115,81,0.35)",
+                  padding: "4px 10px", borderRadius: 6,
+                  maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+              >
+                Nicht aktualisiert
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={RefreshCw}
+              loading={busy}
+              onClick={() => load(stats.selected_year)}
             >
-              Nicht aktualisiert
-            </span>
-          )}
-          <button
-            onClick={() => load(stats.selected_year)}
-            disabled={busy}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${C.border10}`, color: C.onSurfaceVariant, background: "transparent", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, letterSpacing: "0.05em" }}
-          >
-            <RefreshCw size={12} style={busy ? { animation: "spin 0.8s linear infinite" } : undefined} /> AKTUALISIEREN
-          </button>
-        </div>
-      </header>
+              Aktualisieren
+            </Button>
+          </>
+        }
+      />
 
-      {/* Scrollable content — MAX-WIDTH zentriert für Fullscreen */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <div style={{
-          maxWidth: 1800,      // nie breiter als 1800px
-          margin: "0 auto",   // zentriert auf großen Monitoren
-          padding: "24px 32px",
-          display: "flex", flexDirection: "column", gap: 24,
-        }}>
+      <PageBody>
           {/* Aktions-Zeile: Was steht heute an? */}
           {actions && (
             <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
@@ -717,8 +716,7 @@ export default function Dashboard() {
             stats={stats}
             onOpen={(beat) => beat ? handleNavigate({ search: beat.name }) : navigate("/browse")}
           />
-        </div>
-      </div>
+      </PageBody>
     </div>
   );
 }

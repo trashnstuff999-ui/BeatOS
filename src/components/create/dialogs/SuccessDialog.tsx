@@ -102,7 +102,7 @@ export function SuccessDialog({
 
         {/* Subtitle */}
         <p style={{ fontSize: 13, color: C.onSurfaceVariant, margin: 0, marginBottom: 24 }}>
-          Your beat has been organized into the archive structure.
+          Der Beat wurde in die Archiv-Struktur einsortiert.
         </p>
 
         {/* Stats */}
@@ -115,14 +115,14 @@ export function SuccessDialog({
             textAlign: "center", border: `1px solid ${C.border10}`,
           }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.primary }}>{beatId}</div>
-            <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>Beat ID</div>
+            <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>Beat-ID</div>
           </div>
           <div style={{
             background: C.surfaceContainer, borderRadius: 10, padding: 16,
             textAlign: "center", border: `1px solid ${C.border10}`,
           }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.mint }}>{filesCopied}</div>
-            <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>Files Copied</div>
+            <div style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 4 }}>Dateien kopiert</div>
           </div>
           <div style={{
             background: C.surfaceContainer, borderRadius: 10, padding: 16,

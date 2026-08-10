@@ -5,17 +5,21 @@ import { LayoutGrid, LibraryBig, PlusSquare, Music, Upload as UploadIcon, Settin
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 
+// Die Namen folgen dem Wortschatz, den die App in ihren deutschen Texten
+// ohnehin benutzt: „Archiv" steht schon in der Pipeline-Karte und in „Im Archiv
+// oeffnen", und „Upload" ist hier ein deutsches Substantiv (Upload-Planung,
+// Upload-Rhythmus) — deshalb bleibt der Tab „Upload" und wird nicht „Hochladen".
 const NAV = [
-  { to: "/",       icon: LayoutGrid,  label: "Dashboard" },
-  { to: "/browse", icon: LibraryBig,  label: "Browse"    },
-  { to: "/create", icon: PlusSquare,  label: "Create"    },
-  { to: "/upload", icon: UploadIcon,  label: "Upload"    },
-  { to: "/studio", icon: Music,       label: "Studio"    },
+  { to: "/",       icon: LayoutGrid,  label: "Übersicht"  },
+  { to: "/browse", icon: LibraryBig,  label: "Archiv"     },
+  { to: "/create", icon: PlusSquare,  label: "Neuer Beat" },
+  { to: "/upload", icon: UploadIcon,  label: "Upload"     },
+  { to: "/studio", icon: Music,       label: "Studio"     },
 ];
 
 const BOTTOM_NAV = [
-  { to: "/settings", icon: Settings,   label: "Settings" },
-  { to: "/support",  icon: HelpCircle, label: "Support"  },
+  { to: "/settings", icon: Settings,   label: "Einstellungen" },
+  { to: "/support",  icon: HelpCircle, label: "Hilfe"         },
 ];
 
 export default function Sidebar({ beatCount }: { beatCount: number }) {
@@ -30,7 +34,12 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
     <aside style={{
       position: "fixed", left: 0, top: 0,
       height: "100vh", width: SIDEBAR_WIDTH,
-      background: C.surfaceContainerLow,
+      // Eine Stufe ueber dem Inhalt (#1a1919 statt #131313 auf #0e0e0e). Vorher
+      // lagen nur fuenf RGB-Punkte dazwischen — die Navigation schwamm ohne
+      // erkennbare Kante im Inhalt, und eine 1px-Linie bei 15 % reichte dafuer
+      // nicht. Alles, was hier drin sitzt, liegt entsprechend eine Stufe hoeher.
+      background: C.surfaceContainer,
+      borderRight: `1px solid ${C.border15}`,
       display: "flex", flexDirection: "column",
       padding: 16, gap: 8,
       zIndex: 50,
@@ -39,7 +48,7 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 8px", marginBottom: 24 }}>
         <div style={{
           width: 40, height: 40, borderRadius: 8,
-          background: C.surfaceContainer,
+          background: C.surfaceContainerHigh,
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: "inset 0 0 10px rgba(253,161,36,0.1)",
         }}>
@@ -69,7 +78,7 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
                 padding: "12px 16px", borderRadius: 6,
                 fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em",
                 color: isActive ? C.primary : C.onSurfaceVariant,
-                background: isActive ? C.surfaceContainer : "transparent",
+                background: isActive ? C.surfaceContainerHigh : "transparent",
                 boxShadow: isActive ? "0 0 8px rgba(248,157,31,0.2)" : "none",
                 cursor: "pointer", transition: "all 0.15s",
                 userSelect: "none",
@@ -77,7 +86,7 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
               onMouseEnter={e => {
                 if (!isActive) {
                   e.currentTarget.style.color = "#ffffff";
-                  e.currentTarget.style.background = C.surfaceContainer;
+                  e.currentTarget.style.background = C.surfaceContainerHigh;
                 }
               }}
               onMouseLeave={e => {
@@ -116,7 +125,7 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
             }}
             onMouseEnter={e => {
               e.currentTarget.style.color = C.onSurface;
-              e.currentTarget.style.background = C.surfaceContainer;
+              e.currentTarget.style.background = C.surfaceContainerHigh;
             }}
             onMouseLeave={e => {
               e.currentTarget.style.color = C.onSurfaceVariant;

@@ -26,17 +26,17 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<ErrorBoundary fallbackLabel="Dashboard error"><Dashboard /></ErrorBoundary>} />
-        <Route path="/browse" element={<ErrorBoundary fallbackLabel="Browse error"><Browse /></ErrorBoundary>} />
-        <Route path="/studio" element={<ErrorBoundary fallbackLabel="Studio error"><Studio /></ErrorBoundary>} />
-        <Route path="/upload" element={<ErrorBoundary fallbackLabel="Upload error"><Upload /></ErrorBoundary>} />
-        <Route path="/settings" element={<ErrorBoundary fallbackLabel="Settings error"><Settings /></ErrorBoundary>} />
-        <Route path="/support" element={<ErrorBoundary fallbackLabel="Support error"><Support /></ErrorBoundary>} />
+        <Route path="/" element={<ErrorBoundary fallbackLabel="Fehler in der Übersicht"><Dashboard /></ErrorBoundary>} />
+        <Route path="/browse" element={<ErrorBoundary fallbackLabel="Fehler im Archiv"><Browse /></ErrorBoundary>} />
+        <Route path="/studio" element={<ErrorBoundary fallbackLabel="Fehler im Studio"><Studio /></ErrorBoundary>} />
+        <Route path="/upload" element={<ErrorBoundary fallbackLabel="Fehler im Upload"><Upload /></ErrorBoundary>} />
+        <Route path="/settings" element={<ErrorBoundary fallbackLabel="Fehler in den Einstellungen"><Settings /></ErrorBoundary>} />
+        <Route path="/support" element={<ErrorBoundary fallbackLabel="Fehler in der Hilfe"><Support /></ErrorBoundary>} />
       </Routes>
 
       {/* Create — always mounted, hidden when not active */}
       <div style={{ display: currentPath === "/create" ? "block" : "none", height: "100%" }}>
-        <ErrorBoundary fallbackLabel="Create error">
+        <ErrorBoundary fallbackLabel="Fehler beim Anlegen">
           <Create />
         </ErrorBoundary>
       </div>

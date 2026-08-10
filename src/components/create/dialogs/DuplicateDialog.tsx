@@ -107,7 +107,7 @@ export function DuplicateDialog({
             }}
           >
             <Plus size={14} />
-            Create as V2
+            Als V2 anlegen
           </button>
         </div>
       </div>

@@ -10,6 +10,8 @@ import {
   Plus, Trash2, Check, MoveRight,
 } from "lucide-react";
 import { C, commonStyles } from "../../../lib/theme";
+import { Button } from "../../ui";
+import { CATEGORY_LABELS } from "../../../lib/tags";
 import {
   TAG_COLORS, PRESET_TAGS, normalizeTag, sortTagsByCategory,
   updateCustomTagsCache,
@@ -21,11 +23,12 @@ import {
 type ColKey = "genre" | "vibe" | "instrument" | "custom";
 type ViewMode = "all" | ColKey;
 
+// Namen aus CATEGORY_LABELS — hier standen sie vorher ein zweites Mal.
 const COLUMNS: { key: ColKey; label: string; Icon: React.ElementType }[] = [
-  { key: "genre",      label: "Genre",       Icon: Music      },
-  { key: "vibe",       label: "Vibe",        Icon: Sparkles   },
-  { key: "instrument", label: "Instruments", Icon: Piano      },
-  { key: "custom",     label: "Custom",      Icon: Star       },
+  { key: "genre",      label: CATEGORY_LABELS.genre,      Icon: Music    },
+  { key: "vibe",       label: CATEGORY_LABELS.vibe,       Icon: Sparkles },
+  { key: "instrument", label: CATEGORY_LABELS.instrument, Icon: Piano    },
+  { key: "custom",     label: CATEGORY_LABELS.custom,     Icon: Star     },
 ];
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
@@ -359,7 +362,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         draggable
         onDragStart={e => { e.dataTransfer.effectAllowed = "move"; draggingTagRef.current = t; setDraggingTag(t); }}
         onDragEnd={() => { draggingTagRef.current = null; setDraggingTag(null); setDragOverCol(null); }}
-        title={editMode ? "Click to toggle · Double-click to rename · Drag to move" : undefined}
+        title={editMode ? "Klick zum An-/Abwählen · Doppelklick zum Umbenennen · Ziehen zum Verschieben" : undefined}
         style={{
           padding: "13px 16px",
           display: "flex", alignItems: "center", gap: 10,
@@ -529,7 +532,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
               fontSize: 14, fontWeight: 800, color: C.primary,
               letterSpacing: "0.07em", textTransform: "uppercase",
             }}>
-              Studio Tags
+              Tag-Verwaltung
             </span>
           </div>
 
@@ -541,7 +544,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search tags..."
+              placeholder="Tags durchsuchen …"
               style={{ ...commonStyles.input, padding: "8px 10px 8px 32px", fontSize: 12, width: "100%" }}
             />
           </div>
@@ -561,7 +564,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             background: C.surfaceContainerHighest,
             borderRadius: 7, padding: 3,
           }}>
-            {([{ key: "all" as ViewMode, label: "All" }, ...COLUMNS] as { key: ViewMode; label: string }[]).map(({ key, label }) => (
+            {([{ key: "all" as ViewMode, label: "Alle" }, ...COLUMNS] as { key: ViewMode; label: string }[]).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setViewMode(key)}
@@ -583,20 +586,12 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           {/* Create Tag */}
           {editMode && (
             <div style={{ position: "relative" }} ref={createFormRef}>
-              <button
-                onClick={() => setShowCreateForm(v => !v)}
-                style={{
-                  padding: "7px 14px", borderRadius: 7,
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-                  background: `linear-gradient(145deg, ${C.primary}, ${C.primaryContainer})`,
-                  border: "none", color: C.onPrimary, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
-                  flexShrink: 0,
-                }}
-              >
-                <Plus size={12} strokeWidth={2.5} />
-                Create Tag
-              </button>
+              {/* Sekundaer: die Primaeraktion dieses Dialogs ist „Auf Beat
+                  anwenden" unten in der Fussleiste. Vorher riefen beide
+                  gleich laut in Amber. */}
+              <Button variant="secondary" size="sm" icon={Plus} onClick={() => setShowCreateForm(v => !v)}>
+                Tag anlegen
+              </Button>
 
               {showCreateForm && (
                 <div style={{
@@ -609,7 +604,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                     margin: "0 0 12px", fontSize: 10, fontWeight: 700,
                     color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase",
                   }}>
-                    New Tag
+                    Neuer Tag
                   </p>
                   <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                     {(["genre", "vibe", "instrument", "custom"] as const).map(cat => {
@@ -641,28 +636,21 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                     value={newTagName}
                     onChange={e => setNewTagName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleCreate()}
-                    placeholder="Tag name..."
+                    placeholder="Tag-Name …"
                     style={{
                       ...commonStyles.input, padding: "8px 10px", fontSize: 12,
                       width: "100%", boxSizing: "border-box" as const, marginBottom: 10,
                     }}
                   />
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={isCreating || !newTagName.trim()}
                     onClick={handleCreate}
-                    style={{
-                      width: "100%", padding: "8px", borderRadius: 6,
-                      fontSize: 11, fontWeight: 700,
-                      background: newTagName.trim()
-                        ? `linear-gradient(145deg, ${C.primary}, ${C.primaryContainer})`
-                        : C.surfaceContainerHighest,
-                      border: "none",
-                      color: newTagName.trim() ? C.onPrimary : C.onSecondaryFixedVar,
-                      cursor: newTagName.trim() ? "pointer" : "not-allowed",
-                    }}
+                    style={{ width: "100%" }}
                   >
-                    {isCreating ? "Creating..." : "Create"}
-                  </button>
+                    {isCreating ? "Wird angelegt …" : "Anlegen"}
+                  </Button>
                 </div>
               )}
             </div>
@@ -689,7 +677,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
               flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
               color: C.onSecondaryFixedVar, fontSize: 12,
             }}>
-              Loading tags...
+              Tags werden geladen …
             </div>
           ) : (
             visibleColumns.map(renderColumn)
@@ -719,9 +707,9 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
               letterSpacing: "0.06em", textTransform: "uppercase",
             }}>
               {stagedCount > 0 && removedCount > 0
-                ? `${stagedCount} added · ${removedCount} removed`
-                : stagedCount > 0 ? `${stagedCount} tags staged`
-                : `${removedCount} removed`}
+                ? `${stagedCount} hinzugefügt · ${removedCount} entfernt`
+                : stagedCount > 0 ? `${stagedCount} vorgemerkt`
+                : `${removedCount} entfernt`}
             </span>
 
             <div style={{ flex: 1 }} />
@@ -783,7 +771,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             {editMode && stagedCount > 0 && (
               <button
                 onClick={handleTrashStaged}
-                title="Delete staged tags from DB"
+                title="Vorgemerkte Tags aus der Datenbank löschen"
                 style={{
                   padding: "7px 14px", borderRadius: 6,
                   fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
@@ -800,24 +788,14 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             )}
 
             {/* Apply to Beat */}
-            <button
-              onClick={handleApply}
-              style={{
-                padding: "8px 22px", borderRadius: 6,
-                fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
-                background: `linear-gradient(145deg, ${C.primary}, ${C.primaryContainer})`,
-                border: "none", color: C.onPrimary, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 7,
-              }}
-            >
-              <Check size={13} strokeWidth={2.5} />
-              Apply to Beat
-            </button>
+            <Button variant="primary" icon={Check} onClick={handleApply}>
+              Auf Beat anwenden
+            </Button>
 
             {/* Clear all changes */}
             <button
               onClick={() => { setStaged(new Set()); setInternalSelected(initialSelected); }}
-              title="Discard changes"
+              title="Änderungen verwerfen"
               style={{
                 width: 30, height: 30, borderRadius: 6, flexShrink: 0,
                 background: "transparent", border: `1px solid ${C.border20}`,

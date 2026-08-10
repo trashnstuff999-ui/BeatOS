@@ -95,7 +95,7 @@ export function DescriptionFilesCard({
     if (!drafts) return;
     try {
       await navigator.clipboard.writeText(drafts[active]);
-      setBanner({ kind: "ok", msg: `Copied ${TABS.find(t => t.key === active)?.label} to clipboard` });
+      setBanner({ kind: "ok", msg: `${TABS.find(t => t.key === active)?.label} in die Zwischenablage kopiert` });
       setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
     } catch (e) {
       setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
@@ -191,7 +191,7 @@ export function DescriptionFilesCard({
   return (
     <SectionCard
       icon={FileText}
-      title="Descriptions"
+      title="Beschreibungen"
       actions={
         <div style={{ display: "flex", gap: 6 }}>
           <SectionIconBtn
@@ -237,7 +237,7 @@ export function DescriptionFilesCard({
               <Icon size={13} strokeWidth={1.75} />
               {tab.label}
               {isDirty && (
-                <span title="Unsaved edits" style={{
+                <span title="Ungespeicherte Änderungen" style={{
                   width: 6, height: 6, borderRadius: "50%",
                   background: "#fda124",
                 }} />

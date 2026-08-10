@@ -14,16 +14,12 @@ import { TagPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus } from "../../types/browse";
 import { parseTags, isFavorite } from "../../types/browse";
-import { STATUS_CONFIG } from "../../lib/theme";
+// STATUS_ITEMS kommt aus lib/theme — hier stand vorher eine eigene Kopie der
+// Liste, die als einzige Stelle noch englische Labels zeigte, waehrend die
+// Pillen daneben schon deutsch waren.
+import { STATUS_CONFIG, STATUS_ITEMS } from "../../lib/theme";
 import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
 import { useTagManager } from "../../contexts/TagManagerContext";
-
-const STATUS_ITEMS: { key: BeatStatus; label: string }[] = [
-  { key: "idea", label: "IDEA" },
-  { key: "wip", label: "WIP" },
-  { key: "finished", label: "FINISHED" },
-  { key: "sold", label: "SOLD" },
-];
 
 interface DetailPanelProps {
   beat: Beat;
@@ -168,7 +164,7 @@ export function DetailPanel({
             fontSize: 10, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.15em", color: C.onSecondaryFixedVar, marginBottom: 10,
           }}>
-            Artwork
+            Cover
           </div>
           <div style={{
             width: "100%", paddingTop: "100%", position: "relative",
@@ -202,7 +198,7 @@ export function DetailPanel({
 
           {/* Project Name */}
           <div>
-            <div style={labelStyle}>Project Name</div>
+            <div style={labelStyle}>Beat-Name</div>
             <div style={fieldStyle}>{beat.name}</div>
           </div>
 
@@ -213,14 +209,14 @@ export function DetailPanel({
               <div style={fieldStyle}>{beat.bpm || "—"}</div>
             </div>
             <div>
-              <div style={labelStyle}>Key</div>
+              <div style={labelStyle}>Tonart</div>
               <div style={fieldStyle}>{beat.key || "—"}</div>
             </div>
           </div>
 
           {/* Status Selection */}
           <div>
-            <div style={labelStyle}>Status Selection</div>
+            <div style={labelStyle}>Status</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
               {STATUS_ITEMS.map(({ key, label }) => {
                 const isActive = beat.status === key;
@@ -228,7 +224,10 @@ export function DetailPanel({
                 return (
                   <button
                     key={key}
-                    onClick={() => onUpdateStatus(beat.id, key)}
+                    // STATUS_CONFIG ist Record<string, …>, damit FilterBar auch
+                    // mit "all" indizieren kann; die vier Schluessel hier sind
+                    // genau BeatStatus.
+                    onClick={() => onUpdateStatus(beat.id, key as BeatStatus)}
                     style={{
                       padding: "10px 8px",
                       fontSize: 11,
@@ -275,7 +274,7 @@ export function DetailPanel({
                   letterSpacing: "0.05em", textTransform: "uppercase",
                 }}>
                 <Tag size={10} strokeWidth={2} />
-                Tag Manager
+                Tags verwalten
               </button>
             </div>
           </div>
@@ -283,7 +282,7 @@ export function DetailPanel({
           {/* Notes */}
           {beat.notes && (
             <div>
-              <div style={labelStyle}>Notes</div>
+              <div style={labelStyle}>Notizen</div>
               <div style={{
                 marginTop: 6, padding: 12,
                 background: C.surfaceContainerLow,
@@ -318,7 +317,7 @@ export function DetailPanel({
           }}
         >
           <Edit3 size={15} />
-          Edit Beat
+          Beat bearbeiten
         </button>
 
         {/* Open Folder + Favorite */}
@@ -335,7 +334,7 @@ export function DetailPanel({
             }}
           >
             <FolderOpen size={15} color={C.onSurface} strokeWidth={1.5} />
-            Open Folder
+            Ordner öffnen
           </button>
 
           <button
@@ -370,7 +369,7 @@ export function DetailPanel({
             }}
           >
             <Trash2 size={13} strokeWidth={1.75} />
-            Delete Beat
+            Beat löschen
           </button>
         )}
       </div>
@@ -475,7 +474,7 @@ export function DetailPanel({
                 }}
               >
                 <Trash2 size={13} strokeWidth={2} />
-                {isDeleting ? "Deleting…" : "Move to Recycle Bin"}
+                {isDeleting ? "Wird gelöscht …" : "In den Papierkorb"}
               </button>
             </div>
           </div>

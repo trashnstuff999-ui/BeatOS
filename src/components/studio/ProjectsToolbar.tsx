@@ -64,7 +64,7 @@ export function ProjectsToolbar({
           <input
             value={search}
             onChange={e => onSearch(e.target.value)}
-            placeholder="Projekt, Key, BPM…"
+            placeholder="Projekt, Tonart, BPM …"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
               color: C.onSurface, fontSize: 12,

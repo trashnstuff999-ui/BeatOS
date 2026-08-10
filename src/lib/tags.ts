@@ -186,12 +186,15 @@ export function sortTagsByCategory(
 // Category Labels & Icons
 // ─────────────────────────────────────────────────────────────────────────────────
 
+/** Einzige Quelle fuer die Kategorie-Namen. Vorher standen sie dreimal im Code
+ *  — im Tag-Dialog ("Instruments"/"Custom"), hier ("Instrument"/"Custom") und im
+ *  Dashboard ("Instrumente"/"Eigene"). Drei Schreibweisen fuer vier Labels. */
 export const CATEGORY_LABELS: Record<TagCategory, string> = {
   genre: "Genre",
   vibe: "Vibe",
-  instrument: "Instrument",
-  custom: "Custom",
-  other: "Custom",
+  instrument: "Instrumente",
+  custom: "Eigene",
+  other: "Eigene",
 };
 
 export const CATEGORY_ICONS: Record<TagCategory, string> = {

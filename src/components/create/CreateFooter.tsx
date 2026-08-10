@@ -2,6 +2,7 @@
 
 import { FolderOpen, Network, Loader2 } from "lucide-react";
 import { C } from "../../lib/theme";
+import { Button } from "../ui";
 
 interface CreateFooterProps {
   isLoading: boolean;
@@ -50,12 +51,12 @@ export function CreateFooter({
         )}
         <span style={{ fontSize: 12, fontWeight: 500 }}>
           {isArchiving
-            ? "Archiving beat..."
+            ? "Beat wird archiviert …"
             : isLoading
-              ? "Parsing folder..."
+              ? "Ordner wird gelesen …"
               : sourceFolderPath
-                ? `Source: ${sourceFolderPath.split(/[/\\]/).pop()}`
-                : "Select a folder to get started"
+                ? `Quelle: ${sourceFolderPath.split(/[/\\]/).pop()}`
+                : "Ordner wählen, um zu starten"
           }
         </span>
       </div>
@@ -74,7 +75,7 @@ export function CreateFooter({
             onChange={e => onAutoRenameChange(e.target.checked)}
             style={{ accentColor: C.primary, width: 14, height: 14, cursor: "pointer" }}
           />
-          AUTO-RENAME
+          Autom. umbenennen
         </label>
 
         {/* Source cleanup toggle — move semantics for the studio workflow */}
@@ -92,49 +93,34 @@ export function CreateFooter({
             onChange={e => onTrashSourceChange(e.target.checked)}
             style={{ accentColor: C.primary, width: 14, height: 14, cursor: "pointer" }}
           />
-          QUELLE AUFRÄUMEN
+          Quelle aufräumen
         </label>
 
-        <button
-          onClick={onSelectFolder}
-          disabled={isLoading}
-          style={{
-            padding: "10px 24px", borderRadius: 8,
-            fontSize: 14, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
-            display: "flex", alignItems: "center", gap: 8,
-            color: C.primary, background: "transparent", border: "none",
-            cursor: isLoading ? "not-allowed" : "pointer",
-            opacity: isLoading ? 0.5 : 1,
-            transition: "background 0.15s",
-          }}
-          onMouseEnter={e => !isLoading && (e.currentTarget.style.background = "rgba(253,161,36,0.05)")}
-          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-        >
-          <FolderOpen size={16} strokeWidth={1.5} />
-          SELECT FOLDER
-        </button>
+        {/* Nur sichtbar, wenn schon ein Ordner gewaehlt ist — dann heisst der
+            Knopf faktisch „anderen Ordner nehmen". Im Leerzustand bietet die
+            Karte in der Seitenmitte dieselbe Handlung als Primaeraktion an;
+            vorher standen beide gleichzeitig da, beide in Amber. */}
+        {sourceFolderPath && (
+          <Button
+            variant="secondary"
+            icon={FolderOpen}
+            onClick={onSelectFolder}
+            disabled={isLoading}
+          >
+            Ordner wechseln
+          </Button>
+        )}
 
-        <button
+        <Button
+          variant="primary"
+          icon={Network}
+          loading={isArchiving}
           disabled={!canCreate}
           onClick={onCreateBeatstructure}
-          style={{
-            padding: "10px 32px", borderRadius: 8,
-            fontSize: 14, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
-            display: "flex", alignItems: "center", gap: 8,
-            color: canCreate ? "#fff" : C.onSecondaryFixedVar,
-            background: canCreate ? C.primary : C.surfaceContainerHighest,
-            border: `1px solid ${C.border10}`,
-            cursor: canCreate ? "pointer" : "not-allowed",
-            transition: "all 0.2s",
-          }}
+          style={{ padding: "10px 28px" }}
         >
-          {isArchiving ? (
-            <Loader2 size={16} strokeWidth={1.5} style={{ animation: "spin 1s linear infinite" }} />
-          ) : (
-            <Network size={16} strokeWidth={1.5} />
-          )}
-          {isArchiving ? "ARCHIVING..." : "CREATE BEATSTRUCTURE"}
-        </button>
+          {isArchiving ? "Archiviere …" : "Beat anlegen"}
+        </Button>
       </div>
     </footer>
   );

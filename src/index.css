@@ -1,39 +1,15 @@
-@import "tailwindcss";
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
-
-/* ── Design Tokens — "Precision Console" ─────────────────────────────────── */
-:root {
-  /* Surface hierarchy — tonal depth, no borders */
-  --surface:            #0e0e0e;
-  --surface-low:        #131313;
-  --surface-mid:        #1a1919;
-  --surface-high:       #201f1f;
-  --surface-highest:    #262626;
-
-  /* Primary — amber signal light */
-  --primary:            #fda124;
-  --primary-hover:      #e8911a;
-  --primary-dim:        #3a2000;
-
-  /* Text */
-  --text-primary:       #ffffff;
-  --text-secondary:     #adaaaa;
-  --text-muted:         #6b6b6b;
-  --text-dim:           #484848;
-
-  /* Status */
-  --status-idea:        #3b82f6;
-  --status-idea-bg:     #1e3a5f;
-  --status-wip:         #fda124;
-  --status-wip-bg:      #3a2000;
-  --status-finished:    #22c55e;
-  --status-finished-bg: #14532d;
-  --status-sold:        #ef4444;
-  --status-sold-bg:     #7f1d1d;
-
-  /* Outline */
-  --outline:            #484847;
-  --outline-subtle:     rgba(72, 72, 71, 0.15);
+/* Inter — lokal gebuendelt statt per @import von fonts.googleapis.com.
+   Die Tauri-CSP erlaubt nur `style-src 'self'` und `font-src 'self' data:`,
+   der Google-Fonts-Import wurde im gepackten Build also blockiert und die App
+   fiel auf Segoe UI zurueck. Im Dev-Server faellt das nicht auf, weil dort
+   keine CSP greift — Dev und Build sahen unterschiedlich aus.
+   Eine Datei, Latin-Subset, variable Achse 100–900. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
 }
 
 * {
@@ -47,19 +23,28 @@ html, body, #root {
   width: 100%;
   overflow: hidden;
   font-family: "Inter", system-ui, sans-serif;
-  background: var(--surface);
-  color: var(--text-primary);
+  background: #0e0e0e;
+  color: #ffffff;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--surface-highest); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--outline); }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #484847; }
 
 /* Selection */
-::selection { background: var(--primary); color: #000; }
+::selection { background: #fda124; color: #000; }
+
+/* Tastatur-Fokus. Die Komponenten setzen durchgehend `outline: none` und malen
+   ihren Fokus per onFocus-Handler — das greift nur bei Feldern, die einen
+   Handler haben. Der Ring hier gilt fuer alles Uebrige und nur bei Bedienung
+   per Tastatur, nicht bei Mausklick. */
+:focus-visible {
+  outline: 2px solid #fda124;
+  outline-offset: 2px;
+}
 
 /* Spinner — global, damit kein Spinner davon abhaengt, dass eine andere
    Komponente die Keyframes zufaellig mit einblendet. */

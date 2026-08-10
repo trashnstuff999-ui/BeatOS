@@ -87,7 +87,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
           }}
         >
           <Grid3X3 size={10} />
-          MANAGE TAGS
+          Tags verwalten
         </button>
       </div>
 
@@ -113,7 +113,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
         <input
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search tags..."
+          placeholder="Tags durchsuchen …"
           style={{ ...commonStyles.input, width: "100%", padding: "10px 12px 10px 32px", fontSize: 12, boxSizing: "border-box" }}
         />
       </div>

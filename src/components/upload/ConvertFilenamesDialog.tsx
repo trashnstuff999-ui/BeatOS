@@ -47,10 +47,10 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
     try {
       const result = await api.upload.applyFilenameConvention(beatId);
       const parts: string[] = [];
-      if (result.renamed > 0) parts.push(`${result.renamed} file${result.renamed === 1 ? "" : "s"} renamed`);
-      if (result.noops   > 0) parts.push(`${result.noops} already named correctly`);
-      if (result.errors.length > 0) parts.push(`${result.errors.length} error${result.errors.length === 1 ? "" : "s"}`);
-      setDone(parts.join(" · ") || "Nothing to do");
+      if (result.renamed > 0) parts.push(`${result.renamed} Datei${result.renamed === 1 ? "" : "en"} umbenannt`);
+      if (result.noops   > 0) parts.push(`${result.noops} schon korrekt benannt`);
+      if (result.errors.length > 0) parts.push(`${result.errors.length} Fehler`);
+      setDone(parts.join(" · ") || "Nichts zu tun");
       onApplied();
       // Reload plan so the dialog reflects new state (everything should be noops now)
       await loadPlan();
@@ -105,16 +105,16 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface, marginBottom: 2 }}>
-              Convert filenames to convention
+              Dateinamen ins Namensschema bringen
             </div>
             <div style={{ fontSize: 11, color: C.onSurfaceVariant }}>
-              Files are renamed in place. Nothing is overwritten — collisions are flagged below.
+              Dateien werden an Ort und Stelle umbenannt. Nichts wird überschrieben — Konflikte stehen unten.
             </div>
           </div>
           <button
             onClick={loadPlan}
             disabled={isLoading || isApplying}
-            title="Re-scan the beat folder and recompute the plan"
+            title="Beat-Ordner neu einlesen und Plan neu berechnen"
             style={iconBtn(isLoading || isApplying)}
           >
             <RefreshCw size={14} strokeWidth={1.75} />
@@ -136,36 +136,36 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
             <>
               {/* Stat strip */}
               <div style={{ display: "flex", gap: 8 }}>
-                <StatChip color="#34d399" label="To rename" value={renames.length}    />
-                <StatChip color={C.onSecondaryFixedVar} label="Already OK" value={noops.length} />
-                <StatChip color="#e5484d" label="Collisions" value={collisions.length} />
-                <StatChip color="#fda124" label="Skipped" value={skipped.length} dim />
+                <StatChip color="#34d399" label="Umzubenennen" value={renames.length}    />
+                <StatChip color={C.onSecondaryFixedVar} label="Schon korrekt" value={noops.length} />
+                <StatChip color="#e5484d" label="Konflikte" value={collisions.length} />
+                <StatChip color="#fda124" label="Übersprungen" value={skipped.length} dim />
               </div>
 
               {/* Rename rows */}
               {renames.length > 0 && (
-                <Section title="Will rename" color="#34d399">
+                <Section title="Wird umbenannt" color="#34d399">
                   {renames.map(op => <OpRow key={`${op.subdir ?? "/"}/${op.from}`} op={op} />)}
                 </Section>
               )}
 
               {/* Collisions */}
               {collisions.length > 0 && (
-                <Section title="Blocked — target name already taken" color="#e5484d">
+                <Section title="Blockiert — Zielname schon vergeben" color="#e5484d">
                   {collisions.map(op => <OpRow key={`${op.subdir ?? "/"}/${op.from}`} op={op} />)}
                 </Section>
               )}
 
               {/* Already-correct rows (collapsed by default look) */}
               {noops.length > 0 && (
-                <Section title="Already named correctly" color={C.onSecondaryFixedVar} muted>
+                <Section title="Schon korrekt benannt" color={C.onSecondaryFixedVar} muted>
                   {noops.map(op => <OpRow key={`${op.subdir ?? "/"}/${op.from}`} op={op} />)}
                 </Section>
               )}
 
               {/* Skipped (additional MP3s, missing MP4 metadata, etc.) */}
               {skipped.length > 0 && (
-                <Section title="Skipped" color="#fda124" muted>
+                <Section title="Übersprungen" color="#fda124" muted>
                   {skipped.map(s => (
                     <div key={s.file} style={skipRowStyle}>
                       <Minus size={12} color="#fda124" strokeWidth={2} />
@@ -184,7 +184,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
                   borderRadius: 8,
                   fontSize: 12, color: C.onSurfaceVariant,
                 }}>
-                  No matching files found in this beat folder.
+                  Keine passenden Dateien in diesem Beat-Ordner.
                 </div>
               )}
             </>
@@ -224,7 +224,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
               opacity: isApplying ? 0.5 : 1,
             }}
           >
-            Close
+            Schließen
           </button>
           <button
             onClick={handleApply}
@@ -242,8 +242,8 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
             }}
           >
             {isApplying
-              ? <><Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> Renaming…</>
-              : <><Wand2 size={13} strokeWidth={2} /> Apply {renames.length > 0 ? `(${renames.length})` : ""}</>
+              ? <><Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> Wird umbenannt …</>
+              : <><Wand2 size={13} strokeWidth={2} /> Anwenden {renames.length > 0 ? `(${renames.length})` : ""}</>
             }
           </button>
         </div>
@@ -362,7 +362,7 @@ function LoadingState() {
       color: C.onSurfaceVariant, fontSize: 12,
     }}>
       <Loader2 size={20} style={{ animation: "spin 0.8s linear infinite" }} />
-      Building plan…
+      Plan wird erstellt …
     </div>
   );
 }
