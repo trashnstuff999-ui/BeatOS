@@ -179,7 +179,7 @@ export default function Upload() {
                   nicht alles hineinpasst.
                   minHeight faengt den einspaltigen Fall ab (schmales Fenster),
                   wo es keine linke Spalte gibt, die eine Hoehe vorgibt. */}
-              <div style={{ position: "relative", minHeight: 460 }}>
+              <div style={{ position: "relative", minHeight: 560 }}>
                 <DescriptionFilesCard
                   beatId={data.beat.id}
                   uploadFiles={data.assets.upload_files}

@@ -99,44 +99,47 @@ export function PresetBar({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      {/* Single dropdown trigger */}
-      {/* Markanter als der Rest der Karte: der schnellste Weg, Artists, Genres
-          und Tags auf einen Schlag zu setzen — vorher sah er aus wie ein
-          weiteres graues Eingabefeld. */}
+      {/* Ein Werkzeug der Karte, kein Eingabefeld.
+          Vorher: volle Breite, gefuellt, orange, Pfeil rechts — die Gestalt
+          eines Auswahlfeldes, aber der Inhalt eines Befehls („Preset waehlen"
+          statt eines Wertes). Nach dem Abflachen der Karte war es ausserdem
+          das einzige gefuellte Element zwischen lauter Haarlinien.
+          Jetzt ein knapper Knopf in der Kartenkopfzeile, wie „Vorlagen
+          bearbeiten" bei den Beschreibungen. */}
       <button
         onClick={() => setOpen(o => !o)}
+        title="Artists, Genres und Tags auf einen Schlag setzen"
         style={{
-          width: "100%",
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "12px 14px",
-          background: open ? `${C.primary}1f` : `${C.primary}14`,
-          border: `1px solid ${open ? C.primary : C.primary + "55"}`,
-          borderRadius: 8,
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 10px",
+          background: "transparent",
+          border: `1px solid ${open ? C.primary + "60" : C.border15}`,
+          borderRadius: 7,
           cursor: "pointer",
-          fontSize: 13, fontWeight: 700,
-          color: C.primary,
-          transition: "border-color 0.15s, background 0.15s",
+          fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+          color: open ? C.primary : C.onSurfaceVariant,
+          whiteSpace: "nowrap",
+          transition: "border-color 0.15s, color 0.15s",
         }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.color = C.onSurface; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.color = C.onSurfaceVariant; }}
       >
-        <Bookmark size={14} strokeWidth={2.25} />
-        <span style={{ flex: 1, textAlign: "left" }}>
-          Preset wählen
-          {presets.length > 0 && (
-            <span style={{ color: C.primary, opacity: 0.7, marginLeft: 6, fontWeight: 600 }}>
-              ({presets.length})
-            </span>
-          )}
-        </span>
+        <Bookmark size={12} strokeWidth={2} />
+        Presets
+        {presets.length > 0 && (
+          <span style={{ opacity: 0.6 }}>({presets.length})</span>
+        )}
         <ChevronDown
-          size={14}
+          size={12}
           style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
         />
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — rechtsbuendig unter dem Knopf, mit eigener Breite: in der
+          Kopfzeile gibt es keine volle Kartenbreite mehr zum Ausrichten. */}
       {open && (
         <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          position: "absolute", top: "calc(100% + 4px)", right: 0, width: 340,
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
           borderRadius: 8,

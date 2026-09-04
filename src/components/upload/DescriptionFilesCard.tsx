@@ -285,7 +285,9 @@ export function DescriptionFilesCard({
             fontSize: 11, color: C.onSurfaceVariant,
             lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
             display: "-webkit-box",
-            WebkitLineClamp: 6,
+            // 6 Zeilen liessen die Beschreibung unlesbar und darunter die
+            // halbe Karte leer. Der Bereich scrollt ohnehin.
+            WebkitLineClamp: 20,
             WebkitBoxOrient: "vertical" as const,
             overflow: "hidden",
           }}>
@@ -308,7 +310,7 @@ export function DescriptionFilesCard({
               fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
               lineHeight: 1.5, wordBreak: "break-word",
               display: "-webkit-box",
-              WebkitLineClamp: 2,
+              WebkitLineClamp: 4,
               WebkitBoxOrient: "vertical" as const,
               overflow: "hidden",
             }}>
