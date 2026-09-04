@@ -35,6 +35,46 @@ type Row = {
   icon: React.ElementType;
 };
 
+/** Was Cover und Thumbnail an Maßen mitbringen sollen.
+ *
+ *  Die Vorlagen schreiben `_Cover_2000x2000.png` und
+ *  `_THUMBNAIL_1920x1080.png` — geprüft wurde das nie. Ein Cover in 1500×1500
+ *  fällt sonst erst auf, wenn die Plattform es ablehnt.
+ *
+ *  Geprüft wird das Seitenverhältnis und eine Mindestbreite, nicht die exakte
+ *  Pixelzahl: ein Cover in 3000×3000 ist richtig, nur größer. */
+const MASSE: Record<string, { verhaeltnis: number; minBreite: number; soll: string }> = {
+  Cover:     { verhaeltnis: 1,      minBreite: 1400, soll: "quadratisch, ab 1400 px" },
+  Thumbnail: { verhaeltnis: 16 / 9, minBreite: 1280, soll: "16:9, ab 1280 px" },
+};
+
+type Mass = { breite: number; hoehe: number; ok: boolean };
+
+/** Maße einer Bilddatei — ohne Backend, das Bildelement kennt sie. */
+function useImageSize(pfad: string | null, regel?: { verhaeltnis: number; minBreite: number }): Mass | null {
+  const [mass, setMass] = useState<Mass | null>(null);
+
+  useEffect(() => {
+    setMass(null);
+    if (!pfad || !regel) return;
+    let abgebrochen = false;
+    const img = new Image();
+    img.onload = () => {
+      if (abgebrochen) return;
+      const { naturalWidth: breite, naturalHeight: hoehe } = img;
+      if (!breite || !hoehe) return;
+      // 2 % Toleranz: 1920×1080 trifft 16:9 exakt, 1918×1080 soll nicht meckern.
+      const passt = Math.abs(breite / hoehe - regel.verhaeltnis) / regel.verhaeltnis < 0.02;
+      setMass({ breite, hoehe, ok: passt && breite >= regel.minBreite });
+    };
+    img.onerror = () => {};
+    img.src = convertFileSrc(pfad.replace(/\\/g, "/"));
+    return () => { abgebrochen = true; };
+  }, [pfad, regel?.verhaeltnis, regel?.minBreite]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return mass;
+}
+
 export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bare = false }: AssetChecklistCardProps) {
   const allRows: Row[] = [
     { label: "MP3",       filename: assets.mp3,       icon: FileAudio },
@@ -75,6 +115,25 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
     try { await revealItemInDir(beatPath); } catch {}
   };
 
+  // Maße von Cover und Thumbnail. Die Regeln stehen in MASSE; fehlt die Datei,
+  // gibt der Haken null zurück und alles bleibt wie vorher.
+  const vollerPfad = (dateiname: string | null) => {
+    if (!dateiname || !beatPath) return null;
+    const sep = beatPath.includes("\\") ? "\\" : "/";
+    return `${beatPath}${sep}${dateiname}`;
+  };
+  const coverMass = useImageSize(vollerPfad(assets.cover), MASSE.Cover);
+  const thumbMass = useImageSize(vollerPfad(assets.thumbnail), MASSE.Thumbnail);
+  const massFuer = (label: string): Mass | null =>
+    label === "Cover" ? coverMass : label === "Thumbnail" ? thumbMass : null;
+
+  /** Vorhanden, aber mit falschen Maßen — das Segment bleibt dann bernstein. */
+  const massFalsch = (r: Row) => {
+    const m = massFuer(r.label);
+    return r.filename !== null && m !== null && !m.ok;
+  };
+  const schiefeMasse = allRows.filter(massFalsch).map(r => r.label);
+
   const body = (
     <>
       {/* Fortschritt statt Statuszeile: ein Segment je Datei, gefüllt was da
@@ -98,22 +157,33 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
           }}
         >
           <span style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-            {allRows.map(r => (
-              <span
-                key={r.label}
-                title={r.filename ? `${r.label}: ${r.filename}` : `${r.label} fehlt`}
-                style={{
-                  width: 22, height: 5, borderRadius: 3,
-                  background: r.filename ? C.mint : C.border20,
-                }}
-              />
-            ))}
+            {allRows.map(r => {
+              const m = massFuer(r.label);
+              const falsch = massFalsch(r);
+              return (
+                <span
+                  key={r.label}
+                  title={
+                    !r.filename ? `${r.label} fehlt`
+                    : falsch && m ? `${r.label}: ${m.breite}×${m.hoehe} — erwartet ${MASSE[r.label].soll}`
+                    : m ? `${r.label}: ${r.filename} (${m.breite}×${m.hoehe})`
+                    : `${r.label}: ${r.filename}`
+                  }
+                  style={{
+                    width: 22, height: 5, borderRadius: 3,
+                    background: !r.filename ? C.border20 : falsch ? "#fda124" : C.mint,
+                  }}
+                />
+              );
+            })}
           </span>
 
-          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: allOk ? C.mint : C.onSurface }}>
-            {allOk
-              ? "Alle Dateien da"
-              : `${present.length} von ${allRows.length} — es fehlt ${missing.map(m => m.label).join(", ")}`
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: allOk && !schiefeMasse.length ? C.mint : C.onSurface }}>
+            {!allOk
+              ? `${present.length} von ${allRows.length} — es fehlt ${missing.map(m => m.label).join(", ")}`
+              : schiefeMasse.length > 0
+                ? `Alle Dateien da — ${schiefeMasse.join(" und ")} ${schiefeMasse.length === 1 ? "hat" : "haben"} die falsche Größe`
+                : "Alle Dateien da"
             }
           </span>
 
@@ -155,7 +225,7 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 3 }}>
           {/* Missing first — that's what needs attention */}
           {[...missing, ...present].map(row => (
-            <AssetRow key={row.label} {...row} onClick={() => handleRowClick(row)} />
+            <AssetRow key={row.label} {...row} mass={massFuer(row.label)} onClick={() => handleRowClick(row)} />
           ))}
 
           {/* Nur in der Kartenansicht: rahmenlos steht der Knopf oben
@@ -260,7 +330,7 @@ function PreviewImage({ path }: { path: string }) {
   );
 }
 
-function AssetRow({ label, filename, icon: Icon, onClick }: Row & { onClick?: () => void }) {
+function AssetRow({ label, filename, icon: Icon, onClick, mass }: Row & { onClick?: () => void; mass?: Mass | null }) {
   const ok = filename !== null;
   const clickable = ok && (label === "Cover" || label === "Thumbnail" || label === "Video MP4");
   return (
@@ -297,6 +367,21 @@ function AssetRow({ label, filename, icon: Icon, onClick }: Row & { onClick?: ()
       }}>
         {filename ?? "fehlt"}
       </span>
+      {/* Maße nur bei Cover und Thumbnail, und nur wenn sie gelesen werden
+          konnten. Stimmen sie nicht, steht daneben, was erwartet wird. */}
+      {mass && (
+        <span
+          title={mass.ok ? undefined : `Erwartet: ${MASSE[label]?.soll}`}
+          style={{
+            flexShrink: 0, fontSize: 10, fontFamily: "monospace",
+            padding: "2px 7px", borderRadius: 9999,
+            background: mass.ok ? "rgba(255,255,255,0.04)" : "rgba(253,161,36,0.12)",
+            color: mass.ok ? C.onSecondaryFixedVar : "#fda124",
+          }}
+        >
+          {mass.breite}×{mass.hoehe}
+        </span>
+      )}
     </div>
   );
 }

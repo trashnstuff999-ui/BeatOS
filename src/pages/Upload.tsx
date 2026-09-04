@@ -24,7 +24,11 @@ import {
   PlannerStrip,
   UploadBeatHeader,
 } from "../components/upload";
+import { api } from "../lib/api";
 import type { Beat } from "../types/browse";
+
+/** Schluessel fuer die zuletzt gewaehlte Beat-ID. */
+const LETZTER_BEAT = "beatos.upload.letzterBeat";
 
 export default function Upload() {
   const location = useLocation();
@@ -76,6 +80,26 @@ export default function Upload() {
       });
     }
   }, [navState?.beatId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zuletzt gewählten Beat merken und beim Start wiederherstellen.
+  //
+  // BeatOS liegt neben FL Studio offen; jeder Neustart warf einen bisher
+  // zurück auf „Beat wählen…", obwohl man mitten in der Arbeit an genau
+  // diesem Beat war. Gespeichert wird nur die ID, die Zeile kommt frisch aus
+  // der Datenbank — so zeigt sie nie einen veralteten Namen.
+  useEffect(() => {
+    if (navState?.beatId) return;        // Deep-Link von einem anderen Tab gewinnt
+    const gemerkt = localStorage.getItem(LETZTER_BEAT);
+    if (!gemerkt) return;
+    api.beats.getById(gemerkt)
+      .then(b => { if (b) setSelectedBeat(b); })
+      .catch(() => localStorage.removeItem(LETZTER_BEAT));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (selectedBeat?.id) localStorage.setItem(LETZTER_BEAT, selectedBeat.id);
+    else localStorage.removeItem(LETZTER_BEAT);
+  }, [selectedBeat?.id]);
 
   // Once data lands, mirror real beat name/key/bpm onto the selector pill.
   useEffect(() => {

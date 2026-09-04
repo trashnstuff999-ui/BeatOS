@@ -28,7 +28,7 @@ import { useCreateBeat } from "../hooks/useCreateBeat";
 import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
-import { FolderPlus, Info } from "lucide-react";
+import { FolderPlus, Info, FolderOpen, RefreshCw } from "lucide-react";
 import { C } from "../lib/theme";
 import { EmptyState, Button } from "../components/ui";
 import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
@@ -37,6 +37,7 @@ import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 import type {
   AudioFileInfo,
   FlpFileInfo,
+  ImportFolder,
 } from "../types/create";
 import type { TypeBeatPreset } from "../types/upload";
 import { PresetPicker } from "../components/create/PresetPicker";
@@ -351,6 +352,10 @@ export default function Create() {
                 </Button>
               }
             />
+            {/* Kommen die Beats von aussen — anderer Rechner, Zwischenspeicher —
+                liegen sie alle im selben Übergabe-Ordner. Dann muss man sie
+                nicht im Dateidialog suchen. */}
+            <ImportFolderList onPick={setSourceFolderPath} />
           </div>
         )}
 
@@ -487,6 +492,105 @@ export default function Create() {
           onClose={() => setSidebarOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** Die Unterordner des Übergabe-Verzeichnisses als Auswahl.
+ *
+ *  Zeigt nichts, solange in den Einstellungen kein Übergabe-Ordner steht —
+ *  wer seine Beats direkt aus dem Studio archiviert, braucht das nicht. */
+function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
+  const { settings } = useSettings();
+  const [ordner, setOrdner] = useState<ImportFolder[]>([]);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  const laden = useCallback(() => {
+    const pfad = settings.importPath.trim();
+    if (!pfad) { setOrdner([]); return; }
+    api.create.listImportFolders(pfad)
+      .then(o => { setOrdner(o); setFehler(null); })
+      .catch(e => { setOrdner([]); setFehler(String(e)); });
+  }, [settings.importPath]);
+
+  useEffect(() => { laden(); }, [laden]);
+
+  if (!settings.importPath.trim()) return null;
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant,
+          letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>
+          Aus dem Übergabe-Ordner
+        </span>
+        <button
+          onClick={laden}
+          title="Neu einlesen"
+          style={{
+            display: "flex", padding: 4, borderRadius: 5,
+            background: "transparent", border: `1px solid ${C.border15}`,
+            color: C.onSurfaceVariant, cursor: "pointer",
+          }}
+        >
+          <RefreshCw size={11} strokeWidth={2} />
+        </button>
+      </div>
+
+      {fehler && (
+        <div style={{ fontSize: 11, color: C.error, marginBottom: 10 }}>{fehler}</div>
+      )}
+
+      {!fehler && ordner.length === 0 && (
+        <div style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+          Der Übergabe-Ordner ist leer.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {ordner.map(o => (
+          <button
+            key={o.path}
+            onClick={() => onPick(o.path)}
+            title={o.path}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "9px 12px", borderRadius: 7,
+              background: "transparent",
+              border: `1px solid ${C.border10}`,
+              cursor: "pointer", textAlign: "left",
+              fontFamily: "inherit",
+              transition: "border-color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = C.border30;
+              e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = C.border10;
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <FolderOpen size={13} color={o.has_audio ? C.mint : C.onSecondaryFixedVar} strokeWidth={1.75} />
+            <span style={{
+              flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.onSurface,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {o.name}
+            </span>
+            {/* Ohne Audiodatei ist es vermutlich kein Beat — anklickbar bleibt
+                es trotzdem, die Einschaetzung kann falsch sein. */}
+            {!o.has_audio && (
+              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>kein Audio</span>
+            )}
+            <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, fontFamily: "monospace" }}>
+              {o.file_count} {o.file_count === 1 ? "Datei" : "Dateien"} · {o.modified_at}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

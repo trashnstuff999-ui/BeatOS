@@ -56,3 +56,35 @@ Platzhalter also noch nicht. Im Template-Editor einmal eintragen:
 - `{{COLLAB_SOCIALS}}` als eigene Zeile unter den eigenen Socials
 
 - [ ] Vorlagen auf der Platte um die drei Platzhalter ergänzen
+
+---
+
+## Der Rückkanal von den Plattformen
+
+**Was fehlt.** BeatOS weiß, was du hochgeladen hast — aber nie, was daraus
+wurde. Plays, Views, Likes, welche Type-Beat-Tags tatsächlich ziehen. Der
+Katalog ist ein Aktenschrank; mit diesen Zahlen würde er dir sagen, was
+funktioniert.
+
+Heute steht in `beat_uploads` nur, *dass* etwas hochgeladen wurde, plus URL
+und Datum. Das ist die halbe Geschichte.
+
+**Warum das groß ist.** Anders als alles andere auf dieser Liste braucht es
+fremde Dienste:
+
+- [ ] OAuth gegen YouTube (Data API) und SoundCloud, jeweils mit Registrierung
+      der App und Token-Erneuerung. Beatstars hat keine offene API — dort
+      bliebe nur Handeintrag oder gar nichts
+- [ ] Regelmäßiges Abholen im Hintergrund, mit Ratenbegrenzung und einem
+      Umgang mit Ausfällen, der die App nicht blockiert
+- [ ] Eine Tabelle für Zeitreihen (Beat, Plattform, Datum, Zahlen) — nicht
+      nur der letzte Stand, sonst sieht man keine Entwicklung
+- [ ] Eine Auswertungsansicht, die die Zahlen gegen die Tags stellt: welche
+      Artists, Genres und Hashtags korrelieren mit Plays
+
+**Ehrliche Einschätzung.** Das ist kein Nachmittag, sondern das größte
+Einzelvorhaben auf allen Listen — und das einzige, das die App von einer
+Verwaltung zu einem Werkzeug für Entscheidungen macht. Erst sinnvoll, wenn
+der Rest steht und der Bestand gesichert ist.
+
+Aufgekommen bei der Frage „was könnte man noch bauen" am 04.09.2026.

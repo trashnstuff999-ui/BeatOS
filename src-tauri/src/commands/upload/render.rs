@@ -111,11 +111,7 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
 
     // ─── Build shared placeholders ───────────────────────────────────────
     let producer = settings.get("producer_name").cloned().unwrap_or_default();
-    let producer_prod = if producer.is_empty() {
-        String::new()
-    } else {
-        format!("prod. {}", producer)
-    };
+    let producer_prod = mit_prod_praefix(&producer);
     let year = current_year_str();
     let bpm_str = bpm.map(|b| format!("{}", b as i64)).unwrap_or_default();
     let key_str = key_field.unwrap_or_default();
@@ -268,6 +264,25 @@ fn collapse_blank_runs(s: &str) -> String {
 
 const CREDIT_MARK: &str = "🎸";
 const NO_SAMPLES: &str = "🚫 No Samples Used";
+
+/// `{{PRODUCER_PROD}}`: der Producer-Name mit „prod. " davor.
+///
+/// Trägt der Name das Präfix schon — und in den Einstellungen steht es dort
+/// oft, weil es zum Künstlernamen gehört —, wird es nicht verdoppelt. Vorher
+/// rendete die Lizenz-Zeile der YouTube-Vorlage `must credit
+/// "prod. prod. goodbxy"`.
+fn mit_prod_praefix(producer: &str) -> String {
+    let name = producer.trim();
+    if name.is_empty() {
+        return String::new();
+    }
+    let klein = name.to_lowercase();
+    if klein.starts_with("prod.") || klein.starts_with("prod ") {
+        name.to_string()
+    } else {
+        format!("prod. {}", name)
+    }
+}
 
 /// Die Namenszeile: „prod. goodbxy", mit einem Sample-Geber
 /// „prod. goodbxy & prodzeux", mit mehreren „prod. goodbxy, a & b".
@@ -452,6 +467,16 @@ mod tests {
     }
 
     // ─── Sample-Credits ────────────────────────────────────────────────
+
+    #[test]
+    fn prod_praefix_wird_nicht_verdoppelt() {
+        assert_eq!(mit_prod_praefix("goodbxy"), "prod. goodbxy");
+        // Der echte Fall: das Präfix steckt schon im eingestellten Namen
+        assert_eq!(mit_prod_praefix("prod. goodbxy"), "prod. goodbxy");
+        assert_eq!(mit_prod_praefix("Prod. Goodbxy"), "Prod. Goodbxy");
+        assert_eq!(mit_prod_praefix("prod goodbxy"), "prod goodbxy");
+        assert_eq!(mit_prod_praefix("  "), "");
+    }
 
     #[test]
     fn namenszeile_waechst_mit_den_sample_gebern() {

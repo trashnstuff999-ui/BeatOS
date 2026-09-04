@@ -48,6 +48,7 @@ use commands::{
     // Create commands
     get_next_beat_id,
     parse_beat_folder_for_create,
+    list_import_folders,
     read_image_file,
     // Audio commands
     get_beat_audio_path,
@@ -213,6 +214,7 @@ pub fn run() {
             // Create
             get_next_beat_id,
             parse_beat_folder_for_create,
+            list_import_folders,
             read_image_file,
             // Audio
             get_beat_audio_path,

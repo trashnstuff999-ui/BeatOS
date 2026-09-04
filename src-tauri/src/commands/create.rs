@@ -339,3 +339,75 @@ mod tests {
     }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Übergabe-Ordner
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Ein Ordner im Übergabe-Verzeichnis, der ein Beat sein könnte.
+#[derive(Debug, serde::Serialize)]
+pub struct ImportFolder {
+    pub name: String,
+    pub path: String,
+    pub modified_at: String,
+    /// Enthält mindestens eine Audiodatei — ohne die ist es kein Beat-Ordner
+    pub has_audio: bool,
+    pub file_count: usize,
+}
+
+/// Listet die Unterordner des Übergabe-Verzeichnisses, neueste zuerst.
+///
+/// Gedacht für den Weg über einen Zwischenspeicher: Beat auf der anderen
+/// Maschine fertig, als Ordner herübergeschoben, hier eingepflegt. Vorher
+/// musste man den Ordner jedes Mal im Dateidialog suchen.
+///
+/// Nur eine Ebene tief — verschachtelte Ablagen sind hier nicht der Fall, und
+/// ein rekursiver Lauf über ein Downloads-Verzeichnis wäre spürbar langsam.
+#[tauri::command(async)]
+pub fn list_import_folders(import_path: String) -> Result<Vec<ImportFolder>, String> {
+    let root = Path::new(import_path.trim());
+    if import_path.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    if !root.is_dir() {
+        return Err(format!("Übergabe-Ordner nicht gefunden: {}", import_path));
+    }
+
+    let mut out: Vec<(u64, ImportFolder)> = Vec::new();
+
+    for entry in std::fs::read_dir(root).map_err(|e| e.to_string())?.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+
+        let mut has_audio = false;
+        let mut file_count = 0usize;
+        for f in std::fs::read_dir(&path).into_iter().flatten().filter_map(|f| f.ok()) {
+            let fp = f.path();
+            if !fp.is_file() {
+                continue;
+            }
+            file_count += 1;
+            let ext = fp.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            if is_audio_extension(&ext) {
+                has_audio = true;
+            }
+        }
+
+        let secs = file_modified_secs(&path).unwrap_or(0);
+        out.push((secs, ImportFolder {
+            name: name.to_string(),
+            path: path.to_string_lossy().to_string(),
+            modified_at: secs_to_date(secs),
+            has_audio,
+            file_count,
+        }));
+    }
+
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    // Ein Downloads-Ordner kann hunderte Einträge haben; die Liste soll eine
+    // Auswahl sein, kein Dateibrowser.
+    Ok(out.into_iter().take(30).map(|(_, f)| f).collect())
+}

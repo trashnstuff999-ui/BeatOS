@@ -148,3 +148,13 @@ export interface CreateFormState {
   coverImage: string | null;
   coverSourcePath: string | null;
 }
+
+/** Ein Ordner im Übergabe-Verzeichnis — Kandidat für „Neuer Beat". */
+export interface ImportFolder {
+  name: string;
+  path: string;
+  modified_at: string;
+  /** Ohne Audiodatei ist es kein Beat-Ordner */
+  has_audio: boolean;
+  file_count: number;
+}

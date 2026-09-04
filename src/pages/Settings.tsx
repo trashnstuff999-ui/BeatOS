@@ -1148,6 +1148,19 @@ export function Settings() {
                   if (p) update("assetPath", p);
                 }}
               />
+              {/* Zwischenspeicher für Beats von aussen: „Neuer Beat" listet
+                  die Unterordner, statt dass man sie im Dateidialog sucht. */}
+              <PathInput
+                label="Übergabe-Ordner"
+                icon={FolderOpen}
+                value={draft.importPath}
+                placeholder="z.B. C:\Users\…\Downloads\BeatOS-Import  (optional)"
+                onChange={v => update("importPath", v)}
+                onBrowse={async () => {
+                  const p = await pickFolder("Übergabe-Ordner wählen");
+                  if (p) update("importPath", p);
+                }}
+              />
               <PathInput
                 label="Template-FLP"
                 icon={Music2}

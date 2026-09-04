@@ -13,6 +13,8 @@ export interface AppSettings {
   archivePath: string;
   productionPath: string;
   assetPath: string;
+  /** Wohin fertige Beats von aussen abgelegt werden (Zwischenspeicher). */
+  importPath: string;
   /** Vorlage, aus der „Neues Projekt" im Studio die FLP kopiert */
   flpTemplatePath: string;
   // Producer info (used by Upload-tab templates)
@@ -29,6 +31,7 @@ export const DEFAULTS: AppSettings = {
   archivePath: "",
   productionPath: "",
   assetPath: "",
+  importPath: "",
   flpTemplatePath: "",
   producerName: "",
   contactEmail: "",
@@ -46,6 +49,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   archivePath: "archive_path",
   productionPath: "production_path",
   assetPath: "asset_path",
+  importPath: "import_path",
   flpTemplatePath: "flp_template_path",
   producerName: "producer_name",
   contactEmail: "contact_email",

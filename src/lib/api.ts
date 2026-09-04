@@ -11,6 +11,7 @@ import type {
   ArchiveResult,
   DuplicateCheckResult,
   ParsedBeatFolder,
+  ImportFolder,
 } from "../types/create";
 import type { CustomTag } from "./tags";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
@@ -210,6 +211,10 @@ export const api = {
   create: {
     getNextBeatId: () =>
       invoke<number>("get_next_beat_id"),
+
+    /** Unterordner des Uebergabe-Verzeichnisses, neueste zuerst. */
+    listImportFolders: (importPath: string) =>
+      invoke<ImportFolder[]>("list_import_folders", { importPath }),
 
     parseBeatFolder: (folderPath: string) =>
       invoke<ParsedBeatFolder>("parse_beat_folder_for_create", { folderPath }),
