@@ -171,13 +171,23 @@ export default function Upload() {
                 <SampleCreditsCard bare beatId={data.beat.id} onSaved={refresh} />
               </TypeBeatCard>
 
-              {/* Ausgabe */}
-              <DescriptionFilesCard
-                beatId={data.beat.id}
-                uploadFiles={data.assets.upload_files}
-                onSaved={refresh}
-                rerenderKey={rerenderKey}
-              />
+              {/* Ausgabe.
+                  Die Karte haengt absolut in dieser Huelle, damit ihr Inhalt
+                  die Zeilenhoehe nicht mitbestimmt: sonst zoege das Aufklappen
+                  des Volltexts die ganze Zeile nach unten. So gibt die linke
+                  Spalte die Hoehe vor, und die Beschreibungen scrollen, wenn
+                  nicht alles hineinpasst.
+                  minHeight faengt den einspaltigen Fall ab (schmales Fenster),
+                  wo es keine linke Spalte gibt, die eine Hoehe vorgibt. */}
+              <div style={{ position: "relative", minHeight: 460 }}>
+                <DescriptionFilesCard
+                  beatId={data.beat.id}
+                  uploadFiles={data.assets.upload_files}
+                  onSaved={refresh}
+                  rerenderKey={rerenderKey}
+                  style={{ position: "absolute", inset: 0 }}
+                />
+              </div>
             </div>
           )}
 

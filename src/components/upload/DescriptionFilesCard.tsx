@@ -27,6 +27,8 @@ interface DescriptionFilesCardProps {
   // rendered output changes (type-beat fields, upload status URL, etc.) and
   // the card will auto re-render.
   rerenderKey: number;
+  /** Vom Upload-Tab gesetzt, um die Karte in ihrer Huelle zu verankern. */
+  style?: React.CSSProperties;
 }
 
 type TabKey = UploadPlatform;
@@ -43,7 +45,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: 
 ];
 
 export function DescriptionFilesCard({
-  beatId, uploadFiles, onSaved, rerenderKey,
+  beatId, uploadFiles, onSaved, rerenderKey, style,
 }: DescriptionFilesCardProps) {
   const [active, setActive] = useState<TabKey>("beatstars");
   const [drafts, setDrafts] = useState<UploadDescriptions | null>(null);
@@ -175,10 +177,11 @@ export function DescriptionFilesCard({
     <SectionCard
       icon={FileText}
       title="Beschreibungen"
-      // Zieht bis auf die Höhe der Infos-Karte daneben. Der Vorschautext
-      // wächst mit (siehe `flex: 1` unten), der Speichern-Knopf bleibt unten
-      // stehen — sonst waere die gewonnene Hoehe nur Luft.
-      style={{ height: "100%", display: "flex", flexDirection: "column" }}
+      // Fuellt ihre Huelle (siehe Upload.tsx): der Inhaltsbereich waechst und
+      // scrollt, der Speichern-Knopf bleibt am Fuss. Die Kartenhoehe kommt von
+      // der Infos-Karte daneben und aendert sich nicht, wenn der Volltext
+      // aufklappt.
+      style={{ height: "100%", display: "flex", flexDirection: "column", ...style }}
       actions={
         // Der Neu-Rendern-Knopf ist raus: nach dem Speichern einer Vorlage
         // rendert die Karte ohnehin neu.
@@ -313,9 +316,12 @@ export function DescriptionFilesCard({
             </div>
           </OutputRow>
         )}
-      </div>
 
-      {/* ─── Full text — collapsed by default ───────────────────────────── */}
+      {/* ─── Full text — collapsed by default ─────────────────────────────
+          Steht innerhalb des scrollenden Bereichs, direkt unter den Tags:
+          ausserhalb schob ihn der wachsende Bereich an den Kartenfuss, und
+          beim Aufklappen wuchs die ganze Karte nach unten. Jetzt bleibt die
+          Kartenhoehe, wie sie ist, und der Inhalt scrollt. */}
       <button
         onClick={() => setEditorOpen(o => !o)}
         style={{
@@ -383,6 +389,7 @@ export function DescriptionFilesCard({
           )}
         </div>
       )}
+      </div>
 
       {/* ─── Eine Handlung: speichern. Vorher standen hier vier Knoepfe —
               „Text" kopierte den Rohtext, ein zweiter speicherte nur die
