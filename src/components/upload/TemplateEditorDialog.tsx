@@ -21,13 +21,58 @@ const TABS: Array<{ key: UploadPlatform; label: string; icon: React.ElementType;
   { key: "youtube",    label: "YouTube",    icon: Youtube,     color: C.primary, file: "youtube.template"    },
 ];
 
-// Spiegelt die Liste in render.rs (build_renderer). Kommt dort einer dazu,
-// gehört er hier ergänzt.
-const PLACEHOLDERS = [
-  "TITLE", "TITLE_UPPER", "BPM", "KEY",
-  "TYPE_BEAT_MAIN", "ALSO_FITS", "GENRE_TAGS", "HASHTAGS",
-  "PRODUCER", "PRODUCER_PROD", "EMAIL",
-  "IG_URL", "SC_URL", "YT_URL", "BS_URL", "BEATSTARS_LINK", "YEAR",
+// ⚠ Spiegelt `base_vars` in render.rs von Hand. Kommt dort ein Platzhalter
+//   dazu, gehört er hier ergänzt — sonst kennt der Editor ihn nicht.
+//
+// Jeder trägt seine Erklärung mit: die Namen allein sagen nicht, was sie tun,
+// und ein Beispiel sagt es schneller als ein Satz.
+interface Platzhalter {
+  name: string;
+  was: string;
+  beispiel: string;
+}
+
+const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
+  {
+    titel: "Beat",
+    eintraege: [
+      { name: "TITLE",       was: "Titel des Beats, wie er in der Datenbank steht", beispiel: "NOBODY HERE" },
+      { name: "TITLE_UPPER", was: "Derselbe Titel in Großbuchstaben",               beispiel: "NOBODY HERE" },
+      { name: "BPM",         was: "Tempo als Zahl, ohne Einheit",                   beispiel: "156" },
+      { name: "KEY",         was: "Tonart des Beats",                               beispiel: "C#m" },
+      { name: "YEAR",        was: "Das laufende Jahr — für Titel und Tags",         beispiel: "2026" },
+    ],
+  },
+  {
+    titel: "Type-Beat & Tags",
+    eintraege: [
+      { name: "TYPE_BEAT_MAIN", was: "Die Haupt-Artists aus dem Upload-Tab",                       beispiel: "Lil Peep x Juice WRLD" },
+      { name: "ALSO_FITS",      was: "Passt außerdem zu — die zweite Reihe Artists",               beispiel: "Scorey, Polo G, Convolk" },
+      { name: "GENRE_TAGS",     was: "Die Genres dieses Beats",                                    beispiel: "Sad Guitar | Melodic" },
+      { name: "HASHTAGS",       was: "Fertiger Tag-Block, je Plattform anders gebaut",             beispiel: "#lilpeeptypebeat …" },
+    ],
+  },
+  {
+    titel: "Du",
+    eintraege: [
+      { name: "PRODUCER",       was: "Dein Producer-Name aus den Einstellungen",                   beispiel: "prod. goodbxy" },
+      { name: "PRODUCER_PROD",  was: "Derselbe Name mit „prod. \" davor — steht er dort schon, kommt es doppelt", beispiel: "prod. prod. goodbxy" },
+      { name: "EMAIL",          was: "Deine Kontakt-E-Mail",                                       beispiel: "contact@prod404.com" },
+      { name: "IG_URL",         was: "Dein Instagram",                                             beispiel: "instagram.com/prod.goodbxy" },
+      { name: "SC_URL",         was: "Dein SoundCloud",                                            beispiel: "soundcloud.com/prodgoodbxy" },
+      { name: "YT_URL",         was: "Dein YouTube",                                               beispiel: "youtube.com/@PROD.GOODBXY" },
+      { name: "BS_URL",         was: "Dein Beatstars-Profil",                                      beispiel: "beatstars.com/prodgoodbxy" },
+      { name: "BEATSTARS_LINK", was: "Der Kauflink dieses Beats; ohne einen dein Beatstars-Profil", beispiel: "bsta.rs/sSDFEV" },
+    ],
+  },
+  {
+    titel: "Sample-Credits",
+    eintraege: [
+      { name: "PRODUCER_LINE",  was: "Du, plus die Sample-Geber dieses Beats",                          beispiel: "prod. goodbxy & prodzeux" },
+      { name: "CREDITS",        was: "Der Credits-Block. Ohne fremdes Sample steht dort „No Samples Used\"", beispiel: "🎸 Guitarsample by prodzeux" },
+      { name: "COLLAB_SOCIALS", was: "Name und Links der Sample-Geber. Ohne welche bleibt die Zeile leer und verschwindet", beispiel: "prodzeux:\ninstagram.com/…" },
+    ],
+  },
 ];
 
 interface TemplateEditorDialogProps {
@@ -47,6 +92,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [hover, setHover] = useState<Platzhalter | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const tab = TABS.find(t => t.key === active)!;
@@ -183,24 +229,70 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
         })}
       </div>
 
-      {/* Platzhalter — Klick setzt an der Cursorposition ein */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {PLACEHOLDERS.map(name => (
-          <button
-            key={name}
-            onClick={() => insert(name)}
-            title={`{{${name}}} an der Cursorposition einsetzen`}
-            style={{
-              padding: "3px 8px", borderRadius: 9999,
-              background: C.surfaceContainerLowest,
-              border: `1px solid ${C.border20}`,
-              color: C.onSurfaceVariant, cursor: "pointer",
-              fontFamily: "monospace", fontSize: 10,
-            }}
-          >
-            {name}
-          </button>
+      {/* Platzhalter — nach Gruppen sortiert, Klick setzt an der Cursorposition
+          ein. Die Zeile darunter erklärt den, über dem die Maus steht: die
+          Namen allein verraten nicht, was sie tun. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {GRUPPEN.map(gruppe => (
+          <div key={gruppe.titel} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{
+              flex: "0 0 108px", textAlign: "right",
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+              textTransform: "uppercase", color: C.onSecondaryFixedVar,
+            }}>
+              {gruppe.titel}
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {gruppe.eintraege.map(p => {
+                const aktiv = hover?.name === p.name;
+                return (
+                  <button
+                    key={p.name}
+                    onClick={() => insert(p.name)}
+                    onMouseEnter={() => setHover(p)}
+                    onMouseLeave={() => setHover(h => (h?.name === p.name ? null : h))}
+                    onFocus={() => setHover(p)}
+                    onBlur={() => setHover(h => (h?.name === p.name ? null : h))}
+                    title={`{{${p.name}}} an der Cursorposition einsetzen`}
+                    style={{
+                      padding: "3px 8px", borderRadius: 9999,
+                      background: aktiv ? C.surfaceContainer : C.surfaceContainerLowest,
+                      border: `1px solid ${aktiv ? C.primary + "60" : C.border20}`,
+                      color: aktiv ? C.onSurface : C.onSurfaceVariant, cursor: "pointer",
+                      fontFamily: "monospace", fontSize: 10,
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
+      </div>
+
+      {/* Erklärzeile — feste Höhe, damit die Vorlage darunter nicht springt */}
+      <div style={{
+        minHeight: 30, padding: "6px 10px", borderRadius: 6,
+        background: C.surfaceContainerLowest, border: `1px solid ${C.border10}`,
+        fontSize: 11, lineHeight: 1.5, color: C.onSurfaceVariant,
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        {hover ? (
+          <>
+            <code style={{ fontFamily: "monospace", color: C.primary, whiteSpace: "nowrap" }}>
+              {`{{${hover.name}}}`}
+            </code>
+            <span>{hover.was}</span>
+            <span style={{ marginLeft: "auto", color: C.onSecondaryFixedVar, fontStyle: "italic", whiteSpace: "pre", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {hover.beispiel.replace(/\n/g, " ⏎ ")}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: C.onSecondaryFixedVar }}>
+            Auf einen Platzhalter zeigen, um zu sehen was er einsetzt — klicken setzt ihn an der Cursorposition ein.
+          </span>
+        )}
       </div>
 
       {/* Vorlage | Vorschau */}
@@ -232,7 +324,9 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
 
 const paneBox: React.CSSProperties = {
   width: "100%",
-  height: 380,
+  // 340 statt 380: die Platzhalter-Gruppen darüber brauchen den Platz, und
+  // beide Felder scrollen ohnehin.
+  height: 340,
   padding: "11px 13px",
   background: C.surfaceContainerLowest,
   borderRadius: 8,
