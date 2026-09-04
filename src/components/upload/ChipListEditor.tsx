@@ -32,6 +32,7 @@ export function ChipListEditor({
 }: ChipListEditorProps) {
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
+  const [hover, setHover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commitDraft = () => {
@@ -78,6 +79,8 @@ export function ChipListEditor({
 
       <div
         onClick={() => inputRef.current?.focus()}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         style={{
           display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
           padding: "6px 8px",
@@ -85,12 +88,17 @@ export function ChipListEditor({
           // Weder Rahmen noch Fläche im Ruhezustand: Karte, Feld und Chip
           // trugen je eine eigene Abgrenzung — drei Ebenen auf 40px Höhe, und
           // jede Gruppe las sich als eigene Blase. Getrennt wird jetzt eine
-          // Ebene höher mit Haarlinien; hier bleibt nur der Fokus sichtbar.
-          background: focused ? C.surfaceContainerLowest : "transparent",
+          // Ebene höher mit Haarlinien.
+          //
+          // Dafür muss der Hover die Arbeit machen: ohne Fläche im
+          // Ruhezustand sagt sonst nichts mehr, dass man hier tippen kann.
+          background: focused
+            ? C.surfaceContainerLowest
+            : hover ? "rgba(255,255,255,0.035)" : "transparent",
           border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
           borderRadius: 8,
           cursor: "text",
-          transition: "border-color 0.15s",
+          transition: "border-color 0.15s, background 0.15s",
           boxSizing: "border-box",
         }}
       >

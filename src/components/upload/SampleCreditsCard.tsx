@@ -129,12 +129,15 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
 
   const inhalt = (
     <>
-      {/* Rahmenlos trägt der Abschnitt seine eigene Beschriftung, wie die
-          Chip-Gruppen darüber — die Kartenkopfzeile gehört der ganzen Fläche. */}
+      {/* Untertitel im Stil der Kartenüberschrift, nicht wie eine Feldmarke:
+          „Credits" gliedert die Fläche, es beschriftet kein einzelnes Feld.
+          Dieselben Werte wie die h3 in SectionCard. */}
       {bare && (
         <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          fontSize: 11, color: C.onSecondaryFixedVar, marginBottom: 8,
+          display: "flex", alignItems: "center", gap: 6, marginBottom: 12,
+          fontSize: 11, fontWeight: 700,
+          color: C.onSurfaceVariant,
+          letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           Credits
           {saveState === "saving" && <Loader2 size={11} style={{ animation: "spin 0.8s linear infinite" }} />}
@@ -152,12 +155,17 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
 
         <div style={{ flex: "1 1 180px", minWidth: 0 }}>
           <label style={beschriftung}>Sample von</label>
+          {/* „No Samples Used" statt „— niemand —": das Feld zeigt damit
+              direkt, was in der Beschreibung stehen wird, und der Erklärsatz
+              darunter wird überflüssig. */}
           <select
             value={credit ? String(credit.producer_id) : KEINER}
             onChange={e => waehle(e.target.value)}
-            style={{ ...feld, cursor: "pointer" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; }}
+            style={{ ...feld, cursor: "pointer", transition: "border-color 0.15s" }}
           >
-            <option value={KEINER}>— niemand —</option>
+            <option value={KEINER}>No Samples Used</option>
             {producers.map(p => (
               <option key={p.id} value={String(p.id)}>{p.name}</option>
             ))}
@@ -178,14 +186,14 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
         )}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
-        {producers.length === 0
-          ? <>Noch niemand im Adressbuch. Anlegen unter <strong style={{ color: C.onSurfaceVariant }}>Einstellungen → Producer</strong>.</>
-          : credit
-            ? <>In der Beschreibung: „{producerName} &amp; {credit.producer_name}“, dazu {credit.producer_name}s Links.</>
-            : <>Ohne Sample-Geber steht in der Beschreibung „No Samples Used“.</>
-        }
-      </div>
+      {/* Nur noch der Fall, der eine Handlung verlangt. Was ohne Sample-Geber
+          in der Beschreibung steht, sagt jetzt das Auswahlfeld selbst. */}
+      {producers.length === 0 && (
+        <div style={{ marginTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+          Noch niemand im Adressbuch. Anlegen unter{" "}
+          <strong style={{ color: C.onSurfaceVariant }}>Einstellungen → Producer</strong>.
+        </div>
+      )}
     </>
   );
 
