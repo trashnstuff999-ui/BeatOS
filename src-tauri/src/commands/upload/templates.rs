@@ -137,13 +137,13 @@ DESCRIPTION:\n\
 FREE DOWNLOAD / PURCHASE 🔥: {{BEATSTARS_LINK}}\n\
 \n\
 🎧 𝙃𝙞𝙜𝙝𝙡𝙞𝙜𝙝𝙩𝙨 ─ 𝙨𝙩𝙖𝙩𝙨\n\
+{{PRODUCER_LINE}}\n\
 BPM: {{BPM}} | Key: {{KEY}}\n\
 \n\
 {{GENRE_TAGS}} | {{TYPE_BEAT_MAIN}} Type Beat\n\
 also fits: {{ALSO_FITS}}\n\
 \n\
-🚫 No Samples Used\n\
-🎸 Loop by {{PRODUCER}}\n\
+{{CREDITS}}\n\
 \n\
 ─────────────────────────\n\
 CONTACT FOR STEMS & EXCLUSIVES:\n\
@@ -154,6 +154,8 @@ Contact on Instagram and/or Email for track stems and exclusive pricing.\n\
 SOCIALS:\n\
 🎵 YOUTUBE: {{YT_URL}}\n\
 ☁️ SOUNDCLOUD: {{SC_URL}}\n\
+\n\
+{{COLLAB_SOCIALS}}\n\
 \n\
 Drop a like and repost if you feel the vibe! 🤝\n\
 \n\
@@ -173,7 +175,7 @@ DESCRIPTION:\n\
 🔥 PURCHASE / FREE DOWNLOAD: {{BEATSTARS_LINK}}\n\
 \n\
 BPM: {{BPM}} | Key: {{KEY}}\n\
-{{PRODUCER_PROD}}\n\
+{{PRODUCER_LINE}}\n\
 \n\
 ────────────────────────────\n\
 \n\
@@ -188,8 +190,9 @@ This {{GENRE_TAGS}} type beat fits artists like:\n\
 🎵 YouTube: {{YT_URL}}\n\
 🛒 Beatstars: {{BS_URL}}\n\
 \n\
-🚫 No Samples Used\n\
-🎸 Loop by {{PRODUCER}}\n\
+{{COLLAB_SOCIALS}}\n\
+\n\
+{{CREDITS}}\n\
 \n\
 ────────────────────────────\n\
 \n\

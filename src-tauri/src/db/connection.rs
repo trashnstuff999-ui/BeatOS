@@ -319,6 +319,40 @@ pub fn init_db() -> Result<(), String> {
                     }
                 }
 
+                // Sample-Credits, Teil 1: das Adressbuch der Sample-Geber.
+                // Einmal gepflegt, damit ihre Links nicht bei jedem Upload
+                // neu abgetippt werden. Form wie type_beat_presets.
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS sample_producers (
+                        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name           TEXT NOT NULL,
+                        instagram_url  TEXT,
+                        beatstars_url  TEXT,
+                        soundcloud_url TEXT,
+                        youtube_url    TEXT,
+                        created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create sample_producers table: {}", e));
+                }
+
+                // Teil 2: wer bei welchem Beat was beigesteuert hat. Mehrere
+                // Zeilen pro Beat, zusammengesetzter Schlüssel — dieselbe Form
+                // wie beat_uploads. Verwiesen wird über die id, damit ein
+                // geänderter Link beim nächsten Rendern überall stimmt.
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS beat_sample_credits (
+                        beat_id      TEXT    NOT NULL,
+                        producer_id  INTEGER NOT NULL,
+                        contribution TEXT    NOT NULL DEFAULT 'Sample',
+                        PRIMARY KEY (beat_id, producer_id)
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create beat_sample_credits table: {}", e));
+                }
+
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(
                     "CREATE TABLE IF NOT EXISTS studio_projects (

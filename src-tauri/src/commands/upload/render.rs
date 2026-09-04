@@ -3,6 +3,7 @@
 
 use super::templates::templates_dir;
 use super::SOUNDCLOUD_TAG_LIMIT;
+use crate::commands::sample_credits::ResolvedCredit;
 use crate::db::open_db;
 use crate::utils::current_year_str;
 use serde::{Deserialize, Serialize};
@@ -102,6 +103,12 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
     .filter(|s| !s.trim().is_empty())
     .unwrap_or_else(|| settings.get("beatstars_url").cloned().unwrap_or_default());
 
+    // ─── Sample-Credits ──────────────────────────────────────────────────
+    // Wer bei diesem Beat ein Sample beigesteuert hat, aufgelöst mit Namen
+    // und Links. Leer, wenn keiner — dann sagt der Credits-Block weiterhin,
+    // dass keine fremden Samples drinstecken.
+    let credits = crate::commands::sample_credits::resolved_credits(&conn, beat_id);
+
     // ─── Build shared placeholders ───────────────────────────────────────
     let producer = settings.get("producer_name").cloned().unwrap_or_default();
     let producer_prod = if producer.is_empty() {
@@ -128,6 +135,9 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
         ("GENRE_TAGS",     tb_genre_s.clone()),
         ("PRODUCER",       producer.clone()),
         ("PRODUCER_PROD",  producer_prod),
+        ("PRODUCER_LINE",  producer_line(&producer, &credits)),
+        ("CREDITS",        credits_block(&producer, &credits)),
+        ("COLLAB_SOCIALS", collab_socials(&credits)),
         ("EMAIL",          settings.get("contact_email").cloned().unwrap_or_default()),
         ("IG_URL",         settings.get("instagram_url").cloned().unwrap_or_default()),
         ("SC_URL",         settings.get("soundcloud_url").cloned().unwrap_or_default()),
@@ -218,7 +228,88 @@ fn render_template(template: &str, vars: &[(&str, String)]) -> String {
     for (k, v) in vars {
         out = out.replace(&format!("{{{{{}}}}}", k), v);
     }
-    out
+    collapse_blank_runs(&out)
+}
+
+/// Wo ein leerer Platzhalter stand, bliebe sonst eine Lücke im Text — bei
+/// {{COLLAB_SOCIALS}} etwa eine Leerzeile über einem frei stehenden
+/// Trennstrich. Mehr als eine Leerzeile am Stück auf eine zusammenziehen.
+///
+/// Das ersetzt Bedingungen im Renderer: alle anderen Platzhalter sind so
+/// gebaut, dass sie nie leer werden, und die Vorlagen trennen Absätze mit
+/// genau einer Leerzeile — an denen ändert die Regel also nichts.
+fn collapse_blank_runs(s: &str) -> String {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut blank_run = 0usize;
+
+    for line in s.split('\n') {
+        if line.trim().is_empty() {
+            blank_run += 1;
+            if blank_run > 1 {
+                continue;
+            }
+        } else {
+            blank_run = 0;
+        }
+        kept.push(line);
+    }
+
+    // Mit `join` statt angehängtem Umbruch: das leere Stück, das `split` nach
+    // einem abschließenden Umbruch liefert, ist keine Zeile, sondern ein
+    // Artefakt — es einzeln zu behandeln hatte einen Umbruch zu viel erzeugt.
+    kept.join("\n")
+}
+
+// ─── Sample-Credits: die drei Blöcke ───────────────────────────────────────
+//
+// Wortlaut und Symbole stehen hier, nicht in der Vorlage: die Blöcke entstehen
+// aus Daten, also muss ihre Form mitgeliefert werden. Wer sie ändern will,
+// ändert diese Konstanten.
+
+const CREDIT_MARK: &str = "🎸";
+const NO_SAMPLES: &str = "🚫 No Samples Used";
+
+/// Die Namenszeile: „prod. goodbxy", mit einem Sample-Geber
+/// „prod. goodbxy & prodzeux", mit mehreren „prod. goodbxy, a & b".
+fn producer_line(producer: &str, credits: &[ResolvedCredit]) -> String {
+    let mut names: Vec<&str> = Vec::with_capacity(credits.len() + 1);
+    if !producer.trim().is_empty() {
+        names.push(producer.trim());
+    }
+    names.extend(credits.iter().map(|c| c.name.as_str()));
+
+    match names.len() {
+        0 => String::new(),
+        1 => names[0].to_string(),
+        n => format!("{} & {}", names[..n - 1].join(", "), names[n - 1]),
+    }
+}
+
+/// Der Credits-Block. **Nie leer** — ohne Sample-Geber steht dort weiterhin,
+/// dass keine fremden Samples verwendet wurden. Genau deshalb braucht der
+/// Renderer keine Bedingungen.
+fn credits_block(producer: &str, credits: &[ResolvedCredit]) -> String {
+    if credits.is_empty() {
+        return format!("{}\n{} Loop by {}", NO_SAMPLES, CREDIT_MARK, producer);
+    }
+    let mut lines: Vec<String> = credits
+        .iter()
+        .map(|c| format!("{} {} by {}", CREDIT_MARK, c.contribution, c.name))
+        .collect();
+    lines.push(format!("{} Beat by {}", CREDIT_MARK, producer));
+    lines.join("\n")
+}
+
+/// Name und Links je Sample-Geber. Der einzige Block, der leer sein darf —
+/// dann greift `collapse_blank_runs`. Wer keine Links hinterlegt hat, wird im
+/// Credits-Block genannt, taucht hier aber nicht auf.
+fn collab_socials(credits: &[ResolvedCredit]) -> String {
+    credits
+        .iter()
+        .filter(|c| !c.links.is_empty())
+        .map(|c| format!("{}:\n{}", c.name, c.links.join("\n")))
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 
@@ -351,6 +442,95 @@ fn split_csv(s: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn credit(name: &str, contribution: &str, links: &[&str]) -> ResolvedCredit {
+        ResolvedCredit {
+            name: name.into(),
+            contribution: contribution.into(),
+            links: links.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // ─── Sample-Credits ────────────────────────────────────────────────
+
+    #[test]
+    fn namenszeile_waechst_mit_den_sample_gebern() {
+        assert_eq!(producer_line("prod. goodbxy", &[]), "prod. goodbxy");
+        assert_eq!(
+            producer_line("prod. goodbxy", &[credit("prodzeux", "Guitarsample", &[])]),
+            "prod. goodbxy & prodzeux"
+        );
+        assert_eq!(
+            producer_line(
+                "prod. goodbxy",
+                &[credit("a", "Sample", &[]), credit("b", "Sample", &[])]
+            ),
+            "prod. goodbxy, a & b"
+        );
+    }
+
+    /// Der Kern des Entwurfs: dieser Block ist nie leer, deshalb braucht der
+    /// Renderer keine Bedingungen.
+    #[test]
+    fn credits_block_ist_nie_leer() {
+        assert_eq!(
+            credits_block("prod. goodbxy", &[]),
+            "🚫 No Samples Used\n🎸 Loop by prod. goodbxy"
+        );
+        assert_eq!(
+            credits_block("prod. goodbxy", &[credit("prodzeux", "Guitarsample", &[])]),
+            "🎸 Guitarsample by prodzeux\n🎸 Beat by prod. goodbxy"
+        );
+    }
+
+    #[test]
+    fn socials_nur_fuer_wen_links_hinterlegt_sind() {
+        let mit = credit("prodzeux", "Guitarsample", &[
+            "https://www.instagram.com/prodzeux/",
+            "https://www.beatstars.com/prodzeux",
+        ]);
+        let ohne = credit("ohnelinks", "Drumloop", &[]);
+
+        assert_eq!(
+            collab_socials(&[mit.clone(), ohne]),
+            "prodzeux:\nhttps://www.instagram.com/prodzeux/\nhttps://www.beatstars.com/prodzeux",
+            "wer keine Links hat, wird nur im Credits-Block genannt"
+        );
+        assert_eq!(collab_socials(&[]), "");
+    }
+
+    /// Ohne diese Regel bliebe da, wo der leere Block stand, eine Leerzeile
+    /// über einem frei stehenden Trennstrich.
+    #[test]
+    fn leerer_block_hinterlaesst_keine_luecke() {
+        let vorlage = "Beatstars: {{BS_URL}}\n\n{{COLLAB_SOCIALS}}\n────────\n";
+        let vars = vec![
+            ("BS_URL", "beatstars.com/prodgoodbxy".to_string()),
+            ("COLLAB_SOCIALS", String::new()),
+        ];
+        assert_eq!(
+            render_template(vorlage, &vars),
+            "Beatstars: beatstars.com/prodgoodbxy\n\n────────\n"
+        );
+    }
+
+    #[test]
+    fn gefuellter_block_bleibt_unangetastet() {
+        let vorlage = "oben\n\n{{COLLAB_SOCIALS}}\n────────";
+        let vars = vec![("COLLAB_SOCIALS", "prodzeux:\nlink".to_string())];
+        assert_eq!(
+            render_template(vorlage, &vars),
+            "oben\n\nprodzeux:\nlink\n────────"
+        );
+    }
+
+    #[test]
+    fn absaetze_mit_einer_leerzeile_ueberleben() {
+        let text = "a\n\nb\n\nc";
+        assert_eq!(collapse_blank_runs(text), text);
+    }
+
+    // ─── Bestehende Tests ──────────────────────────────────────────────
 
     #[test]
     fn artists_split_on_x_comma_ampersand() {

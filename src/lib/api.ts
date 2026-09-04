@@ -14,6 +14,7 @@ import type {
 } from "../types/create";
 import type { CustomTag } from "./tags";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
+import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
 import type { Stats, DashboardActions } from "../types/stats";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
@@ -67,6 +68,29 @@ export const api = {
 
     apply: (newAnchor: string) =>
       invoke<RelocateResult>("relocate_apply", { newAnchor }),
+  },
+
+  // ─── Sample-Credits ───────────────────────────────────────────────────────
+  // Adressbuch der Sample-Geber plus die Zuordnung pro Beat. Ihre Links stehen
+  // einmal in der App und wandern beim Rendern in die Beschreibungen.
+  sampleCredits: {
+    listProducers: () =>
+      invoke<SampleProducer[]>("get_sample_producers"),
+
+    /** Ohne `id` wird angelegt, mit `id` geändert. Gibt die id zurück. */
+    saveProducer: (producer: SampleProducer) =>
+      invoke<number>("save_sample_producer", { producer }),
+
+    /** Löscht auch alle Nennungen an Beats. */
+    deleteProducer: (id: number) =>
+      invoke<void>("delete_sample_producer", { id }),
+
+    forBeat: (beatId: string) =>
+      invoke<BeatSampleCredit[]>("get_beat_sample_credits", { beatId }),
+
+    /** Ersetzt die Nennungen des Beats vollständig. */
+    setForBeat: (beatId: string, credits: BeatSampleCredit[]) =>
+      invoke<void>("set_beat_sample_credits", { beatId, credits }),
   },
 
   // ─── Stats ───────────────────────────────────────────────────────────────

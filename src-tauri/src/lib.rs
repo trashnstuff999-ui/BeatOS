@@ -61,6 +61,12 @@ use commands::{
     relocate_status,
     relocate_preview,
     relocate_apply,
+    // Sample-Credits
+    get_sample_producers,
+    save_sample_producer,
+    delete_sample_producer,
+    get_beat_sample_credits,
+    set_beat_sample_credits,
     // Studio commands
     scan_studio_projects,
     update_studio_project,
@@ -219,6 +225,11 @@ pub fn run() {
             relocate_status,
             relocate_preview,
             relocate_apply,
+            get_sample_producers,
+            save_sample_producer,
+            delete_sample_producer,
+            get_beat_sample_credits,
+            set_beat_sample_credits,
             // Studio
             scan_studio_projects,
             update_studio_project,

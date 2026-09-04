@@ -9,7 +9,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
-  Settings as SettingsIcon, FolderTree,
+  Settings as SettingsIcon, FolderTree, Users, Trash2, Plus,
 } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
@@ -20,6 +20,8 @@ import { formatRelativeTime } from "../lib/time";
 import { ChipListEditor } from "../components/upload/ChipListEditor";
 import type { FolderSync } from "../types/upload";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
+import { LEERER_PRODUZENT } from "../types/sampleCredits";
+import type { SampleProducer } from "../types/sampleCredits";
 
 type SettingsSection = "paths" | "producer" | "maintenance" | "about";
 
@@ -327,6 +329,178 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Sample-Produzenten: das Adressbuch ──────────────────────────────────────
+//
+// Wer ein Sample beigesteuert hat, wird hier einmal mit seinen Links gepflegt.
+// Im Upload-Tab wird er dann pro Beat ausgewählt, und beim Rendern wandern
+// Name und Links in die Beschreibungen.
+
+function SampleProducersCard() {
+  const [producers, setProducers] = useState<SampleProducer[]>([]);
+  const [draft, setDraft] = useState<SampleProducer | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const laden = () =>
+    api.sampleCredits.listProducers().then(setProducers).catch(e => setError(String(e)));
+
+  useEffect(() => { laden(); }, []);
+
+  const speichern = async () => {
+    if (!draft) return;
+    setError(null);
+    try {
+      await api.sampleCredits.saveProducer(draft);
+      setDraft(null);
+      await laden();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const loeschen = async (p: SampleProducer) => {
+    const zusatz = p.use_count > 0
+      ? `\n\nEr ist bei ${p.use_count} ${p.use_count === 1 ? "Beat" : "Beats"} genannt. Diese Nennungen verschwinden mit.`
+      : "";
+    if (!confirm(`„${p.name}" löschen?${zusatz}`)) return;
+    setError(null);
+    try {
+      if (p.id !== null) await api.sampleCredits.deleteProducer(p.id);
+      await laden();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const feld = (k: keyof SampleProducer) => (v: string) =>
+    setDraft(d => (d ? { ...d, [k]: v } : d));
+
+  return (
+    <div style={{
+      padding: "16px 18px",
+      background: C.surfaceContainerHighest,
+      border: `1px solid ${C.border15}`,
+      borderRadius: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <Users size={14} color={C.mint} strokeWidth={1.75} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Sample-Produzenten</span>
+        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginLeft: "auto" }}>
+          {producers.length === 0 ? "noch keine" : `${producers.length} im Adressbuch`}
+        </span>
+      </div>
+      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5, marginBottom: 12 }}>
+        Wessen Sample du benutzt hast. Einmal hier gepflegt, im Upload-Tab pro Beat
+        ausgewählt — Name und Links landen dann von selbst in der Beschreibung.
+      </div>
+
+      {producers.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          {producers.map(p => (
+            <div key={p.id} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 10px", borderRadius: 6,
+              background: C.surfaceContainer, border: `1px solid ${C.border15}`,
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>{p.name}</span>
+              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+                {[p.instagram_url, p.beatstars_url, p.soundcloud_url, p.youtube_url].filter(Boolean).length} Links
+                {p.use_count > 0 && ` · ${p.use_count}× genannt`}
+              </span>
+              <button
+                onClick={() => { setDraft(p); setError(null); }}
+                style={{
+                  marginLeft: "auto", padding: "4px 10px", borderRadius: 5,
+                  background: "transparent", border: `1px solid ${C.border15}`,
+                  color: C.onSurfaceVariant, cursor: "pointer", fontSize: 10, fontWeight: 600,
+                }}
+              >
+                Bearbeiten
+              </button>
+              <button
+                onClick={() => loeschen(p)}
+                title="Löschen"
+                style={{
+                  padding: "4px 6px", borderRadius: 5, display: "flex",
+                  background: "transparent", border: `1px solid ${C.border15}`,
+                  color: C.error, cursor: "pointer",
+                }}
+              >
+                <Trash2 size={12} strokeWidth={2} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {draft && (
+        <div style={{
+          padding: "14px 16px", marginBottom: 12,
+          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: 7,
+          display: "flex", flexDirection: "column", gap: 14,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface }}>
+            {draft.id === null ? "Neuer Sample-Produzent" : `„${draft.name}" bearbeiten`}
+          </div>
+          <TextSetting label="Name" icon={User} value={draft.name}
+            placeholder="z.B. prodzeux" onChange={feld("name")} />
+          <TextSetting label="Instagram URL" icon={Instagram} value={draft.instagram_url}
+            placeholder="https://www.instagram.com/prodzeux/" onChange={feld("instagram_url")} monospace />
+          <TextSetting label="Beatstars URL" icon={ShoppingBag} value={draft.beatstars_url}
+            placeholder="https://www.beatstars.com/prodzeux" onChange={feld("beatstars_url")} monospace />
+          <TextSetting label="SoundCloud URL" icon={Music2} value={draft.soundcloud_url}
+            placeholder="optional" onChange={feld("soundcloud_url")} monospace />
+          <TextSetting label="YouTube URL" icon={Youtube} value={draft.youtube_url}
+            placeholder="optional" onChange={feld("youtube_url")} monospace />
+          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+            Leere Felder werden in der Beschreibung weggelassen.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={speichern}
+              style={{
+                padding: "8px 16px", borderRadius: 7, background: C.mint,
+                border: "none", color: "#064e3b", cursor: "pointer",
+                fontSize: 11, fontWeight: 700,
+              }}
+            >
+              Speichern
+            </button>
+            <button
+              onClick={() => { setDraft(null); setError(null); }}
+              style={{
+                padding: "8px 16px", borderRadius: 7, background: "transparent",
+                border: `1px solid ${C.border15}`, color: C.onSurfaceVariant,
+                cursor: "pointer", fontSize: 11, fontWeight: 600,
+              }}
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ fontSize: 11, color: C.error, marginBottom: 12 }}>{error}</div>
+      )}
+
+      {!draft && (
+        <button
+          onClick={() => { setDraft({ ...LEERER_PRODUZENT }); setError(null); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 16px", borderRadius: 7,
+            background: C.surfaceContainer, border: `1px solid ${C.border15}`,
+            color: C.onSurface, cursor: "pointer", fontSize: 11, fontWeight: 700,
+          }}
+        >
+          <Plus size={12} strokeWidth={2} />
+          Sample-Produzent hinzufügen
+        </button>
+      )}
     </div>
   );
 }
@@ -1051,6 +1225,9 @@ export function Settings() {
                 placeholder="Tag eingeben, Enter drücken … (z.B. Melodic Trap)"
                 hint="werden bei SoundCloud immer vorangestellt"
               />
+
+              {/* Adressbuch der Sample-Geber */}
+              <SampleProducersCard />
 
               {/* Live-Vorschau: so landen die Werte in den Templates */}
               <TemplatePreview draft={draft} />

@@ -16,6 +16,7 @@ import { useUploadData } from "../hooks/useUploadData";
 import {
   AssetChecklistCard,
   TypeBeatCard,
+  SampleCreditsCard,
   UploadStatusCard,
   DescriptionFilesCard,
   LegacyMigrationBanner,
@@ -164,6 +165,7 @@ export default function Upload() {
                   ueber die volle Breite zog er einzelne Felder auseinander. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <TypeBeatCard beat={data.beat} onSaved={refresh} />
+                <SampleCreditsCard beatId={data.beat.id} onSaved={refresh} />
                 <UploadStatusCard
                   beatId={data.beat.id}
                   uploads={data.uploads}
