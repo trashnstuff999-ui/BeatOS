@@ -66,9 +66,8 @@ export function ChipListEditor({
         title={hint}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11,
           color: C.onSecondaryFixedVar,
-          textTransform: "uppercase", letterSpacing: "0.1em",
           marginBottom: 6,
           cursor: hint ? "help" : undefined,
           width: "fit-content",
@@ -81,12 +80,13 @@ export function ChipListEditor({
         onClick={() => inputRef.current?.focus()}
         style={{
           display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
-          padding: "8px 10px",
-          minHeight: 44,
-          background: C.surfaceContainerLowest,
-          // Kein Ruhe-Rahmen: Karte, dieses Feld und jeder Chip hatten je einen
-          // eigenen — drei Linien auf 40px Höhe. Die Fläche grenzt das Feld
-          // schon ab, der Rahmen kommt nur beim Fokus zurück.
+          padding: "6px 8px",
+          minHeight: 40,
+          // Weder Rahmen noch Fläche im Ruhezustand: Karte, Feld und Chip
+          // trugen je eine eigene Abgrenzung — drei Ebenen auf 40px Höhe, und
+          // jede Gruppe las sich als eigene Blase. Getrennt wird jetzt eine
+          // Ebene höher mit Haarlinien; hier bleibt nur der Fokus sichtbar.
+          background: focused ? C.surfaceContainerLowest : "transparent",
           border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
           borderRadius: 8,
           cursor: "text",
