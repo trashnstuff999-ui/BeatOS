@@ -32,7 +32,6 @@ export function ChipListEditor({
 }: ChipListEditorProps) {
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
-  const [hover, setHover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commitDraft = () => {
@@ -79,8 +78,6 @@ export function ChipListEditor({
 
       <div
         onClick={() => inputRef.current?.focus()}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
         style={{
           display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
           padding: "6px 8px",
@@ -88,13 +85,13 @@ export function ChipListEditor({
           // Weder Rahmen noch Fläche im Ruhezustand: Karte, Feld und Chip
           // trugen je eine eigene Abgrenzung — drei Ebenen auf 40px Höhe, und
           // jede Gruppe las sich als eigene Blase. Getrennt wird jetzt eine
-          // Ebene höher mit Haarlinien.
+          // Ebene höher mit Haarlinien; sichtbar wird hier nur der Fokus.
           //
-          // Dafür muss der Hover die Arbeit machen: ohne Fläche im
-          // Ruhezustand sagt sonst nichts mehr, dass man hier tippen kann.
-          background: focused
-            ? C.surfaceContainerLowest
-            : hover ? "rgba(255,255,255,0.035)" : "transparent",
+          // Der Hover sitzt bewusst auf den einzelnen Chips statt auf dem
+          // ganzen Feld: eine Fläche, die unter dem Zeiger aufleuchtet, wirkt
+          // träge — reagiert dagegen genau das Element unter dem Zeiger,
+          // fühlt es sich flüssig an.
+          background: focused ? C.surfaceContainerLowest : "transparent",
           border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
           borderRadius: 8,
           cursor: "text",
@@ -113,15 +110,20 @@ export function ChipListEditor({
                 {separatorLabel}
               </span>
             )}
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "4px 8px 4px 10px",
-              background: C.surfaceContainerHigh,
-              borderRadius: 9999,
-              fontSize: 12, fontWeight: 600,
-              color: C.onSurface,
-              lineHeight: 1.2,
-            }}>
+            <span
+              onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHighest; }}
+              onMouseLeave={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "4px 8px 4px 10px",
+                background: C.surfaceContainerHigh,
+                borderRadius: 9999,
+                fontSize: 12, fontWeight: 600,
+                color: C.onSurface,
+                lineHeight: 1.2,
+                transition: "background 0.12s",
+              }}
+            >
               {v}
               <button
                 onClick={(e) => { e.stopPropagation(); removeAt(i); }}
