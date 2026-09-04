@@ -667,7 +667,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
             <div style={row}><span style={rowLabel}>Live-DB</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.db_path ?? "…"}</span></div>
-            <div style={row}><span style={rowLabel}>Backup → OneDrive</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.backup_path ?? "…"}</span></div>
+            <div style={row}><span style={rowLabel}>Sicherung →</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.backup_path ?? "…"}</span></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button

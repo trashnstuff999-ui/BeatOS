@@ -7,8 +7,10 @@ use rusqlite::{Connection, Result as SqlResult};
 use std::path::{Path, PathBuf};
 use std::sync::{Once, OnceLock};
 
-/// Legacy database location inside the OneDrive-synced library folder.
-/// Kept only as migration source and as target directory for backups.
+/// Früherer Ort der Datenbank, im Bibliotheksordner.
+///
+/// Nur noch Quelle für die einmalige Migration — das Sicherungsziel hängt
+/// seit `backup_dir()` am eingestellten Archivpfad und nicht mehr hier.
 const LEGACY_DB_PATH: &str = r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\beats.db";
 
 static DB_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -83,25 +85,69 @@ pub fn open_db() -> SqlResult<Connection> {
     Ok(conn)
 }
 
-/// Where the OneDrive-synced backup snapshot lives.
-pub fn backup_target_path() -> PathBuf {
-    Path::new(LEGACY_DB_PATH)
+/// Der Bibliotheksordner zu einem Archivpfad — eine Ebene darüber.
+///
+/// Rein rechnerisch, ohne Blick auf die Platte, damit es prüfbar bleibt.
+fn library_dir_from_archive(archive: &str) -> Option<PathBuf> {
+    let archive = archive.trim();
+    if archive.is_empty() {
+        return None;
+    }
+    Path::new(archive)
         .parent()
-        .map(|d| d.join("beats.backup.db"))
-        .unwrap_or_else(|| PathBuf::from("beats.backup.db"))
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.to_path_buf())
 }
 
-/// Write a consistent single-file snapshot of the live DB into the OneDrive
-/// library folder (`beats.backup.db`). Uses VACUUM INTO on a temp file and an
-/// atomic swap so the synced file is never a half-written database.
+/// Wohin die Sicherung geht: in den Bibliotheksordner, also eine Ebene über
+/// dem eingestellten Archiv.
+///
+/// Früher stand hier ein einkompilierter Pfad. Seit die Bibliothek umziehen
+/// kann (siehe `db::relocate`), wäre der nach dem ersten Ankertausch tot —
+/// abgeleitet folgt die Sicherung der Bibliothek von selbst.
+///
+/// Fällt auf das Verzeichnis der Datenbank zurück, wenn kein Archivpfad
+/// gesetzt ist oder sein Elternordner fehlt. Eine Sicherung neben der
+/// Datenbank ist schwächer als eine in der Bibliothek, aber immer noch eine —
+/// und der Pfad steht in den Einstellungen, ist also nicht versteckt.
+fn backup_dir() -> PathBuf {
+    let from_settings = open_db().ok().and_then(|conn| {
+        let archive: String = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'archive_path'",
+                [],
+                |row| row.get(0),
+            )
+            .ok()?;
+        library_dir_from_archive(&archive).filter(|p| p.is_dir())
+    });
+
+    from_settings.unwrap_or_else(|| {
+        get_db_path()
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."))
+    })
+}
+
+/// Wo der Sicherungs-Schnappschuss liegt.
+pub fn backup_target_path() -> PathBuf {
+    backup_dir().join("beats.backup.db")
+}
+
+/// Schreibt einen in sich konsistenten Ein-Datei-Schnappschuss der laufenden
+/// Datenbank als `beats.backup.db` in den Bibliotheksordner. `VACUUM INTO` auf
+/// eine temporäre Datei plus atomarer Tausch, damit die Zieldatei nie eine
+/// halb geschriebene Datenbank ist.
 pub fn backup_db() -> Result<(), String> {
-    let backup_dir = Path::new(LEGACY_DB_PATH)
-        .parent()
-        .ok_or("no backup directory")?;
-    if !backup_dir.exists() {
-        return Err(format!("backup directory missing: {}", backup_dir.display()));
+    let backup_dir = backup_dir();
+    if !backup_dir.is_dir() {
+        return Err(format!(
+            "Sicherungsordner nicht gefunden: {}",
+            backup_dir.display()
+        ));
     }
-    let final_path = backup_target_path();
+    let final_path = backup_dir.join("beats.backup.db");
     let tmp_path = backup_dir.join("beats.backup.db.tmp");
     let _ = std::fs::remove_file(&tmp_path);
 
@@ -330,5 +376,41 @@ pub fn init_db() -> Result<(), String> {
     match stored {
         Some(e) => Err(e.clone()),
         None => Ok(()),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::library_dir_from_archive;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sicherung_landet_eine_ebene_ueber_dem_archiv() {
+        assert_eq!(
+            library_dir_from_archive(r"C:\P\._BEAT LIBRARY\03_ARCHIVE"),
+            Some(PathBuf::from(r"C:\P\._BEAT LIBRARY"))
+        );
+        // Aus der Adressleiste kopiert, endet der Pfad gern auf einem Strich
+        assert_eq!(
+            library_dir_from_archive(r"C:\P\._BEAT LIBRARY\03_ARCHIVE\"),
+            Some(PathBuf::from(r"C:\P\._BEAT LIBRARY"))
+        );
+        assert_eq!(
+            library_dir_from_archive("  /Users/goodbxy/Studio/BEAT LIBRARY/03_ARCHIVE  "),
+            Some(PathBuf::from("/Users/goodbxy/Studio/BEAT LIBRARY"))
+        );
+    }
+
+    #[test]
+    fn ohne_brauchbaren_archivpfad_kein_ziel() {
+        // Leer, nur Leerzeichen, oder ohne Elternordner — dann greift der
+        // Rueckfall auf das Verzeichnis der Datenbank.
+        assert_eq!(library_dir_from_archive(""), None);
+        assert_eq!(library_dir_from_archive("   "), None);
+        assert_eq!(library_dir_from_archive("03_ARCHIVE"), None);
     }
 }
