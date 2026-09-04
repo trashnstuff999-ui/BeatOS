@@ -161,16 +161,10 @@ export default function Upload() {
               gap: 24,
               alignItems: "start",
             }}>
-              {/* Eingabe — darunter der Status: er gehoert zur linken Haelfte,
-                  ueber die volle Breite zog er einzelne Felder auseinander. */}
+              {/* Eingabe */}
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <TypeBeatCard beat={data.beat} onSaved={refresh} />
                 <SampleCreditsCard beatId={data.beat.id} onSaved={refresh} />
-                <UploadStatusCard
-                  beatId={data.beat.id}
-                  uploads={data.uploads}
-                  onChanged={handleStatusChanged}
-                />
               </div>
 
               {/* Ausgabe */}
@@ -181,6 +175,19 @@ export default function Upload() {
                 rerenderKey={rerenderKey}
               />
             </div>
+          )}
+
+          {/* Veroeffentlichung — der letzte Schritt, deshalb ganz unten und
+              ueber die volle Breite. Als der Status noch in der linken Spalte
+              stand, war die linke Haelfte doppelt so hoch wie die rechte; und
+              die drei Plattformen liegen als Kacheln nebeneinander, sodass
+              sich kein Feld ueber das halbe Fenster streckt. */}
+          {data && !error && (
+            <UploadStatusCard
+              beatId={data.beat.id}
+              uploads={data.uploads}
+              onChanged={handleStatusChanged}
+            />
           )}
 
           {/* Luft fuer die fixierte Planungs-Leiste am unteren Rand */}

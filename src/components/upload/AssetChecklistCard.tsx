@@ -77,41 +77,74 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
 
   const body = (
     <>
-      {/* Status line — the whole card in one glance */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {/* Fortschritt statt Statuszeile: ein Segment je Datei, gefüllt was da
+          ist. Man sieht die Lücke, statt sie aus „4/6" zu erschließen — und
+          beim Ablegen der nächsten Datei füllt sich sichtbar eins mehr.
+          Daneben die Aktionen mit Beschriftung: „Namen konvertieren" lag
+          vorher im zugeklappten Teil und war praktisch unauffindbar. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button
           onClick={() => setOpen(o => !o)}
+          title={open ? "Liste zuklappen" : "Alle Dateien zeigen"}
           style={{
             flex: 1, minWidth: 0,
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 12px",
-            background: allOk ? "rgba(52,211,153,0.07)" : "rgba(255,115,81,0.06)",
-            border: `1px solid ${allOk ? "rgba(52,211,153,0.25)" : "rgba(255,115,81,0.25)"}`,
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "9px 12px",
+            background: "transparent",
+            border: `1px solid ${C.border15}`,
             borderRadius: 8,
             cursor: "pointer",
             textAlign: "left",
           }}
         >
-          {allOk
-            ? <CheckCircle2 size={15} color={C.mint} strokeWidth={2} />
-            : <XCircle size={15} color={C.error} strokeWidth={2} />
-          }
-          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: allOk ? C.mint : C.error }}>
+          <span style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+            {allRows.map(r => (
+              <span
+                key={r.label}
+                title={r.filename ? `${r.label}: ${r.filename}` : `${r.label} fehlt`}
+                style={{
+                  width: 22, height: 5, borderRadius: 3,
+                  background: r.filename ? C.mint : C.border20,
+                }}
+              />
+            ))}
+          </span>
+
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: allOk ? C.mint : C.onSurface }}>
             {allOk
-              ? `Alle Assets bereit · ${present.length}/${allRows.length}`
-              : `${missing.length} fehlt: ${missing.map(m => m.label).join(", ")}`
+              ? "Alle Dateien da"
+              : `${present.length} von ${allRows.length} — es fehlt ${missing.map(m => m.label).join(", ")}`
             }
           </span>
+
           <ChevronDown
             size={13}
             color={C.onSecondaryFixedVar}
             style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
           />
         </button>
-        {/* Im rahmenlosen Modus tragen die beiden Aktionen keine Kartenkopfzeile
-            mehr — sie stehen direkt neben der Ampel. */}
+
+        {/* Im rahmenlosen Modus tragen die Aktionen keine Kartenkopfzeile mehr
+            — sie stehen direkt neben dem Fortschritt. */}
         {bare && (
           <>
+            <button
+              onClick={onConvert}
+              title="Dateinamen im Beat-Ordner auf das Namensschema bringen"
+              style={{
+                display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+                padding: "8px 12px", borderRadius: 7,
+                background: "transparent",
+                border: `1px solid ${C.border20}`,
+                color: C.onSurfaceVariant, cursor: "pointer",
+                fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; e.currentTarget.style.color = C.onSurfaceVariant; }}
+            >
+              <Wand2 size={12} strokeWidth={2} />
+              Namen konvertieren
+            </button>
             <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
             <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
           </>
@@ -125,27 +158,30 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
             <AssetRow key={row.label} {...row} onClick={() => handleRowClick(row)} />
           ))}
 
-          {/* Demoted convert action — rarely needed since auto-rename */}
-          <button
-            onClick={onConvert}
-            style={{
-              marginTop: 10,
-              alignSelf: "flex-start",
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 10px",
-              background: "transparent",
-              border: `1px solid ${C.border20}`,
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: 10, fontWeight: 600,
-              color: C.onSurfaceVariant,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; e.currentTarget.style.color = C.onSurfaceVariant; }}
-          >
-            <Wand2 size={11} strokeWidth={2} />
-            Dateinamen konventionieren
-          </button>
+          {/* Nur in der Kartenansicht: rahmenlos steht der Knopf oben
+              neben dem Fortschritt, wo man ihn auch findet. */}
+          {!bare && (
+            <button
+              onClick={onConvert}
+              style={{
+                marginTop: 10,
+                alignSelf: "flex-start",
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 10px",
+                background: "transparent",
+                border: `1px solid ${C.border20}`,
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 10, fontWeight: 600,
+                color: C.onSurfaceVariant,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; e.currentTarget.style.color = C.onSurfaceVariant; }}
+            >
+              <Wand2 size={11} strokeWidth={2} />
+              Dateinamen konventionieren
+            </button>
+            )}
         </div>
       )}
 

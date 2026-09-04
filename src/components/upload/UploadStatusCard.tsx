@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { ShoppingBag, Music2, Youtube, Send, Rocket } from "lucide-react";
+import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
@@ -60,11 +60,16 @@ const DATE_FIELD_CSS = `
 export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCardProps) {
   return (
     <SectionCard icon={Send} title="Status">
-      {/* Untereinander mit festen Spaltenbreiten: so liegen Name, Status und
-          Datum der drei Plattformen exakt auf einer Linie. Die Karte steht in
-          der linken Spalte, dadurch streckt sich kein Feld mehr ueber die
-          halbe Fensterbreite. */}
-      <div>
+      {/* Drei Kacheln nebeneinander statt drei Zeilen untereinander: die Karte
+          steht jetzt über die volle Breite, und untereinander hätten sich die
+          Link-Felder über das halbe Fenster gestreckt. Nebeneinander stehen
+          die Plattformen auch so, wie man sie vergleicht.
+          auto-fit: bricht bei schmalem Fenster von selbst um. */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+        gap: 14,
+      }}>
         <style>{DATE_FIELD_CSS}</style>
         {uploads.map(row => (
           <PlatformRow
@@ -91,6 +96,7 @@ function PlatformRow({ beatId, row, onChanged }: {
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const persist = async (patch: Partial<UploadPlatformRow>) => {
     setIsSaving(true);
@@ -141,9 +147,28 @@ function PlatformRow({ beatId, row, onChanged }: {
   };
 
   const dateValue = row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "");
+  const zustand = UPLOAD_STATUS_CONFIG[row.status] ?? UPLOAD_STATUS_CONFIG.draft;
+
+  const copyUrl = async () => {
+    if (!urlDraft.trim()) return;
+    try {
+      await navigator.clipboard.writeText(urlDraft.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch (e) {
+      console.error("[UploadStatus] Kopieren fehlgeschlagen:", e);
+    }
+  };
 
   return (
-    <div style={{ padding: "10px 0", borderTop: `1px solid ${C.border10}` }}>
+    <div style={{
+      // Eigene Kachel statt Trennlinie: nebeneinander trennt der Kasten
+      // sauberer als ein Strich, und der Rand nimmt die Zustandsfarbe auf.
+      padding: "12px 13px",
+      borderRadius: 8,
+      background: C.surfaceContainerLowest,
+      border: `1px solid ${row.status === "draft" ? C.border15 : zustand.color + "40"}`,
+    }}>
       {/* Drei Zeilen je Plattform, alle am Namenstext ausgerichtet (23px =
           Symbol + Abstand):
             1) Plattform + Assistent
@@ -151,10 +176,15 @@ function PlatformRow({ beatId, row, onChanged }: {
             3) Status links, Datum rechts */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {/* Neutral: direkt daneben steht der Name der Plattform — die
-              Markenfarbe traegt hier keine Information, nur Buntheit. */}
-          <PlatIcon size={15} color={C.onSurfaceVariant} strokeWidth={1.75} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface }}>
+          {/* Symbol und Name tragen die Zustandsfarbe, nicht die Markenfarbe:
+              so sieht man am Zeilenkopf, wie weit die Plattform ist, ohne die
+              Pillen darunter zu lesen. Entwurf bleibt bewusst grau — sonst
+              wäre alles bunt und nichts hervorgehoben. */}
+          <PlatIcon size={15} color={zustand.color} strokeWidth={1.75} />
+          <span style={{
+            fontSize: 13, fontWeight: 600,
+            color: row.status === "draft" ? C.onSurface : zustand.color,
+          }}>
             {meta.label}
           </span>
         </span>
@@ -229,6 +259,24 @@ function PlatformRow({ beatId, row, onChanged }: {
               color: C.onSurface,
             }}
           />
+          {/* Kopieren wie bei den Beschreibungen — der Link wird auf der
+              Plattform gebraucht, nicht hier. */}
+          <button
+            onClick={copyUrl}
+            disabled={!urlDraft.trim()}
+            title={copied ? "Kopiert" : "Link kopieren"}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+              background: "transparent",
+              border: `1px solid ${copied ? C.mint : C.border15}`,
+              color: copied ? C.mint : C.onSurfaceVariant,
+              cursor: urlDraft.trim() ? "pointer" : "default",
+              opacity: urlDraft.trim() ? 1 : 0.35,
+            }}
+          >
+            {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
+          </button>
         </div>
       )}
 

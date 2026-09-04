@@ -185,7 +185,7 @@ export function DescriptionFilesCard({
           onClick={() => setShowTemplates(true)}
           title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
         >
-          Template-Editor
+          Vorlagen bearbeiten
         </Button>
       }
     >
