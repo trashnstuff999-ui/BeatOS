@@ -3,20 +3,28 @@
 // Sample-Credits — wessen Sample in diesem Beat steckt
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// Das Adressbuch wird in den Einstellungen gepflegt; hier wird pro Beat
-// ausgewählt, wer etwas beigesteuert hat und was. Beim Rendern wandern Name
-// und Links daraus in die Beschreibungen ({{PRODUCER_LINE}}, {{CREDITS}},
+// Zwei Felder nebeneinander, weil es zwei Rollen sind: du produzierst, jemand
+// anderes hat vielleicht ein Sample beigesteuert. Steht rechts niemand, bist
+// du beides — und in der Beschreibung steht „No Samples Used".
+//
+// Links ist bewusst ein festes Feld, kein Auswahlmenü: einen Produzenten pro
+// Beat gibt es in der Datenbank nicht, und jeder Beat ist von dir. Ein Menü
+// mit einer Option wäre eine Attrappe. Wird das mal anders, kommt eine Spalte
+// auf `beats` dazu und hier ein echtes Menü.
+//
+// Das Adressbuch wird in den Einstellungen gepflegt. Beim Rendern wandern Name
+// und Links in die Beschreibungen ({{PRODUCER_LINE}}, {{CREDITS}},
 // {{COLLAB_SOCIALS}}).
 //
 // Speichert wie die TypeBeatCard nebenan automatisch, 500 ms nach der letzten
-// Änderung, mit Abgleich gegen den zuletzt gespeicherten Stand — sonst löste
-// schon das Umschalten auf einen anderen Beat ein Phantom-Speichern aus.
+// Änderung, mit Abgleich gegen den zuletzt gespeicherten Stand.
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Plus, Users, X } from "lucide-react";
+import { Check, Loader2, Users } from "lucide-react";
 import { C } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { api } from "../../lib/api";
+import { useSettings } from "../../contexts/SettingsContext";
 import type { BeatSampleCredit, SampleProducer } from "../../types/sampleCredits";
 
 interface SampleCreditsCardProps {
@@ -27,19 +35,21 @@ interface SampleCreditsCardProps {
 
 type SaveState = "idle" | "saving" | "saved";
 
-/** Vergleichsstand für den Abgleich — Reihenfolge zählt mit. */
+const KEINER = "";
+
+/** Vergleichsstand für den Abgleich. */
 function snapshot(credits: BeatSampleCredit[]): string {
   return credits.map(c => `${c.producer_id}:${c.contribution}`).join("|");
 }
 
 export function SampleCreditsCard({ beatId, onSaved }: SampleCreditsCardProps) {
+  const { settings } = useSettings();
   const [producers, setProducers] = useState<SampleProducer[]>([]);
   const [credits, setCredits] = useState<BeatSampleCredit[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const lastSavedRef = useRef<string>("");
   const geladenRef = useRef(false);
 
-  // Adressbuch einmal, Credits bei jedem Beat-Wechsel
   useEffect(() => {
     api.sampleCredits.listProducers().then(setProducers).catch(() => setProducers([]));
   }, []);
@@ -83,110 +93,92 @@ export function SampleCreditsCard({ beatId, onSaved }: SampleCreditsCardProps) {
     return () => clearTimeout(handle);
   }, [credits, beatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const frei = producers.filter(p => !credits.some(c => c.producer_id === p.id));
+  const credit = credits[0] ?? null;
+  const producerName = settings.producerName.trim() || "—";
 
-  const hinzufuegen = () => {
-    const naechster = frei[0];
-    if (!naechster || naechster.id === null) return;
-    setCredits(cs => [
-      ...cs,
-      { producer_id: naechster.id!, contribution: "Sample", producer_name: naechster.name },
-    ]);
+  const waehle = (wert: string) => {
+    if (wert === KEINER) { setCredits([]); return; }
+    const id = Number(wert);
+    const p = producers.find(x => x.id === id);
+    setCredits([{
+      producer_id: id,
+      contribution: credit?.contribution || "Sample",
+      producer_name: p?.name ?? "",
+    }]);
   };
 
-  const aendern = (i: number, patch: Partial<BeatSampleCredit>) =>
-    setCredits(cs => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-
-  const entfernen = (i: number) => setCredits(cs => cs.filter((_, idx) => idx !== i));
-
-  const eingabe: React.CSSProperties = {
+  const feld: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 7,
     background: C.surfaceContainerHighest,
     border: `1px solid ${C.border20}`,
-    borderRadius: 6,
     color: C.onSurface,
     fontSize: 12,
-    padding: "7px 10px",
+    fontFamily: "inherit",
     outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const beschriftung: React.CSSProperties = {
+    display: "block", marginBottom: 6,
+    fontSize: 11, color: C.onSecondaryFixedVar,
   };
 
   return (
     <SectionCard
       icon={Users}
-      title="Sample-Credits"
+      title="Credits"
       actions={
         saveState === "saving" ? <Loader2 size={13} color={C.onSurfaceVariant} style={{ animation: "spin 0.8s linear infinite" }} />
         : saveState === "saved" ? <Check size={13} color={C.mint} />
         : null
       }
     >
-      {producers.length === 0 ? (
-        <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.6 }}>
-          Noch keine Sample-Produzenten im Adressbuch. Anlegen unter
-          <strong style={{ color: C.onSurfaceVariant }}> Einstellungen → Producer</strong> —
-          danach stehen sie hier zur Auswahl.
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+          <label style={beschriftung}>Produziert von</label>
+          <div style={{ ...feld, color: C.onSurface, background: C.surfaceContainer }} title="Kommt aus den Einstellungen → Producer">
+            {producerName}
+          </div>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {credits.length === 0 && (
-            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.6 }}>
-              Keine fremden Samples. In der Beschreibung steht dann weiterhin
-              „No Samples Used".
-            </div>
-          )}
 
-          {credits.map((c, i) => (
-            <div key={`${c.producer_id}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <select
-                value={c.producer_id}
-                onChange={e => {
-                  const id = Number(e.target.value);
-                  const p = producers.find(x => x.id === id);
-                  aendern(i, { producer_id: id, producer_name: p?.name ?? "" });
-                }}
-                style={{ ...eingabe, flex: "0 0 40%", cursor: "pointer" }}
-              >
-                {producers.map(p => (
-                  <option key={p.id} value={p.id ?? undefined}>{p.name}</option>
-                ))}
-              </select>
-              <input
-                value={c.contribution}
-                onChange={e => aendern(i, { contribution: e.target.value })}
-                placeholder="Guitarsample"
-                title="Was er beigesteuert hat — steht so in der Beschreibung"
-                style={{ ...eingabe, flex: 1 }}
-              />
-              <button
-                onClick={() => entfernen(i)}
-                title="Entfernen"
-                style={{
-                  background: "transparent", border: `1px solid ${C.border15}`,
-                  borderRadius: 6, color: C.onSurfaceVariant,
-                  cursor: "pointer", display: "flex", padding: 6,
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-
-          {frei.length > 0 && (
-            <button
-              onClick={hinzufuegen}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "8px 0", borderRadius: 6,
-                background: "transparent", border: `1px dashed ${C.border20}`,
-                color: C.onSurfaceVariant, cursor: "pointer",
-                fontSize: 11, fontWeight: 600,
-              }}
-            >
-              <Plus size={12} strokeWidth={2} />
-              Sample-Geber hinzufügen
-            </button>
-          )}
+        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+          <label style={beschriftung}>Sample von</label>
+          <select
+            value={credit ? String(credit.producer_id) : KEINER}
+            onChange={e => waehle(e.target.value)}
+            style={{ ...feld, cursor: "pointer" }}
+          >
+            <option value={KEINER}>— niemand —</option>
+            {producers.map(p => (
+              <option key={p.id} value={String(p.id)}>{p.name}</option>
+            ))}
+          </select>
         </div>
-      )}
+
+        {credit && (
+          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+            <label style={beschriftung}>Was genau</label>
+            <input
+              value={credit.contribution}
+              onChange={e => setCredits([{ ...credit, contribution: e.target.value }])}
+              placeholder="Guitarsample"
+              title="Steht so in der Beschreibung: „🎸 Guitarsample by …“"
+              style={feld}
+            />
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+        {producers.length === 0
+          ? <>Noch niemand im Adressbuch. Anlegen unter <strong style={{ color: C.onSurfaceVariant }}>Einstellungen → Producer</strong>.</>
+          : credit
+            ? <>In der Beschreibung: „{producerName} &amp; {credit.producer_name}“, dazu {credit.producer_name}s Links.</>
+            : <>Ohne Sample-Geber steht in der Beschreibung „No Samples Used“.</>
+        }
+      </div>
     </SectionCard>
   );
 }

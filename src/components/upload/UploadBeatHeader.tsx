@@ -90,6 +90,20 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
   const key = data?.beat.key ?? selectedBeat?.key ?? null;
   const bpm = data?.beat.bpm ?? selectedBeat?.bpm ?? null;
 
+  // Erstes Genre als Stimmungs-Chip: sagt auf einen Blick, was für ein Beat
+  // das ist. Der Rest steht in der Type-Beat-Karte darunter.
+  //
+  // „Type Beat" fliegt raus — in einem Chip neben Tonart und Tempo ist das
+  // Füllwort, „Sad Guitar" sagt dasselbe in der Hälfte der Breite.
+  const stimmung = (data?.beat.genre_tags ?? "")
+    .split(/[|,]/)[0]
+    .replace(/\s*type\s*beats?\s*$/i, "")
+    .trim() || null;
+
+  // Länge kommt aus der Audiodatei selbst — dafür braucht es kein Backend,
+  // das Abspielelement kennt sie, sobald es die Kopfdaten gelesen hat.
+  const laenge = useTrackLength(data?.beat.path ?? null);
+
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{
@@ -156,6 +170,8 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
                   <MetaPill mono>#{beatId}</MetaPill>
                   {key && <MetaPill>{key}</MetaPill>}
                   {bpm != null && <MetaPill>{bpm} BPM</MetaPill>}
+                  {laenge && <MetaPill mono>{laenge}</MetaPill>}
+                  {stimmung && <MetaPill>{stimmung}</MetaPill>}
                 </>
               : <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
                   Archivierten Beat suchen und für den Upload vorbereiten
@@ -186,9 +202,17 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
         {steps && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             {missingSteps.length === 0 ? (
+              // Als Plakette statt als Satz: „bin ich fertig" ist die
+              // wichtigste Antwort auf dieser Seite und darf man von weitem
+              // sehen. Flaeche und Rahmen, aber gedaempft — die Karte soll
+              // nicht schreien.
               <span style={{
                 display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 14px", borderRadius: 8,
+                background: "rgba(52,211,153,0.10)",
+                border: `1px solid ${C.mint}55`,
                 fontSize: 13, fontWeight: 700, color: C.mint,
+                whiteSpace: "nowrap",
               }}>
                 <CheckCircle2 size={16} strokeWidth={2} />
                 Bereit zum Hochladen
@@ -326,4 +350,40 @@ function MetaPill({ children, mono, title }: { children: React.ReactNode; mono?:
       {children}
     </span>
   );
+}
+
+/** Länge des Beats als „2:54".
+ *
+ *  Ohne Backend: der Pfad zur Audiodatei kommt aus `get_beat_audio_path`, die
+ *  Dauer liest ein Audio-Element aus den Kopfdaten der Datei. `preload
+ *  metadata` laedt dafuer nur den Anfang, nicht den ganzen Track.
+ */
+function useTrackLength(beatPath: string | null): string | null {
+  const [laenge, setLaenge] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLaenge(null);
+    if (!beatPath) return;
+    let abgebrochen = false;
+
+    api.audio.getAudioPath(beatPath)
+      .then(pfad => {
+        if (abgebrochen || !pfad) return;
+        const el = new Audio();
+        el.preload = "metadata";
+        el.src = convertFileSrc(pfad.replace(/\\/g, "/"));
+        el.addEventListener("loadedmetadata", () => {
+          if (abgebrochen || !isFinite(el.duration)) return;
+          const s = Math.round(el.duration);
+          setLaenge(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+        });
+        // Fehlschlaege sind kein Drama — dann fehlt eben ein Chip.
+        el.addEventListener("error", () => {});
+      })
+      .catch(() => {});
+
+    return () => { abgebrochen = true; };
+  }, [beatPath]);
+
+  return laenge;
 }

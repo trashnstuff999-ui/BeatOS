@@ -190,9 +190,18 @@ export function DescriptionFilesCard({
       }
     >
 
-      {/* ─── Tab strip ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-        {TABS.map(tab => {
+      {/* ─── Tab strip ───────────────────────────────────────────────────────
+          Eine zusammenhaengende Leiste mit Trennstrichen statt drei einzelner
+          Pillen: die drei Plattformen sind Abschnitte derselben Sache, keine
+          drei getrennten Knoepfe. Nur der aktive Abschnitt bekommt Flaeche. */}
+      <div style={{
+        display: "flex", marginBottom: 10,
+        background: C.surfaceContainerLowest,
+        border: `1px solid ${C.border15}`,
+        borderRadius: 8,
+        overflow: "hidden",
+      }}>
+        {TABS.map((tab, i) => {
           const isActive = active === tab.key;
           const exists = fileExistsMap[tab.key];
           const isDirty = dirty[tab.key];
@@ -205,11 +214,14 @@ export function DescriptionFilesCard({
                 flex: 1,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 padding: "9px 12px",
-                background: isActive ? C.surfaceContainer : C.surfaceContainerLowest,
-                border: `1px solid ${isActive ? tab.color + "60" : C.border15}`,
-                borderRadius: 8,
+                background: isActive ? C.surfaceContainer : "transparent",
+                border: "none",
+                borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
+                // Der aktive Abschnitt traegt seine Farbe als Unterstrich,
+                // nicht als Rahmen — sonst zerfaellt die Leiste wieder.
+                boxShadow: isActive ? `inset 0 -2px 0 ${tab.color}` : "none",
                 cursor: "pointer",
-                fontSize: 11, fontWeight: 700,
+                fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: isActive ? tab.color : C.onSurfaceVariant,
                 letterSpacing: "0.05em", textTransform: "uppercase",
                 position: "relative",
