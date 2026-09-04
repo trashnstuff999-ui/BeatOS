@@ -5,6 +5,7 @@
 
 mod connection;
 mod models;
+mod relocate;
 
 pub use connection::{open_db, init_db, backup_db, backup_target_path, get_db_path};
 pub use models::*;
