@@ -19,6 +19,7 @@ import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/time";
 import { ChipListEditor } from "../components/upload/ChipListEditor";
 import type { FolderSync } from "../types/upload";
+import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
 
 type SettingsSection = "paths" | "producer" | "maintenance" | "about";
 
@@ -330,6 +331,218 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
   );
 }
 
+// ─── Bibliothek umgezogen: den Anker tauschen ────────────────────────────────
+//
+// Alle gespeicherten Pfade hängen an einem gemeinsamen Präfix. Zieht die
+// Bibliothek um — andere Platte, NAS, anderer Rechner —, wird nur dieses
+// Präfix getauscht.
+//
+// Regel: erkannt wird automatisch, geschrieben nur auf Bestätigung. Ein
+// fehlender Archivordner heißt genauso oft „Platte nicht angesteckt" wie
+// „umgezogen" — deshalb löst die Erkennung nie selbst etwas aus.
+
+function RelocateCard() {
+  const [status, setStatus] = useState<RelocateStatus | null>(null);
+  const [plan, setPlan] = useState<RelocatePlan | null>(null);
+  const [done, setDone] = useState<RelocateResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.relocate.status().then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  const handlePick = async () => {
+    const dir = await pickFolder("Ordner wählen, der die Bibliothek künftig enthält");
+    if (!dir) return;
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      setPlan(await api.relocate.preview(dir));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!plan) return;
+    if (!confirm(
+      `${plan.total} Pfade werden umgeschrieben:\n\n` +
+      `von:  ${plan.old_anchor}\n` +
+      `nach: ${plan.new_anchor}\n\n` +
+      `Vorher wird eine Sicherung der Datenbank angelegt. Der Vorgang fasst ` +
+      `ausschließlich die Datenbank an, keine Dateien, und ist umkehrbar — ` +
+      `derselbe Weg zurück stellt den Ausgangszustand her.\n\nFortfahren?`
+    )) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.relocate.apply(plan.new_anchor);
+      setDone(res);
+      setPlan(null);
+      setStatus(await api.relocate.status());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" };
+  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 11 };
+  const pfad: React.CSSProperties = { color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
+  // Solange das Archiv da liegt, wo es hingehört, ist das hier eine stille
+  // Randnotiz. Fehlt es, wird die Karte zur Frage.
+  const vermisst = status !== null && !status.archive_exists;
+  const probe = plan?.entries.find(e => e.sample_before && e.sample_after);
+
+  return (
+    <div style={{
+      padding: "16px 18px",
+      background: C.surfaceContainerHighest,
+      border: `1px solid ${vermisst ? C.error : C.border15}`,
+      borderRadius: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <FolderTree size={14} color={vermisst ? C.error : C.mint} strokeWidth={1.75} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Bibliothek umgezogen</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: vermisst ? C.error : C.mint, marginLeft: "auto" }}>
+          {status === null ? "…" : vermisst ? "Archivordner nicht gefunden" : "Alles am Platz"}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
+        <div style={row}><span style={rowLabel}>Anker</span><span style={pfad}>{status?.anchor ?? "…"}</span></div>
+        <div style={row}><span style={rowLabel}>Archiv</span><span style={pfad}>{status?.archive_path ?? "…"}</span></div>
+      </div>
+
+      {vermisst && (
+        <div style={{ fontSize: 10, color: C.error, lineHeight: 1.5, marginBottom: 12 }}>
+          Der Archivordner liegt nicht dort, wo die Datenbank ihn vermutet. Das heißt
+          nicht zwingend, dass etwas umgezogen ist — eine abgezogene Platte oder eine
+          nicht eingebundene Freigabe sieht genauso aus. Erst nachsehen, dann handeln.
+        </div>
+      )}
+
+      {plan && (
+        <div style={{
+          padding: "12px 14px", marginBottom: 12,
+          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: 7,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, marginBottom: 8 }}>
+            Vorschau — es ist noch nichts geschrieben
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+            {plan.entries.map(e => (
+              <div key={e.label} style={row}>
+                <span style={{ ...rowLabel, width: 190 }}>{e.label}</span>
+                <span style={{ color: C.onSurfaceVariant }}>
+                  {e.count} {e.count === 1 ? "Wert" : "Werte"}
+                  {e.skipped > 0 && ` · ${e.skipped} bleiben liegen`}
+                </span>
+              </div>
+            ))}
+          </div>
+          {probe && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 10 }}>
+              <div style={row}><span style={rowLabel}>vorher</span><span style={pfad}>{probe.sample_before}</span></div>
+              <div style={row}><span style={rowLabel}>nachher</span><span style={{ ...pfad, color: C.mint }}>{probe.sample_after}</span></div>
+            </div>
+          )}
+          <div style={{ fontSize: 11, fontWeight: 700, color: plan.total > 0 ? C.onSurface : C.error }}>
+            {plan.total} Werte würden sich ändern, {plan.skipped} blieben liegen
+          </div>
+          {plan.total === 0 && (
+            <div style={{ fontSize: 10, color: C.error, marginTop: 6, lineHeight: 1.5 }}>
+              Kein einziger Pfad passt. Vermutlich liegt der gewählte Ordner eine Ebene
+              zu tief oder zu hoch — gesucht ist der Ordner, der die Bibliothek enthält,
+              nicht die Bibliothek selbst.
+            </div>
+          )}
+        </div>
+      )}
+
+      {done && (
+        <div style={{
+          padding: "12px 14px", marginBottom: 12,
+          background: C.surfaceContainer, border: `1px solid ${C.mint}`, borderRadius: 7,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.mint, marginBottom: 6 }}>
+            {done.changed} Pfade umgeschrieben ✓
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={row}><span style={rowLabel}>Sicherung</span><span style={pfad}>{done.backup_path}</span></div>
+          </div>
+          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
+            Die App arbeitet noch mit den alten Pfaden im Speicher — einmal neu laden.
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ fontSize: 11, color: C.error, marginBottom: 12, whiteSpace: "pre-wrap" }}>{error}</div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          onClick={handlePick}
+          disabled={busy}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 16px", borderRadius: 7,
+            background: C.surfaceContainer, border: `1px solid ${C.border15}`,
+            color: C.onSurface, cursor: busy ? "wait" : "pointer",
+            fontSize: 11, fontWeight: 700,
+          }}
+        >
+          {busy ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <FolderOpen size={12} strokeWidth={2} />}
+          {plan ? "Anderen Ordner wählen" : "Neuen Ordner wählen"}
+        </button>
+
+        {plan && plan.total > 0 && (
+          <button
+            onClick={handleApply}
+            disabled={busy}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 16px", borderRadius: 7,
+              background: C.mint, border: "none",
+              color: "#064e3b", cursor: busy ? "wait" : "pointer",
+              fontSize: 11, fontWeight: 700,
+            }}
+          >
+            <CheckCircle size={12} strokeWidth={2} />
+            {plan.total} Pfade übernehmen
+          </button>
+        )}
+
+        {done && (
+          <button
+            onClick={() => location.reload()}
+            style={{
+              padding: "8px 16px", borderRadius: 7,
+              background: C.mint, border: "none",
+              color: "#064e3b", cursor: "pointer", fontSize: 11, fontWeight: 700,
+            }}
+          >
+            App neu laden
+          </button>
+        )}
+      </div>
+
+      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
+        Getauscht wird nur das gemeinsame Präfix aller Pfade. Es wird ausschließlich die
+        Datenbank geschrieben, keine Datei verschoben — und der Weg zurück stellt den
+        Ausgangszustand wieder her.
+      </div>
+    </div>
+  );
+}
+
 // ─── Wartung: Backup, System Repair, Templates ───────────────────────────────
 
 function MaintenancePane({ archivePath }: { archivePath: string }) {
@@ -477,6 +690,9 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             Läuft zusätzlich automatisch bei jedem App-Start und nach jeder Archivierung.
           </div>
         </div>
+
+        {/* Bibliothek umgezogen */}
+        <RelocateCard />
 
         {/* System Repair */}
         <div style={{

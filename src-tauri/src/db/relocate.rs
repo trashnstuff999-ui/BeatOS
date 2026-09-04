@@ -15,11 +15,6 @@
 // Stelle, die einen DB-Pfad anfasst, prüft vorher auf Existenz oder auf die
 // Lage unterhalb des Archiv-Roots. Ein Fehlgriff ist wirkungslos, nicht
 // zerstörerisch, und durch den Rücktausch umkehrbar.
-//
-// Stand: nur Trockenlauf. Aufgerufen wird bisher ausschließlich aus den Tests
-// (siehe `trockenlauf_am_echten_bestand`), deshalb das `allow` — es fällt weg,
-// sobald `apply` und der Bestätigungsdialog dranhängen.
-#![allow(dead_code)]
 
 use rusqlite::{Connection, Result as SqlResult};
 
@@ -187,18 +182,22 @@ pub fn detect_anchor(conn: &Connection) -> SqlResult<Option<String>> {
     Ok(common_anchor(&values, sep()))
 }
 
-/// Trockenlauf: zählt und zeigt Beispiele, schreibt nichts.
-pub fn plan(conn: &Connection, old_anchor: &str, new_anchor: &str) -> SqlResult<RelocatePlan> {
-    // Der Zieltrenner kommt aus der Form des neuen Ankers, nicht aus dem
-    // laufenden System — nur so lässt sich ein Mac-Umzug von Windows aus im
-    // Trockenlauf ansehen. Ein Anker ohne Trenner fällt auf das System zurück.
-    let target_sep = if new_anchor.contains('/') && !new_anchor.contains('\\') {
+/// Der Zieltrenner kommt aus der Form des neuen Ankers, nicht aus dem
+/// laufenden System — nur so lässt sich ein Mac-Umzug von Windows aus im
+/// Trockenlauf ansehen. Ein Anker ohne Trenner fällt auf das System zurück.
+fn target_sep(new_anchor: &str) -> char {
+    if new_anchor.contains('/') && !new_anchor.contains('\\') {
         '/'
     } else if new_anchor.contains('\\') {
         '\\'
     } else {
         sep()
-    };
+    }
+}
+
+/// Trockenlauf: zählt und zeigt Beispiele, schreibt nichts.
+pub fn plan(conn: &Connection, old_anchor: &str, new_anchor: &str) -> SqlResult<RelocatePlan> {
+    let target_sep = target_sep(new_anchor);
 
     let mut entries: Vec<RelocateEntry> = Vec::new();
     let (mut total, mut skipped) = (0usize, 0usize);
@@ -240,6 +239,99 @@ pub fn plan(conn: &Connection, old_anchor: &str, new_anchor: &str) -> SqlResult<
         total,
         skipped,
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scharf
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Datierte Sicherung der Datenbank, **neben** der Datenbank — nicht in die
+/// Bibliothek, denn genau die liegt beim Umzug ja nicht mehr dort, wo die
+/// Datenbank sie vermutet. Gibt den Pfad der Sicherung zurück.
+///
+/// `VACUUM INTO` statt Dateikopie: die DB läuft im WAL-Modus, eine rohe Kopie
+/// der `.db` ließe frisch committete Änderungen im `-wal` zurück. Gleiches
+/// Vorgehen wie `backup_db()`, nur mit anderem Ziel.
+pub fn backup_before_relocate() -> Result<std::path::PathBuf, String> {
+    let db = super::connection::get_db_path();
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    // Datum plus Unix-Sekunden, wie bei den Merge-Protokollen daneben: lesbar
+    // und kollisionsfrei, denn VACUUM INTO scheitert an bestehenden Dateien.
+    let name = format!(
+        "beats.db.vor-anker-{}_{}",
+        crate::utils::secs_to_date(secs),
+        secs
+    );
+    let dest = db.with_file_name(name);
+
+    let conn = super::connection::open_db().map_err(|e| e.to_string())?;
+    conn.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])
+        .map_err(|e| format!("Sicherung fehlgeschlagen: {}", e))?;
+    Ok(dest)
+}
+
+/// Schreibt den Ankertausch — alles in einer Transaktion. Bricht ein Schritt
+/// ab, ist gar nichts geschrieben; einen Halbzustand kann es nicht geben.
+///
+/// Werte, die nicht am alten Anker hängen, bleiben unberührt.
+pub fn apply(conn: &mut Connection, old_anchor: &str, new_anchor: &str) -> Result<usize, String> {
+    let target_sep = target_sep(new_anchor);
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let mut changed = 0usize;
+
+    for (table, column) in PATH_COLUMNS {
+        // Über die rowid schreiben, nicht über den Pfad selbst: bei
+        // studio_projects ist der Pfad der Primary Key, und man benennt keine
+        // Zeile über den Wert um, den man gerade ersetzt.
+        let rows: Vec<(i64, String)> = {
+            let sql = format!(
+                "SELECT rowid, {c} FROM {t} WHERE {c} IS NOT NULL AND {c} != ''",
+                c = column,
+                t = table
+            );
+            let mut stmt = tx.prepare(&sql).map_err(|e| e.to_string())?;
+            let mapped = stmt
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .map_err(|e| e.to_string())?;
+            mapped.collect::<SqlResult<_>>().map_err(|e| e.to_string())?
+        };
+
+        let update = format!("UPDATE {t} SET {c} = ?1 WHERE rowid = ?2", c = column, t = table);
+        for (rowid, value) in rows {
+            let Some(after) = swap_anchor(&value, old_anchor, new_anchor, target_sep) else {
+                continue;
+            };
+            tx.execute(&update, rusqlite::params![after, rowid])
+                .map_err(|e| format!("{}.{} (rowid {}): {}", table, column, rowid, e))?;
+            changed += 1;
+        }
+    }
+
+    for key in PATH_SETTINGS {
+        let value: Option<String> = tx
+            .query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .ok();
+        let Some(after) = value
+            .filter(|v| !v.trim().is_empty())
+            .and_then(|v| swap_anchor(&v, old_anchor, new_anchor, target_sep))
+        else {
+            continue;
+        };
+        tx.execute(
+            "UPDATE app_settings SET value = ?1 WHERE key = ?2",
+            rusqlite::params![after, key],
+        )
+        .map_err(|e| format!("app_settings.{}: {}", key, e))?;
+        changed += 1;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(changed)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,6 +446,65 @@ mod tests {
             .query_row("SELECT path FROM beats WHERE id = '1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(path, r"C:\P\LIB\03_ARCHIVE\a", "Trockenlauf darf nichts anfassen");
+    }
+
+    #[test]
+    fn scharf_schreibt_pfade_und_laesst_alles_andere_liegen() {
+        let mut conn = test_db();
+        let changed = apply(&mut conn, r"C:\P\LIB", r"E:\BEATS").unwrap();
+        assert_eq!(changed, 4);
+
+        let beat: String = conn
+            .query_row("SELECT path FROM beats WHERE id = '1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(beat, r"E:\BEATS\03_ARCHIVE\a");
+
+        let studio: String = conn
+            .query_row("SELECT path FROM studio_projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(studio, r"E:\BEATS\01_ACTIVE\p", "Primary-Key-Zeile wandert mit");
+
+        let name: String = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'producer_name'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(name, "prod. goodbxy", "kein Pfad, bleibt unangetastet");
+    }
+
+    #[test]
+    fn zweiter_lauf_findet_nichts_mehr() {
+        let mut conn = test_db();
+        apply(&mut conn, r"C:\P\LIB", r"E:\BEATS").unwrap();
+        assert_eq!(
+            apply(&mut conn, r"C:\P\LIB", r"E:\BEATS").unwrap(),
+            0,
+            "der alte Anker hängt nirgends mehr"
+        );
+    }
+
+    /// Die Zusage, auf der die ganze Sicherheit ruht: der Vorgang ist durch
+    /// den Rücktausch umkehrbar — quer über den Trennerwechsel hinweg.
+    #[test]
+    fn ruecktausch_stellt_den_ausgangszustand_her() {
+        let mut conn = test_db();
+        let vorher: Vec<String> = {
+            let mut stmt = conn.prepare("SELECT path FROM beats ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.collect::<SqlResult<_>>().unwrap()
+        };
+
+        apply(&mut conn, r"C:\P\LIB", "/Users/goodbxy/Studio").unwrap();
+        apply(&mut conn, "/Users/goodbxy/Studio", r"C:\P\LIB").unwrap();
+
+        let nachher: Vec<String> = {
+            let mut stmt = conn.prepare("SELECT path FROM beats ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.collect::<SqlResult<_>>().unwrap()
+        };
+        assert_eq!(vorher, nachher);
     }
 
     #[test]

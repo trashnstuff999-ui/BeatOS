@@ -57,6 +57,10 @@ use commands::{
     save_settings,
     get_backup_info,
     backup_db_now,
+    // Umzug der Bibliothek (Anker)
+    relocate_status,
+    relocate_preview,
+    relocate_apply,
     // Studio commands
     scan_studio_projects,
     update_studio_project,
@@ -200,6 +204,9 @@ pub fn run() {
             save_settings,
             get_backup_info,
             backup_db_now,
+            relocate_status,
+            relocate_preview,
+            relocate_apply,
             // Studio
             scan_studio_projects,
             update_studio_project,

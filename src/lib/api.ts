@@ -13,6 +13,7 @@ import type {
   ParsedBeatFolder,
 } from "../types/create";
 import type { CustomTag } from "./tags";
+import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
 import type { Stats, DashboardActions } from "../types/stats";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
@@ -51,6 +52,21 @@ export const api = {
 
     backupNow: () =>
       invoke<{ db_path: string; backup_path: string; last_backup_secs: number | null }>("backup_db_now"),
+  },
+
+  // ─── Umzug der Bibliothek (Anker) ─────────────────────────────────────────
+  // Alle gespeicherten Pfade hängen an einem gemeinsamen Präfix. Zieht die
+  // Bibliothek um, wird nur dieses Präfix getauscht. Erkannt wird automatisch,
+  // geschrieben nur auf Bestätigung — `preview` schreibt nichts.
+  relocate: {
+    status: () =>
+      invoke<RelocateStatus>("relocate_status"),
+
+    preview: (newAnchor: string) =>
+      invoke<RelocatePlan>("relocate_preview", { newAnchor }),
+
+    apply: (newAnchor: string) =>
+      invoke<RelocateResult>("relocate_apply", { newAnchor }),
   },
 
   // ─── Stats ───────────────────────────────────────────────────────────────
