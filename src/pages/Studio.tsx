@@ -22,11 +22,9 @@ type StudioTab = "projects" | "assets";
 export default function Studio() {
   const { settings } = useSettings();
   const [tab, setTab] = useState<StudioTab>("projects");
+  // Der letzte Scan — der Assets-Tab braucht ihn als Zielliste beim Zuweisen.
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
-  // Ziel-Projekt für die Asset-Zuweisung (Klick auf eine Projekt-Zeile)
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const selectedProject = projects.find(p => p.path === selectedPath) ?? null;
 
   const productionPaths = useMemo(
     () => parseProductionPaths(settings.productionPath),
@@ -66,22 +64,20 @@ export default function Studio() {
 
       {/* Content */}
       <PageBody>
-        {/* Both panes stay mounted: the assign popover needs the project
-            list, and switching tabs must not lose scan state. */}
+        {/* Beide Panes bleiben montiert: der Assets-Tab braucht die Projektliste
+            beim Zuweisen, und ein Tabwechsel darf keinen Scan wegwerfen. */}
         <div style={{ display: tab === "projects" ? "block" : "none" }}>
           <ProjectsPane
             productionPaths={productionPaths}
             refreshKey={refreshKey}
             onProjects={setProjects}
-            selectedPath={selectedPath}
-            onSelectPath={setSelectedPath}
           />
         </div>
         <div style={{ display: tab === "assets" ? "block" : "none" }}>
           <AssetsPane
             assetPath={settings.assetPath}
-            selectedProject={selectedProject}
-            onClearSelection={() => setSelectedPath(null)}
+            projects={projects}
+            active={tab === "assets"}
             onAssigned={() => setRefreshKey(k => k + 1)}
           />
         </div>

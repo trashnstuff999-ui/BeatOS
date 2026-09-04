@@ -254,7 +254,7 @@ pub fn init_db() -> Result<(), String> {
                     "CREATE TABLE IF NOT EXISTS studio_projects (
                         path       TEXT PRIMARY KEY,
                         status     TEXT NOT NULL DEFAULT 'idea'
-                                   CHECK (status IN ('idea','wip','exported','ready')),
+                                   CHECK (status IN ('idea','wip','exported','ready','discard')),
                         priority   INTEGER NOT NULL DEFAULT 0,
                         notes      TEXT,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -262,6 +262,38 @@ pub fn init_db() -> Result<(), String> {
                     [],
                 ) {
                     init_error = Some(format!("Failed to create studio_projects table: {}", e));
+                }
+
+                // Migration: 'discard' ("Kann weg") kam später dazu. SQLite kann
+                // keinen CHECK ändern — Tabelle neu bauen, wie oben bei
+                // custom_tags. Die Werte bleiben, der Studio-Scan rechnet
+                // idea/exported/ready ohnehin aus den Dateien neu.
+                let studio_needs_migration: bool = conn.query_row(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='studio_projects'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                ).map(|sql| !sql.contains("'discard'"))
+                 .unwrap_or(false);
+
+                if studio_needs_migration {
+                    let migration = "
+                        BEGIN;
+                        CREATE TABLE studio_projects_new (
+                            path       TEXT PRIMARY KEY,
+                            status     TEXT NOT NULL DEFAULT 'idea'
+                                       CHECK (status IN ('idea','wip','exported','ready','discard')),
+                            priority   INTEGER NOT NULL DEFAULT 0,
+                            notes      TEXT,
+                            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        );
+                        INSERT INTO studio_projects_new SELECT * FROM studio_projects;
+                        DROP TABLE studio_projects;
+                        ALTER TABLE studio_projects_new RENAME TO studio_projects;
+                        COMMIT;
+                    ";
+                    if let Err(e) = conn.execute_batch(migration) {
+                        init_error = Some(format!("Failed to migrate studio_projects table: {}", e));
+                    }
                 }
 
                 // Data repair: earlier archive scans stored 0.0 / '' instead

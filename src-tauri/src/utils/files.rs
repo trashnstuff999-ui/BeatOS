@@ -51,6 +51,16 @@ pub fn is_flp(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Wo eine Beat-/Projekt-FLP liegen kann: im Ordner-Root oder im Projekt-
+/// Unterordner (`01_SAVEFILES/` neu, `03_PROJECTS/` alt). Liefert nur Pfade,
+/// die es wirklich gibt — Root immer zuerst.
+pub fn flp_search_dirs(root: &Path) -> Vec<std::path::PathBuf> {
+    [root.to_path_buf(), root.join("01_SAVEFILES"), root.join("03_PROJECTS")]
+        .into_iter()
+        .filter(|p| p.is_dir())
+        .collect()
+}
+
 /// Resolve a destination path that does not collide with an existing file.
 /// If `dir/file_name` exists, returns `dir/{stem}_2.{ext}`, `_3`, ... until a free slot is found.
 /// Never overwrites; guarantees the returned PathBuf does not yet exist.

@@ -32,12 +32,16 @@ export function SectionCard({ icon: Icon, title, actions, children, style }: Sec
         display: "flex", alignItems: "center", gap: 8,
         marginBottom: 16,
       }}>
-        {Icon && <Icon size={14} color={C.onSecondaryFixedVar} strokeWidth={1.75} />}
+        {Icon && <Icon size={13} color={C.onSecondaryFixedVar} strokeWidth={1.75} />}
+        {/* Eine Stufe leiser als der Inhalt: die Karte grenzt sich durch ihre
+            Flaeche schon ab. Vorher war die Ueberschrift genauso laut wie das,
+            worum es in der Karte geht. */}
         <h3 style={{
           margin: 0, flex: 1,
-          fontSize: 13, fontWeight: 600,
-          color: C.onSurface,
-          letterSpacing: "0.01em",
+          fontSize: 11, fontWeight: 700,
+          color: C.onSurfaceVariant,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
         }}>
           {title}
         </h3>

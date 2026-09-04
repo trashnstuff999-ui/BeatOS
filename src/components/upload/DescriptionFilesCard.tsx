@@ -7,12 +7,13 @@
 
 import { useState, useEffect } from "react";
 import {
-  ShoppingBag, Music2, Youtube, Copy, Save, RefreshCw, FolderOpen,
+  ShoppingBag, Music2, Youtube, Copy, Save, FileCode2,
   Check, AlertCircle, Loader2, FileText, ChevronDown,
 } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { C, PLATFORM_CONFIG } from "../../lib/theme";
-import { SectionCard, SectionIconBtn } from "../ui/SectionCard";
+import { C } from "../../lib/theme";
+import { SectionCard } from "../ui/SectionCard";
+import { Button } from "../ui";
+import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
 
@@ -31,10 +32,14 @@ interface DescriptionFilesCardProps {
 type TabKey = UploadPlatform;
 type Banner = { kind: "ok" | "err"; msg: string } | null;
 
+// Ein Akzent statt drei Markenfarben: welcher Tab offen ist, sagt der aktive
+// Zustand — welche Plattform es ist, sagen Symbol und Beschriftung. Die
+// Plattformfarben bleiben dort, wo sie die einzige Unterscheidung sind
+// (Punkte im Planer, Badges in der Archiv-Tabelle).
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
-  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
-  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
-  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: PLATFORM_CONFIG.youtube.color,    file: "youtube.txt"    },
+  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: C.primary, file: "beatstars.txt"  },
+  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: C.primary, file: "soundcloud.txt" },
+  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: C.primary, file: "youtube.txt"    },
 ];
 
 export function DescriptionFilesCard({
@@ -91,17 +96,6 @@ export function DescriptionFilesCard({
     setDirty(prev => ({ ...prev, [key]: true }));
   };
 
-  const handleCopy = async () => {
-    if (!drafts) return;
-    try {
-      await navigator.clipboard.writeText(drafts[active]);
-      setBanner({ kind: "ok", msg: `${TABS.find(t => t.key === active)?.label} in die Zwischenablage kopiert` });
-      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
-    } catch (e) {
-      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
-    }
-  };
-
   const handleCopyTitle = async () => {
     if (!drafts) return;
     try {
@@ -135,48 +129,37 @@ export function DescriptionFilesCard({
     }
   };
 
-  const persist = async (which: "current" | "all") => {
+  /** Speichert immer alle drei Dateien. Ein Knopf pro Datei bedeutete drei
+   *  Knoepfe fuer eine Handlung, die man ohnehin nie einzeln macht. */
+  const persist = async () => {
     if (!drafts) return;
     setIsSaving(true);
     setBanner(null);
     try {
       await api.upload.saveDescriptions({
         beat_id:    beatId,
-        beatstars:  (which === "all" || active === "beatstars")  ? drafts.beatstars  : null,
-        soundcloud: (which === "all" || active === "soundcloud") ? drafts.soundcloud : null,
-        youtube:    (which === "all" || active === "youtube")    ? drafts.youtube    : null,
+        beatstars:  drafts.beatstars,
+        soundcloud: drafts.soundcloud,
+        youtube:    drafts.youtube,
       });
-      if (which === "all") {
-        setDirty({ beatstars: false, soundcloud: false, youtube: false });
-        setBanner({ kind: "ok", msg: "Saved all 3 description files to the beat folder" });
-      } else {
-        setDirty(prev => ({ ...prev, [active]: false }));
-        setBanner({ kind: "ok", msg: `Saved ${TABS.find(t => t.key === active)?.file}` });
-      }
+      setDirty({ beatstars: false, soundcloud: false, youtube: false });
+      setBanner({ kind: "ok", msg: "Alle drei Beschreibungen gespeichert" });
       onSaved();
       setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2500);
     } catch (e) {
-      setBanner({ kind: "err", msg: `Save failed: ${e}` });
+      setBanner({ kind: "err", msg: `Speichern fehlgeschlagen: ${e}` });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const openTemplatesFolder = async () => {
-    try {
-      const dir = await api.upload.getTemplatesDir();
-      await revealItemInDir(dir);
-    } catch (e) {
-      setBanner({ kind: "err", msg: `Cannot open templates folder: ${e}` });
-    }
-  };
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Editor collapsed by default — the title panel is the main output.
   // Stays open while the active tab has unsaved edits so nothing hides.
   const [editorOpen, setEditorOpen] = useState(false);
 
   const activeContent = drafts?.[active] ?? "";
-  const activeTabMeta = TABS.find(t => t.key === active)!;
   const activeTitle = extractTitle(activeContent);
   const activeDescription = extractDescription(activeContent);
   const activeTags = extractTags(activeContent);
@@ -193,19 +176,17 @@ export function DescriptionFilesCard({
       icon={FileText}
       title="Beschreibungen"
       actions={
-        <div style={{ display: "flex", gap: 6 }}>
-          <SectionIconBtn
-            icon={RefreshCw}
-            title="Alle 3 Tabs neu aus Templates rendern (verwirft ungespeicherte Edits)"
-            onClick={() => renderFromBackend(true)}
-            disabled={isLoading}
-          />
-          <SectionIconBtn
-            icon={FolderOpen}
-            title="Template-Ordner im Explorer öffnen"
-            onClick={openTemplatesFolder}
-          />
-        </div>
+        // Der Neu-Rendern-Knopf ist raus: nach dem Speichern einer Vorlage
+        // rendert die Karte ohnehin neu.
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={FileCode2}
+          onClick={() => setShowTemplates(true)}
+          title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
+        >
+          Template-Editor
+        </Button>
       }
     >
 
@@ -250,28 +231,18 @@ export function DescriptionFilesCard({
         })}
       </div>
 
-      {/* ─── Title panel — the headline output, always visible ──────────── */}
-      <div style={{
-        display: "flex", alignItems: "flex-start", gap: 10,
-        padding: "12px 14px",
-        background: C.surfaceContainerLowest,
-        border: `1px solid ${C.border15}`,
-        borderRadius: 8,
-        marginBottom: 10,
-      }}>
-        <activeTabMeta.icon size={14} color={activeTabMeta.color} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-            textTransform: "uppercase", color: C.onSecondaryFixedVar,
-            marginBottom: 4,
-          }}>
-            Titel
-          </div>
-          <div style={{
-            fontSize: 13, fontWeight: 600, color: C.onSurface,
-            lineHeight: 1.45, wordBreak: "break-word",
-          }}>
+      {/* ─── Ausgabe: Titel / Beschreibung / Tags ────────────────────────────
+          Drei Zeilen einer Liste statt drei Kaesten. Vorher hatte jede Zeile
+          Rahmen, Icon, Label UND einen breiten Knopf, der ausschrieb, was das
+          Icon schon sagte („TITEL KOPIEREN" neben dem Titel). Jetzt trennen
+          duenne Linien, und Kopieren ist ein Icon rechts. */}
+      <div style={{ borderTop: `1px solid ${C.border10}` }}>
+        <OutputRow
+          label="Titel"
+          onCopy={handleCopyTitle}
+          disabled={!drafts || isLoading}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, lineHeight: 1.45, wordBreak: "break-word" }}>
             {isLoading
               ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.onSurfaceVariant }}>
                   <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> Rendering…
@@ -279,33 +250,18 @@ export function DescriptionFilesCard({
               : (activeTitle || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
             }
           </div>
-        </div>
-        <SmallBtn icon={Copy} label="Titel kopieren" onClick={handleCopyTitle} disabled={!drafts || isLoading} />
-      </div>
+        </OutputRow>
 
-      {/* ─── Description panel — copy without opening the raw text ──────── */}
-      <div style={{
-        display: "flex", alignItems: "flex-start", gap: 10,
-        padding: "12px 14px",
-        background: C.surfaceContainerLowest,
-        border: `1px solid ${C.border15}`,
-        borderRadius: 8,
-        marginBottom: 10,
-      }}>
-        <FileText size={14} color={C.onSecondaryFixedVar} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-            textTransform: "uppercase", color: C.onSecondaryFixedVar,
-            marginBottom: 4,
-          }}>
-            Beschreibung
-          </div>
+        <OutputRow
+          label="Beschreibung"
+          onCopy={handleCopyDescription}
+          disabled={!drafts || isLoading}
+        >
           <div style={{
             fontSize: 11, color: C.onSurfaceVariant,
             lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
             display: "-webkit-box",
-            WebkitLineClamp: 3,
+            WebkitLineClamp: 6,
             WebkitBoxOrient: "vertical" as const,
             overflow: "hidden",
           }}>
@@ -314,40 +270,16 @@ export function DescriptionFilesCard({
               : (activeDescription || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
             }
           </div>
-        </div>
-        <SmallBtn icon={Copy} label="Beschreibung kopieren" onClick={handleCopyDescription} disabled={!drafts || isLoading} />
-      </div>
+        </OutputRow>
 
-      {/* ─── Tags panel — SC capped at 9, YouTube comma list ─────────────── */}
-      {activeTags && (
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10,
-          padding: "12px 14px",
-          background: C.surfaceContainerLowest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: 8,
-          marginBottom: 10,
-        }}>
-          <activeTabMeta.icon size={14} color={activeTabMeta.color} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 6,
-              fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-              textTransform: "uppercase", color: C.onSecondaryFixedVar,
-              marginBottom: 4,
-            }}>
-              Tags
-              <span style={{
-                padding: "1px 7px", borderRadius: 9999,
-                fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
-                background: active === "soundcloud" && activeTagCount > 9
-                  ? "rgba(255,115,81,0.15)"
-                  : `${activeTabMeta.color}15`,
-                color: active === "soundcloud" && activeTagCount > 9 ? C.error : activeTabMeta.color,
-              }}>
-                {active === "soundcloud" ? `${activeTagCount}/9` : activeTagCount}
-              </span>
-            </div>
+        {activeTags && (
+          <OutputRow
+            label="Tags"
+            badge={active === "soundcloud" ? `${activeTagCount}/9` : String(activeTagCount)}
+            badgeWarn={active === "soundcloud" && activeTagCount > 9}
+            onCopy={handleCopyTags}
+            disabled={!drafts || isLoading}
+          >
             <div style={{
               fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
               lineHeight: 1.5, wordBreak: "break-word",
@@ -358,10 +290,9 @@ export function DescriptionFilesCard({
             }}>
               {activeTags.split(/\r?\n/).join("  ")}
             </div>
-          </div>
-          <SmallBtn icon={Copy} label="Tags kopieren" onClick={handleCopyTags} disabled={!drafts || isLoading} />
-        </div>
-      )}
+          </OutputRow>
+        )}
+      </div>
 
       {/* ─── Full text — collapsed by default ───────────────────────────── */}
       <button
@@ -432,25 +363,21 @@ export function DescriptionFilesCard({
         </div>
       )}
 
-      {/* ─── Action bar — ONE primary action: Save All ───────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-        <FileTag tab={activeTabMeta} exists={fileExistsMap[active]} isDirty={dirty[active]} />
-        <div style={{ flex: 1 }} />
-        <SmallBtn icon={Copy} label="Text" onClick={handleCopy} disabled={!drafts} title="Kompletten Text kopieren" />
-        <SmallBtn
+      {/* ─── Eine Handlung: speichern. Vorher standen hier vier Knoepfe —
+              „Text" kopierte den Rohtext, ein zweiter speicherte nur die
+              aktuelle Datei, dazu Dateiname und „saved"-Vermerk. ───────── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+        <Button
+          size="sm"
+          variant="primary"
           icon={Save}
-          label={activeTabMeta.label}
-          onClick={() => persist("current")}
-          disabled={!drafts || isSaving}
-          title={`Nur ${activeTabMeta.file} speichern`}
-        />
-        <SmallBtn
-          icon={Save}
-          label="Save All (3 Dateien)"
-          onClick={() => persist("all")}
-          disabled={!drafts || isSaving}
-          primary
-        />
+          onClick={persist}
+          loading={isSaving}
+          disabled={!drafts}
+          title="Beatstars, SoundCloud und YouTube in den Beat-Ordner schreiben"
+        >
+          Speichern
+        </Button>
       </div>
 
       {/* ─── Banner ──────────────────────────────────────────────────────── */}
@@ -472,64 +399,75 @@ export function DescriptionFilesCard({
           {banner.msg}
         </div>
       )}
+
+      {showTemplates && (
+        <TemplateEditorDialog
+          beatId={beatId}
+          onClose={() => setShowTemplates(false)}
+          // Gespeicherte Vorlage → alle Tabs frisch rendern, aber eigene
+          // Änderungen am Text nicht wegwerfen
+          onSaved={() => renderFromBackend(false)}
+        />
+      )}
     </SectionCard>
   );
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function SmallBtn({ icon: Icon, label, onClick, disabled, primary, title }: {
-  icon: React.ElementType;
+/** Eine Ausgabe-Zeile: Label links, Inhalt darunter, Kopieren rechts. */
+function OutputRow({ label, badge, badgeWarn, onCopy, disabled, children }: {
   label: string;
-  onClick: () => void;
+  badge?: string;
+  badgeWarn?: boolean;
+  onCopy: () => void;
   disabled?: boolean;
-  primary?: boolean;
-  title?: string;
+  children: React.ReactNode;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "7px 12px",
-        background: primary ? C.primary : C.surfaceContainerLowest,
-        border: primary ? "none" : `1px solid ${C.border20}`,
-        borderRadius: 6,
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontSize: 10, fontWeight: 700,
-        color: primary ? C.onPrimary : C.onSurfaceVariant,
-        letterSpacing: "0.05em", textTransform: "uppercase",
-        opacity: disabled ? 0.5 : 1,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <Icon size={11} strokeWidth={2} />
-      {label}
-    </button>
-  );
-}
-
-function FileTag({ tab, exists, isDirty }: {
-  tab: { file: string; color: string };
-  exists: boolean;
-  isDirty: boolean;
-}) {
-  const status = isDirty ? "edited"
-    : exists ? "saved"
-    : "not yet written";
-  const color = isDirty ? "#fda124" : exists ? C.mint : C.onSecondaryFixedVar;
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      fontSize: 10, color: C.onSurfaceVariant,
+      display: "flex", alignItems: "flex-start", gap: 12,
+      padding: "12px 2px",
+      borderBottom: `1px solid ${C.border10}`,
     }}>
-      <FileText size={11} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-      <span style={{ fontFamily: "monospace" }}>{tab.file}</span>
-      <span style={{ color, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-        · {status}
-      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+          textTransform: "uppercase", color: C.onSecondaryFixedVar,
+          marginBottom: 4,
+        }}>
+          {label}
+          {badge && (
+            <span style={{
+              padding: "1px 7px", borderRadius: 9999,
+              fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
+              background: badgeWarn ? "rgba(255,115,81,0.15)" : "rgba(255,255,255,0.05)",
+              color: badgeWarn ? C.error : C.onSurfaceVariant,
+            }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        {children}
+      </div>
+      <button
+        onClick={onCopy}
+        disabled={disabled}
+        title={`${label} kopieren`}
+        style={{
+          width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "transparent",
+          border: `1px solid ${C.border20}`,
+          color: C.onSurfaceVariant,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.45 : 1,
+        }}
+      >
+        <Copy size={12} strokeWidth={2} />
+      </button>
     </div>
   );
 }
+

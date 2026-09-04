@@ -10,7 +10,8 @@
       "identifier": "opener:allow-open-path",
       "allow": [{ "path": "**" }]
     },
-    "dialog:default"
+    "dialog:default",
+    "core:window:allow-set-always-on-top"
   ],
   "security": {
     "csp": null

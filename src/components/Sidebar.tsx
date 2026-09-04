@@ -1,9 +1,12 @@
 // src/components/Sidebar.tsx
 
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, LibraryBig, PlusSquare, Music, Upload as UploadIcon, Settings, HelpCircle } from "lucide-react";
-import { C } from "../lib/theme";
+import { LayoutGrid, LibraryBig, PlusSquare, Music, Upload as UploadIcon, Settings, HelpCircle, Pin, PinOff } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { C, STUDIO_STATUS_CONFIG } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
+import type { StudioStatusCounts } from "../types/studio";
 
 // Die Namen folgen dem Wortschatz, den die App in ihren deutschen Texten
 // ohnehin benutzt: „Archiv" steht schon in der Pipeline-Karte und in „Im Archiv
@@ -22,9 +25,23 @@ const BOTTOM_NAV = [
   { to: "/support",  icon: HelpCircle, label: "Hilfe"         },
 ];
 
-export default function Sidebar({ beatCount }: { beatCount: number }) {
+const LS_PINNED = "beatos_always_on_top";
+
+export default function Sidebar({ beatCount, studioCounts }: {
+  beatCount: number;
+  /** „Bereit" und „Überarbeiten" — die zwei Zahlen am Studio-Tab */
+  studioCounts?: StudioStatusCounts;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [pinned, setPinned] = useState(() => localStorage.getItem(LS_PINNED) === "1");
+
+  // Beim Start wiederherstellen und bei jedem Umschalten anwenden
+  useEffect(() => {
+    localStorage.setItem(LS_PINNED, pinned ? "1" : "0");
+    getCurrentWindow().setAlwaysOnTop(pinned).catch(e =>
+      console.error("[Sidebar] setAlwaysOnTop failed:", e));
+  }, [pinned]);
 
   const handleNavClick = (to: string) => {
     if (location.pathname !== to) navigate(to);
@@ -59,10 +76,9 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
             <rect x="17" y="7" width="3" height="13" rx="1"/>
           </svg>
         </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: C.primary, lineHeight: 1 }}>BeatOS</h1>
-          <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.2em", color: C.onSurfaceVariant, fontWeight: 500, marginTop: 2 }}>Precision Console</p>
-        </div>
+        {/* Ohne Untertitel: „Precision Console" sagt nichts, was die App nicht
+            selbst zeigt, und stand in jedem Tab dauerhaft im Blick. */}
+        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: C.primary, lineHeight: 1 }}>BeatOS</h1>
       </div>
 
       {/* Main nav */}
@@ -98,6 +114,15 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
             >
               <Icon size={18} strokeWidth={1.5} />
               {label}
+              {/* Was im Studio ansteht: fertig zum Archivieren und selbst
+                  vorgemerkt. Dieselben Farben wie die Status-Pillen in der
+                  Liste — die Zahl ist damit ohne Legende lesbar. */}
+              {to === "/studio" && studioCounts && (
+                <span style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
+                  <CountPill status="ready" value={studioCounts.ready} />
+                  <CountPill status="wip" value={studioCounts.wip} />
+                </span>
+              )}
             </div>
           );
         })}
@@ -105,38 +130,86 @@ export default function Sidebar({ beatCount }: { beatCount: number }) {
 
       {/* Bottom section */}
       <div style={{ borderTop: `1px solid ${C.border15}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        {/* Beat count */}
-        <div style={{ padding: "8px 16px", marginBottom: 8 }}>
-          <div style={{ background: "rgba(38,38,38,0.5)", borderRadius: 8, padding: 12 }}>
-            <p style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Beats gesamt</p>
-            <p style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{beatCount.toLocaleString()}</p>
-          </div>
+        {/* Beat count — eine Zahl braucht keinen Kasten */}
+        <div style={{
+          display: "flex", alignItems: "baseline", gap: 8,
+          padding: "4px 16px 12px",
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>
+            {beatCount.toLocaleString()}
+          </span>
+          <span style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+            Beats
+          </span>
         </div>
 
+        {/* Immer im Vordergrund — damit BeatOS neben FL Studio offen bleibt */}
+        <BottomRow
+          icon={pinned ? Pin : PinOff}
+          label={pinned ? "Immer vorn: an" : "Immer vorn: aus"}
+          active={pinned}
+          onClick={() => setPinned(p => !p)}
+        />
+
         {BOTTOM_NAV.map(({ to, icon: Icon, label }) => (
-          <div
-            key={to}
-            onClick={() => handleNavClick(to)}
-            style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "12px 16px", borderRadius: 6,
-              fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em",
-              color: C.onSurfaceVariant, cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.color = C.onSurface;
-              e.currentTarget.style.background = C.surfaceContainerHigh;
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.color = C.onSurfaceVariant;
-              e.currentTarget.style.background = "transparent";
-            }}
-          >
-            <Icon size={18} strokeWidth={1.5} />
-            {label}
-          </div>
+          <BottomRow key={to} icon={Icon} label={label} onClick={() => handleNavClick(to)} />
         ))}
       </div>
     </aside>
+  );
+}
+
+function BottomRow({ icon: Icon, label, active = false, onClick }: {
+  icon: React.ElementType;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  const idle = active ? C.primary : C.onSurfaceVariant;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "12px 16px", borderRadius: 6,
+        fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em",
+        color: idle,
+        background: active ? C.surfaceContainerHigh : "transparent",
+        cursor: "pointer", transition: "all 0.15s",
+        userSelect: "none",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.color = active ? C.primary : C.onSurface;
+        e.currentTarget.style.background = C.surfaceContainerHigh;
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.color = idle;
+        e.currentTarget.style.background = active ? C.surfaceContainerHigh : "transparent";
+      }}
+    >
+      <Icon size={18} strokeWidth={1.5} />
+      {label}
+    </div>
+  );
+}
+
+/**
+ * Eine der zwei Studio-Zahlen. Null bleibt leer statt eine „0" hinzustellen —
+ * nichts zu tun ist keine Meldung wert.
+ */
+function CountPill({ status, value }: { status: "ready" | "wip"; value: number }) {
+  if (value <= 0) return null;
+  const m = STUDIO_STATUS_CONFIG[status];
+  return (
+    <span
+      title={`${value} ${value === 1 ? "Projekt" : "Projekte"} auf „${m.label}“`}
+      style={{
+        padding: "1px 7px", borderRadius: 9999,
+        background: m.bg, color: m.color,
+        fontSize: 10, fontWeight: 700,
+      }}
+    >
+      {value}
+    </span>
   );
 }

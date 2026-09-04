@@ -1,8 +1,12 @@
 // src/App.tsx
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import { SIDEBAR_WIDTH } from "./lib/constants";
+import { api } from "./lib/api";
+import { useFocusRefresh } from "./hooks/useFocusRefresh";
+import type { StudioStatusCounts } from "./types/studio";
 import Dashboard from "./pages/Dashboard";
 import Browse from "./pages/Browse";
 import Create from "./pages/Create";
@@ -11,9 +15,9 @@ import Upload from "./pages/Upload";
 import { Settings } from "./pages/Settings";
 import { Support } from "./pages/Placeholder";
 import { useBeatCount } from "./hooks/useStats";
-import { SettingsProvider } from "./contexts/SettingsContext";
+import { SettingsProvider, useSettings, parseProductionPaths } from "./contexts/SettingsContext";
 import { AudioPlayerProvider } from "./contexts/AudioPlayerContext";
-import { GlobalAudioPlayer } from "./components/GlobalAudioPlayer";
+import { GlobalAudioPlayer, PLAYER_HEIGHT } from "./components/GlobalAudioPlayer";
 import { useAudioPlayerContext } from "./contexts/AudioPlayerContext";
 import { TagManagerProvider, useTagManager } from "./contexts/TagManagerContext";
 import { AllTagsModal } from "./components/create/dialogs/AllTagsModal";
@@ -57,19 +61,50 @@ function GlobalTagManager() {
   );
 }
 
+/**
+ * Was im Studio ansteht: fertig zum Archivieren (grün) und selbst vorgemerkt
+ * (orange). Die Zahl der Inbox-Dateien stand hier mal — sie mischte Cover,
+ * Thumbnails und Videos zu einer Zahl, aus der keine Handlung folgte.
+ *
+ * Reine DB-Abfrage, deshalb darf sie bei jedem Fensterwechsel und bei jedem
+ * Tabwechsel neu laufen. Den Stand schreibt der Studio-Scan.
+ */
+function useStudioCounts(): StudioStatusCounts {
+  const [counts, setCounts] = useState<StudioStatusCounts>({ ready: 0, wip: 0 });
+  const { settings } = useSettings();
+  const { pathname } = useLocation();
+  // Dieselben Ordner, die auch der Scan abläuft — sonst zählt die Zahl
+  // Projekte mit, die die Liste nicht mehr zeigt (z.B. geparkte).
+  const roots = useMemo(
+    () => parseProductionPaths(settings.productionPath),
+    [settings.productionPath],
+  );
+
+  const load = useCallback(() => {
+    api.studio.statusCounts(roots)
+      .then(setCounts)
+      .catch(() => setCounts({ ready: 0, wip: 0 }));
+  }, [roots]);
+
+  useEffect(() => { load(); }, [load, pathname]);
+  useFocusRefresh(load);
+  return counts;
+}
+
 function AppContent() {
   const beatCount = useBeatCount();
+  const studioCounts = useStudioCounts();
   const { currentBeat } = useAudioPlayerContext();
   const playerVisible = !!currentBeat;
 
   return (
     <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "#0e0e0e" }}>
-      <Sidebar beatCount={beatCount} />
+      <Sidebar beatCount={beatCount} studioCounts={studioCounts} />
       <main style={{
         marginLeft: SIDEBAR_WIDTH,
         height: "100vh",
         overflow: "hidden",
-        paddingBottom: playerVisible ? 80 : 0,
+        paddingBottom: playerVisible ? PLAYER_HEIGHT : 0,
         boxSizing: "border-box",
       }}>
         <AppRoutes />

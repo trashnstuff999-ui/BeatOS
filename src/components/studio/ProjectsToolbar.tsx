@@ -10,16 +10,19 @@ import { Search, Star, ArrowUpDown, ChevronDown, X } from "lucide-react";
 import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import type { StudioStatus } from "../../types/studio";
 
-export type SortMode = "modified" | "priority" | "name" | "oldest";
+export type SortMode = "modified" | "name" | "oldest";
 
+// „Priorität zuerst" gab es hier mal. Es sortierte nur innerhalb einer Sektion
+// und tat damit sichtbar nichts — die Sektion „Priorität" ganz oben in der
+// Liste erledigt die Aufgabe seither richtig.
 export const SORT_LABELS: Record<SortMode, string> = {
   modified: "Zuletzt bearbeitet",
-  priority: "Priorität zuerst",
   name: "Name A–Z",
   oldest: "Älteste zuerst",
 };
 
-const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready"];
+// „Kann weg" steht am Ende, hinter allem, was noch Arbeit werden kann.
+const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready", "discard"];
 
 interface ProjectsToolbarProps {
   search: string;

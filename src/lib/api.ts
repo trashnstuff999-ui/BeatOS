@@ -14,7 +14,12 @@ import type {
 } from "../types/create";
 import type { CustomTag } from "./tags";
 import type { Stats, DashboardActions } from "../types/stats";
-import type { StudioProject, AssetFile, StudioStatus } from "../types/studio";
+import type {
+  StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
+  MergeRun,
+  ParkReport,
+  ProjectArchiveStatus,
+} from "../types/studio";
 import type {
   UploadData,
   ScheduleEntry,
@@ -27,6 +32,7 @@ import type {
   MigrationResult,
   RenamePlan,
   RenameResult,
+  FolderSync,
 } from "../types/upload";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -139,6 +145,11 @@ export const api = {
     fixDates: (archiveBasePath: string) =>
       invoke<{ updated: number; not_found: number; no_flp: number; errors: string[] }>("fix_dates", { archiveBasePath }),
 
+    /** Ordner + Dateinamen + beats.path auf die DB-Werte ziehen.
+     *  Leere ID-Liste = alle Beats, dryRun = nur Vorschau. */
+    syncFolders: (beatIds: string[], dryRun: boolean) =>
+      invoke<FolderSync[]>("sync_beat_folders", { beatIds, dryRun }),
+
     checkDuplicate: (catalogId: number, title: string, key: string | null, bpm: number | null) =>
       invoke<DuplicateCheckResult>("check_beat_duplicate", { catalogId, title, key, bpm }),
 
@@ -186,12 +197,67 @@ export const api = {
     updateProject: (path: string, status: StudioStatus, priority: number, notes: string | null) =>
       invoke<void>("update_studio_project", { path, status, priority, notes }),
 
+    /** „Bereit" und „Überarbeiten" als Zahl — reine DB-Abfrage, kein Ordner-Scan.
+     *  Die Roots müssen mit, sonst zählen geparkte Projekte mit, die die Liste
+     *  gar nicht mehr zeigt. */
+    statusCounts: (paths: string[]) =>
+      invoke<StudioStatusCounts>("studio_status_counts", { paths }),
+
+    /** Legt Ordner + 01_SAVEFILES + Template-Kopie an, gibt die neue FLP zurück. */
+    createProject: (root: string, name: string, templateFlp: string) =>
+      invoke<string>("create_project_folder", { root, name, templateFlp }),
+
+    /** Nächste freie Projektnummer über alle Roots ("Project_206"). */
+    nextProjectName: (paths: string[]) =>
+      invoke<string>("next_project_name", { paths }),
+
+    /** Benennt Ordner + gleichnamige FLPs um, gibt den neuen Pfad zurück. */
+    renameProject: (path: string, newName: string) =>
+      invoke<string>("rename_project_folder", { path, newName }),
+
+    /** Vorschau: welcher Ordner landet unter welchem Namen im Ziel. Ändert nichts. */
+    /** `exclude` nimmt Ordner heraus, BEVOR die Nummern vergeben werden —
+     *  hinterher gefiltert entstünden Lücken. */
+    planMerge: (paths: string[], target: string, exclude: string[] = []) =>
+      invoke<MergePlan>("plan_production_merge", { paths, target, exclude }),
+
+    /** Führt den Plan aus (DB-Sicherung, Verschieben, Protokoll). */
+    applyMerge: (steps: MergeStep[]) =>
+      invoke<MergeReport>("apply_production_merge", { steps }),
+
+    /** Vollständig archivierte Projekte in einen Parkordner verschieben.
+     *  Der Command prüft jeden Ordner selbst nochmal nach — die Liste hier ist
+     *  ein Vorschlag, kein Freibrief. */
+    parkArchived: (projectPaths: string[], archivePath: string, parkDir: string) =>
+      invoke<ParkReport>("park_archived_projects", { projectPaths, archivePath, parkDir }),
+
+    /** Vergangene Läufe aus den Protokolldateien — überlebt den Neustart. */
+    listMergeRuns: () =>
+      invoke<MergeRun[]>("list_merge_runs"),
+
+    /** Trockenlauf-Bericht als CSV in die Bibliothek schreiben; gibt den Pfad zurück.
+     *  Kein Pfad vom Frontend — der Command wählt den Ort selbst. */
+    exportPreview: (content: string) =>
+      invoke<string>("export_merge_preview", { content }),
+
+    /** Spielt ein Protokoll rückwärts ab. */
+    undoMerge: (logPath: string) =>
+      invoke<MergeReport>("undo_production_merge", { logPath }),
+
+    /** Welche Produktionsordner liegen schon im Archiv — und fehlt dort etwas?
+     *  `deep` schaltet den Datei-für-Datei-Vergleich zu: langsamer, aber erst
+     *  er beantwortet, ob ein Ordner gefahrlos weggeräumt werden könnte. */
+    matchArchive: (paths: string[], archivePath: string, deep: boolean) =>
+      invoke<ProjectArchiveStatus[]>("match_projects_to_archive", { paths, archivePath, deep }),
+
     scanAssetInbox: (path: string) =>
       invoke<AssetFile[]>("scan_asset_inbox", { path }),
 
-    /** Moves the asset into the project folder root (collision-safe). */
-    assignAsset: (assetPath: string, assetRoot: string, projectDir: string) =>
-      invoke<string>("assign_asset_to_project", { assetPath, assetRoot, projectDir }),
+    /** Moves the asset into the project folder root (collision-safe).
+     *  `slot` ergänzt fehlende Namensmarker, damit der Zielordner die Datei
+     *  danach im gewählten Slot wiederfindet. */
+    assignAsset: (assetPath: string, assetRoot: string, projectDir: string, slot?: string) =>
+      invoke<string>("assign_asset_to_project", { assetPath, assetRoot, projectDir, slot }),
   },
 
   // ─── Upload ──────────────────────────────────────────────────────────────
@@ -241,6 +307,14 @@ export const api = {
 
     readTemplate: (name: string) =>
       invoke<string>("read_template", { name }),
+
+    /** Überschreibt eine Vorlage; die alte Fassung bleibt als .bak liegen. */
+    writeTemplate: (name: string, contents: string) =>
+      invoke<void>("write_template", { name, contents }),
+
+    /** Rendert ungespeicherten Vorlagentext mit den Werten eines echten Beats. */
+    previewTemplate: (beatId: string, platform: string, contents: string) =>
+      invoke<string>("preview_template", { beatId, platform, contents }),
 
     renderDescriptions: (beatId: string) =>
       invoke<UploadDescriptions>("render_upload_descriptions", { beatId }),

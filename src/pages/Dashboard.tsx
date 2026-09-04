@@ -97,7 +97,7 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
           );
         })}
       </div>
-      <div style={{ fontSize: 9, color: C.onSecondaryFixedVar, marginTop: 6 }}>
+      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 6 }}>
         letzte 8 Wochen · aktuelle Woche rechts
       </div>
     </div>
@@ -105,6 +105,9 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
 }
 
 // ── Pipeline-Funnel: Studio → Archiv → Geplant → Live ────────────────────────
+// 'discard' fehlt hier mit Absicht: was zum Loeschen vorgemerkt ist, ist keine
+// Pipeline mehr und darf die Studio-Zahl nicht aufblaehen. Es steht leise
+// hinter der Aufschluesselung.
 const STUDIO_STAGES = ["idea", "wip", "exported", "ready"] as const;
 
 function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
@@ -117,11 +120,21 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
   // nicht zur Zeile darunter, sobald ein weiterer Studio-Status dazukommt.
   const studioCounts = STUDIO_STAGES.map(s => actions.studio_by_status[s] ?? 0);
   const studioTotal = studioCounts.reduce((a, b) => a + b, 0);
+  const discardCount = actions.studio_by_status.discard ?? 0;
 
   const stages: Array<{ label: string; value: number; detail: React.ReactNode; icon: React.ReactNode; color: string; path: string }> = [
     {
       label: "Studio", value: studioTotal,
-      detail: STUDIO_STAGES.map((s, i) => `${studioCounts[i]} ${STUDIO_STATUS_CONFIG[s].label}`).join(" · "),
+      detail: (
+        <>
+          {STUDIO_STAGES.map((s, i) => `${studioCounts[i]} ${STUDIO_STATUS_CONFIG[s].label}`).join(" · ")}
+          {discardCount > 0 && (
+            <span style={{ color: STUDIO_STATUS_CONFIG.discard.color }}>
+              {" · "}{discardCount} kann weg
+            </span>
+          )}
+        </>
+      ),
       icon: <Disc3 size={15} />, color: "#9492ff", path: "/studio",
     },
     {
@@ -179,7 +192,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
               </span>
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
-            <div style={{ fontSize: 9, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
+            <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
           </button>
         </div>
       ))}
@@ -318,7 +331,7 @@ function BarChart({ data, color, onBarClick }: {
       <div style={{ display: "flex", justifyContent: "center", gap: 4, flexShrink: 0 }}>
         {data.map((bar, i) => (
           <span key={bar.key} style={{
-            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 9, fontWeight: 700,
+            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 10, fontWeight: 700,
             color: hov === i ? colorAt(bar, i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
             transition: "color 0.15s", lineHeight: 1.2, overflow: "hidden",
           }}>
@@ -518,7 +531,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
           Alle anzeigen ›
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
         <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
       </div>
       {beats.map((beat, i) => {

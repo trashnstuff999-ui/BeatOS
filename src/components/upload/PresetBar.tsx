@@ -100,26 +100,29 @@ export function PresetBar({
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       {/* Single dropdown trigger */}
+      {/* Markanter als der Rest der Karte: der schnellste Weg, Artists, Genres
+          und Tags auf einen Schlag zu setzen — vorher sah er aus wie ein
+          weiteres graues Eingabefeld. */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
           width: "100%",
           display: "flex", alignItems: "center", gap: 10,
-          padding: "11px 14px",
-          background: C.surfaceContainerLowest,
-          border: `1px solid ${open ? C.primary + "50" : C.border20}`,
+          padding: "12px 14px",
+          background: open ? `${C.primary}1f` : `${C.primary}14`,
+          border: `1px solid ${open ? C.primary : C.primary + "55"}`,
           borderRadius: 8,
           cursor: "pointer",
-          fontSize: 12, fontWeight: 600,
-          color: C.onSurfaceVariant,
-          transition: "border-color 0.15s",
+          fontSize: 13, fontWeight: 700,
+          color: C.primary,
+          transition: "border-color 0.15s, background 0.15s",
         }}
       >
-        <Bookmark size={13} strokeWidth={2} />
+        <Bookmark size={14} strokeWidth={2.25} />
         <span style={{ flex: 1, textAlign: "left" }}>
           Preset wählen
           {presets.length > 0 && (
-            <span style={{ color: C.onSecondaryFixedVar, marginLeft: 6, fontWeight: 500 }}>
+            <span style={{ color: C.primary, opacity: 0.7, marginLeft: 6, fontWeight: 600 }}>
               ({presets.length})
             </span>
           )}
@@ -172,7 +175,7 @@ export function PresetBar({
                       <Youtube size={10} color={PLATFORM_CONFIG.youtube.color} strokeWidth={2.5} />
                     )}
                     {p.use_count > 0 && (
-                      <span style={{ fontSize: 9, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
+                      <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
                         {p.use_count}×
                       </span>
                     )}

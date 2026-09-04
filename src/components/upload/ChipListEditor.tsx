@@ -59,24 +59,22 @@ export function ChipListEditor({
 
   return (
     <div>
-      <label style={{
-        display: "flex", alignItems: "center", gap: 6,
-        fontSize: 10, fontWeight: 700,
-        color: C.onSecondaryFixedVar,
-        textTransform: "uppercase", letterSpacing: "0.1em",
-        marginBottom: 6,
-      }}>
+      {/* Der Hinweis stand fruher dauerhaft rechts neben dem Label — eine
+          Erklaerung, die man einmal liest und danach nie wieder braucht. Als
+          Tooltip ist sie da, wenn man sie sucht (Cursor zeigt es an). */}
+      <label
+        title={hint}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          fontSize: 10, fontWeight: 700,
+          color: C.onSecondaryFixedVar,
+          textTransform: "uppercase", letterSpacing: "0.1em",
+          marginBottom: 6,
+          cursor: hint ? "help" : undefined,
+          width: "fit-content",
+        }}
+      >
         {label}
-        {hint && (
-          <span style={{
-            marginLeft: "auto",
-            fontSize: 9, fontWeight: 500,
-            letterSpacing: "0.03em", textTransform: "none",
-            color: C.onSecondaryFixedVar, opacity: 0.7,
-          }}>
-            {hint}
-          </span>
-        )}
       </label>
 
       <div
@@ -86,7 +84,10 @@ export function ChipListEditor({
           padding: "8px 10px",
           minHeight: 44,
           background: C.surfaceContainerLowest,
-          border: `1px solid ${focused ? C.primary + "60" : C.border20}`,
+          // Kein Ruhe-Rahmen: Karte, dieses Feld und jeder Chip hatten je einen
+          // eigenen — drei Linien auf 40px Höhe. Die Fläche grenzt das Feld
+          // schon ab, der Rahmen kommt nur beim Fokus zurück.
+          border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
           borderRadius: 8,
           cursor: "text",
           transition: "border-color 0.15s",
@@ -108,7 +109,6 @@ export function ChipListEditor({
               display: "inline-flex", alignItems: "center", gap: 5,
               padding: "4px 8px 4px 10px",
               background: C.surfaceContainerHigh,
-              border: `1px solid ${C.border20}`,
               borderRadius: 9999,
               fontSize: 12, fontWeight: 600,
               color: C.onSurface,

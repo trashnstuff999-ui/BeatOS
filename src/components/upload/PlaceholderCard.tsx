@@ -20,7 +20,7 @@ export function PlaceholderCard({ title, phase, description }: PlaceholderCardPr
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <Label>{title}</Label>
         <span style={{
-          fontSize: 9, fontWeight: 700,
+          fontSize: 10, fontWeight: 700,
           letterSpacing: "0.1em", textTransform: "uppercase",
           color: C.onSecondaryFixedVar,
           padding: "3px 8px",

@@ -161,6 +161,25 @@ export default function Browse() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [beats, selectedBeat, editModalBeat, tagManagerOpen, selectBeat, currentBeat, togglePlay, handlePlayBeat]);
 
+  // ─── Der Streifen unter dem Detailpanel zaehlt nicht als sichtbar ─────────
+  // Das Panel liegt fix ueber der rechten Seite; scrollIntoView kennt es nicht
+  // und haelt eine verdeckte Karte fuer sichtbar. scroll-padding-right nimmt
+  // dem Browser genau diese Breite aus dem Sichtfeld — dann holt er die Karte
+  // von selbst darunter hervor. Nur im Raster: eine Tabellenzeile reicht immer
+  // bis unter das Panel, die wuerde sonst bei jedem Klick nach links wandern.
+  // Muss vor den beiden Scroll-Effekten stehen, sonst greift es erst beim
+  // naechsten Klick.
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    if (selectedBeat && viewMode === "grid") {
+      sc.style.scrollPaddingRight = `${BROWSE_PANEL_WIDTH}px`;
+    } else {
+      sc.style.scrollPaddingRight = "";
+      sc.scrollTo({ left: 0, behavior: "smooth" }); // Panel zu: wieder buendig
+    }
+  }, [selectedBeat, viewMode]);
+
   // ─── Beat ins Bild holen ──────────────────────────────────────────────────
   // Nur wenn er auf dieser Seite liegt; "nearest" ruehrt sich nicht, wenn er
   // ohnehin sichtbar ist — ein Klick auf eine sichtbare Zeile scrollt also nicht.
@@ -169,7 +188,7 @@ export default function Browse() {
     if (!beatId) return;
     scrollRef.current
       ?.querySelector(`[data-beat-id="${beatId}"]`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, []);
 
   // Laufender Beat (z.B. wenn der Player weiterspringt)
@@ -178,7 +197,6 @@ export default function Browse() {
   useEffect(() => { scrollBeatIntoView(selectedBeat?.id); }, [selectedBeat?.id, scrollBeatIntoView]);
 
   // ─── Layout Calculation ────────────────────────────────────────────────────
-  const PANEL_WIDTH = selectedBeat ? BROWSE_PANEL_WIDTH : 0;
   // Nur solange noch nie etwas geladen wurde — danach wird gedimmt statt geleert.
   const isInitialLoad = isLoading && beats.length === 0;
   // Feldweise vergleichen, nicht die ganzen Objekte als JSON: ein alter
@@ -197,8 +215,10 @@ export default function Browse() {
       flexDirection: "column",
       overflow: "hidden",
       background: C.background,
-      marginRight: PANEL_WIDTH,
-      transition: "margin-right 0.3s ease",
+      // Kein marginRight fuer das Detailpanel: das Panel liegt fixed darueber.
+      // Vorher schob es die Seite in 300 ms zur Seite — Margin ist Layout, also
+      // rechnete der Browser in jedem Frame das Cover-Raster neu und liess dabei
+      // ganze Reihen umbrechen. Das war das Zusammensacken der Vorschaubilder.
     }}>
       {/* ═══════════════════════════════════════════════════════════════════════
           Header (Fixed)
@@ -361,8 +381,11 @@ export default function Browse() {
             </div>
           )}
 
-          {/* Bottom spacer for comfortable scrolling */}
-          <div style={{ height: 32, flexShrink: 0 }} />
+          {/* Luft nach unten — und nach rechts: die Ueberbreite ist der Platz,
+              in den eine vom Detailpanel verdeckte Karte gescrollt wird. Sie
+              haengt an diesem Streifen statt am Raster, damit das Raster gleich
+              breit bleibt und nichts umbricht. */}
+          <div style={{ height: 32, flexShrink: 0, width: `calc(100% + ${BROWSE_PANEL_WIDTH}px)` }} />
       </PageBody>
 
       {/* ═══════════════════════════════════════════════════════════════════════

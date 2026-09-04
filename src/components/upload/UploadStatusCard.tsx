@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { ShoppingBag, Music2, Youtube, Calendar, Link2, ExternalLink, Send, Rocket } from "lucide-react";
+import { ShoppingBag, Music2, Youtube, Send, Rocket } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
@@ -29,17 +29,49 @@ const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
 
 const STATUS_ORDER: UploadStatus[] = ["draft", "scheduled", "uploaded"];
 
+/** Das Datumsfeld traegt keinen Rahmen, soll aber als anklickbar erkennbar
+ *  sein. Der native Kalender-Knopf ist im Normalzustand blass und wird beim
+ *  Ueberfahren deutlich — Pseudoelemente gehen nur ueber echtes CSS. */
+const DATE_FIELD_CSS = `
+  .beatos-date {
+    padding: 3px 6px;
+    font-size: 12px;
+    font-family: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    outline: none;
+    color-scheme: dark;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .beatos-date:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: ${C.border20};
+  }
+  .beatos-date::-webkit-calendar-picker-indicator {
+    opacity: 0.35;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .beatos-date:hover::-webkit-calendar-picker-indicator { opacity: 0.9; }
+`;
+
 export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCardProps) {
   return (
-    <SectionCard icon={Send} title="Upload-Status">
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {uploads.map((row, i) => (
+    <SectionCard icon={Send} title="Status">
+      {/* Untereinander mit festen Spaltenbreiten: so liegen Name, Status und
+          Datum der drei Plattformen exakt auf einer Linie. Die Karte steht in
+          der linken Spalte, dadurch streckt sich kein Feld mehr ueber die
+          halbe Fensterbreite. */}
+      <div>
+        <style>{DATE_FIELD_CSS}</style>
+        {uploads.map(row => (
           <PlatformRow
             key={row.platform}
             beatId={beatId}
             row={row}
             onChanged={onChanged}
-            isFirst={i === 0}
           />
         ))}
       </div>
@@ -49,11 +81,10 @@ export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCar
 
 // ─── Single Platform Row ────────────────────────────────────────────────────
 
-function PlatformRow({ beatId, row, onChanged, isFirst }: {
+function PlatformRow({ beatId, row, onChanged }: {
   beatId: string;
   row: UploadPlatformRow;
   onChanged: () => void;
-  isFirst: boolean;
 }) {
   const meta = PLATFORM_CONFIG[row.platform];
   const PlatIcon = PLATFORM_ICON[row.platform];
@@ -112,23 +143,22 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
   const dateValue = row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "");
 
   return (
-    <div style={{
-      borderTop: isFirst ? "none" : `1px solid ${C.border10}`,
-      padding: "10px 0",
-    }}>
-      {/* Main row: platform | assistant | segments | date */}
+    <div style={{ padding: "10px 0", borderTop: `1px solid ${C.border10}` }}>
+      {/* Drei Zeilen je Plattform, alle am Namenstext ausgerichtet (23px =
+          Symbol + Abstand):
+            1) Plattform + Assistent
+            2) Link
+            3) Status links, Datum rechts */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{
-          display: "flex", alignItems: "center", gap: 8,
-          width: 108, flexShrink: 0,
-        }}>
-          <PlatIcon size={14} color={meta.color} strokeWidth={1.75} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {/* Neutral: direkt daneben steht der Name der Plattform — die
+              Markenfarbe traegt hier keine Information, nur Buntheit. */}
+          <PlatIcon size={15} color={C.onSurfaceVariant} strokeWidth={1.75} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface }}>
             {meta.label}
           </span>
         </span>
 
-        {/* Guided upload flow */}
         {row.status !== "uploaded" && (
           <button
             onClick={() => setAssistantOpen(true)}
@@ -142,85 +172,10 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
               cursor: "pointer",
             }}
           >
-            <Rocket size={11} strokeWidth={2} />
+            <Rocket size={12} strokeWidth={2} />
           </button>
         )}
 
-        {/* Segmented status control */}
-        <div style={{
-          display: "flex", gap: 2, flexShrink: 0,
-          background: "rgba(255,255,255,0.03)",
-          border: `1px solid ${C.border15}`,
-          borderRadius: 7, padding: 2,
-        }}>
-          {STATUS_ORDER.map(s => {
-            const active = row.status === s;
-            const m = UPLOAD_STATUS_CONFIG[s];
-            return (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                disabled={isSaving}
-                title={m.label}
-                style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  padding: "3px 8px",
-                  background: active ? m.bg : "transparent",
-                  border: "none",
-                  borderRadius: 5,
-                  cursor: isSaving ? "wait" : "pointer",
-                  fontSize: 9, fontWeight: 700,
-                  color: active ? m.color : C.onSecondaryFixedVar,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  opacity: isSaving ? 0.6 : 1,
-                  transition: "all 0.15s",
-                }}
-              >
-                {active && <span style={{ width: 4, height: 4, borderRadius: "50%", background: m.color }} />}
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Date — always visible; ghost label instead of raw TT.mm.jjjj */}
-        <div style={{ flex: 1, position: "relative", minWidth: 120 }}>
-          <Calendar size={12} color={C.onSecondaryFixedVar} strokeWidth={1.5} style={{
-            position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)",
-            pointerEvents: "none",
-          }} />
-          <input
-            type="date"
-            value={dateValue}
-            title={row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
-            onChange={e => row.status === "uploaded"
-              ? persist({ uploaded_at: e.target.value || null })
-              : handleScheduledChange(e.target.value)
-            }
-            style={{
-              width: "100%",
-              padding: "6px 8px 6px 28px",
-              fontSize: 11,
-              background: C.surfaceContainerLowest,
-              border: `1px solid ${C.border15}`,
-              borderRadius: 6,
-              outline: "none",
-              color: dateValue ? C.onSurface : "transparent",
-              colorScheme: "dark",
-              boxSizing: "border-box",
-            }}
-          />
-          {!dateValue && (
-            <span style={{
-              position: "absolute", left: 28, top: "50%", transform: "translateY(-50%)",
-              fontSize: 11, color: C.onSecondaryFixedVar,
-              pointerEvents: "none",
-            }}>
-              Datum wählen
-            </span>
-          )}
-        </div>
       </div>
 
       {/* Guided upload assistant */}
@@ -242,25 +197,30 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
 
       {/* URL row — uploaded platforms, plus ALWAYS for Beatstars: the link
           feeds {{BEATSTARS_LINK}} in the SoundCloud/YouTube descriptions,
-          so it must be settable before those uploads happen. */}
+          so it must be settable before those uploads happen.
+          Buendig unter Name und Status. Ohne Link-Symbol davor und ohne
+          Oeffnen-Knopf dahinter — beides sagte nichts, was die URL selbst
+          nicht schon zeigt. */}
       {(row.status === "uploaded" || row.platform === "beatstars") && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          marginTop: 8, paddingLeft: 118,
+          marginTop: 6, paddingLeft: 23,
         }}>
-          <Link2 size={12} color={C.onSecondaryFixedVar} strokeWidth={1.5} style={{ flexShrink: 0 }} />
           <input
             value={urlDraft}
             onChange={e => setUrlDraft(e.target.value)}
             onBlur={handleUrlBlur}
-            title={row.platform === "beatstars" ? "Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert" : undefined}
+            // Lange URLs laufen aus dem Feld — der Tooltip zeigt sie ganz
+            title={row.platform === "beatstars"
+              ? `Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert${urlDraft ? `\n${urlDraft}` : ""}`
+              : urlDraft || undefined}
             placeholder={row.platform === "beatstars"
               ? "Beat-Link (z.B. beatstars.com/beat/…) → {{BEATSTARS_LINK}}"
               : `https://...${row.platform}...`}
             style={{
-              flex: 1,
-              padding: "5px 9px",
-              fontSize: 11,
+              flex: 1, minWidth: 0,
+              padding: "6px 9px",
+              fontSize: 12,
               fontFamily: "monospace",
               background: C.surfaceContainerLowest,
               border: `1px solid ${C.border15}`,
@@ -269,24 +229,75 @@ function PlatformRow({ beatId, row, onChanged, isFirst }: {
               color: C.onSurface,
             }}
           />
-          {row.url && (
-            <button
-              onClick={() => row.url && window.open(row.url, "_blank")}
-              title="URL öffnen"
-              style={{
-                width: 24, height: 24, borderRadius: 5, flexShrink: 0,
-                background: "transparent",
-                border: `1px solid ${C.border15}`,
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: C.onSurfaceVariant,
-              }}
-            >
-              <ExternalLink size={11} />
-            </button>
-          )}
         </div>
       )}
+
+      {/* Zeile 3: Status links, Datum rechts — beides unter dem Link-Feld und
+          buendig mit dem Namenstext darueber. */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        marginTop: 6, paddingLeft: 23,
+      }}>
+        <div style={{ display: "flex", gap: 2 }}>
+          {STATUS_ORDER.map(s => {
+            const active = row.status === s;
+            const m = UPLOAD_STATUS_CONFIG[s];
+            return (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                disabled={isSaving}
+                title={m.label}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                  padding: "4px 9px",
+                  background: active ? m.bg : "transparent",
+                  border: "none",
+                  borderRadius: 5,
+                  cursor: isSaving ? "wait" : "pointer",
+                  fontSize: 11, fontWeight: active ? 700 : 500,
+                  color: active ? m.color : C.onSecondaryFixedVar,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  opacity: isSaving ? 0.6 : (active ? 1 : 0.7),
+                  transition: "all 0.15s",
+                }}
+              >
+                {active && <span style={{ width: 4, height: 4, borderRadius: "50%", background: m.color }} />}
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <span style={{ flex: 1 }} />
+
+        {/* Datum rechtsbuendig. Kein Kasten, aber beim Ueberfahren hebt sich
+            das Feld leicht ab — so ist erkennbar, dass man es anklicken kann,
+            ohne dass es dauerhaft laut wird (Regeln in DATE_FIELD_CSS). */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <input
+            type="date"
+            className="beatos-date"
+            value={dateValue}
+            title={row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
+            onChange={e => row.status === "uploaded"
+              ? persist({ uploaded_at: e.target.value || null })
+              : handleScheduledChange(e.target.value)
+            }
+            style={{ color: dateValue ? C.onSurfaceVariant : "transparent" }}
+          />
+          {!dateValue && (
+            <span style={{
+              position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)",
+              fontSize: 12, color: C.onSecondaryFixedVar,
+              pointerEvents: "none", whiteSpace: "nowrap",
+            }}>
+              Datum wählen
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

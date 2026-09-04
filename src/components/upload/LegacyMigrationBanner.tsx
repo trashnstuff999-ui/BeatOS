@@ -4,6 +4,7 @@
 // and offers a one-click migration to the new flat structure:
 //   • move contents of 01_AUDIO, 02_VISUALS, 04_UPLOAD into the root
 //   • rename 03_PROJECTS → 01_SAVEFILES
+//   • move all but the newest MP3/WAV out of the root into 02_OLD
 // Nothing is overwritten — collisions abort the migration before any file moves.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -50,6 +51,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
       if (result.moved_files > 0)         parts.push(`${result.moved_files} Datei(en) verschoben`);
       if (result.renamed_savefiles)       parts.push("03_PROJECTS → 01_SAVEFILES");
       if (result.removed_subfolders.length) parts.push(`${result.removed_subfolders.join(", ")} entfernt`);
+      if (result.moved_to_old > 0)          parts.push(`${result.moved_to_old} ältere MP3/WAV → 02_OLD`);
       setSuccess(parts.length > 0 ? parts.join(" · ") : "Nichts zu migrieren");
       setOpen(false);
       onMigrated();
@@ -309,6 +311,13 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
               </div>
             </div>
           )}
+
+          {/* Aufräum-Schritt: läuft immer mit, hat aber keine Vorschau —
+              welche Datei die neueste ist, steht erst nach dem Flatten fest. */}
+          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+            Danach bleibt im Root nur die neueste MP3 und die neueste WAV — ältere
+            Audio-Dateien wandern mit ihrem Originalnamen nach 02_OLD/.
+          </div>
 
           {error && (
             <div style={{

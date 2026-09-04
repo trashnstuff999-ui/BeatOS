@@ -616,7 +616,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                           onClick={() => setNewTagCategory(cat)}
                           style={{
                             flex: 1, padding: "6px 4px", borderRadius: 8,
-                            fontSize: 9, fontWeight: 700,
+                            fontSize: 10, fontWeight: 700,
                             border: `1px solid ${active ? clrs.text + "80" : clrs.border}`,
                             background: active ? clrs.bg : `${clrs.bg}40`,
                             color: clrs.text,

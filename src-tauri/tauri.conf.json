@@ -13,9 +13,8 @@
     "windows": [
       {
         "title": "beatos",
-        "width": 800,
-        "height": 600,
-        "maximized": true
+        "width": 1400,
+        "height": 900
       }
     ],
     "security": {

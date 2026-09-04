@@ -45,18 +45,67 @@ pub fn get_templates_dir(app: AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+/// Ein Template-Name darf nur eine Datei im Template-Ordner meinen.
+/// Eine Prüfung, beide Wege (Lesen und Schreiben) gehen hier durch.
+fn template_path(dir: &Path, name: &str) -> Result<PathBuf, String> {
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || !name.ends_with(".template")
+    {
+        return Err(format!("Ungültiger Template-Name: {}", name));
+    }
+    Ok(dir.join(name))
+}
+
 /// Tauri command: read a single template's current contents.
-/// Phase B+ will use this for live preview rendering.
 #[tauri::command]
 pub fn read_template(app: AppHandle, name: String) -> Result<String, String> {
     let dir = templates_dir(&app)?;
-    // Defense-in-depth: reject path-traversal attempts.
-    if name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err(format!("Invalid template name: {}", name));
+    let path = template_path(&dir, &name)?;
+    fs::read_to_string(&path)
+        .map_err(|e| format!("Template {:?} nicht lesbar: {}", path, e))
+}
+
+/// Tauri command: eine Vorlage überschreiben. Die bisherige Fassung wandert
+/// vorher nach `<name>.bak` — ein verunglücktes Template ist damit immer noch
+/// eine Dateikopie weit von „weg".
+#[tauri::command]
+pub fn write_template(app: AppHandle, name: String, contents: String) -> Result<(), String> {
+    let dir = templates_dir(&app)?;
+    let path = template_path(&dir, &name)?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Template-Ordner {:?} nicht anlegbar: {}", dir, e))?;
+
+    if path.exists() {
+        let backup = path.with_extension("template.bak");
+        if let Err(e) = fs::copy(&path, &backup) {
+            eprintln!("WARNING: Sicherungskopie {:?} fehlgeschlagen: {}", backup, e);
+        }
     }
-    let path: &Path = &dir.join(&name);
-    fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read template {:?}: {}", path, e))
+    fs::write(&path, contents)
+        .map_err(|e| format!("Template {:?} nicht schreibbar: {}", path, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::template_path;
+    use std::path::Path;
+
+    #[test]
+    fn template_name_stays_inside_the_folder() {
+        let dir = Path::new("C:/tmp/templates");
+        assert!(template_path(dir, "../beats.db").is_err(), "kein Ausbruch nach oben");
+        assert!(template_path(dir, "..\\..\\beats.db").is_err());
+        assert!(template_path(dir, "sub/youtube.template").is_err(), "kein Unterordner");
+        assert!(template_path(dir, "beats.db").is_err(), "nur .template-Dateien");
+        assert!(template_path(dir, "").is_err());
+        assert_eq!(
+            template_path(dir, "youtube.template").unwrap(),
+            dir.join("youtube.template")
+        );
+    }
 }
 
 //   {{SC_URL}}            — settings.soundcloud_url

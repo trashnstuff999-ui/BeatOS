@@ -26,6 +26,35 @@ pub struct UploadDescriptions {
 /// beyond reading the template files.
 #[tauri::command]
 pub fn render_upload_descriptions(app: AppHandle, beat_id: String) -> Result<UploadDescriptions, String> {
+    let dir = templates_dir(&app)?;
+    let bs_tpl = fs::read_to_string(dir.join("beatstars.template"))
+        .map_err(|e| format!("Cannot read beatstars.template: {}", e))?;
+    let sc_tpl = fs::read_to_string(dir.join("soundcloud.template"))
+        .map_err(|e| format!("Cannot read soundcloud.template: {}", e))?;
+    let yt_tpl = fs::read_to_string(dir.join("youtube.template"))
+        .map_err(|e| format!("Cannot read youtube.template: {}", e))?;
+
+    let render_for = build_renderer(&beat_id)?;
+    Ok(UploadDescriptions {
+        beatstars:  render_for("beatstars", &bs_tpl),
+        soundcloud: render_for("soundcloud", &sc_tpl),
+        youtube:    render_for("youtube", &yt_tpl),
+    })
+}
+
+/// Vorschau für eine NOCH NICHT gespeicherte Vorlage: rendert beliebigen Text
+/// mit den Werten eines echten Beats. Damit zeigt der Template-Editor, was die
+/// Platzhalter tun, bevor die Datei überschrieben wird.
+#[tauri::command]
+pub fn preview_template(beat_id: String, platform: String, contents: String) -> Result<String, String> {
+    let render_for = build_renderer(&beat_id)?;
+    Ok(render_for(&platform, &contents))
+}
+
+/// Sammelt Beat-Zeile, Einstellungen und Hashtag-Logik einmal ein und gibt eine
+/// Funktion (Plattform, Vorlage) → fertiger Text zurück. Eine Quelle für das
+/// echte Rendern und für die Vorschau im Editor.
+fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
 
     // ─── Beat row ────────────────────────────────────────────────────────
@@ -73,15 +102,6 @@ pub fn render_upload_descriptions(app: AppHandle, beat_id: String) -> Result<Upl
     .filter(|s| !s.trim().is_empty())
     .unwrap_or_else(|| settings.get("beatstars_url").cloned().unwrap_or_default());
 
-    // ─── Templates from disk ─────────────────────────────────────────────
-    let dir = templates_dir(&app)?;
-    let bs_tpl = fs::read_to_string(dir.join("beatstars.template"))
-        .map_err(|e| format!("Cannot read beatstars.template: {}", e))?;
-    let sc_tpl = fs::read_to_string(dir.join("soundcloud.template"))
-        .map_err(|e| format!("Cannot read soundcloud.template: {}", e))?;
-    let yt_tpl = fs::read_to_string(dir.join("youtube.template"))
-        .map_err(|e| format!("Cannot read youtube.template: {}", e))?;
-
     // ─── Build shared placeholders ───────────────────────────────────────
     let producer = settings.get("producer_name").cloned().unwrap_or_default();
     let producer_prod = if producer.is_empty() {
@@ -126,7 +146,7 @@ pub fn render_upload_descriptions(app: AppHandle, beat_id: String) -> Result<Upl
         .map(|(_, v)| v.clone())
         .unwrap_or_default();
 
-    let render_for = |template: &str, platform: &str| -> String {
+    Ok(move |platform: &str, template: &str| -> String {
         let hashtags = build_hashtags(
             platform,
             &default_genre,
@@ -141,12 +161,6 @@ pub fn render_upload_descriptions(app: AppHandle, beat_id: String) -> Result<Upl
         let mut vars = base_vars.clone();
         vars.push(("HASHTAGS", hashtags));
         render_template(template, &vars)
-    };
-
-    Ok(UploadDescriptions {
-        beatstars:  render_for(&bs_tpl, "beatstars"),
-        soundcloud: render_for(&sc_tpl, "soundcloud"),
-        youtube:    render_for(&yt_tpl, "youtube"),
     })
 }
 

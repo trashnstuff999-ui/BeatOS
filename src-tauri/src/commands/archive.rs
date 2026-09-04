@@ -282,7 +282,7 @@ pub fn check_beat_duplicate(
 /// Single source of truth for the archive folder name. Used by the real
 /// archive step and by the live preview in the Create tab, so the preview
 /// can never diverge from what actually lands on disk.
-fn build_archive_folder_name(
+pub(crate) fn build_archive_folder_name(
     catalog_id: i32,
     title: &str,
     key: Option<&str>,
@@ -421,7 +421,16 @@ fn archive_beat_inner(
         });
 
         if path.is_dir() {
-            let dest = unique_dest(&savefiles_dir, &file_name);
+            // Quellordner, die schon das Layout benutzen (01_SAVEFILES/ bzw.
+            // alt 03_PROJECTS/), werden in das Ziel-01_SAVEFILES gemischt —
+            // sonst landet die FLP in 01_SAVEFILES/01_SAVEFILES/.
+            let dest = if file_name.eq_ignore_ascii_case("01_SAVEFILES")
+                || file_name.eq_ignore_ascii_case("03_PROJECTS")
+            {
+                savefiles_dir.to_path_buf()
+            } else {
+                unique_dest(savefiles_dir, &file_name)
+            };
             files_copied += copy_dir_recursive(&path, &dest)?;
         } else {
             let ext = path.extension()
@@ -514,6 +523,10 @@ fn archive_beat_inner(
             Ok(r) => warning = Some(format!("Auto-Rename mit Fehlern: {}", r.errors.join("; "))),
             Err(e) => warning = Some(format!("Auto-Rename fehlgeschlagen: {}", e)),
         }
+    } else {
+        // Ohne Auto-Rename bleiben die Originalnamen — aber im Root soll trotzdem
+        // nur die neueste MP3/WAV liegen, der Rest wandert nach 02_OLD/.
+        crate::commands::sweep_old_audio(target_path);
     }
 
     // Refresh the OneDrive snapshot in the background after a successful write.

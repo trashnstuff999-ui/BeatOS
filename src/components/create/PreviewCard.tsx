@@ -137,7 +137,7 @@ export const PreviewCard = memo(function PreviewCard({
           }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusMeta.color }} />
             <span style={{
-              fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+              fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
               color: statusMeta.color,
             }}>
               {statusMeta.label}

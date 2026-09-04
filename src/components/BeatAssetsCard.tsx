@@ -27,11 +27,13 @@ interface BeatAssetsCardProps {
   title?: string;
   /** Create: Hinweis, dass beim Archivieren nachgefragt wird. Studio: aus. */
   showArchiveWarning?: boolean;
+  /** Karten-Chrome anpassen — der Studio-Inspector nimmt sie ganz weg. */
+  style?: React.CSSProperties;
 }
 
 export function BeatAssetsCard({
   assets, folderPath, assetPath, isRefreshing, onRefresh,
-  title = "Cover & Assets", showArchiveWarning = true,
+  title = "Cover & Assets", showArchiveWarning = true, style,
 }: BeatAssetsCardProps) {
   const [picker, setPicker] = useState<null | { slot: AssetSlotKind }>(null);
 
@@ -43,6 +45,7 @@ export function BeatAssetsCard({
     <SectionCard
       icon={Images}
       title={title}
+      style={style}
       actions={
         <button
           onClick={onRefresh}
@@ -118,7 +121,7 @@ export function BeatAssetsCard({
           ? "Erst einen Ordner wählen."
           : noAssetPath
             ? "Kein Asset-Pfad in den Settings gesetzt — dort den Media-Ordner eintragen."
-            : "Cover = „cover\" im Namen, Thumbnail = „thumbnail\", Video = Videodatei. Die Datei wandert in den Ordner."}
+            : "Die gewählte Datei wandert in den Projektordner."}
       </div>
 
       {picker && folderPath && (
@@ -154,9 +157,12 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
 
   return (
     <div style={fill ? { display: "flex", flexDirection: "column", height: "100%" } : undefined}>
+      {/* Feldbeschriftung, nicht Abschnittsüberschrift: GROSSBUCHSTABEN sind in
+          diesem Panel für Abschnitte reserviert. Standen beide gleich da, las
+          sich der Slot als eigener Abschnitt. */}
       <div style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-        textTransform: "uppercase", color: C.onSecondaryFixedVar,
+        fontSize: 10, fontWeight: 600,
+        color: C.onSecondaryFixedVar,
         marginBottom: 6,
       }}>
         {label}
@@ -191,7 +197,7 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: C.onSecondaryFixedVar }}>
             <Plus size={18} strokeWidth={2} />
-            <span style={{ fontSize: 9, fontWeight: 600 }}>Zuweisen</span>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>Zuweisen</span>
           </div>
         )}
 
@@ -208,18 +214,21 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
           </div>
         )}
       </button>
-      <div
-        title={fileName ?? undefined}
-        style={{
-          fontSize: 9, marginTop: 5,
-          fontFamily: "monospace",
-          color: filled ? C.onSurfaceVariant : C.onSecondaryFixedVar,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          opacity: filled ? 1 : 0.6,
-        }}
-      >
-        {fileName ?? "—"}
-      </div>
+      {/* Kein Platzhalter-Strich unter leeren Slots — drei Gedankenstriche
+          sagten nichts, was der gestrichelte Rahmen nicht schon sagt. */}
+      {filled && (
+        <div
+          title={fileName ?? undefined}
+          style={{
+            fontSize: 10, marginTop: 5,
+            fontFamily: "monospace",
+            color: C.onSurfaceVariant,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}
+        >
+          {fileName}
+        </div>
+      )}
     </div>
   );
 }

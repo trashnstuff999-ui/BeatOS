@@ -70,7 +70,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
           style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "4px 10px", borderRadius: 4,
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,
             color: C.onSurfaceVariant,

@@ -64,12 +64,20 @@ export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string
   uploaded:  { label: "Hochgeladen",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
 };
 
-/** Studio project workflow: Idee → In Arbeit → Exportiert → Bereit */
+/**
+ * Studio-Status. Die Stufe Idee → Exportiert → Bereit rechnet der Scan aus den
+ * Dateien im Ordner; „Überarbeiten" und „Kann weg" vergibst nur du von Hand.
+ *
+ * „Kann weg" ist bewusst das Leiseste auf der Seite, nicht das Lauteste: bei
+ * hundert markierten Projekten wäre eine Liste voll roter Pillen unlesbar und
+ * die Warnung wertlos. Rot bleibt dem Papierkorb-Knopf, der wirklich etwas tut.
+ */
 export const STUDIO_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  idea:     { label: "Idee",       color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  wip:      { label: "In Arbeit",  color: "#fda124", bg: "rgba(253,161,36,0.12)" },
-  exported: { label: "Exportiert", color: "#9492ff", bg: "rgba(148,146,255,0.12)" },
-  ready:    { label: "Bereit",     color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  idea:     { label: "Idee",         color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
+  wip:      { label: "Überarbeiten", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
+  exported: { label: "Exportiert",   color: "#9492ff", bg: "rgba(148,146,255,0.12)" },
+  ready:    { label: "Bereit",       color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  discard:  { label: "Kann weg",     color: "#6b6a72", bg: "rgba(255,255,255,0.03)" },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────────

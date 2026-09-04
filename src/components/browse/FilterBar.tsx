@@ -278,7 +278,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
                 {/* Minor Keys */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ 
-                    fontSize: 9, 
+                    fontSize: 10, 
                     fontWeight: 700, 
                     color: C.tertiary, 
                     textTransform: "uppercase",
@@ -316,7 +316,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
                 {/* Major Keys */}
                 <div>
                   <div style={{ 
-                    fontSize: 9, 
+                    fontSize: 10, 
                     fontWeight: 700, 
                     color: C.primary, 
                     textTransform: "uppercase",

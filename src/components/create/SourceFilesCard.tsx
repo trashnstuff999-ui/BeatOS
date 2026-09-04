@@ -143,7 +143,7 @@ function Badge({ icon, text, highlight }: { icon: React.ReactNode; text: string;
       padding: "4px 8px",
       background: highlight ? "rgba(52,211,153,0.15)" : C.surfaceContainerHighest,
       borderRadius: 4,
-      fontSize: 9, fontWeight: 700,
+      fontSize: 10, fontWeight: 700,
       color: highlight ? C.mint : C.onSurfaceVariant,
       display: "flex", alignItems: "center", gap: 4,
     }}>

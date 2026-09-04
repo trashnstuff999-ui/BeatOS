@@ -46,7 +46,7 @@ export function TagPill({
 
   // Size variants
   const sizeStyles = {
-    sm: { padding: "3px 8px", fontSize: 9, gap: 4, iconSize: 10 },
+    sm: { padding: "3px 8px", fontSize: 10, gap: 4, iconSize: 10 },
     md: { padding: "5px 10px", fontSize: 11, gap: 6, iconSize: 12 },
     lg: { padding: "6px 14px", fontSize: 12, gap: 8, iconSize: 14 },
   };
@@ -257,7 +257,7 @@ export function TagCategoryRow({ category, tags, onAdd }: TagCategoryRowProps) {
         {CATEGORY_ICONS[category]}
         <span
           style={{
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
@@ -294,7 +294,7 @@ export function StatusPill({ status, size = "md" }: StatusPillProps) {
 
   const sizeStyles = {
     sm: { padding: "2px 8px", fontSize: 8 },
-    md: { padding: "3px 10px", fontSize: 9 },
+    md: { padding: "3px 10px", fontSize: 10 },
   };
 
   const s = sizeStyles[size];

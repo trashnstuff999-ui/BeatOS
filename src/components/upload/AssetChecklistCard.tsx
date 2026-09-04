@@ -25,6 +25,8 @@ interface AssetChecklistCardProps {
   beatPath: string;
   onRefresh: () => void;
   onConvert: () => void;
+  /** Ohne eigene Karte rendern — haengt im Upload-Tab unter der Kopfzeile. */
+  bare?: boolean;
 }
 
 type Row = {
@@ -33,7 +35,7 @@ type Row = {
   icon: React.ElementType;
 };
 
-export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: AssetChecklistCardProps) {
+export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bare = false }: AssetChecklistCardProps) {
   const allRows: Row[] = [
     { label: "MP3",       filename: assets.mp3,       icon: FileAudio },
     { label: "WAV",       filename: assets.wav,       icon: FileAudio },
@@ -69,47 +71,48 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
     try { await revealItemInDir(beatPath); } catch {}
   };
 
-  return (
-    <SectionCard
-      icon={ListChecks}
-      title="Assets"
-      actions={
-        <div style={{ display: "flex", gap: 6 }}>
-          <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
-          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
-        </div>
-      }
-    >
+  const body = (
+    <>
       {/* Status line — the whole card in one glance */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: "100%",
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 12px",
-          background: allOk ? "rgba(52,211,153,0.07)" : "rgba(255,115,81,0.06)",
-          border: `1px solid ${allOk ? "rgba(52,211,153,0.25)" : "rgba(255,115,81,0.25)"}`,
-          borderRadius: 8,
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        {allOk
-          ? <CheckCircle2 size={15} color={C.mint} strokeWidth={2} />
-          : <XCircle size={15} color={C.error} strokeWidth={2} />
-        }
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: allOk ? C.mint : C.error }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            flex: 1, minWidth: 0,
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 12px",
+            background: allOk ? "rgba(52,211,153,0.07)" : "rgba(255,115,81,0.06)",
+            border: `1px solid ${allOk ? "rgba(52,211,153,0.25)" : "rgba(255,115,81,0.25)"}`,
+            borderRadius: 8,
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
           {allOk
-            ? `Alle Assets bereit · ${present.length}/${allRows.length}`
-            : `${missing.length} fehlt: ${missing.map(m => m.label).join(", ")}`
+            ? <CheckCircle2 size={15} color={C.mint} strokeWidth={2} />
+            : <XCircle size={15} color={C.error} strokeWidth={2} />
           }
-        </span>
-        <ChevronDown
-          size={13}
-          color={C.onSecondaryFixedVar}
-          style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
-        />
-      </button>
+          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: allOk ? C.mint : C.error }}>
+            {allOk
+              ? `Alle Assets bereit · ${present.length}/${allRows.length}`
+              : `${missing.length} fehlt: ${missing.map(m => m.label).join(", ")}`
+            }
+          </span>
+          <ChevronDown
+            size={13}
+            color={C.onSecondaryFixedVar}
+            style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
+          />
+        </button>
+        {/* Im rahmenlosen Modus tragen die beiden Aktionen keine Kartenkopfzeile
+            mehr — sie stehen direkt neben der Ampel. */}
+        {bare && (
+          <>
+            <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
+            <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
+          </>
+        )}
+      </div>
 
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -168,6 +171,23 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (bare) return body;
+
+  return (
+    <SectionCard
+      icon={ListChecks}
+      title="Assets"
+      actions={
+        <div style={{ display: "flex", gap: 6 }}>
+          <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
+          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
+        </div>
+      }
+    >
+      {body}
     </SectionCard>
   );
 }

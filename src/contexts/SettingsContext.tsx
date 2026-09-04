@@ -13,6 +13,8 @@ export interface AppSettings {
   archivePath: string;
   productionPath: string;
   assetPath: string;
+  /** Vorlage, aus der „Neues Projekt" im Studio die FLP kopiert */
+  flpTemplatePath: string;
   // Producer info (used by Upload-tab templates)
   producerName: string;
   contactEmail: string;
@@ -23,10 +25,11 @@ export interface AppSettings {
   defaultGenreTags: string;
 }
 
-const DEFAULTS: AppSettings = {
+export const DEFAULTS: AppSettings = {
   archivePath: "",
   productionPath: "",
   assetPath: "",
+  flpTemplatePath: "",
   producerName: "",
   contactEmail: "",
   instagramUrl: "",
@@ -43,6 +46,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   archivePath: "archive_path",
   productionPath: "production_path",
   assetPath: "asset_path",
+  flpTemplatePath: "flp_template_path",
   producerName: "producer_name",
   contactEmail: "contact_email",
   instagramUrl: "instagram_url",
@@ -81,12 +85,28 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** productionPath stores MULTIPLE roots, one per line (legacy single path = 1 line). */
+/** productionPath stores MULTIPLE roots, one per line (legacy single path = 1 line).
+ *
+ *  Ein Schlussstrich fliegt raus: aus der Explorer-Adressleiste kopiert, endet
+ *  ein Pfad gern auf „\". Der Merge-Dialog schneidet für den Parkordner den
+ *  letzten Abschnitt ab — mit Schlussstrich landet `_ARCHIVIERT` dadurch IM
+ *  Produktions-Ordner, und der nächste Scan liest ihn als ein einziges Projekt
+ *  mit hunderten FLPs. */
 export function parseProductionPaths(s: string): string[] {
-  return s
-    .split(/\r?\n|;/)
-    .map(p => p.trim())
-    .filter(Boolean);
+  const gesehen = new Set<string>();
+  const pfade: string[] = [];
+  for (const roh of s.split(/\r?\n|;/)) {
+    const pfad = roh.trim().replace(/[/\\]+$/, "");
+    if (!pfad) continue;
+    // Derselbe Ordner zweimal in den Einstellungen (auch als „C:/Prod" neben
+    // „c:\PROD") hieß: jedes Projekt doppelt in der Liste, doppelte Zähler,
+    // und zwei Zeilen, die sich um dieselbe DB-Zeile streiten.
+    const schluessel = pfad.replace(/\//g, "\\").toLowerCase();
+    if (gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    pfade.push(pfad);
+  }
+  return pfade;
 }
 
 function loadFromLocalStorage(): AppSettings {

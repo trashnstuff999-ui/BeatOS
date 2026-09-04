@@ -9,15 +9,16 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
-  Settings as SettingsIcon,
+  Settings as SettingsIcon, FolderTree,
 } from "lucide-react";
 import { C, commonStyles } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
-import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
+import { useSettings, parseProductionPaths, DEFAULTS } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/time";
 import { ChipListEditor } from "../components/upload/ChipListEditor";
+import type { FolderSync } from "../types/upload";
 
 type SettingsSection = "paths" | "producer" | "maintenance" | "about";
 
@@ -26,6 +27,19 @@ type SettingsSection = "paths" | "producer" | "maintenance" | "about";
 async function pickFolder(title: string): Promise<string | null> {
   try {
     const result = await open({ directory: true, multiple: false, title });
+    return result as string | null;
+  } catch {
+    return null;
+  }
+}
+
+async function pickFlp(): Promise<string | null> {
+  try {
+    const result = await open({
+      multiple: false,
+      title: "Template-FLP wählen",
+      filters: [{ name: "FL Studio Projekt", extensions: ["flp"] }],
+    });
     return result as string | null;
   } catch {
     return null;
@@ -295,7 +309,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         marginBottom: 10,
       }}>
@@ -320,7 +334,8 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
 
 function MaintenancePane({ archivePath }: { archivePath: string }) {
   const [info, setInfo] = useState<{ db_path: string; backup_path: string; last_backup_secs: number | null } | null>(null);
-  const [busy, setBusy] = useState<"backup" | "repair" | null>(null);
+  const [busy, setBusy] = useState<"backup" | "repair" | "sync" | null>(null);
+  const [syncPlan, setSyncPlan] = useState<FolderSync[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -358,6 +373,45 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
     } finally {
       setBusy(null);
     }
+  };
+
+  // Ordner-Abgleich: erst Trockenlauf, dann anwenden. Bei 200+ Ordnern ist die
+  // Vorschau Pflicht, nicht Luxus.
+  const handleSyncCheck = async () => {
+    setBusy("sync");
+    setSyncPlan(null);
+    try {
+      const all = await api.archive.syncFolders([], true);
+      setSyncPlan(all.filter(s => s.to !== s.from || s.files_renamed > 0 || s.error));
+    } catch (e) {
+      alert(`Abgleich fehlgeschlagen:\n${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSyncApply = async () => {
+    const ids = (syncPlan ?? []).filter(s => !s.error).map(s => s.beat_id);
+    if (ids.length === 0) return;
+    if (!confirm(`${ids.length} Beat${ids.length === 1 ? " wird" : "s werden"} auf der Platte umbenannt (Ordner + Dateien).\n\nFortfahren?`)) return;
+    setBusy("sync");
+    try {
+      const done = await api.archive.syncFolders(ids, false);
+      const folders = done.filter(s => s.to !== s.from && !s.error).length;
+      const files = done.reduce((n, s) => n + s.files_renamed, 0);
+      const errors = done.filter(s => s.error);
+      alert(
+        `Ordner-Abgleich abgeschlossen\n\n` +
+        `Ordner umbenannt: ${folders}\nDateien umbenannt: ${files}\nFehler: ${errors.length}` +
+        (errors.length > 0 ? `\n\n${errors.slice(0, 10).map(s => `${s.beat_id}: ${s.error}`).join("\n")}` : "")
+      );
+    } catch (e) {
+      alert(`Abgleich fehlgeschlagen:\n${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+    // Zeigt, was haengen geblieben ist — im Idealfall eine leere Liste.
+    await handleSyncCheck();
   };
 
   const handleOpenTemplates = async () => {
@@ -456,6 +510,73 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           </button>
         </div>
 
+        {/* Ordner-Abgleich */}
+        <div style={{
+          padding: "16px 18px",
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <FolderTree size={14} color={C.mint} strokeWidth={1.75} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Ordner-Abgleich</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
+            Benennt Ordner und Dateien im Archiv nach den Werten aus der Datenbank und
+            räumt ältere MP3/WAV nach 02_OLD —
+            für Beats, die in der App längst anders heißen als auf der Platte.
+            Neue Umbenennungen laufen ab jetzt automatisch mit; das hier holt den Altbestand nach.
+          </div>
+
+          {syncPlan && (
+            <div style={{
+              maxHeight: 220, overflowY: "auto",
+              display: "flex", flexDirection: "column", gap: 4,
+              padding: syncPlan.length > 0 ? "10px 12px" : 0,
+              background: syncPlan.length > 0 ? C.surfaceContainer : "transparent",
+              borderRadius: 6, marginBottom: 12,
+              fontSize: 11, fontFamily: "monospace",
+            }}>
+              {syncPlan.length === 0 ? (
+                <span style={{ fontSize: 11, fontFamily: "Inter, sans-serif", color: C.mint }}>
+                  Alles im Reinen — nichts umzubenennen.
+                </span>
+              ) : syncPlan.map(s => (
+                <div key={s.beat_id} style={{ color: s.error ? C.error : C.onSurfaceVariant, lineHeight: 1.5 }}>
+                  {s.error
+                    ? `${s.beat_id}: ${s.error}`
+                    : s.to !== s.from
+                      ? `${s.from}  →  ${s.to}${s.files_renamed > 0 ? `  (+${s.files_renamed} Dateien)` : ""}`
+                      : `${s.from}  →  ${s.files_renamed} Datei${s.files_renamed === 1 ? "" : "en"}`}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Button
+              size="sm"
+              icon={FolderTree}
+              onClick={handleSyncCheck}
+              loading={busy === "sync"}
+              disabled={busy !== null}
+            >
+              Abgleich prüfen
+            </Button>
+            {syncPlan && syncPlan.some(s => !s.error) && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Wrench}
+                onClick={handleSyncApply}
+                disabled={busy !== null}
+              >
+                {syncPlan.filter(s => !s.error).length} umbenennen
+              </Button>
+            )}
+          </div>
+        </div>
+
         {/* Templates */}
         <div style={{
           padding: "16px 18px",
@@ -486,7 +607,6 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           </button>
         </div>
       </div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </Section>
   );
 }
@@ -498,8 +618,10 @@ type Draft = AppSettings;
 export function Settings() {
   const { settings, isLoaded, updateSettings } = useSettings();
 
-  // Local draft state — only applied on Save
-  const [draft, setDraft] = useState<Draft>(settings);
+  // Local draft state — only applied on Save. DEFAULTS davor, damit ein
+  // Settings-Objekt ohne den neuesten Schlüssel (alter Stand im Speicher)
+  // die Seite nicht mit "cannot read properties of undefined" abschießt.
+  const [draft, setDraft] = useState<Draft>(() => ({ ...DEFAULTS, ...settings }));
   const [saved, setSaved] = useState(false);
   const [section, setSection] = useState<SettingsSection>("paths");
 
@@ -507,7 +629,7 @@ export function Settings() {
   // once they are in so a Save can never overwrite the DB with stale
   // localStorage values.
   useEffect(() => {
-    if (isLoaded) setDraft(settings);
+    if (isLoaded) setDraft({ ...DEFAULTS, ...settings });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
@@ -634,6 +756,17 @@ export function Settings() {
                 onBrowse={async () => {
                   const p = await pickFolder("Asset-Ordner wählen");
                   if (p) update("assetPath", p);
+                }}
+              />
+              <PathInput
+                label="Template-FLP"
+                icon={Music2}
+                value={draft.flpTemplatePath}
+                placeholder="z.B. D:\Beat Library\_TEMPLATE\Start.flp"
+                onChange={v => update("flpTemplatePath", v)}
+                onBrowse={async () => {
+                  const p = await pickFlp();
+                  if (p) update("flpTemplatePath", p);
                 }}
               />
             </div>

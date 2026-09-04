@@ -60,11 +60,24 @@ use commands::{
     // Studio commands
     scan_studio_projects,
     update_studio_project,
+    studio_status_counts,
+    create_project_folder,
+    next_project_name,
+    rename_project_folder,
+    plan_production_merge,
+    apply_production_merge,
+    undo_production_merge,
     scan_asset_inbox,
     assign_asset_to_project,
+    match_projects_to_archive,
+    export_merge_preview,
+    list_merge_runs,
+    park_archived_projects,
     // Upload commands (Phase A: bootstrap, B: read, C: write, D: render+save)
     get_templates_dir,
     read_template,
+    write_template,
+    preview_template,
     get_upload_data,
     get_upload_schedule,
     update_type_beat_info,
@@ -79,6 +92,7 @@ use commands::{
     migrate_legacy_beat_structure,
     plan_filename_convention,
     apply_filename_convention,
+    sync_beat_folders,
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -103,8 +117,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        // Merkt sich Größe und Position des Fensters über Neustarts hinweg —
+        // Voraussetzung dafür, BeatOS dauerhaft neben FL Studio liegen zu haben.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             // Write default upload templates on first launch. Never overwrites
             // existing files, so a user-edited template survives app restarts.
@@ -187,11 +203,24 @@ pub fn run() {
             // Studio
             scan_studio_projects,
             update_studio_project,
+            studio_status_counts,
+            create_project_folder,
+            next_project_name,
+            rename_project_folder,
+            plan_production_merge,
+            apply_production_merge,
+            undo_production_merge,
             scan_asset_inbox,
             assign_asset_to_project,
+            match_projects_to_archive,
+            export_merge_preview,
+            list_merge_runs,
+            park_archived_projects,
             // Upload (Phase A + B + C + D)
             get_templates_dir,
             read_template,
+            write_template,
+            preview_template,
             get_upload_data,
             get_upload_schedule,
             update_type_beat_info,
@@ -206,6 +235,7 @@ pub fn run() {
             migrate_legacy_beat_structure,
             plan_filename_convention,
             apply_filename_convention,
+            sync_beat_folders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

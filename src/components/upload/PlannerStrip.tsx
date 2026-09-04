@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { CalendarDays, Plus, Check } from "lucide-react";
+import { Plus, Check } from "lucide-react";
 import { C, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
 import { api } from "../../lib/api";
 import type { ScheduleEntry, UploadPlatformRow } from "../../types/upload";
@@ -40,6 +40,9 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
   const [days, setDays] = useState<DayCell[]>(() => buildDays([]));
   const [error, setError] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<string | null>(null);
+  // Das „+" nur unter dem Zeiger: 14 gestrichelte Kreise gleichzeitig sind
+  // Rauschen, der Klick funktioniert auch ohne dauerhafte Einladung.
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -91,28 +94,20 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
 
   const canSchedule = Boolean(beatId && uploads);
 
+  // Kein eigener Rahmen und kein eigener Titel: der Streifen sitzt in der
+  // Planungs-Leiste am unteren Fensterrand, die beides schon mitbringt.
   return (
-    <div ref={containerRef} style={{
-      background: C.surfaceContainerLow,
-      border: `1px solid ${C.border10}`,
-      borderRadius: 12,
-      padding: "14px 18px",
-      position: "relative",
-    }}>
+    <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <CalendarDays size={13} color={C.onSecondaryFixedVar} strokeWidth={2} />
-        <span style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: "0.15em",
-          textTransform: "uppercase", color: C.onSecondaryFixedVar,
-        }}>
-          Upload-Planung — nächste {DAYS_SHOWN} Tage
+        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+          nächste {DAYS_SHOWN} Tage
         </span>
         {error && (
           <span style={{ marginLeft: "auto", fontSize: 10, color: C.error }}>{error}</span>
         )}
         <span style={{ marginLeft: error ? 0 : "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {PLATFORMS.map(p => (
-            <span key={p} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: C.onSecondaryFixedVar }}>
+            <span key={p} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.onSecondaryFixedVar }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: PLATFORM_CONFIG[p].color }} />
               {PLATFORM_CONFIG[p].short}
             </span>
@@ -141,8 +136,8 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                 onClick={() => canSchedule && setOpenDay(isOpen ? null : day.iso)}
                 style={{
                   width: "100%",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                  padding: "8px 2px",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                  padding: "14px 2px",
                   borderRadius: 8,
                   background: busy
                     ? C.surfaceContainerHigh
@@ -155,8 +150,14 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   cursor: canSchedule ? "pointer" : "default",
                   transition: "background 0.15s, transform 0.1s",
                 }}
-                onMouseEnter={e => { if (canSchedule && !busy) e.currentTarget.style.background = C.surfaceContainerHighest ?? C.surfaceContainerHigh; }}
-                onMouseLeave={e => { if (!busy) e.currentTarget.style.background = day.isWeekend ? "rgba(255,255,255,0.02)" : "transparent"; }}
+                onMouseEnter={e => {
+                  setHoverDay(day.iso);
+                  if (canSchedule && !busy) e.currentTarget.style.background = C.surfaceContainerHighest ?? C.surfaceContainerHigh;
+                }}
+                onMouseLeave={e => {
+                  setHoverDay(d => (d === day.iso ? null : d));
+                  if (!busy) e.currentTarget.style.background = day.isWeekend ? "rgba(255,255,255,0.02)" : "transparent";
+                }}
               >
                 <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", color: day.isToday ? C.primary : C.onSecondaryFixedVar, textTransform: "uppercase" }}>
                   {day.isToday ? "Heute" : day.weekday}
@@ -174,11 +175,14 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                     ))}
                   </span>
                 ) : (
-                  // Free day = inviting slot, not a disabled cell
+                  // Freier Tag: der Platz bleibt reserviert (kein Springen),
+                  // die Einladung erscheint erst unter dem Zeiger.
                   <span style={{
                     width: 10, height: 10, borderRadius: "50%",
                     border: `1px dashed ${C.border30}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    opacity: (hoverDay === day.iso || isOpen) ? 1 : 0,
+                    transition: "opacity 0.15s",
                   }}>
                     <Plus size={7} color={C.onSecondaryFixedVar} strokeWidth={2} />
                   </span>
@@ -231,7 +235,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                           {PLATFORM_CONFIG[p].label}
                           {alreadyHere && <Check size={11} color={C.mint} strokeWidth={2.5} style={{ marginLeft: "auto" }} />}
                           {row?.scheduled_at && !alreadyHere && (
-                            <span style={{ marginLeft: "auto", fontSize: 9, color: C.onSecondaryFixedVar }}>
+                            <span style={{ marginLeft: "auto", fontSize: 10, color: C.onSecondaryFixedVar }}>
                               {row.scheduled_at.slice(5)}
                             </span>
                           )}

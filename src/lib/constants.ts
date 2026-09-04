@@ -8,5 +8,5 @@
 /** Width of the fixed left sidebar in px */
 export const SIDEBAR_WIDTH = 260;
 
-/** Width of the Browse detail panel in px — the page reserves exactly this much */
+/** Width of the Browse detail panel in px — it overlays the page, nothing is reserved */
 export const BROWSE_PANEL_WIDTH = 380;

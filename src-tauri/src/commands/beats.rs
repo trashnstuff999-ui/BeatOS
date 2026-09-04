@@ -360,6 +360,15 @@ pub fn update_beat(params: UpdateBeatParams) -> Result<(), String> {
     conn.execute(&sql, value_refs.as_slice())
         .map_err(|e| format!("Failed to update beat: {}", e))?;
     
+    drop(conn);
+
+    // Name/BPM/Key stecken im Ordner- und in den Dateinamen — sofort nachziehen,
+    // sonst heißt der Beat in der App anders als auf der Platte.
+    if params.name.is_some() || params.bpm.is_some() || params.key.is_some() {
+        crate::commands::sync_beat_folder(&params.id, false)
+            .map_err(|e| format!("Gespeichert, aber Umbenennen auf der Platte schlug fehl: {}", e))?;
+    }
+
     Ok(())
 }
 

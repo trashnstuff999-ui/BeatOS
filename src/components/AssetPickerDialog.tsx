@@ -1,9 +1,10 @@
 // src/components/AssetPickerDialog.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
 // Pick a single asset from the export inbox and move it into a target folder.
-// Filtered per slot: the Cover slot shows images with "cover" in the name,
-// the Thumbnail slot images with "thumb", the Video slot video files.
-// No group detection — every file is picked individually.
+// Gefiltert pro Slot: der Video-Slot zeigt Videos, die Bild-Slots zeigen Bilder
+// mit passendem Marker im Namen ("cover"/"thumb") — und zusätzlich alle Bilder
+// ohne Marker, denn das ist der Normalfall und sonst wären sie unerreichbar.
+// Keine Gruppenerkennung — jede Datei wird einzeln gewählt.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -18,8 +19,8 @@ import type { AssetFile } from "../types/studio";
 export type AssetSlotKind = "cover" | "thumbnail" | "video";
 
 const SLOT_META: Record<AssetSlotKind, { label: string; aspect: string; empty: string }> = {
-  cover:     { label: "Cover",     aspect: "1 / 1",  empty: "Kein Bild mit \"cover\" im Namen im Asset-Ordner." },
-  thumbnail: { label: "Thumbnail", aspect: "16 / 9", empty: "Kein Bild mit \"thumbnail\" im Namen im Asset-Ordner." },
+  cover:     { label: "Cover",     aspect: "1 / 1",  empty: "Kein Bild im Asset-Ordner." },
+  thumbnail: { label: "Thumbnail", aspect: "16 / 9", empty: "Kein Bild im Asset-Ordner." },
   video:     { label: "Video",     aspect: "16 / 9", empty: "Kein Video im Asset-Ordner." },
 };
 
@@ -28,7 +29,13 @@ function matchesSlot(a: AssetFile, slot: AssetSlotKind): boolean {
   if (slot === "video") return a.kind === "video";
   if (a.kind !== "image") return false;
   const n = a.name.toLowerCase();
-  return slot === "thumbnail" ? n.includes("thumb") : n.includes("cover");
+  const isThumb = n.includes("thumb");
+  const isCover = n.includes("cover");
+  // Ein Bild ohne Marker im Namen — der Normalfall bei Photoshop-Exporten —
+  // gehört in beide Bild-Slots. Filterte man streng nach dem Namen, wäre so
+  // eine Datei in der ganzen App nicht zuweisbar.
+  if (!isThumb && !isCover) return true;
+  return slot === "thumbnail" ? isThumb : isCover;
 }
 
 interface AssetPickerDialogProps {
@@ -83,12 +90,14 @@ export function AssetPickerDialog({
     if (query.trim() && !a.name.toLowerCase().includes(query.trim().toLowerCase())) return false;
     return true;
   });
-  visible.sort((a, b) => b.modified_secs - a.modified_secs);
+  // Namenstreffer zuerst ("… cover.png" für den Cover-Slot), dann das Neueste
+  const named = (a: AssetFile) => (a.guessed_role === slot ? 0 : 1);
+  visible.sort((a, b) => named(a) - named(b) || b.modified_secs - a.modified_secs);
 
   const assign = async (file: AssetFile) => {
     setBusy(true);
     try {
-      await api.studio.assignAsset(file.path, assetRoot, targetDir);
+      await api.studio.assignAsset(file.path, assetRoot, targetDir, slot);
       onAssigned(1);
       onClose();
     } catch (e) {
@@ -196,7 +205,6 @@ export function AssetPickerDialog({
           )}
         </div>
       </div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -248,8 +256,9 @@ function FileCard({ asset, aspect, busy, onAssign }: {
   );
 }
 
-/** Image via asset protocol, base64 fallback; whole image visible (contain). */
-function AssetImage({ path }: { path: string }) {
+/** Image via asset protocol, base64 fallback; whole image visible (contain).
+ *  Auch von der Studio-Inbox genutzt. */
+export function AssetImage({ path }: { path: string }) {
   const [src, setSrc] = useState<string>(() => convertFileSrc(path.replace(/\\/g, "/")));
   const [failed, setFailed] = useState(false);
   const triedBase64 = useRef(false);

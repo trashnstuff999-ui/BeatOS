@@ -144,7 +144,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
 
               {/* Rename rows */}
               {renames.length > 0 && (
-                <Section title="Wird umbenannt" color="#34d399">
+                <Section title="Wird umbenannt / aufgeräumt" color="#34d399">
                   {renames.map(op => <OpRow key={`${op.subdir ?? "/"}/${op.from}`} op={op} />)}
                 </Section>
               )}
@@ -309,7 +309,7 @@ function OpRow({ op }: { op: RenameOp }) {
       borderRadius: 5,
       fontSize: 11,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", fontSize: 9 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", fontSize: 10 }}>
         <Icon size={11} strokeWidth={1.75} />
         {meta.label}
       </div>
@@ -347,7 +347,7 @@ function StatChip({ label, value, color, dim }: { label: string; value: number; 
       opacity: value === 0 ? (dim ? 0.4 : 0.6) : 1,
     }}>
       <div style={{ fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 9, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>
         {label}
       </div>
     </div>

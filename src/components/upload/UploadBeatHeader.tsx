@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { Music, Check, Search, ChevronDown, X } from "lucide-react";
+import { Music, CheckCircle2, Search, ChevronDown, X } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { C } from "../../lib/theme";
 import { api } from "../../lib/api";
@@ -19,11 +19,14 @@ interface UploadBeatHeaderProps {
   selectedBeat: Beat | null;
   onSelect: (beat: Beat | null) => void;
   data: UploadData | null;
+  /** Wird unter der Kopfzeile in dieselbe Karte gehaengt (Asset-Ampel). */
+  children?: React.ReactNode;
 }
 
-export function UploadBeatHeader({ selectedBeat, onSelect, data }: UploadBeatHeaderProps) {
+export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: UploadBeatHeaderProps) {
   const steps = data ? computeReadySteps(data) : null;
   const doneCount = steps?.filter(s => s.done).length ?? 0;
+  const missingSteps = steps?.filter(s => !s.done) ?? [];
 
   // ── Cover via asset protocol (stale-guard like AudioPlayerContext) ────────
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -90,13 +93,15 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data }: UploadBeatHea
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{
-        display: "flex", alignItems: "center", gap: 20,
         background: C.surfaceContainerLow,
         border: `1px solid ${open ? C.primary + "50" : C.border10}`,
         borderRadius: 12,
-        padding: "16px 20px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         transition: "border-color 0.15s",
+      }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 20,
+        padding: "16px 20px",
       }}>
         {/* Cover */}
         <div style={{
@@ -175,45 +180,43 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data }: UploadBeatHea
           </button>
         )}
 
-        {/* Ready progress */}
+        {/* Fortschritt als Satz statt als vier Symbole: „bin ich fertig?" ist
+            die wichtigste Frage auf dieser Seite und war bisher nur durch
+            Abscannen von vier Haken zu beantworten. */}
         {steps && (
-          <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-            <div style={{ display: "flex", gap: 14 }}>
-              {steps.map(step => (
-                <div
-                  key={step.key}
-                  title={step.detail}
-                  style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
-                    cursor: "default",
-                  }}
-                >
-                  <span style={{
-                    width: 18, height: 18, borderRadius: "50%",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: step.done ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.04)",
-                    border: `1px solid ${step.done ? "rgba(52,211,153,0.45)" : C.border20}`,
-                  }}>
-                    {step.done && <Check size={10} color={C.mint} strokeWidth={3} />}
-                  </span>
-                  <span style={{
-                    fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
-                    color: step.done ? C.onSurfaceVariant : C.onSecondaryFixedVar,
-                  }}>
-                    {step.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{
-              fontSize: 16, fontWeight: 700,
-              color: doneCount === steps.length ? C.mint : C.onSurfaceVariant,
-              fontVariantNumeric: "tabular-nums",
-            }}>
-              {doneCount}/{steps.length}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {missingSteps.length === 0 ? (
+              <span style={{
+                display: "flex", alignItems: "center", gap: 8,
+                fontSize: 13, fontWeight: 700, color: C.mint,
+              }}>
+                <CheckCircle2 size={16} strokeWidth={2} />
+                Bereit zum Hochladen
+              </span>
+            ) : (
+              <>
+                <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>Es fehlt</span>
+                {missingSteps.map(step => (
+                  <MetaPill key={step.key} title={step.detail}>{step.label}</MetaPill>
+                ))}
+                <span style={{
+                  fontSize: 12, fontWeight: 700, color: C.onSecondaryFixedVar,
+                  fontVariantNumeric: "tabular-nums",
+                }}>
+                  {doneCount}/{steps.length}
+                </span>
+              </>
+            )}
           </div>
         )}
+      </div>
+
+      {/* Asset-Ampel: gehoert zu „wie weit bin ich", nicht in eine eigene Karte */}
+      {children && (
+        <div style={{ padding: "0 20px 16px", borderTop: `1px solid ${C.border10}`, paddingTop: 14 }}>
+          {children}
+        </div>
+      )}
       </div>
 
       {/* ── Picker dropdown ─────────────────────────────────────────────────── */}
@@ -309,9 +312,9 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data }: UploadBeatHea
   );
 }
 
-function MetaPill({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
+function MetaPill({ children, mono, title }: { children: React.ReactNode; mono?: boolean; title?: string }) {
   return (
-    <span style={{
+    <span title={title} style={{
       padding: "2px 9px",
       borderRadius: 9999,
       fontSize: 10, fontWeight: 600,

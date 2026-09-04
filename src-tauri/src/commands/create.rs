@@ -6,7 +6,7 @@
 use crate::db::{open_db, AudioFileInfo, FlpFileInfo, ParsedBeatFolder};
 use crate::utils::{
     secs_to_date, file_created_secs, file_modified_secs, year_month_from_secs,
-    is_audio_extension, is_image_extension, image_mime_type,
+    is_audio_extension, is_image_extension, image_mime_type, is_flp, flp_search_dirs,
     parse_audio_filename,
 };
 use std::path::Path;
@@ -117,12 +117,16 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
             (folder_name, None, None)
         });
     
-    // Find FLP files
+    // Find FLP files — Ordner-Root plus die Projekt-Unterordner: Studio legt
+    // neue Projekte mit der FLP in 01_SAVEFILES/ an, Altbestand in 03_PROJECTS/.
     let mut flp_entries: Vec<(u64, u64, std::path::PathBuf)> = Vec::new();
-    
-    for entry in &entries {
-        let file_path = entry.path();
-        if file_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) == Some("flp".to_string()) {
+
+    for dir in flp_search_dirs(path) {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().filter_map(|e| e.ok()) {
+            let file_path = entry.path();
+            if !file_path.is_file() || !is_flp(&file_path) {
+                continue;
+            }
             let created_secs = file_created_secs(&file_path).unwrap_or(0);
             let modified_secs = file_modified_secs(&file_path).unwrap_or(0);
             flp_entries.push((created_secs, modified_secs, file_path));
@@ -274,7 +278,28 @@ pub fn read_image_file(file_path: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::find_asset_slots;
+    use super::{find_asset_slots, flp_search_dirs, is_flp};
+
+    /// FLP im Root UND FLP in 01_SAVEFILES müssen beide gefunden werden.
+    #[test]
+    fn findet_flp_in_root_und_savefiles() {
+        let tmp = std::env::temp_dir().join(format!("beatos_flp_scan_{}", std::process::id()));
+        let saves = tmp.join("01_SAVEFILES");
+        std::fs::create_dir_all(&saves).unwrap();
+        std::fs::write(tmp.join("root.flp"), b"x").unwrap();
+        std::fs::write(saves.join("nested.flp"), b"x").unwrap();
+
+        let mut found: Vec<String> = flp_search_dirs(&tmp)
+            .iter()
+            .flat_map(|d| std::fs::read_dir(d).unwrap())
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| is_flp(p))
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        found.sort();
+        std::fs::remove_dir_all(&tmp).ok();
+        assert_eq!(found, vec!["nested.flp", "root.flp"]);
+    }
 
     fn entries(dir: &std::path::Path) -> Vec<std::fs::DirEntry> {
         let mut v: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).collect();
@@ -313,3 +338,4 @@ mod tests {
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }
+

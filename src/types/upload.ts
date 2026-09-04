@@ -123,6 +123,8 @@ export interface MigrationResult {
   moved_files: number;
   renamed_savefiles: boolean;
   removed_subfolders: string[];
+  /// Ältere MP3/WAV, die nach der Migration in 02_OLD/ gelandet sind.
+  moved_to_old: number;
 }
 
 export type RenameStatus = "rename" | "noop" | "collision";
@@ -152,4 +154,13 @@ export interface RenameResult {
   renamed: number;
   noops: number;
   errors: string[];
+}
+
+/** Abgleich Ordnername/Dateinamen ↔ DB. `to === from` heißt: Ordner passt schon. */
+export interface FolderSync {
+  beat_id: string;
+  from: string;
+  to: string;
+  files_renamed: number;
+  error: string | null;
 }

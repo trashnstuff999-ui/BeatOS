@@ -11,8 +11,9 @@ import {
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
+import { isStudioBeatId } from "../types/studio";
 
-const PLAYER_HEIGHT = 80;
+export const PLAYER_HEIGHT = 80;
 
 export function GlobalAudioPlayer() {
   const {
@@ -78,9 +79,13 @@ export function GlobalAudioPlayer() {
           }}>
             {currentBeat.name}
           </div>
+          {/* Ein Studio-Preview hat keine Katalognummer — seine ID ist der
+              Ordnerpfad und stand hier als „#studio:C:\…" quer durch die Leiste. */}
           <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
-            #{currentBeat.id}
-            {currentBeat.bpm ? ` • ${currentBeat.bpm} BPM` : ""}
+            {[
+              isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
+              currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
+            ].filter(Boolean).join(" • ")}
           </div>
         </div>
       </div>
@@ -179,8 +184,6 @@ export function GlobalAudioPlayer() {
           }} />
         </div>
       </div>
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

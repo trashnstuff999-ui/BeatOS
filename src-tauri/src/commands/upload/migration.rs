@@ -17,7 +17,9 @@ use std::path::{Path, PathBuf};
 //   {beat}/04_UPLOAD/*
 //
 // Migration moves contents of 01_AUDIO/, 02_VISUALS/, 04_UPLOAD/ into the
-// root and renames 03_PROJECTS/ to 01_SAVEFILES/. Nothing is overwritten —
+// root and renames 03_PROJECTS/ to 01_SAVEFILES/. A final sweep moves all but
+// the newest MP3/WAV into 02_OLD/, so exactly one MP3 and one WAV stay in
+// the root. Nothing is overwritten —
 // if a destination filename already exists in the root we report it as a
 // collision and abort the whole migration before touching the disk.
 
@@ -55,6 +57,8 @@ pub struct MigrationResult {
     pub moved_files:        usize,
     pub renamed_savefiles:  bool,
     pub removed_subfolders: Vec<String>,
+    /// Older MP3/WAV files swept into 02_OLD/ after the migration.
+    pub moved_to_old:       usize,
 }
 
 /// Inspect a beat's folder, build a migration plan without touching anything.
@@ -153,10 +157,15 @@ pub fn migrate_legacy_beat_structure(beat_id: String) -> Result<MigrationResult,
         }
     };
 
+    // Nach dem Flatten liegen alle Audios des Altbestands im Root. Nur die
+    // neueste MP3/WAV bleibt dort, der Rest zieht nach 02_OLD/.
+    let moved_to_old = crate::commands::sweep_old_audio(&beat_root);
+
     Ok(MigrationResult {
         moved_files: moved,
         renamed_savefiles,
         removed_subfolders: removed,
+        moved_to_old,
     })
 }
 

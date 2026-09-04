@@ -6,8 +6,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Upload as UploadIcon, AlertCircle, Loader2 } from "lucide-react";
+import { Upload as UploadIcon, AlertCircle, Loader2, CalendarDays, ChevronUp } from "lucide-react";
 import { C } from "../lib/theme";
+import { SIDEBAR_WIDTH } from "../lib/constants";
+import { GLOBAL_PLAYER_HEIGHT } from "../components/GlobalAudioPlayer";
+import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { PageHeader, PageBody, EmptyState } from "../components/ui";
 import { useUploadData } from "../hooks/useUploadData";
 import {
@@ -100,21 +103,25 @@ export default function Upload() {
       {/* Content */}
       <PageBody gap={32}>
 
-          {/* Beat anchor + integrated picker: cover, title, ready progress */}
+          {/* Beat anchor + integrated picker: cover, title, ready progress.
+              Die Asset-Ampel haengt in derselben Karte — sie beantwortet
+              dieselbe Frage („wie weit bin ich") und war vorher eine eigene
+              Karte fuer eine Zeile Inhalt. */}
           <UploadBeatHeader
             selectedBeat={selectedBeat}
             onSelect={setSelectedBeat}
             data={!error ? data : null}
-          />
-
-          {/* Planner — always visible; click-to-schedule when a beat is selected */}
-          <PlannerStrip
-            refreshKey={plannerRefresh}
-            beatId={data?.beat.id ?? null}
-            beatName={data?.beat.name ?? null}
-            uploads={data?.uploads ?? null}
-            onChanged={handleStatusChanged}
-          />
+          >
+            {data && !error && (
+              <AssetChecklistCard
+                bare
+                assets={data.assets}
+                beatPath={data.beat.path}
+                onRefresh={refresh}
+                onConvert={() => setConvertOpen(true)}
+              />
+            )}
+          </UploadBeatHeader>
 
           {/* Loading / Error / Empty
               LoadingBanner only on the first load (when there's no data yet).
@@ -141,35 +148,30 @@ export default function Upload() {
             />
           )}
 
-          {/* Data view — kept mounted across refreshes so input state survives.
-              3 columns on wide screens:
-                1) Type-Beat inputs   2) Status + Checklist   3) Description output */}
+          {/* Arbeitsflaeche: Eingabe links, Ausgabe rechts — was links steht,
+              erzeugt rechts den Text. Vorher stand der Status dazwischen, und
+              der Blick sprang bei jedem Beat links-rechts-mitte.
+              auto-fit: bricht bei schmalem Fenster auf eine Spalte um, statt
+              hinter PageBodys overflowX:hidden abgeschnitten zu werden. */}
           {data && !error && (
             <div style={{
               display: "grid",
-              gridTemplateColumns: "minmax(340px, 4fr) minmax(340px, 4fr) minmax(440px, 5fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
               gap: 24,
               alignItems: "start",
             }}>
-              {/* Column 1: What is this beat? */}
-              <TypeBeatCard beat={data.beat} onSaved={refresh} />
-
-              {/* Column 2: Where does it stand? */}
+              {/* Eingabe — darunter der Status: er gehoert zur linken Haelfte,
+                  ueber die volle Breite zog er einzelne Felder auseinander. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <TypeBeatCard beat={data.beat} onSaved={refresh} />
                 <UploadStatusCard
                   beatId={data.beat.id}
                   uploads={data.uploads}
                   onChanged={handleStatusChanged}
                 />
-                <AssetChecklistCard
-                  assets={data.assets}
-                  beatPath={data.beat.path}
-                  onRefresh={refresh}
-                  onConvert={() => setConvertOpen(true)}
-                />
               </div>
 
-              {/* Column 3: The output — gets the most width */}
+              {/* Ausgabe */}
               <DescriptionFilesCard
                 beatId={data.beat.id}
                 uploadFiles={data.assets.upload_files}
@@ -179,9 +181,20 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Bottom spacer */}
-          <div style={{ height: 40, flexShrink: 0 }} />
+          {/* Luft fuer die fixierte Planungs-Leiste am unteren Rand */}
+          <div style={{ height: PLANNER_DOCK_HEIGHT + 16, flexShrink: 0 }} />
       </PageBody>
+
+      {/* Planung — fixiert am unteren Rand, klappt nach oben auf */}
+      <PlannerDock>
+        <PlannerStrip
+          refreshKey={plannerRefresh}
+          beatId={data?.beat.id ?? null}
+          beatName={data?.beat.name ?? null}
+          uploads={data?.uploads ?? null}
+          onChanged={handleStatusChanged}
+        />
+      </PlannerDock>
 
       {/* Convert-filenames dialog (modal overlay) */}
       {convertOpen && data && (
@@ -196,6 +209,54 @@ export default function Upload() {
 }
 
 // ─── Sub-views ───────────────────────────────────────────────────────────────
+
+/** Der Planer beantwortet „was steht diese Woche an", nicht „was mache ich mit
+ *  diesem Song". Deshalb liegt er als schmale Leiste am unteren Fensterrand
+ *  und klappt bei Bedarf nach oben auf — ueber dem Player, wenn der laeuft. */
+function PlannerDock({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const { currentBeat } = useAudioPlayerContext();
+  const bottom = currentBeat ? GLOBAL_PLAYER_HEIGHT : 0;
+
+  return (
+    <div style={{
+      position: "fixed",
+      bottom, left: SIDEBAR_WIDTH, right: 0,
+      zIndex: 90,
+      background: C.surfaceContainerLow,
+      borderTop: `1px solid ${C.border15}`,
+      boxShadow: open ? "0 -12px 40px rgba(0,0,0,0.45)" : "none",
+    }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={open ? "Planung zuklappen" : "Planung aufklappen"}
+        style={{
+          width: "100%",
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "9px 24px",
+          background: "transparent", border: "none",
+          cursor: "pointer",
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+          textTransform: "uppercase", color: C.onSurfaceVariant,
+        }}
+      >
+        <CalendarDays size={13} strokeWidth={1.75} />
+        Planung
+        <span style={{ flex: 1 }} />
+        <ChevronUp
+          size={14}
+          strokeWidth={2}
+          style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
+        />
+      </button>
+      {open && <div style={{ padding: "0 24px 20px" }}>{children}</div>}
+    </div>
+  );
+}
+
+/** Hoehe der zugeklappten Dock-Leiste — so viel Luft braucht die Seite unten,
+ *  damit die letzte Karte nicht darunter verschwindet. */
+const PLANNER_DOCK_HEIGHT = 39;
 
 function UploadEmptyState() {
   return (
@@ -219,7 +280,6 @@ function LoadingBanner() {
     }}>
       <Loader2 size={14} color={C.primary} style={{ animation: "spin 0.8s linear infinite" }} />
       Beat-Daten werden geladen …
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
