@@ -24,11 +24,14 @@ const TABS: Array<{ key: UploadPlatform; label: string; icon: React.ElementType;
 // ⚠ Spiegelt `base_vars` in render.rs von Hand. Kommt dort ein Platzhalter
 //   dazu, gehört er hier ergänzt — sonst kennt der Editor ihn nicht.
 //
-// Der Knopf trägt den Namen der *Sache*, nicht den der Maschine: „Tempo"
+// Der Eintrag trägt den Namen der *Sache*, nicht den der Maschine: „Tempo"
 // statt `BPM`, „Titel groß" statt `TITLE_UPPER`. Der technische Name gehört
-// in den Vorlagentext, nicht in die Bedienleiste — zwanzig Versalien-Pillen
-// lasen sich wie eine Symboltabelle. Was der Platzhalter einsetzt und ein
-// Beispiel stehen im Tooltip.
+// in den Vorlagentext, nicht in die Bedienleiste.
+//
+// Alle zwanzig stecken in einem Menü statt in zwanzig Knöpfen. Sie liegen im
+// Ruhezustand nicht auf dem Bildschirm herum, und dass die Gruppen
+// unterschiedlich lang sind, sieht man nicht mehr. `was` und `beispiel`
+// landen im Tooltip des Eintrags.
 interface Platzhalter {
   /** Was draufsteht */
   label: string;
@@ -62,7 +65,7 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
     titel: "Du",
     eintraege: [
       { label: "Dein Name",        name: "PRODUCER",       was: "Dein Producer-Name aus den Einstellungen", beispiel: "prod. goodbxy" },
-      { label: "Name mit „prod.“", name: "PRODUCER_PROD",  was: "Setzt „prod. “ davor — steht es im Namen schon, kommt es doppelt", beispiel: "prod. prod. goodbxy" },
+      { label: "Name mit „prod.“ davor", name: "PRODUCER_PROD",  was: "Setzt „prod. “ davor — steht es im Namen schon, kommt es doppelt", beispiel: "prod. prod. goodbxy" },
       { label: "E-Mail",           name: "EMAIL",          was: "Deine Kontakt-E-Mail",                     beispiel: "contact@prod404.com" },
       { label: "Instagram",        name: "IG_URL",         was: "Dein Instagram",                           beispiel: "instagram.com/prod.goodbxy" },
       { label: "SoundCloud",       name: "SC_URL",         was: "Dein SoundCloud",                          beispiel: "soundcloud.com/prodgoodbxy" },
@@ -239,45 +242,38 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
         })}
       </div>
 
-      {/* Zum Einsetzen: benannt nach dem, was sie einsetzen. Klick schreibt an
-          die Cursorposition, das Was und ein Beispiel stehen im Tooltip. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {GRUPPEN.map(gruppe => (
-          <div key={gruppe.titel} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{
-              flex: "0 0 104px", textAlign: "right",
-              fontSize: 11, color: C.onSecondaryFixedVar,
-            }}>
-              {gruppe.titel}
-            </span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+      {/* Einsetzen — ein Menü statt zwanzig Knöpfe.
+          Die Gruppierung übernimmt <optgroup>, das Aufklappen der Browser.
+          Nebeneffekt: unterschiedlich lange Gruppen fallen nicht mehr auf.
+          Der Wert bleibt fest "", damit die Auswahl nach dem Einsetzen
+          zurückspringt und wieder „Einfügen …" dasteht. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <select
+          value=""
+          onChange={e => { if (e.target.value) insert(e.target.value); }}
+          style={{
+            padding: "7px 12px", borderRadius: 8,
+            background: C.surfaceContainerLowest,
+            border: `1px solid ${C.border20}`,
+            color: C.onSurface, cursor: "pointer",
+            fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+            outline: "none",
+          }}
+        >
+          <option value="">Einfügen …</option>
+          {GRUPPEN.map(gruppe => (
+            <optgroup key={gruppe.titel} label={gruppe.titel}>
               {gruppe.eintraege.map(p => (
-                <button
-                  key={p.name}
-                  onClick={() => insert(p.name)}
-                  title={tooltip(p)}
-                  style={{
-                    padding: "4px 10px", borderRadius: 9999,
-                    background: C.surfaceContainerLowest,
-                    border: `1px solid ${C.border15}`,
-                    color: C.onSurfaceVariant, cursor: "pointer",
-                    fontFamily: "inherit", fontSize: 11,
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = C.primary + "60";
-                    e.currentTarget.style.color = C.onSurface;
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = C.border15;
-                    e.currentTarget.style.color = C.onSurfaceVariant;
-                  }}
-                >
+                <option key={p.name} value={p.name} title={tooltip(p)}>
                   {p.label}
-                </button>
+                </option>
               ))}
-            </div>
-          </div>
-        ))}
+            </optgroup>
+          ))}
+        </select>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+          schreibt an die Cursorposition in der Vorlage
+        </span>
       </div>
 
       {/* Vorlage | Vorschau — links wird gearbeitet, rechts nur bestätigt.
@@ -318,7 +314,8 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
 
 const paneBox: React.CSSProperties = {
   width: "100%",
-  height: 360,
+  // Das Einfüge-Menü ersetzt vier Reihen Knöpfe — der Platz geht an die Felder.
+  height: 430,
   padding: "11px 13px",
   borderRadius: 8,
   color: C.onSurface,
