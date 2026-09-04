@@ -31,6 +31,8 @@ interface SampleCreditsCardProps {
   beatId: string;
   /** Eltern laden die Upload-Daten neu, damit die Vorschau die Credits zeigt */
   onSaved: () => void;
+  /** Ohne eigene Karte rendern — hängt als Abschnitt in der Infos-Karte. */
+  bare?: boolean;
 }
 
 type SaveState = "idle" | "saving" | "saved";
@@ -42,7 +44,7 @@ function snapshot(credits: BeatSampleCredit[]): string {
   return credits.map(c => `${c.producer_id}:${c.contribution}`).join("|");
 }
 
-export function SampleCreditsCard({ beatId, onSaved }: SampleCreditsCardProps) {
+export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCreditsCardProps) {
   const { settings } = useSettings();
   const [producers, setProducers] = useState<SampleProducer[]>([]);
   const [credits, setCredits] = useState<BeatSampleCredit[]>([]);
@@ -125,16 +127,21 @@ export function SampleCreditsCard({ beatId, onSaved }: SampleCreditsCardProps) {
     fontSize: 11, color: C.onSecondaryFixedVar,
   };
 
-  return (
-    <SectionCard
-      icon={Users}
-      title="Credits"
-      actions={
-        saveState === "saving" ? <Loader2 size={13} color={C.onSurfaceVariant} style={{ animation: "spin 0.8s linear infinite" }} />
-        : saveState === "saved" ? <Check size={13} color={C.mint} />
-        : null
-      }
-    >
+  const inhalt = (
+    <>
+      {/* Rahmenlos trägt der Abschnitt seine eigene Beschriftung, wie die
+          Chip-Gruppen darüber — die Kartenkopfzeile gehört der ganzen Fläche. */}
+      {bare && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          fontSize: 11, color: C.onSecondaryFixedVar, marginBottom: 8,
+        }}>
+          Credits
+          {saveState === "saving" && <Loader2 size={11} style={{ animation: "spin 0.8s linear infinite" }} />}
+          {saveState === "saved" && <Check size={11} color={C.mint} />}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 180px", minWidth: 0 }}>
           <label style={beschriftung}>Produziert von</label>
@@ -179,6 +186,22 @@ export function SampleCreditsCard({ beatId, onSaved }: SampleCreditsCardProps) {
             : <>Ohne Sample-Geber steht in der Beschreibung „No Samples Used“.</>
         }
       </div>
+    </>
+  );
+
+  if (bare) return inhalt;
+
+  return (
+    <SectionCard
+      icon={Users}
+      title="Credits"
+      actions={
+        saveState === "saving" ? <Loader2 size={13} color={C.onSurfaceVariant} style={{ animation: "spin 0.8s linear infinite" }} />
+        : saveState === "saved" ? <Check size={13} color={C.mint} />
+        : null
+      }
+    >
+      {inhalt}
     </SectionCard>
   );
 }

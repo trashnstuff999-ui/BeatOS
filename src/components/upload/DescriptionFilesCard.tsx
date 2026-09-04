@@ -175,6 +175,10 @@ export function DescriptionFilesCard({
     <SectionCard
       icon={FileText}
       title="Beschreibungen"
+      // Zieht bis auf die Höhe der Infos-Karte daneben. Der Vorschautext
+      // wächst mit (siehe `flex: 1` unten), der Speichern-Knopf bleibt unten
+      // stehen — sonst waere die gewonnene Hoehe nur Luft.
+      style={{ height: "100%", display: "flex", flexDirection: "column" }}
       actions={
         // Der Neu-Rendern-Knopf ist raus: nach dem Speichern einer Vorlage
         // rendert die Karte ohnehin neu.
@@ -248,7 +252,12 @@ export function DescriptionFilesCard({
           Rahmen, Icon, Label UND einen breiten Knopf, der ausschrieb, was das
           Icon schon sagte („TITEL KOPIEREN" neben dem Titel). Jetzt trennen
           duenne Linien, und Kopieren ist ein Icon rechts. */}
-      <div style={{ borderTop: `1px solid ${C.border10}` }}>
+      <div style={{
+        borderTop: `1px solid ${C.border10}`,
+        // Nimmt die Hoehe auf, die die Karte neben der Infos-Karte gewinnt:
+        // statt Luft steht dort mehr von der Beschreibung.
+        flex: 1, minHeight: 0, overflowY: "auto",
+      }}>
         <OutputRow
           label="Titel"
           onCopy={handleCopyTitle}

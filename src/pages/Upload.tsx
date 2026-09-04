@@ -159,13 +159,17 @@ export default function Upload() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
               gap: 24,
-              alignItems: "start",
+              // stretch statt start: die rechte Spalte zieht auf die Hoehe der
+              // linken, damit unten kein halbes Fenster leer bleibt.
+              alignItems: "stretch",
             }}>
-              {/* Eingabe */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                <TypeBeatCard beat={data.beat} onSaved={refresh} />
-                <SampleCreditsCard beatId={data.beat.id} onSaved={refresh} />
-              </div>
+              {/* Eingabe — Infos und Credits liegen auf einer Flaeche, durch
+                  Haarlinien getrennt. Beides gehoert zum selben Beat und
+                  fliesst in dieselbe Beschreibung; zwei Kaesten dafuer waren
+                  eine Trennung ohne Bedeutung. */}
+              <TypeBeatCard beat={data.beat} onSaved={refresh}>
+                <SampleCreditsCard bare beatId={data.beat.id} onSaved={refresh} />
+              </TypeBeatCard>
 
               {/* Ausgabe */}
               <DescriptionFilesCard
