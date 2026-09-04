@@ -15,20 +15,44 @@ const LEGACY_DB_PATH: &str = r"C:\Users\kismo\OneDrive\Dokumente\._BEAT LIBRARY\
 
 static DB_PATH: OnceLock<PathBuf> = OnceLock::new();
 
-/// Resolve the database path. The live DB lives in %LOCALAPPDATA%\BeatOS so
-/// OneDrive sync can never lock or corrupt it; on first run an existing
-/// legacy DB is migrated over (copy + integrity check). Falls back to the
-/// legacy path only if %LOCALAPPDATA% is unavailable.
+/// Verzeichnis der Datenbank, pro System.
+///
+/// Windows bleibt bei `%LOCALAPPDATA%\BeatOS`: dort liegt der Bestand, und ein
+/// Umzug an einen „saubereren" Ort würde nur Daten bewegen, die längst am
+/// richtigen Platz sind.
+#[cfg(windows)]
+fn data_dir() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .filter(|v| !v.is_empty())
+        .map(|v| PathBuf::from(v).join("BeatOS"))
+}
+
+/// macOS. Linux ist kein Ziel dieser App — käme es dazu, gehört hier
+/// `$XDG_DATA_HOME` hin.
+#[cfg(not(windows))]
+fn data_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|v| !v.is_empty())
+        .map(|v| PathBuf::from(v).join("Library/Application Support/BeatOS"))
+}
+
+/// Wo die laufende Datenbank liegt.
+///
+/// Bewusst außerhalb des Bibliotheksordners: so kann die Bibliothek umziehen
+/// (siehe `db::relocate`), ohne dass die Datenbank mitwandert, und ein
+/// Sync-Client im Bibliotheksordner könnte sie nie sperren.
+///
+/// Beim ersten Start wird eine vorhandene Datenbank vom alten Ort übernommen
+/// (Kopie plus Integritätsprüfung). Auf einem frischen System gibt es den
+/// alten Ort nicht, dann entfällt der Schritt von selbst.
 pub fn get_db_path() -> &'static Path {
     DB_PATH.get_or_init(resolve_db_path)
 }
 
 fn resolve_db_path() -> PathBuf {
-    let local = match std::env::var_os("LOCALAPPDATA") {
-        Some(v) if !v.is_empty() => PathBuf::from(v),
-        _ => return PathBuf::from(LEGACY_DB_PATH),
+    let Some(dir) = data_dir() else {
+        return PathBuf::from(LEGACY_DB_PATH);
     };
-    let dir = local.join("BeatOS");
     if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!("WARNING: cannot create {}: {} — using legacy DB path", dir.display(), e);
         return PathBuf::from(LEGACY_DB_PATH);

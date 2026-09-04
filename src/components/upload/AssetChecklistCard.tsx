@@ -58,7 +58,11 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
 
   const handleRowClick = (row: Row) => {
     if (!row.filename || !beatPath) return;
-    const fullPath = `${beatPath}\\${row.filename}`;
+    // Trenner aus dem Pfad selbst ablesen statt fest annehmen: die Bibliothek
+    // kann unter Windows wie unter macOS liegen, und „/pfad\datei.wav" ist
+    // auf keinem von beiden ein Pfad.
+    const sep = beatPath.includes("\\") ? "\\" : "/";
+    const fullPath = `${beatPath}${sep}${row.filename}`;
     if (row.label === "Cover" || row.label === "Thumbnail") {
       setPreview({ label: row.label, path: fullPath });
     } else if (row.label === "Video MP4") {

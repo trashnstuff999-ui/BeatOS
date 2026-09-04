@@ -132,15 +132,27 @@ pub fn run() {
                 eprintln!("WARNING: Failed to bootstrap upload templates: {}", e);
             }
 
-            // Production roots and the asset inbox can live outside the beat
-            // library — allow them on the asset protocol so image previews
-            // (convertFileSrc) work there too. Frontend falls back to base64
-            // (read_image_file) if a path is still not covered.
+            // Der komplette Asset-Scope wird hier zur Laufzeit gesetzt, aus den
+            // eingestellten Pfaden — Archiv, Produktions-Roots und Asset-Inbox.
+            //
+            // Früher stand das Archiv als einkompilierter Pfad in
+            // tauri.conf.json. Das war aus zwei Gründen falsch: es band die App
+            // an einen Rechner, und seit die Bibliothek umziehen kann (siehe
+            // db::relocate) wäre der Pfad nach dem ersten Ankertausch tot —
+            // Cover und Audio hätten stumm nicht mehr geladen.
+            //
+            // Frontend fällt auf base64 (read_image_file) zurück, wenn ein Pfad
+            // doch nicht abgedeckt ist.
             {
                 use tauri::Manager;
                 let scope = app.asset_protocol_scope();
                 if let Ok(settings) = commands::get_settings() {
                     let mut dirs: Vec<String> = Vec::new();
+                    if let Some(archive) = settings.get("archive_path") {
+                        if !archive.trim().is_empty() {
+                            dirs.push(archive.trim().to_string());
+                        }
+                    }
                     if let Some(prod) = settings.get("production_path") {
                         dirs.extend(
                             prod.split(['\n', ';'])
