@@ -170,14 +170,16 @@ function PlatformRow({ beatId, row, onChanged }: {
       padding: "14px 15px",
       borderRadius: 10,
       background: C.surfaceContainer,
-      // ZWEI Angaben, ZWEI Kanaele:
-      //   Farbe   = welche Plattform (und ob sie ueberhaupt im Spiel ist)
-      //   Linie   = wie sicher — durchgezogen steht, gestrichelt ist vorgemerkt
-      // Farbe fuer beides zu benutzen ginge nicht: sie kann nur eines
-      // bedeuten. Der genaue Zustand steht ohnehin als Wort in der Leiste.
-      border: hochgeladen ? `1px solid ${meta.color}66`
-            : geplant     ? `1px dashed ${meta.color}55`
-            : `1px solid ${C.border15}`,
+      // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu viel:
+      // drei Kacheln nebeneinander mit farbigem Rahmen UND farbiger Schrift
+      // ergeben eine bunte Reihe, in der nichts mehr heraussticht.
+      //
+      // Farbe traegt jetzt nur die Beschriftung — welche Plattform, und ob
+      // sie im Spiel ist. Den Zustand traegt die Linienart: durchgezogen
+      // steht, gestrichelt ist vorgemerkt.
+      border: geplant
+        ? `1px dashed ${C.border20}`
+        : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
       display: "flex", flexDirection: "column", gap: 12,
     }}>
       {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
