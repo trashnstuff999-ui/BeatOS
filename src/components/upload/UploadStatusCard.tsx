@@ -162,23 +162,24 @@ function PlatformRow({ beatId, row, onChanged }: {
 
   return (
     <div style={{
-      // Eigene Kachel statt Trennlinie: nebeneinander trennt der Kasten
-      // sauberer als ein Strich, und der Rand nimmt die Zustandsfarbe auf.
-      padding: "12px 13px",
-      borderRadius: 8,
-      background: C.surfaceContainerLowest,
-      border: `1px solid ${row.status === "draft" ? C.border15 : zustand.color + "40"}`,
+      // Erhebung geht in einem dunklen Design nach OBEN. Vorher lag hier die
+      // dunkelste Flaeche (surfaceContainerLowest) in einer helleren Karte —
+      // das las sich nicht als Kachel, sondern als Loch. Jetzt eine Stufe
+      // ueber der Karte, dazu ein Rand, der den Zustand aufnimmt.
+      padding: "14px 15px",
+      borderRadius: 10,
+      background: C.surfaceContainer,
+      border: `1px solid ${row.status === "draft" ? C.border15 : zustand.color + "45"}`,
+      display: "flex", flexDirection: "column", gap: 12,
     }}>
-      {/* Drei Zeilen je Plattform, alle am Namenstext ausgerichtet (23px =
-          Symbol + Abstand):
-            1) Plattform + Assistent
-            2) Link
-            3) Status links, Datum rechts */}
+      {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
+          es zusammen gelesen wird. Vorher standen der Name oben und der
+          Zustand zwei Zeilen tiefer. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           {/* Symbol und Name tragen die Zustandsfarbe, nicht die Markenfarbe:
               so sieht man am Zeilenkopf, wie weit die Plattform ist, ohne die
-              Pillen darunter zu lesen. Entwurf bleibt bewusst grau — sonst
+              Leiste darunter zu lesen. Entwurf bleibt bewusst grau — sonst
               wäre alles bunt und nichts hervorgehoben. */}
           <PlatIcon size={15} color={zustand.color} strokeWidth={1.75} />
           <span style={{
@@ -206,6 +207,48 @@ function PlatformRow({ beatId, row, onChanged }: {
           </button>
         )}
 
+        <span style={{ flex: 1 }} />
+
+        {/* Zustandsleiste in der Kopfzeile: „welche Plattform" und „wie weit"
+            gehoeren nebeneinander. Zusammenhaengend mit Trennstrichen wie die
+            Plattform-Tabs bei den Beschreibungen — so sieht man, dass es ein
+            Schalter ist. */}
+        <div style={{
+          display: "flex", flexShrink: 0,
+          border: `1px solid ${C.border15}`,
+          borderRadius: 6,
+          overflow: "hidden",
+        }}>
+          {STATUS_ORDER.map((s, i) => {
+            const active = row.status === s;
+            const m = UPLOAD_STATUS_CONFIG[s];
+            return (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                disabled={isSaving}
+                title={`Auf „${m.label}" setzen`}
+                style={{
+                  padding: "4px 8px",
+                  background: active ? m.bg : "transparent",
+                  border: "none",
+                  borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
+                  cursor: isSaving ? "wait" : "pointer",
+                  fontSize: 9, fontWeight: active ? 700 : 500,
+                  fontFamily: "inherit",
+                  color: active ? m.color : C.onSecondaryFixedVar,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  opacity: isSaving ? 0.6 : 1,
+                  transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = C.onSurface; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Guided upload assistant */}
@@ -234,7 +277,6 @@ function PlatformRow({ beatId, row, onChanged }: {
       {(row.status === "uploaded" || row.platform === "beatstars") && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          marginTop: 6, paddingLeft: 23,
         }}>
           <input
             value={urlDraft}
@@ -245,14 +287,16 @@ function PlatformRow({ beatId, row, onChanged }: {
               ? `Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert${urlDraft ? `\n${urlDraft}` : ""}`
               : urlDraft || undefined}
             placeholder={row.platform === "beatstars"
-              ? "Beat-Link (z.B. beatstars.com/beat/…) → {{BEATSTARS_LINK}}"
+              ? "Beat-Link → {{BEATSTARS_LINK}}"
               : `https://...${row.platform}...`}
             style={{
               flex: 1, minWidth: 0,
-              padding: "6px 9px",
+              padding: "7px 10px",
               fontSize: 12,
               fontFamily: "monospace",
-              background: C.surfaceContainerLowest,
+              // Eingabefelder gehen nach unten, Kacheln nach oben: hier ist
+              // eine Vertiefung richtig, weil man hineinschreibt.
+              background: C.surfaceContainerLow,
               border: `1px solid ${C.border15}`,
               borderRadius: 6,
               outline: "none",
@@ -280,54 +324,14 @@ function PlatformRow({ beatId, row, onChanged }: {
         </div>
       )}
 
-      {/* Zeile 3: Status links, Datum rechts — beides unter dem Link-Feld und
-          buendig mit dem Namenstext darueber. */}
+      {/* Fusszeile: nur noch das Datum, beschriftet. Die Zustandsleiste ist in
+          die Kopfzeile gewandert, wo sie neben den Plattformnamen gehoert. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        marginTop: 6, paddingLeft: 23,
       }}>
-        {/* Eine zusammenhaengende Leiste statt drei loser Woerter: vorher sah
-            der Statuswechsel aus wie eine Beschriftung, und dass man auf
-            „Entwurf" und „Geplant" klicken kann, war nicht zu sehen. Dieselbe
-            Form wie die Plattform-Tabs bei den Beschreibungen. */}
-        <div style={{
-          display: "flex",
-          border: `1px solid ${C.border15}`,
-          borderRadius: 6,
-          overflow: "hidden",
-        }}>
-          {STATUS_ORDER.map((s, i) => {
-            const active = row.status === s;
-            const m = UPLOAD_STATUS_CONFIG[s];
-            return (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                disabled={isSaving}
-                title={`Auf „${m.label}" setzen`}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  padding: "5px 10px",
-                  background: active ? m.bg : "transparent",
-                  border: "none",
-                  borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
-                  cursor: isSaving ? "wait" : "pointer",
-                  fontSize: 10, fontWeight: active ? 700 : 500,
-                  fontFamily: "inherit",
-                  color: active ? m.color : C.onSecondaryFixedVar,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  opacity: isSaving ? 0.6 : 1,
-                  transition: "background 0.15s, color 0.15s",
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.color = C.onSurface; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+          {row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
+        </span>
 
         <span style={{ flex: 1 }} />
 
