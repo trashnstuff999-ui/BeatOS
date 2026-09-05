@@ -40,49 +40,68 @@ export function ChipListEditor({
   // Die Reihenfolge ist nicht kosmetisch: aus ihr entsteht der Titel
   // („A x B") und die Genre-Kette („G1 | G2").
   //
-  // Bewusst über Zeigerereignisse statt über HTML5-Drag-and-Drop: Tauri
-  // installiert bei `dragDropEnabled` (Standard) den Datei-Drop-Handler des
-  // Betriebssystems, und der schaltet HTML5-Ziehen im Fenster ab. Abschalten
-  // kommt nicht in Frage — der Datei-Drop ins Fenster steht auf der Roadmap.
+  // Umgesetzt mit MAUS-Ereignissen, und das ist eine bewusste Entscheidung
+  // nach zwei gescheiterten Anläufen:
+  //
+  // • HTML5-Drag-and-Drop faellt aus: Tauri installiert bei `dragDropEnabled`
+  //   (Standard) den Datei-Drop-Handler des Betriebssystems, der es im
+  //   Fenster abschaltet. Abschalten kommt nicht in Frage, der Datei-Drop
+  //   steht auf der Roadmap.
+  // • Zeigerereignisse (pointerdown/-move) feuerten das Anfassen, aber in
+  //   dieser WebView kam waehrend gedrueckter Taste kein einziges `pointermove`
+  //   an — weder am Element mit Zeigererfassung noch am Fenster.
+  //
+  // Maus-Ereignisse sind der aelteste Weg und werden zuverlaessig geliefert.
+  // Die Logik dahinter ist dieselbe und in ChipListEditor.test.tsx geprueft.
   const [gezogen, setGezogen] = useState<number | null>(null);
   const gezogenRef = useRef<number | null>(null);
   const chipRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
 
-  const starteZiehen = (i: number) => (e: React.PointerEvent<HTMLSpanElement>) => {
+  const starteZiehen = (i: number) => (e: React.MouseEvent<HTMLSpanElement>) => {
     // Der Entfernen-Knopf im Chip darf kein Ziehen ausloesen.
     if ((e.target as HTMLElement).closest("button")) return;
-    // Ohne das faengt der Browser an, Text zu markieren.
-    e.preventDefault();
-    // Zeigererfassung: alle weiteren Bewegungen gehen an DIESES Element,
-    // egal was gerade unter dem Zeiger liegt. Ohne sie verliert man den
-    // Zug, sobald die Liste sich neu ordnet.
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
+
     gezogenRef.current = i;
     setGezogen(i);
-  };
+    // Waehrend des Ziehens nichts markieren — sonst zieht man Text mit.
+    const vorherigeAuswahl = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
 
-  const beimZiehen = (e: React.PointerEvent) => {
-    const von = gezogenRef.current;
-    if (von === null) return;
-    // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
-    // zaehlt beides — waagerecht und senkrecht.
-    const treffer = values.findIndex(v => {
-      const el = chipRefs.current.get(v);
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
-      return e.clientX >= r.left && e.clientX <= r.right
-          && e.clientY >= r.top  && e.clientY <= r.bottom;
-    });
-    if (treffer < 0 || treffer === von) return;
-    gezogenRef.current = treffer;
-    setGezogen(treffer);
-    onChange(verschiebe(values, von, treffer));
-  };
+    // Der Zustand `values` steckt in dieser Closure fest. Das genuegt, weil
+    // wir bei jedem Schritt aus der ZULETZT gemeldeten Reihenfolge weiter
+    // rechnen statt aus der urspruenglichen.
+    let aktuell = values;
 
-  const beendeZiehen = () => {
-    if (gezogenRef.current === null) return;
-    gezogenRef.current = null;
-    setGezogen(null);
+    const bewegen = (ev: MouseEvent) => {
+      const von = gezogenRef.current;
+      if (von === null) return;
+      // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
+      // zaehlt beides — waagerecht und senkrecht.
+      const treffer = aktuell.findIndex(v => {
+        const el = chipRefs.current.get(v);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return ev.clientX >= r.left && ev.clientX <= r.right
+            && ev.clientY >= r.top  && ev.clientY <= r.bottom;
+      });
+      if (treffer < 0 || treffer === von) return;
+      aktuell = verschiebe(aktuell, von, treffer);
+      gezogenRef.current = treffer;
+      setGezogen(treffer);
+      onChange(aktuell);
+    };
+
+    const loslassen = () => {
+      gezogenRef.current = null;
+      setGezogen(null);
+      document.body.style.userSelect = vorherigeAuswahl;
+      document.removeEventListener("mousemove", bewegen);
+      document.removeEventListener("mouseup", loslassen);
+    };
+
+    document.addEventListener("mousemove", bewegen);
+    document.addEventListener("mouseup", loslassen);
   };
 
   const commitDraft = () => {
@@ -171,10 +190,7 @@ export function ChipListEditor({
                 if (el) chipRefs.current.set(v, el);
                 else chipRefs.current.delete(v);
               }}
-              onPointerDown={starteZiehen(i)}
-              onPointerMove={beimZiehen}
-              onPointerUp={beendeZiehen}
-              onPointerCancel={beendeZiehen}
+              onMouseDown={starteZiehen(i)}
               onMouseEnter={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHighest; }}
               onMouseLeave={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHigh; }}
               title="Ziehen zum Umsortieren"
