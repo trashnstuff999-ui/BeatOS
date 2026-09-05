@@ -5,7 +5,7 @@
 // (opens the detail panel), the overlay button plays.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { memo } from "react";
+import { Fragment, memo } from "react";
 import { Heart, Play, Pause, Loader2, Music } from "lucide-react";
 import { C } from "../../lib/theme";
 import { StatusPill } from "../Tagpill";
@@ -21,10 +21,36 @@ interface BeatGridProps {
   onPlayBeat: (beat: Beat) => void;
   getCoverUrl: (beatId: string) => string | null;
   uploadBadges: UploadBadgeMap;
+  /** Monatsueberschriften einblenden — nur sinnvoll bei chronologischer Sicht. */
+  gruppiereNachMonat?: boolean;
+}
+
+const MONATE = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
+/** „2026 · August" aus einem ISO-Datum. `null`, wenn keins da ist. */
+function monatsTitel(datum: string | null): string | null {
+  if (!datum) return null;
+  const [jahr, monat] = datum.split("-");
+  const i = Number(monat) - 1;
+  if (!jahr || i < 0 || i > 11) return null;
+  return `${jahr} · ${MONATE[i]}`;
+}
+
+/** Nur beim erstem Beat eines Monats steht die Ueberschrift — die Liste ist
+ *  chronologisch sortiert, ein Wechsel zum Vorgaenger genuegt als Signal. */
+function istMonatswechsel(beats: Beat[], i: number): string | null {
+  const titel = monatsTitel(beats[i].created_date);
+  if (!titel) return null;
+  if (i === 0) return titel;
+  return monatsTitel(beats[i - 1].created_date) === titel ? null : titel;
 }
 
 export function BeatGrid({
   beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, getCoverUrl, uploadBadges,
+  gruppiereNachMonat = false,
 }: BeatGridProps) {
   // Einmal abonnieren, nicht pro Karte — siehe Kommentar in BeatTable.
   const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
@@ -35,9 +61,31 @@ export function BeatGrid({
       gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
       gap: 14,
     }}>
-      {beats.map(beat => {
+      <style>{`.beatos-karte:hover .beatos-fav { opacity: 1 !important; }`}</style>
+      {beats.map((beat, i) => {
         const isCurrentBeat = currentBeat?.id === beat.id;
+        const monat = gruppiereNachMonat ? istMonatswechsel(beats, i) : null;
         return (
+          <Fragment key={`gruppe-${beat.id}`}>
+          {/* Ueber die ganze Rasterbreite, klebt beim Scrollen oben an:
+              212 Beats in 21 Reihen ohne Landmarken sind eine Flaeche, keine
+              Liste. Der Monat ist die Ordnung, in der das Archiv auch auf der
+              Platte liegt. */}
+          {monat && (
+            <div style={{
+              gridColumn: "1 / -1",
+              position: "sticky", top: 0, zIndex: 2,
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 2px 8px",
+              background: C.background,
+              fontSize: 11, fontWeight: 700,
+              color: C.onSurfaceVariant,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              {monat}
+              <span style={{ flex: 1, height: 1, background: C.border10 }} />
+            </div>
+          )}
           <GridCard
             key={beat.id}
             beat={beat}
@@ -52,6 +100,7 @@ export function BeatGrid({
             onPlayBeat={onPlayBeat}
             onTogglePlay={togglePlay}
           />
+          </Fragment>
         );
       })}
     </div>
@@ -92,6 +141,7 @@ const GridCard = memo(function GridCard({
         if ((e.target as HTMLElement).closest("button")) return;
         onPlayBeat(beat);
       }}
+      className="beatos-karte"
       style={{
         background: isSelected ? C.surfaceContainerHigh : C.surfaceContainerLow,
         border: `1px solid ${isCurrentBeat ? C.primary : isSelected ? C.border30 : C.border10}`,
@@ -150,15 +200,21 @@ const GridCard = memo(function GridCard({
               : <Play size={14} fill={isCurrentBeat ? C.onPrimary : "#fff"} color={isCurrentBeat ? C.onPrimary : "#fff"} style={{ marginLeft: 2 }} />
           }
         </button>
-        {/* Fav */}
+        {/* Favorit: sichtbar nur, wenn er einer IST — sonst erst beim
+            Ueberfahren. Zweihundert leere Herzen auf zweihundert Karten sagen
+            nichts; ein gefuelltes unter zweihundert sagt alles. */}
         <button
+          className="beatos-fav"
           onClick={e => { e.stopPropagation(); onToggleFavorite(beat.id); }}
+          title={isFav ? "Favorit entfernen" : "Als Favorit merken"}
           style={{
             position: "absolute", right: 8, top: 8,
             background: "rgba(0,0,0,0.5)", border: "none",
             borderRadius: 6, padding: 5,
             cursor: "pointer", display: "flex",
             backdropFilter: "blur(4px)",
+            opacity: isFav ? 1 : 0,
+            transition: "opacity 0.15s",
           }}
         >
           <Heart size={13} strokeWidth={1.75} fill={isFav ? C.primary : "none"} color={isFav ? C.primary : "#fff"} />
@@ -179,8 +235,18 @@ const GridCard = memo(function GridCard({
           {beat.key && <span>{beat.key}</span>}
           {beat.bpm != null && <span>{beat.bpm}</span>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-          <StatusPill status={beat.status ?? "idea"} size="sm" />
+        {/* Die Pille zeigt nur die AUSNAHME. „Fertig" steht auf fast jedem
+            Beat — bei 212 Stueck ist das keine Auskunft mehr, sondern
+            Textur, und die seltenen Zustaende gehen darin unter. Fehlt die
+            Pille, ist der Beat fertig; das lernt man in einer Sekunde. */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginTop: 8, minHeight: 18,
+        }}>
+          {(beat.status ?? "idea") !== "finished"
+            ? <StatusPill status={beat.status ?? "idea"} size="sm" />
+            : <span />
+          }
           <PlatformDots badges={badges} />
         </div>
       </div>

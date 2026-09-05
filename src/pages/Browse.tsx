@@ -20,7 +20,7 @@ import {
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
 import { PageBody, EmptyState, Button } from "../components/ui";
-import type { Beat, UpdateBeatParams } from "../types/browse";
+import type { Beat, UpdateBeatParams, SortColumn } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { useTagManager } from "../contexts/TagManagerContext";
@@ -237,13 +237,97 @@ export default function Browse() {
           Maximalbreite — Innenabstand und Abstaende kommen trotzdem aus
           derselben Quelle wie auf allen anderen Seiten. */}
       <PageBody ref={scrollRef} width="full">
-          {/* Filter Bar */}
-          <FilterBar
-            filters={filters}
-            onChange={setFilters}
-            onReset={resetFilters}
-            resultCount={pagination.totalCount}
-          />
+          {/* Eine Bedienreihe statt zwei. Filter, Ansicht, Sortierung und
+              Zufall standen untereinander und kosteten zwei Reihen Hoehe —
+              also eine Cover-Reihe weniger auf dem Schirm. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <FilterBar
+                filters={filters}
+                onChange={setFilters}
+                onReset={resetFilters}
+                resultCount={pagination.totalCount}
+              />
+            </div>
+
+            {!isInitialLoad && !error && (
+              <>
+                {/* Sortierung — es gab sie bisher nur in der Tabelle. Im
+                    Cover-Raster musste man die Ansicht wechseln, also genau
+                    die verlassen, in der man visuell sucht. */}
+                <select
+                  value={`${sort.column}:${sort.direction}`}
+                  onChange={e => {
+                    const [column, direction] = e.target.value.split(":");
+                    setSort(column as SortColumn, direction as "asc" | "desc");
+                  }}
+                  title="Sortierung"
+                  style={{
+                    padding: "6px 10px", borderRadius: 7,
+                    background: C.surfaceContainer,
+                    border: `1px solid ${C.border15}`,
+                    color: C.onSurfaceVariant,
+                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                    cursor: "pointer", outline: "none", flexShrink: 0,
+                  }}
+                >
+                  <option value="id:desc">Neueste zuerst</option>
+                  <option value="id:asc">Älteste zuerst</option>
+                  <option value="name:asc">Titel A–Z</option>
+                  <option value="bpm:asc">Tempo aufsteigend</option>
+                  <option value="bpm:desc">Tempo absteigend</option>
+                  <option value="key:asc">Tonart</option>
+                  <option value="status:asc">Status</option>
+                </select>
+
+                <div style={{
+                  display: "flex", gap: 2, flexShrink: 0,
+                  background: "rgba(255,255,255,0.03)",
+                  border: `1px solid ${C.border15}`,
+                  borderRadius: 7, padding: 2,
+                }}>
+                  {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      title={label}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        padding: "5px 11px",
+                        background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
+                        border: "none", borderRadius: 5,
+                        cursor: "pointer",
+                        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                        color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
+                      }}
+                    >
+                      <Icon size={12} strokeWidth={2} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleRandomBeat}
+                  disabled={pagination.totalCount === 0}
+                  title="Zufälligen Beat aus allen Treffern abspielen"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+                    padding: "6px 12px", borderRadius: 7,
+                    background: "transparent",
+                    border: `1px solid ${C.border15}`,
+                    color: C.onSurfaceVariant,
+                    cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
+                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                    opacity: pagination.totalCount === 0 ? 0.5 : 1,
+                  }}
+                >
+                  <Shuffle size={12} strokeWidth={2} />
+                  Zufall
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Erster Ladevorgang: hier gibt es noch nichts zu zeigen.
               Jedes weitere Laden dimmt nur die stehende Liste (siehe unten) —
@@ -282,59 +366,6 @@ export default function Browse() {
             </div>
           )}
 
-          {/* View toolbar: Tabelle ⇄ Grid + Zufalls-Beat */}
-          {!isInitialLoad && !error && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                display: "flex", gap: 2,
-                background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${C.border15}`,
-                borderRadius: 7, padding: 2,
-              }}>
-                {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    title={label}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 5,
-                      padding: "5px 11px",
-                      background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
-                      border: "none", borderRadius: 5,
-                      cursor: "pointer",
-                      fontSize: 11, fontWeight: 600,
-                      color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
-                      letterSpacing: "0.02em",
-                    }}
-                  >
-                    <Icon size={12} strokeWidth={2} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ flex: 1 }} />
-              <button
-                onClick={handleRandomBeat}
-                disabled={pagination.totalCount === 0}
-                title="Zufälligen Beat aus allen Treffern abspielen"
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: 7,
-                  background: "transparent",
-                  border: `1px solid ${C.border15}`,
-                  color: C.onSurfaceVariant,
-                  cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
-                  fontSize: 11, fontWeight: 600,
-                  letterSpacing: "0.02em",
-                  opacity: pagination.totalCount === 0 ? 0.5 : 1,
-                }}
-              >
-                <Shuffle size={12} strokeWidth={2} />
-                Zufall
-              </button>
-            </div>
-          )}
-
           {/* Beats: Tabelle oder Cover-Grid.
               Bleibt beim Nachladen stehen und wird nur ausgegraut — das haelt
               Layout und Scrollposition ruhig. */}
@@ -367,6 +398,12 @@ export default function Browse() {
                   onPlayBeat={handlePlayBeat}
                   getCoverUrl={getCoverUrl}
                   uploadBadges={uploadBadges}
+                  // Monatsueberschriften nur bei chronologischer Sicht. Nach
+                  // Tempo oder Tonart sortiert waeren sie gelogen — dann steht
+                  // ein Beat aus Mai zwischen zweien aus August.
+                  // Die Nummer ist der chronologische Schluessel: sie wird
+                  // beim Archivieren fortlaufend vergeben.
+                  gruppiereNachMonat={sort.column === "id"}
                 />
               )}
 

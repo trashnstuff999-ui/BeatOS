@@ -34,7 +34,7 @@ interface UseBeatsReturn {
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   resetFilters: () => void;
   sort: SortState;
-  setSort: (column: SortColumn) => void;
+  setSort: (column: SortColumn, direction?: "asc" | "desc") => void;
   pagination: PaginationState;
   setPage: (page: number) => void;
   setPageSize: (size: number) => void;
@@ -308,12 +308,15 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
 
   const resetFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
-  const setSort = useCallback((column: SortColumn) => {
+  /** Ohne `direction`: Klick auf denselben Tabellenkopf dreht die Richtung um.
+   *  Mit `direction`: die Auswahl im Browse-Raster setzt beides direkt, denn
+   *  dort steht „Neueste zuerst" und „Älteste zuerst" als je eigener Eintrag. */
+  const setSort = useCallback((column: SortColumn, direction?: "asc" | "desc") => {
     setSortState(prev => ({
       column,
-      direction: prev.column === column 
+      direction: direction ?? (prev.column === column
         ? (prev.direction === "asc" ? "desc" : "asc")
-        : (column === "id" ? "desc" : "asc")
+        : (column === "id" ? "desc" : "asc")),
     }));
   }, []);
 
