@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, Archive, Play, Sparkles, Piano, Star, Music,
-  CalendarClock, Rocket, Disc3, Flame, ArrowRight, Upload as UploadIcon, LayoutGrid,
+  CalendarClock, Disc3, Flame, ArrowRight, Upload as UploadIcon, LayoutGrid,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Stats, DashboardActions } from "../types/stats";
@@ -15,43 +15,89 @@ import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } f
 import { StatusPill } from "../components/Tagpill";
 import { Select, Button, PageHeader, PageBody, EmptyState } from "../components/ui";
 
-// ── Aktions-Karte: eine Zahl, eine Handlung, ein Klick ───────────────────────
-function ActionCard({ title, value, hint, icon, color, onClick }: {
-  title: string; value: number; hint: string;
-  icon: React.ReactNode; color: string; onClick: () => void;
+// ── Upload-Rhythmus: 8-Wochen-Balken + Serie ─────────────────────────────────
+/** Der naechste Schritt — eine Karte statt vier.
+ *
+ *  Vorher standen hier vier gleich grosse Kacheln, von denen typischerweise
+ *  drei auf null stehen. Ein Dashboard, dessen Aktionsreihe aus Nullen
+ *  besteht, beantwortet die Frage nicht, fuer die man es aufmacht.
+ *
+ *  Ausserdem wiederholten drei davon, was die Pipeline-Zeile darunter ohnehin
+ *  sagt („Diese Woche geplant 0" gegen „Geplant · 0 in den naechsten 7 Tagen",
+ *  wortgleich). Uebrig bleibt das, was wirklich ansteht — gross, mit dem Weg
+ *  dorthin. Die uebrigen Zahlen stehen als Nebensatz daneben.
+ */
+function NaechsterSchritt({ actions, onNavigate, onFilter }: {
+  actions: DashboardActions;
+  onNavigate: (path: string) => void;
+  onFilter: (filter: object) => void;
 }) {
-  const active = value > 0;
+  // Reihenfolge = Dringlichkeit. Der erste Treffer gewinnt.
+  const kandidaten = [
+    {
+      wenn: actions.scheduled_next_7 > 0,
+      zahl: actions.scheduled_next_7,
+      titel: actions.scheduled_next_7 === 1 ? "Upload steht diese Woche an" : "Uploads stehen diese Woche an",
+      knopf: "Zum Upload-Tab",
+      tun: () => onNavigate("/upload"),
+    },
+    {
+      wenn: actions.finished_unscheduled > 0,
+      zahl: actions.finished_unscheduled,
+      titel: actions.finished_unscheduled === 1 ? "fertiger Beat wartet auf einen Termin" : "fertige Beats warten auf einen Termin",
+      knopf: "Im Archiv zeigen",
+      tun: () => onFilter({ status: "finished", unpublishedOnly: true }),
+    },
+    {
+      wenn: actions.studio_ready > 0,
+      zahl: actions.studio_ready,
+      titel: actions.studio_ready === 1 ? "Projekt ist bereit zum Archivieren" : "Projekte sind bereit zum Archivieren",
+      knopf: "Zum Studio",
+      tun: () => onNavigate("/studio"),
+    },
+  ];
+  const schritt = kandidaten.find(k => k.wenn) ?? null;
+
   return (
-    <button
-      onClick={onClick}
-      style={{
-        ...commonStyles.card,
-        textAlign: "left",
-        padding: 18,
-        border: `1px solid ${active ? `${color}35` : C.border10}`,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-        cursor: "pointer",
-        transition: "border-color 0.2s, transform 0.15s",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = `${color}70`; e.currentTarget.style.transform = "translateY(-1px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? `${color}35` : C.border10; e.currentTarget.style.transform = "translateY(0)"; }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ color, display: "flex" }}>{icon}</span>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.onSurfaceVariant }}>
-          {title}
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurfaceVariant }}>
+        Was ansteht
+      </h4>
+
+      {schritt ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, color: C.primary, letterSpacing: "-0.02em" }}>
+            {schritt.zahl}
+          </span>
+          <span style={{ fontSize: 15, color: C.onSurface, fontWeight: 600 }}>{schritt.titel}</span>
+          <span style={{ flex: 1 }} />
+          <Button variant="primary" size="sm" onClick={schritt.tun}>{schritt.knopf}</Button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 15, color: C.onSurfaceVariant }}>
+          Nichts offen — alles geplant oder schon draußen.
+        </div>
+      )}
+
+      {/* Die uebrigen Zahlen als Nebensatz, nicht als eigene Kacheln. */}
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11, color: C.onSecondaryFixedVar }}>
+        <span
+          onClick={() => onFilter({ status: "finished", unpublishedOnly: true })}
+          style={{ cursor: "pointer" }}
+        >
+          <strong style={{ color: C.onSurfaceVariant }}>{actions.finished_unscheduled}</strong> fertig ohne Termin
         </span>
-        <ArrowRight size={11} color={C.onSecondaryFixedVar} style={{ marginLeft: "auto" }} />
+        <span onClick={() => onNavigate("/upload")} style={{ cursor: "pointer" }}>
+          <strong style={{ color: C.onSurfaceVariant }}>{actions.scheduled_next_7}</strong> diese Woche geplant
+        </span>
+        <span onClick={() => onNavigate("/studio")} style={{ cursor: "pointer" }}>
+          <strong style={{ color: C.onSurfaceVariant }}>{actions.studio_ready}</strong> Studio-Projekte bereit
+        </span>
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: active ? C.onSurface : C.onSecondaryFixedVar, lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 6 }}>{hint}</div>
-    </button>
+    </div>
   );
 }
 
-// ── Upload-Rhythmus: 8-Wochen-Balken + Serie ─────────────────────────────────
 function RhythmCard({ actions }: { actions: DashboardActions }) {
   const weeks = actions.uploads_per_week;
   const max = Math.max(1, ...weeks.map(w => w.count));
@@ -127,9 +173,26 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
       label: "Studio", value: studioTotal,
       detail: (
         <>
-          {STUDIO_STAGES.map((s, i) => `${studioCounts[i]} ${STUDIO_STATUS_CONFIG[s].label}`).join(" · ")}
+          {/* Der groesste Posten fett. Die Zeile war eine gleichfoermige Kette
+              aus fuenf Zahlen — dabei ist genau einer davon die Nachricht:
+              wo der Bestand liegt. Bewertet wird nichts, nur lesbar gemacht. */}
+          {STUDIO_STAGES.map((s, i) => {
+            const groesster = studioCounts[i] === Math.max(...studioCounts) && studioCounts[i] > 0;
+            return (
+              <span key={s}>
+                {i > 0 && " · "}
+                <span style={groesster ? { color: C.onSurfaceVariant, fontWeight: 700 } : undefined}>
+                  {studioCounts[i]} {STUDIO_STATUS_CONFIG[s].label}
+                </span>
+              </span>
+            );
+          })}
           {discardCount > 0 && (
-            <span style={{ color: STUDIO_STATUS_CONFIG.discard.color }}>
+            <span
+              onClick={e => { e.stopPropagation(); onNavigate("/studio"); }}
+              title="Im Studio ansehen"
+              style={{ color: STUDIO_STATUS_CONFIG.discard.color, cursor: "pointer" }}
+            >
               {" · "}{discardCount} kann weg
             </span>
           )}
@@ -214,30 +277,52 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
   const total = bars.reduce((sum, b) => sum + b.count, 0) || 1;
   return (
     <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", display: "flex", flexDirection: "column" }} {...commonStyles.cardHoverHandlers}>
-      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 20, flexShrink: 0 }}>Status-Verteilung</h4>
-      {/* Die Zeilen verteilen sich ueber die volle Kartenhoehe — die Karte wird
-          neben "Tonarten" gestreckt und stand vorher unten leer. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-around" }}>
-        {bars.map(({ key, label, color, count }) => (
-          <div key={key}
-            style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 0.15s", margin: "0 -10px" }}
-            onMouseEnter={e => (e.currentTarget.style.background = `${color}12`)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 18, flexShrink: 0 }}>Status-Verteilung</h4>
+
+      {/* EIN gestapelter Balken statt vier einzelner. Vier Balken brauchten die
+          vierfache Hoehe und zeigten dabei vor allem leere Strecke; gestapelt
+          sieht man zusaetzlich die Verhaeltnisse zueinander, was bei einer
+          Verteilung ohnehin die interessantere Frage ist. */}
+      <div style={{
+        display: "flex", height: 14, borderRadius: 999, overflow: "hidden",
+        background: C.surfaceContainerHighest, marginBottom: 16, flexShrink: 0,
+      }}>
+        {bars.filter(b => b.count > 0).map(({ key, label, color, count }) => (
+          <div
+            key={key}
+            title={`${label}: ${count}`}
             onClick={() => onNavigate({ status: key })}
+            style={{
+              // Mindestbreite, sonst verschwindet „Verkauft" mit 2 von 212 zu
+              // einem unsichtbaren Splitter.
+              width: `${Math.max((count / total) * 100, 1.5)}%`,
+              background: color,
+              cursor: "pointer",
+              transition: "width 0.6s ease, filter 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.filter = "brightness(1.25)")}
+            onMouseLeave={e => (e.currentTarget.style.filter = "none")}
+          />
+        ))}
+      </div>
+
+      {/* Legende: Punkt, Wort, Zahl — in einer Zeile pro Status, aber ohne
+          eigenen Balken. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+        {bars.map(({ key, label, color, count }) => (
+          <span
+            key={key}
+            onClick={() => onNavigate({ status: key })}
+            style={{
+              display: "flex", alignItems: "center", gap: 7,
+              fontSize: 11, color: C.onSurfaceVariant, cursor: "pointer",
+              opacity: count === 0 ? 0.45 : 1,
+            }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", color: C.onSurfaceVariant }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                {label}
-              </span>
-              <span>{count}</span>
-            </div>
-            <div style={{ height: 10, background: C.surfaceContainerHighest, borderRadius: 999, overflow: "hidden" }}>
-              {/* Mindestens 1.5 %, sonst verschwindet "Sold" mit 2 von 204 zu
-                  einem unsichtbaren Splitter. */}
-              <div style={{ height: "100%", width: count === 0 ? 0 : `${Math.max((count / total) * 100, 1.5)}%`, background: color, borderRadius: 999, transition: "width 0.6s ease" }} />
-            </div>
-          </div>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+            {label}
+            <strong style={{ color: C.onSurface, fontVariantNumeric: "tabular-nums" }}>{count}</strong>
+          </span>
         ))}
       </div>
     </div>
@@ -476,14 +561,18 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
                     onClick={() => onNavigate({ search: tag })}
                     style={{
                       padding: "4px 12px",
-                      background: colors.bg,
+                      // Neutral statt vier Kategoriefarben. Welche Kategorie es
+                      // ist, steht als Ueberschrift direkt darueber — die Farbe
+                      // wiederholte nur das Wort und brachte dafuer Orange,
+                      // Blau, Gruen und Lila gleichzeitig auf die Seite.
+                      background: C.surfaceContainerHigh,
                       borderRadius: 9999,
                       fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: "0.05em",
                       textTransform: "uppercase",
-                      color: colors.text,
-                      border: `1px solid ${colors.border}`,
+                      color: C.onSurfaceVariant,
+                      border: `1px solid ${C.border15}`,
                       cursor: "pointer",
                       transition: "filter 0.15s, transform 0.15s",
                       whiteSpace: "nowrap",
@@ -561,7 +650,9 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
             <span style={{ fontSize: 13, fontWeight: 600, color: isCurrent ? C.primary : C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{beat.name}</span>
             <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.key ?? "–"}</span>
             <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
-            <span><StatusPill status={beat.status ?? "idea"} /></span>
+            {/* Nur die AUSNAHME zeigen — dieselbe Regel wie im Archiv-Raster.
+                "Fertig" stand auf jeder Zeile und sagte damit nichts mehr. */}
+            <span>{(beat.status ?? "idea") !== "finished" && <StatusPill status={beat.status ?? "idea"} />}</span>
             <span style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
             <span />
           </div>
@@ -671,32 +762,16 @@ export default function Dashboard() {
       />
 
       <PageBody>
-          {/* Aktions-Zeile: Was steht heute an? */}
+          {/* Was ansteht — eine Fokus-Karte statt vier Kacheln, daneben der
+              Rhythmus. Die drei Zahlen, die vorher eigene Kacheln hatten,
+              stehen jetzt als Nebensatz in der Karte; die Pipeline-Zeile
+              darunter trug sie ohnehin schon einmal. */}
           {actions && (
-            <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-              <ActionCard
-                title="Diese Woche geplant"
-                value={actions.scheduled_next_7}
-                hint="Uploads in den nächsten 7 Tagen"
-                icon={<CalendarClock size={14} />}
-                color="#fda124"
-                onClick={() => navigate("/upload")}
-              />
-              <ActionCard
-                title="Fertig, ohne Termin"
-                value={actions.finished_unscheduled}
-                hint="fertige Beats ohne Upload-Plan"
-                icon={<Rocket size={14} />}
-                color="#f43f8e"
-                onClick={() => handleNavigate({ status: "finished", unpublishedOnly: true })}
-              />
-              <ActionCard
-                title="Studio bereit"
-                value={actions.studio_ready}
-                hint="Projekte bereit zum Archivieren"
-                icon={<Disc3 size={14} />}
-                color="#9492ff"
-                onClick={() => navigate("/studio")}
+            <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+              <NaechsterSchritt
+                actions={actions}
+                onNavigate={(pfad) => navigate(pfad)}
+                onFilter={handleNavigate}
               />
               <RhythmCard actions={actions} />
             </section>
