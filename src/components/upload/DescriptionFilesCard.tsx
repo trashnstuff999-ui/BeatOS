@@ -10,7 +10,7 @@ import {
   ShoppingBag, Music2, Youtube, Copy, Save, FileCode2,
   Check, AlertCircle, Loader2, FileText, ChevronDown,
 } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, PLATFORM_CONFIG } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Button } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -46,14 +46,17 @@ const TITEL_MAX = 100;
  *  Summe. Was darüber liegt, verschwindet still. */
 const YT_TAG_ZEICHEN = 500;
 
-// Ein Akzent statt drei Markenfarben: welcher Tab offen ist, sagt der aktive
-// Zustand — welche Plattform es ist, sagen Symbol und Beschriftung. Die
-// Plattformfarben bleiben dort, wo sie die einzige Unterscheidung sind
-// (Punkte im Planer, Badges in der Archiv-Tabelle).
+// Die Markenfarbe traegt NUR der aktive Abschnitt.
+//
+// Alle drei dauerhaft einzufaerben waere dieselbe Falle wie zuvor beim Gruen:
+// SoundClouds Orange liegt dicht an der Akzentfarbe der App, YouTubes Rot
+// dicht an der Fehlerfarbe — drei bunte Knoepfe nebeneinander konkurrieren,
+// und keiner sagt mehr etwas. Aktiv gefaerbt sagt die Farbe dagegen genau
+// eines: wo du gerade bist.
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
-  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: C.primary, file: "beatstars.txt"  },
-  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: C.primary, file: "soundcloud.txt" },
-  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: C.primary, file: "youtube.txt"    },
+  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
+  { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
+  { key: "youtube",    label: "YouTube",    icon: Youtube,     color: PLATFORM_CONFIG.youtube.color,    file: "youtube.txt"    },
 ];
 
 export function DescriptionFilesCard({
@@ -237,8 +240,10 @@ export function DescriptionFilesCard({
           Pillen: die drei Plattformen sind Abschnitte derselben Sache, keine
           drei getrennten Knoepfe. Nur der aktive Abschnitt bekommt Flaeche. */}
       <div style={{
-        display: "flex", marginBottom: 10,
-        background: C.surfaceContainerLowest,
+        display: "flex", marginBottom: 12,
+        // Eine Stufe UEBER der Karte, wie die Status-Kacheln: die Leiste lag
+        // vorher auf der dunkelsten Flaeche und las sich als Ausschnitt.
+        background: C.surfaceContainer,
         border: `1px solid ${C.border15}`,
         borderRadius: 8,
         overflow: "hidden",
@@ -255,19 +260,22 @@ export function DescriptionFilesCard({
               style={{
                 flex: 1,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "9px 12px",
-                background: isActive ? C.surfaceContainer : "transparent",
+                padding: "10px 12px",
+                // Aktiv: getoente Flaeche plus Unterstrich in der Markenfarbe.
+                // Als Rahmen zerfiele die Leiste wieder in drei Knoepfe.
+                background: isActive ? `${tab.color}14` : "transparent",
                 border: "none",
                 borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
-                // Der aktive Abschnitt traegt seine Farbe als Unterstrich,
-                // nicht als Rahmen — sonst zerfaellt die Leiste wieder.
                 boxShadow: isActive ? `inset 0 -2px 0 ${tab.color}` : "none",
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 700, fontFamily: "inherit",
-                color: isActive ? tab.color : C.onSurfaceVariant,
+                color: isActive ? tab.color : C.onSecondaryFixedVar,
                 letterSpacing: "0.05em", textTransform: "uppercase",
                 position: "relative",
+                transition: "background 0.15s, color 0.15s",
               }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = C.onSurface; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
             >
               <Icon size={13} strokeWidth={1.75} />
               {tab.label}
