@@ -271,8 +271,14 @@ export default function Browse() {
                     cursor: "pointer", outline: "none", flexShrink: 0,
                   }}
                 >
-                  <option value="id:desc">Neueste zuerst</option>
-                  <option value="id:asc">Älteste zuerst</option>
+                  {/* Zwei verschiedene Zeitachsen, und sie laufen auseinander:
+                      die Nummer sagt, wann archiviert wurde, das Datum kommt
+                      aus der FLP und sagt, wann produziert wurde. Nur die
+                      Datums-Sortierung passt zu den Monatsueberschriften. */}
+                  <option value="created_date:desc">Datum — neueste zuerst</option>
+                  <option value="created_date:asc">Datum — älteste zuerst</option>
+                  <option value="id:desc">Zuletzt archiviert</option>
+                  <option value="id:asc">Zuerst archiviert</option>
                   <option value="name:asc">Titel A–Z</option>
                   <option value="bpm:asc">Tempo aufsteigend</option>
                   <option value="bpm:desc">Tempo absteigend</option>
@@ -398,12 +404,11 @@ export default function Browse() {
                   onPlayBeat={handlePlayBeat}
                   getCoverUrl={getCoverUrl}
                   uploadBadges={uploadBadges}
-                  // Monatsueberschriften nur bei chronologischer Sicht. Nach
-                  // Tempo oder Tonart sortiert waeren sie gelogen — dann steht
-                  // ein Beat aus Mai zwischen zweien aus August.
-                  // Die Nummer ist der chronologische Schluessel: sie wird
-                  // beim Archivieren fortlaufend vergeben.
-                  gruppiereNachMonat={sort.column === "id"}
+                  // Nur wenn nach demselben Feld sortiert wird, nach dem
+                  // gruppiert wird. Anfangs hing das an der Nummer — falsch:
+                  // die Nummer zaehlt die Archivierung, das Datum kommt aus
+                  // der FLP. Dadurch kam derselbe Monat mehrfach vor.
+                  gruppiereNachMonat={sort.column === "created_date"}
                 />
               )}
 

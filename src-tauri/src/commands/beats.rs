@@ -243,6 +243,11 @@ pub fn get_beats_paginated(
         "id" => "CAST(id AS INTEGER)",
         "name" => "LOWER(name)",
         "bpm" => "COALESCE(bpm, 0)",
+        // Produktionsdatum aus der FLP — NICHT dasselbe wie die Nummer. Die
+        // wird beim Archivieren fortlaufend vergeben, das Datum kommt aus der
+        // Datei; ein spaet archivierter Beat kann also eine alte FLP haben.
+        // Ohne Datum ans Ende, sonst stuenden sie je nach Richtung vorne.
+        "created_date" => "COALESCE(created_date, '0000-00-00')",
         "key" => "COALESCE(LOWER(key), 'zzz')",
         // Nach Workflow, nicht nach Alphabet — alphabetisch kaeme
         // finished/idea/sold/wip heraus, was keiner Reihenfolge entspricht.

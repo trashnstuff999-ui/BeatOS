@@ -26,7 +26,7 @@ export type BeatStatus = "idea" | "wip" | "finished" | "sold";
 
 // ─── Sort State ─────────────────────────────────────────────────────────────
 
-export type SortColumn = "id" | "name" | "key" | "bpm" | "status";
+export type SortColumn = "id" | "name" | "key" | "bpm" | "status" | "created_date";
 export type SortDirection = "asc" | "desc";
 
 export interface SortState {
