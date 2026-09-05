@@ -192,23 +192,38 @@ export function DescriptionFilesCard({
     <SectionCard
       icon={FileText}
       title="Beschreibungen"
-      // Fuellt ihre Huelle (siehe Upload.tsx): der Inhaltsbereich waechst und
-      // scrollt, der Speichern-Knopf bleibt am Fuss. Die Kartenhoehe kommt von
-      // der Infos-Karte daneben und aendert sich nicht, wenn der Volltext
-      // aufklappt.
+      // Fuellt ihre Huelle (siehe Upload.tsx). Der Inhaltsbereich nimmt die
+      // ganze uebrige Hoehe und scrollt — dadurch steht alles Uebrige fest,
+      // egal wie lang der Text der gewaehlten Plattform ist und ob der
+      // Volltext aufgeklappt ist.
       style={{ height: "100%", display: "flex", flexDirection: "column", ...style }}
       actions={
-        // Der Neu-Rendern-Knopf ist raus: nach dem Speichern einer Vorlage
-        // rendert die Karte ohnehin neu.
-        <Button
-          size="sm"
-          variant="secondary"
-          icon={FileCode2}
-          onClick={() => setShowTemplates(true)}
-          title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
-        >
-          Vorlagen bearbeiten
-        </Button>
+        // Speichern steht hier oben statt am Kartenfuss. Unten sprang es bei
+        // jedem Tabwechsel mit der Textlaenge mit; hier steht es fest, und die
+        // Karte braucht keine Fusszeile, die bei kurzen Vorlagen eine Luecke
+        // ueber sich laesst.
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={FileCode2}
+            onClick={() => setShowTemplates(true)}
+            title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
+          >
+            Vorlagen
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Save}
+            onClick={persist}
+            loading={isSaving}
+            disabled={!drafts}
+            title="Beatstars, SoundCloud und YouTube in den Beat-Ordner schreiben"
+          >
+            Speichern
+          </Button>
+        </div>
       }
     >
 
@@ -302,10 +317,10 @@ export function DescriptionFilesCard({
         borderTop: `1px solid ${C.border10}`,
         // Nimmt die Hoehe auf, die die Karte neben der Infos-Karte gewinnt:
         // statt Luft steht dort mehr von der Beschreibung.
-        // flex-grow bewusst 0: waechst der Bereich auf die ganze Kartenhoehe,
-        // rutscht der Speichern-Knopf an den Fuss und die Luecke dazwischen
-        // wird sichtbar. So folgt er dem Inhalt, und der Rest ist Kartenrand.
-        flex: "0 1 auto", minHeight: 0, overflowY: "auto",
+        // Nimmt die ganze uebrige Hoehe und scrollt. Damit steht die Karte
+        // still: kurze und lange Vorlagen ergeben dieselbe Aussenform, und das
+        // Aufklappen des Volltexts schneidet nichts ab, sondern scrollt.
+        flex: 1, minHeight: 0, overflowY: "auto",
       }}>
         <OutputRow
           label="Titel"
@@ -419,7 +434,11 @@ export function DescriptionFilesCard({
               width: "100%",
               minHeight: 460,
               padding: "12px 14px",
-              background: C.surfaceContainerLowest,
+              // NICHT surfaceContainerLowest — das ist reines Schwarz und
+              // liest sich auf der Karte als Loch. Ein Feld steht eine Stufe
+              // von seiner Karte ab; weil die Karte schon auf der zweiten
+              // Stufe von unten liegt, geht dieser Schritt nach oben.
+              background: C.surfaceContainer,
               border: `1px solid ${C.border20}`,
               borderRadius: 8,
               outline: "none",
@@ -448,23 +467,6 @@ export function DescriptionFilesCard({
           )}
         </div>
       )}
-      </div>
-
-      {/* ─── Eine Handlung: speichern. Vorher standen hier vier Knoepfe —
-              „Text" kopierte den Rohtext, ein zweiter speicherte nur die
-              aktuelle Datei, dazu Dateiname und „saved"-Vermerk. ───────── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-        <Button
-          size="sm"
-          variant="primary"
-          icon={Save}
-          onClick={persist}
-          loading={isSaving}
-          disabled={!drafts}
-          title="Beatstars, SoundCloud und YouTube in den Beat-Ordner schreiben"
-        >
-          Speichern
-        </Button>
       </div>
 
       {/* ─── Banner ──────────────────────────────────────────────────────── */}
