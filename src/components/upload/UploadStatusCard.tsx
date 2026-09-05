@@ -147,7 +147,10 @@ function PlatformRow({ beatId, row, onChanged }: {
   };
 
   const dateValue = row.status === "uploaded" ? (row.uploaded_at ?? "") : (row.scheduled_at ?? "");
-  const zustand = UPLOAD_STATUS_CONFIG[row.status] ?? UPLOAD_STATUS_CONFIG.draft;
+  const hochgeladen = row.status === "uploaded";
+  const geplant     = row.status === "scheduled";
+  /** Geplant oder hochgeladen — die Plattform ist angefasst, nicht mehr leer. */
+  const imSpiel = hochgeladen || geplant;
 
   const copyUrl = async () => {
     if (!urlDraft.trim()) return;
@@ -162,14 +165,19 @@ function PlatformRow({ beatId, row, onChanged }: {
 
   return (
     <div style={{
-      // Erhebung geht in einem dunklen Design nach OBEN. Vorher lag hier die
-      // dunkelste Flaeche (surfaceContainerLowest) in einer helleren Karte —
-      // das las sich nicht als Kachel, sondern als Loch. Jetzt eine Stufe
-      // ueber der Karte, dazu ein Rand, der den Zustand aufnimmt.
+      // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe ueber
+      // der Karte, nicht darunter.
       padding: "14px 15px",
       borderRadius: 10,
       background: C.surfaceContainer,
-      border: `1px solid ${row.status === "draft" ? C.border15 : zustand.color + "45"}`,
+      // ZWEI Angaben, ZWEI Kanaele:
+      //   Farbe   = welche Plattform (und ob sie ueberhaupt im Spiel ist)
+      //   Linie   = wie sicher — durchgezogen steht, gestrichelt ist vorgemerkt
+      // Farbe fuer beides zu benutzen ginge nicht: sie kann nur eines
+      // bedeuten. Der genaue Zustand steht ohnehin als Wort in der Leiste.
+      border: hochgeladen ? `1px solid ${meta.color}66`
+            : geplant     ? `1px dashed ${meta.color}55`
+            : `1px solid ${C.border15}`,
       display: "flex", flexDirection: "column", gap: 12,
     }}>
       {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
@@ -177,14 +185,20 @@ function PlatformRow({ beatId, row, onChanged }: {
           Zustand zwei Zeilen tiefer. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {/* Symbol und Name tragen die Zustandsfarbe, nicht die Markenfarbe:
-              so sieht man am Zeilenkopf, wie weit die Plattform ist, ohne die
-              Leiste darunter zu lesen. Entwurf bleibt bewusst grau — sonst
-              wäre alles bunt und nichts hervorgehoben. */}
-          <PlatIcon size={15} color={zustand.color} strokeWidth={1.75} />
+          {/* Sobald die Plattform im Spiel ist — geplant oder hochgeladen —
+              tragen Symbol und Name ihre Markenfarbe. Im Entwurf bleiben sie
+              grau: sonst leuchtete alles von Anfang an, und das Aufleuchten
+              waere keine Nachricht mehr. */}
+          <PlatIcon
+            size={15}
+            color={imSpiel ? meta.color : C.onSurfaceVariant}
+            strokeWidth={1.75}
+            style={{ transition: "color 0.15s" }}
+          />
           <span style={{
             fontSize: 13, fontWeight: 600,
-            color: row.status === "draft" ? C.onSurface : zustand.color,
+            color: imSpiel ? meta.color : C.onSurface,
+            transition: "color 0.15s",
           }}>
             {meta.label}
           </span>
