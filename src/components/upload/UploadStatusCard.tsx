@@ -286,8 +286,17 @@ function PlatformRow({ beatId, row, onChanged }: {
         display: "flex", alignItems: "center", gap: 8,
         marginTop: 6, paddingLeft: 23,
       }}>
-        <div style={{ display: "flex", gap: 2 }}>
-          {STATUS_ORDER.map(s => {
+        {/* Eine zusammenhaengende Leiste statt drei loser Woerter: vorher sah
+            der Statuswechsel aus wie eine Beschriftung, und dass man auf
+            „Entwurf" und „Geplant" klicken kann, war nicht zu sehen. Dieselbe
+            Form wie die Plattform-Tabs bei den Beschreibungen. */}
+        <div style={{
+          display: "flex",
+          border: `1px solid ${C.border15}`,
+          borderRadius: 6,
+          overflow: "hidden",
+        }}>
+          {STATUS_ORDER.map((s, i) => {
             const active = row.status === s;
             const m = UPLOAD_STATUS_CONFIG[s];
             return (
@@ -295,23 +304,25 @@ function PlatformRow({ beatId, row, onChanged }: {
                 key={s}
                 onClick={() => setStatus(s)}
                 disabled={isSaving}
-                title={m.label}
+                title={`Auf „${m.label}" setzen`}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                  padding: "4px 9px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "5px 10px",
                   background: active ? m.bg : "transparent",
                   border: "none",
-                  borderRadius: 5,
+                  borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
                   cursor: isSaving ? "wait" : "pointer",
-                  fontSize: 11, fontWeight: active ? 700 : 500,
+                  fontSize: 10, fontWeight: active ? 700 : 500,
+                  fontFamily: "inherit",
                   color: active ? m.color : C.onSecondaryFixedVar,
                   letterSpacing: "0.05em",
                   textTransform: "uppercase",
-                  opacity: isSaving ? 0.6 : (active ? 1 : 0.7),
-                  transition: "all 0.15s",
+                  opacity: isSaving ? 0.6 : 1,
+                  transition: "background 0.15s, color 0.15s",
                 }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = C.onSurface; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
               >
-                {active && <span style={{ width: 4, height: 4, borderRadius: "50%", background: m.color }} />}
                 {m.label}
               </button>
             );

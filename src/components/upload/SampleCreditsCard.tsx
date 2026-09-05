@@ -135,8 +135,12 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
       {bare && (
         <div style={{
           display: "flex", alignItems: "center", gap: 6, marginBottom: 12,
-          fontSize: 11, fontWeight: 700,
-          color: C.onSurfaceVariant,
+          // Eine Stufe unter der Kartenüberschrift, nicht daneben: gleiche
+          // Form (gesperrt, Versalien), aber kleiner und leiser. Mit
+          // identischen Werten waren „Infos & Credits" und „Credits" optisch
+          // gleichrangig — das ist keine Hierarchie, sondern eine Wiederholung.
+          fontSize: 10, fontWeight: 700,
+          color: C.onSecondaryFixedVar,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           Credits

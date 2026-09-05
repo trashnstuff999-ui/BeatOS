@@ -278,7 +278,7 @@ export function DescriptionFilesCard({
                 }} />
               )}
               {exists && !isDirty && (
-                <Check size={11} color={C.mint} strokeWidth={2.5} />
+                <Check size={11} color={C.onSecondaryFixedVar} strokeWidth={2.5} />
               )}
             </button>
           );
@@ -294,7 +294,10 @@ export function DescriptionFilesCard({
         borderTop: `1px solid ${C.border10}`,
         // Nimmt die Hoehe auf, die die Karte neben der Infos-Karte gewinnt:
         // statt Luft steht dort mehr von der Beschreibung.
-        flex: 1, minHeight: 0, overflowY: "auto",
+        // flex-grow bewusst 0: waechst der Bereich auf die ganze Kartenhoehe,
+        // rutscht der Speichern-Knopf an den Fuss und die Luecke dazwischen
+        // wird sichtbar. So folgt er dem Inhalt, und der Rest ist Kartenrand.
+        flex: "0 1 auto", minHeight: 0, overflowY: "auto",
       }}>
         <OutputRow
           label="Titel"

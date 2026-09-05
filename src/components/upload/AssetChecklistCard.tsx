@@ -171,14 +171,19 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
                   }
                   style={{
                     width: 22, height: 5, borderRadius: 3,
-                    background: !r.filename ? C.border20 : falsch ? "#fda124" : C.mint,
+                    // Neutral statt grün: „Datei liegt da" ist eine Zählung,
+                    // keine Zustandsaussage. Grün bleibt den zwei Stellen, die
+                    // wirklich etwas melden — „Bereit zum Hochladen" oben und
+                    // „Hochgeladen" im Status. Sonst ist die Seite so grün,
+                    // dass nichts mehr heraussticht.
+                    background: !r.filename ? C.border20 : falsch ? "#fda124" : C.onSurfaceVariant,
                   }}
                 />
               );
             })}
           </span>
 
-          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: allOk && !schiefeMasse.length ? C.mint : C.onSurface }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.onSurface }}>
             {!allOk
               ? `${present.length} von ${allRows.length} — es fehlt ${missing.map(m => m.label).join(", ")}`
               : schiefeMasse.length > 0
