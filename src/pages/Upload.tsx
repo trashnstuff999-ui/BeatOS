@@ -209,6 +209,7 @@ export default function Upload() {
                   uploadFiles={data.assets.upload_files}
                   onSaved={refresh}
                   rerenderKey={rerenderKey}
+                  beatstarsUrl={data.uploads.find(x => x.platform === "beatstars")?.url ?? null}
                   style={{ position: "absolute", inset: 0 }}
                 />
               </div>

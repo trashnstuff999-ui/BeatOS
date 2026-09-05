@@ -27,12 +27,24 @@ interface DescriptionFilesCardProps {
   // rendered output changes (type-beat fields, upload status URL, etc.) and
   // the card will auto re-render.
   rerenderKey: number;
+  /** Der Kauflink dieses Beats aus dem Status. Fehlt er, rendert
+   *  {{BEATSTARS_LINK}} das Profil statt des Beats — siehe Hinweis unten. */
+  beatstarsUrl: string | null;
   /** Vom Upload-Tab gesetzt, um die Karte in ihrer Huelle zu verankern. */
   style?: React.CSSProperties;
 }
 
 type TabKey = UploadPlatform;
 type Banner = { kind: "ok" | "err"; msg: string } | null;
+
+/** Titellänge. YouTube schneidet bei 100 Zeichen hart ab, ohne zu fragen;
+ *  SoundCloud und Beatstars liegen ebenfalls bei 100. Ein Wert reicht also —
+ *  wird eine Plattform großzügiger, gehört hier eine Tabelle hin. */
+const TITEL_MAX = 100;
+
+/** YouTube begrenzt die Tags nicht in der Anzahl, sondern auf 500 Zeichen in
+ *  Summe. Was darüber liegt, verschwindet still. */
+const YT_TAG_ZEICHEN = 500;
 
 // Ein Akzent statt drei Markenfarben: welcher Tab offen ist, sagt der aktive
 // Zustand — welche Plattform es ist, sagen Symbol und Beschriftung. Die
@@ -45,7 +57,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: 
 ];
 
 export function DescriptionFilesCard({
-  beatId, uploadFiles, onSaved, rerenderKey, style,
+  beatId, uploadFiles, onSaved, rerenderKey, beatstarsUrl, style,
 }: DescriptionFilesCardProps) {
   const [active, setActive] = useState<TabKey>("beatstars");
   const [drafts, setDrafts] = useState<UploadDescriptions | null>(null);
@@ -197,6 +209,29 @@ export function DescriptionFilesCard({
       }
     >
 
+      {/* Der Kauflink fehlt — dann steht in allen drei Beschreibungen das
+          Profil statt des Beats, und zwar stillschweigend: {{BEATSTARS_LINK}}
+          faellt im Renderer auf beatstars_url aus den Einstellungen zurueck.
+          Wer die Beschreibungen vorher speichert, paste hinterher den
+          falschen Link. Deshalb steht der Hinweis hier, wo der Text
+          entsteht — nicht beim Status, wo der Link eingetragen wird. */}
+      {!beatstarsUrl?.trim() && (
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 8,
+          padding: "9px 12px", borderRadius: 8,
+          background: "rgba(253,161,36,0.10)",
+          border: "1px solid rgba(253,161,36,0.35)",
+          fontSize: 11, lineHeight: 1.5, color: "#fda124",
+        }}>
+          <AlertCircle size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            Kein Beatstars-Kauflink hinterlegt — in den Beschreibungen steht
+            gerade dein Profil statt dieses Beats. Link unten bei
+            <strong> Status → Beatstars</strong> eintragen, dann rendert es neu.
+          </span>
+        </div>
+      )}
+
       {/* ─── Tab strip ───────────────────────────────────────────────────────
           Eine zusammenhaengende Leiste mit Trennstrichen statt drei einzelner
           Pillen: die drei Plattformen sind Abschnitte derselben Sache, keine
@@ -263,6 +298,8 @@ export function DescriptionFilesCard({
       }}>
         <OutputRow
           label="Titel"
+          badge={`${activeTitle.length}/${TITEL_MAX}`}
+          badgeWarn={activeTitle.length > TITEL_MAX}
           onCopy={handleCopyTitle}
           disabled={!drafts || isLoading}
         >
@@ -301,8 +338,17 @@ export function DescriptionFilesCard({
         {activeTags && (
           <OutputRow
             label="Tags"
-            badge={active === "soundcloud" ? `${activeTagCount}/9` : String(activeTagCount)}
-            badgeWarn={active === "soundcloud" && activeTagCount > 9}
+            // SoundCloud begrenzt die Anzahl, YouTube die Zeichensumme —
+            // deshalb zwei verschiedene Zähler statt eines.
+            badge={
+              active === "soundcloud" ? `${activeTagCount}/9`
+              : active === "youtube"  ? `${activeTags.length}/${YT_TAG_ZEICHEN} Zeichen`
+              : String(activeTagCount)
+            }
+            badgeWarn={
+              (active === "soundcloud" && activeTagCount > 9) ||
+              (active === "youtube" && activeTags.length > YT_TAG_ZEICHEN)
+            }
             onCopy={handleCopyTags}
             disabled={!drafts || isLoading}
           >
