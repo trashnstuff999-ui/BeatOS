@@ -1,6 +1,6 @@
 // src/lib/typeBeat.test.ts
 
-import { parseArtists, parseGenres, joinArtists, joinAlsoFits, joinGenres } from "./typeBeat";
+import { parseArtists, parseGenres, joinArtists, joinAlsoFits, joinGenres, verschiebe } from "./typeBeat";
 
 describe("parseArtists", () => {
   it("splits on ' x ', comma and ' & ' (legacy freetext)", () => {
@@ -53,5 +53,28 @@ describe("join + parse roundtrips", () => {
   it("join drops empty rows", () => {
     expect(joinArtists(["A", "  ", ""])).toBe("A");
     expect(joinGenres([])).toBe("");
+  });
+});
+
+describe("verschiebe", () => {
+  it("zieht nach hinten", () => {
+    expect(verschiebe(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
+  });
+
+  it("zieht nach vorn", () => {
+    expect(verschiebe(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+  });
+
+  it("laesst die Liste in Ruhe, wenn sich nichts aendert", () => {
+    const liste = ["a", "b"];
+    expect(verschiebe(liste, 1, 1)).toBe(liste);
+  });
+
+  /** Waehrend eines Ziehvorgangs kann der Zeiger neben der Liste landen —
+   *  dann darf kein `undefined` einsortiert werden. */
+  it("ignoriert Indizes ausserhalb der Liste", () => {
+    const liste = ["a", "b"];
+    expect(verschiebe(liste, 0, 5)).toBe(liste);
+    expect(verschiebe(liste, -1, 0)).toBe(liste);
   });
 });

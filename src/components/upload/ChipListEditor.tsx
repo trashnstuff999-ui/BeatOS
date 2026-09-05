@@ -7,9 +7,10 @@
 // the last chip, "+" gives a clickable affordance.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { C } from "../../lib/theme";
+import { verschiebe } from "../../lib/typeBeat";
 
 interface ChipListEditorProps {
   label: string;
@@ -33,6 +34,58 @@ export function ChipListEditor({
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Sortieren per Ziehen ─────────────────────────────────────────────────
+  //
+  // Die Reihenfolge ist nicht kosmetisch: aus ihr entsteht der Titel
+  // („A x B") und die Genre-Kette („G1 | G2").
+  //
+  // Bewusst über Zeigerereignisse statt über HTML5-Drag-and-Drop: Tauri
+  // installiert bei `dragDropEnabled` (Standard) den Datei-Drop-Handler des
+  // Betriebssystems, und der schaltet HTML5-Ziehen im Fenster ab. Abschalten
+  // kommt nicht in Frage — der Datei-Drop ins Fenster steht auf der Roadmap.
+  const [gezogen, setGezogen] = useState<number | null>(null);
+  const gezogenRef = useRef<number | null>(null);
+  const chipRefs = useRef<Array<HTMLSpanElement | null>>([]);
+
+  useEffect(() => {
+    if (gezogen === null) return;
+
+    const bewegen = (e: PointerEvent) => {
+      const von = gezogenRef.current;
+      if (von === null) return;
+      // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
+      // zaehlt beides — waagerecht und senkrecht.
+      const nach = chipRefs.current.findIndex(el => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return e.clientX >= r.left && e.clientX <= r.right
+            && e.clientY >= r.top  && e.clientY <= r.bottom;
+      });
+      if (nach < 0 || nach === von) return;
+      gezogenRef.current = nach;
+      setGezogen(nach);
+      onChange(verschiebe(values, von, nach));
+    };
+
+    const loslassen = () => { gezogenRef.current = null; setGezogen(null); };
+
+    window.addEventListener("pointermove", bewegen);
+    window.addEventListener("pointerup", loslassen);
+    window.addEventListener("pointercancel", loslassen);
+    return () => {
+      window.removeEventListener("pointermove", bewegen);
+      window.removeEventListener("pointerup", loslassen);
+      window.removeEventListener("pointercancel", loslassen);
+    };
+  }, [gezogen, values, onChange]);
+
+  const starteZiehen = (i: number) => (e: React.PointerEvent) => {
+    // Der Entfernen-Knopf im Chip darf kein Ziehen ausloesen.
+    if ((e.target as HTMLElement).closest("button")) return;
+    gezogenRef.current = i;
+    setGezogen(i);
+  };
 
   const commitDraft = () => {
     const v = draft.trim();
@@ -111,17 +164,26 @@ export function ChipListEditor({
               </span>
             )}
             <span
-              onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHighest; }}
-              onMouseLeave={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              ref={el => { chipRefs.current[i] = el; }}
+              onPointerDown={starteZiehen(i)}
+              onMouseEnter={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHighest; }}
+              onMouseLeave={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              title="Ziehen zum Umsortieren"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
                 padding: "4px 8px 4px 10px",
-                background: C.surfaceContainerHigh,
+                background: gezogen === i ? C.surfaceContainerHighest : C.surfaceContainerHigh,
                 borderRadius: 9999,
                 fontSize: 12, fontWeight: 600,
                 color: C.onSurface,
                 lineHeight: 1.2,
-                transition: "background 0.12s",
+                cursor: gezogen === null ? "grab" : "grabbing",
+                // Waehrend des Ziehens darf der Zeiger keinen Text markieren,
+                // und auf dem Touchpad kein Scrollen ausloesen.
+                userSelect: "none",
+                touchAction: "none",
+                opacity: gezogen === i ? 0.65 : 1,
+                transition: "background 0.12s, opacity 0.12s",
               }}
             >
               {v}

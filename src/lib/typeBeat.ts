@@ -56,3 +56,18 @@ export function joinGenres(rows: string[]): string {
 function clean(rows: string[]): string[] {
   return rows.map(r => r.trim()).filter(Boolean);
 }
+
+/** Einen Eintrag innerhalb einer Liste verschieben.
+ *
+ *  Kern der Zieh-Sortierung in `ChipListEditor`. Ausserhalb liegende Indizes
+ *  geben die Liste unveraendert zurueck, statt `undefined` einzufuegen —
+ *  waehrend eines Ziehvorgangs kann der Zeiger neben der Liste landen.
+ */
+export function verschiebe<T>(liste: T[], von: number, nach: number): T[] {
+  if (von === nach) return liste;
+  if (von < 0 || nach < 0 || von >= liste.length || nach >= liste.length) return liste;
+  const neu = [...liste];
+  const [eintrag] = neu.splice(von, 1);
+  neu.splice(nach, 0, eintrag);
+  return neu;
+}
