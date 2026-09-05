@@ -161,7 +161,10 @@ export function ChipListEditor({
           // ganzen Feld: eine Fläche, die unter dem Zeiger aufleuchtet, wirkt
           // träge — reagiert dagegen genau das Element unter dem Zeiger,
           // fühlt es sich flüssig an.
-          background: focused ? C.surfaceContainerLowest : "transparent",
+          // Wie jedes Feld eine Stufe ueber der Karte (siehe commonStyles.input
+          // in theme.ts) — im Ruhezustand bleibt es transparent, damit die
+          // Gruppen nicht wieder als Kaesten lesen.
+          background: focused ? C.surfaceContainer : "transparent",
           border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
           borderRadius: 8,
           cursor: "text",

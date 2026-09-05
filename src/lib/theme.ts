@@ -11,7 +11,11 @@
 export const colors = {
   // ── Background Hierarchy (dunkel → hell) ───────────────────────────────────
   background:              "#0e0e0e",
-  surfaceContainerLowest:  "#000000",
+  // Nicht reines Schwarz. #000000 lag 14 Stufen unter dem Seitenhintergrund,
+  // waehrend alle anderen Schritte gleichmaessig rund 7 auseinanderliegen —
+  // alles, was diese Flaeche benutzte, las sich dadurch als ausgestanztes
+  // Loch statt als Element. Jetzt Teil derselben Reihe.
+  surfaceContainerLowest:  "#0a0a0a",
   surfaceContainerLow:     "#131313",
   surfaceContainer:        "#1a1919",
   surfaceContainerHigh:    "#201f1f",
@@ -198,8 +202,20 @@ export const commonStyles = {
   },
 
   // Input Base
+  /** Eingabefelder.
+   *
+   *  Regel: **ein Feld hebt sich von seiner Karte ab, es versinkt nicht
+   *  darin.** Karten liegen auf `surfaceContainerLow`, Felder also eine Stufe
+   *  darueber. Vorher stand hier `surfaceContainerLowest` — auf einer Karte
+   *  ergab das ein schwarzes Loch, und weil dieser Stil ueberall eingebunden
+   *  ist, zog sich der Effekt durch die ganze App.
+   *
+   *  Die einzige Ausnahme sind Felder, die selbst schon auf
+   *  `surfaceContainer` liegen (etwa in den Status-Kacheln des Upload-Tabs).
+   *  Dort setzt die Stelle den Hintergrund selbst — entscheidend ist der
+   *  Abstand zur eigenen Umgebung, nicht der absolute Wert. */
   input: {
-    background: colors.surfaceContainerLowest,
+    background: colors.surfaceContainer,
     border: `1px solid ${colors.border20}`,
     borderRadius: radius.control,
     color: colors.onSurface,
