@@ -7,7 +7,7 @@
 // the last chip, "+" gives a clickable affordance.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { C } from "../../lib/theme";
 import { verschiebe } from "../../lib/typeBeat";
@@ -46,45 +46,43 @@ export function ChipListEditor({
   // kommt nicht in Frage — der Datei-Drop ins Fenster steht auf der Roadmap.
   const [gezogen, setGezogen] = useState<number | null>(null);
   const gezogenRef = useRef<number | null>(null);
-  const chipRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const chipRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
 
-  useEffect(() => {
-    if (gezogen === null) return;
-
-    const bewegen = (e: PointerEvent) => {
-      const von = gezogenRef.current;
-      if (von === null) return;
-      // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
-      // zaehlt beides — waagerecht und senkrecht.
-      const nach = chipRefs.current.findIndex(el => {
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        return e.clientX >= r.left && e.clientX <= r.right
-            && e.clientY >= r.top  && e.clientY <= r.bottom;
-      });
-      if (nach < 0 || nach === von) return;
-      gezogenRef.current = nach;
-      setGezogen(nach);
-      onChange(verschiebe(values, von, nach));
-    };
-
-    const loslassen = () => { gezogenRef.current = null; setGezogen(null); };
-
-    window.addEventListener("pointermove", bewegen);
-    window.addEventListener("pointerup", loslassen);
-    window.addEventListener("pointercancel", loslassen);
-    return () => {
-      window.removeEventListener("pointermove", bewegen);
-      window.removeEventListener("pointerup", loslassen);
-      window.removeEventListener("pointercancel", loslassen);
-    };
-  }, [gezogen, values, onChange]);
-
-  const starteZiehen = (i: number) => (e: React.PointerEvent) => {
+  const starteZiehen = (i: number) => (e: React.PointerEvent<HTMLSpanElement>) => {
     // Der Entfernen-Knopf im Chip darf kein Ziehen ausloesen.
     if ((e.target as HTMLElement).closest("button")) return;
+    // Ohne das faengt der Browser an, Text zu markieren.
+    e.preventDefault();
+    // Zeigererfassung: alle weiteren Bewegungen gehen an DIESES Element,
+    // egal was gerade unter dem Zeiger liegt. Ohne sie verliert man den
+    // Zug, sobald die Liste sich neu ordnet.
+    e.currentTarget.setPointerCapture(e.pointerId);
     gezogenRef.current = i;
     setGezogen(i);
+  };
+
+  const beimZiehen = (e: React.PointerEvent) => {
+    const von = gezogenRef.current;
+    if (von === null) return;
+    // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
+    // zaehlt beides — waagerecht und senkrecht.
+    const treffer = values.findIndex(v => {
+      const el = chipRefs.current.get(v);
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right
+          && e.clientY >= r.top  && e.clientY <= r.bottom;
+    });
+    if (treffer < 0 || treffer === von) return;
+    gezogenRef.current = treffer;
+    setGezogen(treffer);
+    onChange(verschiebe(values, von, treffer));
+  };
+
+  const beendeZiehen = () => {
+    if (gezogenRef.current === null) return;
+    gezogenRef.current = null;
+    setGezogen(null);
   };
 
   const commitDraft = () => {
@@ -152,8 +150,13 @@ export function ChipListEditor({
           boxSizing: "border-box",
         }}
       >
+        {/* Schluessel ist der Wert selbst, nicht Wert+Position. Mit der
+            Position im Schluessel aendert sich beim Umsortieren JEDER
+            Schluessel, React baut alle Knoten neu — und der gegriffene Chip
+            verschwindet mitten im Zug. Die Werte sind eindeutig, dafuer sorgt
+            commitDraft. */}
         {values.map((v, i) => (
-          <span key={`${v}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             {i > 0 && (
               <span style={{
                 fontSize: 10, fontWeight: 700, fontFamily: "monospace",
@@ -164,8 +167,14 @@ export function ChipListEditor({
               </span>
             )}
             <span
-              ref={el => { chipRefs.current[i] = el; }}
+              ref={el => {
+                if (el) chipRefs.current.set(v, el);
+                else chipRefs.current.delete(v);
+              }}
               onPointerDown={starteZiehen(i)}
+              onPointerMove={beimZiehen}
+              onPointerUp={beendeZiehen}
+              onPointerCancel={beendeZiehen}
               onMouseEnter={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHighest; }}
               onMouseLeave={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHigh; }}
               title="Ziehen zum Umsortieren"
