@@ -84,6 +84,8 @@ pub struct UploadBeatInfo {
     pub genre_tags: Option<String>,
     pub youtube_tags: Option<String>,
     pub soundcloud_tags: Option<String>,
+    /// Kapitelmarken, eine Zeile je Marke ("0:00 Intro").
+    pub timecodes: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,7 +135,7 @@ pub fn get_upload_data(beat_id: String) -> Result<UploadData, String> {
     let beat = conn.query_row(
         "SELECT id, name, path, bpm, key,
                 type_beat_main, type_beat_also_fits, genre_tags,
-                youtube_tags, soundcloud_tags
+                youtube_tags, soundcloud_tags, timecodes
          FROM beats WHERE id = ?1",
         rusqlite::params![beat_id],
         |row| {
@@ -148,6 +150,7 @@ pub fn get_upload_data(beat_id: String) -> Result<UploadData, String> {
                 genre_tags:          row.get(7).ok(),
                 youtube_tags:        row.get(8).ok(),
                 soundcloud_tags:     row.get(9).ok(),
+                timecodes:           row.get(10).ok(),
             })
         },
     ).map_err(|e| match e {

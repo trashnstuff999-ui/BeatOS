@@ -16,6 +16,7 @@ import { useUploadData } from "../hooks/useUploadData";
 import {
   AssetChecklistCard,
   TypeBeatCard,
+  TimecodeCard,
   SampleCreditsCard,
   UploadStatusCard,
   DescriptionFilesCard,
@@ -191,9 +192,15 @@ export default function Upload() {
                   Haarlinien getrennt. Beides gehoert zum selben Beat und
                   fliesst in dieselbe Beschreibung; zwei Kaesten dafuer waren
                   eine Trennung ohne Bedeutung. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <TypeBeatCard beat={data.beat} onSaved={refresh}>
                 <SampleCreditsCard bare beatId={data.beat.id} onSaved={refresh} />
               </TypeBeatCard>
+
+              {/* Kapitelmarken — Eingabe, die rechts in der YouTube-Beschreibung
+                  landet. Deshalb links, unter Type-Beat und Credits. */}
+              <TimecodeCard beat={data.beat} onSaved={refresh} />
+              </div>
 
               {/* Ausgabe.
                   Die Karte haengt absolut in dieser Huelle, damit ihr Inhalt

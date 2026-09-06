@@ -33,6 +33,10 @@ interface AudioPlayerContextValue {
   toggleLoop: () => void;
   toggleMute: () => void;
   seekPercent: (percent: number) => void;
+  /** Sekunden lesen statt abonnieren — der Fortschritts-Kontext tickt 10x/s. */
+  getCurrentSeconds: () => number;
+  getDurationSeconds: () => number;
+  seekSeconds: (secs: number) => void;
   setVolume: (vol: number) => void;
   /** Hör-Queue (z.B. die aktuell gefilterte Browse-Liste) für Skip-Buttons */
   setQueue: (beats: Beat[] | null) => void;
@@ -201,6 +205,21 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [duration]);
 
+  // ── Zeit in Sekunden, fuer Kapitelmarken ──────────────────────────────────
+  // Bewusst als Funktionen auf DIESEM Kontext und nicht als Wert im
+  // Fortschritts-Kontext: der tickt zehnmal pro Sekunde, und wer ihn
+  // abonniert, rendert zehnmal pro Sekunde mit. Die Kapitel-Karte will die
+  // Zeit nur im Moment des Klicks wissen — also lesen, nicht abonnieren.
+  const getCurrentSeconds = useCallback(() => audioRef.current?.currentTime ?? 0, []);
+  const getDurationSeconds = useCallback(() => audioRef.current?.duration ?? 0, []);
+
+  /** Direkt auf eine Sekunde springen — ohne den Umweg ueber Prozent. */
+  const seekSeconds = useCallback((secs: number) => {
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(audio.duration)) return;
+    audio.currentTime = Math.max(0, Math.min(secs, audio.duration));
+  }, []);
+
   const setVolume = useCallback((vol: number) => setVolumeState(Math.max(0, Math.min(1, vol))), []);
 
   // ── Listen queue (skip buttons navigate the list that started playback) ────
@@ -229,11 +248,13 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+    getCurrentSeconds, getDurationSeconds, seekSeconds,
     setQueue, playNext, playPrev, hasQueue: queueLength > 1,
   }), [
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
+    getCurrentSeconds, getDurationSeconds, seekSeconds,
     setQueue, playNext, playPrev, queueLength,
   ]);
 

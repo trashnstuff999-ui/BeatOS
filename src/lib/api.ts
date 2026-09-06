@@ -37,6 +37,7 @@ import type {
   RenamePlan,
   RenameResult,
   FolderSync,
+  Timecode,
 } from "../types/upload";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -335,6 +336,11 @@ export const api = {
 
     updateUploadStatus: (params: UpdateUploadStatusParams) =>
       invoke<void>("update_upload_status", { params }),
+
+    /** Kapitelmarken speichern. Sortieren, Entdoppeln und das Ziehen der
+     *  ersten Marke auf 0:00 passiert im Backend — eine Regel, ein Ort. */
+    updateTimecodes: (beatId: string, marks: Timecode[]) =>
+      invoke<void>("update_beat_timecodes", { beatId, marks }),
 
     getPresets: () =>
       invoke<TypeBeatPreset[]>("get_type_beat_presets"),

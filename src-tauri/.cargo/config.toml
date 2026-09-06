@@ -1,0 +1,12 @@
+# Groesserer Compiler-Stack.
+#
+# `tauri::generate_handler!` baut aus der Befehlsliste in lib.rs einen tief
+# verschachtelten Typ. Ab dem 78. Befehl stieg rustc unter Windows mit
+# STATUS_STACK_BUFFER_OVERRUN (0xc0000409) aus — kein Fehler im Code: mit 77
+# Befehlen uebersetzt dieselbe Datei, mit 78 nicht.
+#
+# RUST_MIN_STACK setzt die Stackgroesse des Uebersetzer-Threads. 16 MB sind
+# genug Luft fuer die naechsten Befehle; 64 MB scheiterten schon an der
+# Thread-Erzeugung ("Allocation failed").
+[env]
+RUST_MIN_STACK = "16777216"

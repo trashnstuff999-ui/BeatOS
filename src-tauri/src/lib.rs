@@ -9,11 +9,9 @@
 // └── utils/        - Helper functions (date, files, parsing)
 //
 // ═══════════════════════════════════════════════════════════════════════════════
-
 mod db;
 mod commands;
 mod utils;
-
 use db::init_db;
 use commands::ensure_default_templates;
 use commands::{
@@ -21,7 +19,6 @@ use commands::{
     get_stats,
     get_beat_count,
     get_dashboard_actions,
-
     // Beat CRUD commands
     get_beats,
     get_beats_paginated,
@@ -92,6 +89,7 @@ use commands::{
     get_upload_data,
     get_upload_schedule,
     update_type_beat_info,
+    update_beat_timecodes,
     update_upload_status,
     get_type_beat_presets,
     save_type_beat_preset,
@@ -106,11 +104,9 @@ use commands::{
     apply_filename_convention,
     sync_beat_folders,
 };
-
 // ══════════════════════════════════════════════════════════════════════════════
 // ENTRY POINT
 // ══════════════════════════════════════════════════════════════════════════════
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize database schema ONCE at startup
@@ -126,7 +122,6 @@ pub fn run() {
             }
         });
     }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -139,7 +134,6 @@ pub fn run() {
             if let Err(e) = ensure_default_templates(app.handle()) {
                 eprintln!("WARNING: Failed to bootstrap upload templates: {}", e);
             }
-
             // Der komplette Asset-Scope wird hier zur Laufzeit gesetzt, aus den
             // eingestellten Pfaden — Archiv, Produktions-Roots und Asset-Inbox.
             //
@@ -188,7 +182,6 @@ pub fn run() {
             get_stats,
             get_beat_count,
             get_dashboard_actions,
-
             // Beat CRUD
             get_beats,
             get_beats_paginated,
@@ -257,6 +250,7 @@ pub fn run() {
             get_upload_data,
             get_upload_schedule,
             update_type_beat_info,
+            update_beat_timecodes,
             update_upload_status,
             get_type_beat_presets,
             save_type_beat_preset,

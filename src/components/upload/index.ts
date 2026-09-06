@@ -1,5 +1,6 @@
 export { AssetChecklistCard } from "./AssetChecklistCard";
 export { TypeBeatCard } from "./TypeBeatCard";
+export { TimecodeCard } from "./TimecodeCard";
 export { SampleCreditsCard } from "./SampleCreditsCard";
 export { UploadStatusCard, UploadPlatformGrid } from "./UploadStatusCard";
 export { DescriptionFilesCard } from "./DescriptionFilesCard";

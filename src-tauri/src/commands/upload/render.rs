@@ -103,6 +103,17 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
     .filter(|s| !s.trim().is_empty())
     .unwrap_or_else(|| settings.get("beatstars_url").cloned().unwrap_or_default());
 
+    // ─── Kapitelmarken ───────────────────────────────────────────────────
+    // Eigene Abfrage statt ein neuntes Feld im Tupel oben: mit neun Elementen
+    // stuerzte rustc beim Uebersetzen ab (STATUS_STACK_BUFFER_OVERRUN, in der
+    // Aufloesung des `impl Fn`-Rueckgabetyps darueber). Eine zweite Zeile SQL
+    // ist ohnehin die Form, die der Beatstars-Link hier schon benutzt.
+    let timecodes: Option<String> = conn.query_row(
+        "SELECT timecodes FROM beats WHERE id = ?1",
+        rusqlite::params![beat_id],
+        |row| row.get::<_, Option<String>>(0),
+    ).unwrap_or(None);
+
     // ─── Sample-Credits ──────────────────────────────────────────────────
     // Wer bei diesem Beat ein Sample beigesteuert hat, aufgelöst mit Namen
     // und Links. Leer, wenn keiner — dann sagt der Credits-Block weiterhin,
@@ -134,6 +145,10 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
         ("PRODUCER_LINE",  producer_line(&producer, &credits)),
         ("CREDITS",        credits_block(&producer, &credits)),
         ("COLLAB_SOCIALS", collab_socials(&credits)),
+        // Steht so in der Spalte, wie er in die Beschreibung gehört — eine
+        // Zeile je Marke. Ohne Marken bleibt er leer, und collapse_blank_runs
+        // zieht die Lücke zusammen, genau wie bei COLLAB_SOCIALS.
+        ("TIMECODES",      timecodes.clone().unwrap_or_default()),
         ("EMAIL",          settings.get("contact_email").cloned().unwrap_or_default()),
         ("IG_URL",         settings.get("instagram_url").cloned().unwrap_or_default()),
         ("SC_URL",         settings.get("soundcloud_url").cloned().unwrap_or_default()),
@@ -607,6 +622,7 @@ mod tests {
 //   {{ALSO_FITS}}         — e.g. "Lil Peep, Convolk, Scorey"
 //   {{GENRE_TAGS}}        — e.g. "Dark Melodic Trap"
 //   {{HASHTAGS}}          — derived hashtag block, one per line
+//   {{TIMECODES}}         — Kapitelmarken, eine Zeile je Marke ("0:00 Intro")
 //   {{PRODUCER}}          — settings.producer_name (e.g. "goodbxy")
 //   {{PRODUCER_PROD}}     — "prod. " + producer name (e.g. "prod. goodbxy")
 //   {{EMAIL}}             — settings.contact_email

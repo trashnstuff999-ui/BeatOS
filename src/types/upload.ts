@@ -18,6 +18,8 @@ export interface UploadBeatInfo {
   genre_tags: string | null;
   youtube_tags: string | null;
   soundcloud_tags: string | null;
+  /** Kapitelmarken, eine Zeile je Marke ("0:00 Intro"). */
+  timecodes: string | null;
 }
 
 export interface UploadFilesState {
@@ -77,6 +79,13 @@ export interface SaveTypeBeatPresetParams {
   genre_tags: string | null;
   youtube_tags: string | null;
   soundcloud_tags: string | null;
+}
+
+/** Eine Kapitelmarke, wie die Karte sie zum Speichern schickt.
+ *  Der fertige Block entsteht im Backend (`build_timecode_block`). */
+export interface Timecode {
+  seconds: number;
+  label: string;
 }
 
 export interface UpdateUploadStatusParams {

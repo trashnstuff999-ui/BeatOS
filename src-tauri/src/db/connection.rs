@@ -265,6 +265,12 @@ pub fn init_db() -> Result<(), String> {
                     "ALTER TABLE beats ADD COLUMN genre_tags TEXT",
                     "ALTER TABLE beats ADD COLUMN youtube_tags TEXT",
                     "ALTER TABLE beats ADD COLUMN soundcloud_tags TEXT",
+                    // Kapitelmarken fuer die YouTube-Beschreibung, eine Zeile
+                    // je Marke ("0:00 Intro"). Als Text und nicht als eigene
+                    // Tabelle: die Liste wird immer komplett gelesen und
+                    // komplett geschrieben, und das Speicherformat ist zugleich
+                    // das, was YouTube erwartet. Wie genre_tags und youtube_tags.
+                    "ALTER TABLE beats ADD COLUMN timecodes TEXT",
                 ];
                 for sql in add_beat_columns {
                     if let Err(e) = conn.execute(sql, []) {
