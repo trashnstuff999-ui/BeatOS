@@ -3,8 +3,10 @@
 // und ob auf Seite 1 zurückgesprungen wird. Fehlte dort ein Feld, war der
 // Filter still wirkungslos (so passiert mit `unpublishedOnly`).
 
-import { describe, it, expect } from "vitest";
-import { querySignature } from "./useBeats";
+import { describe, it, expect, vi } from "vitest";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
+import { querySignature, useBeats } from "./useBeats";
 import { DEFAULT_FILTERS, DEFAULT_SORT } from "../types/browse";
 import type { FilterState } from "../types/browse";
 
@@ -41,5 +43,33 @@ describe("querySignature", () => {
 
   it("bleibt gleich bei identischen Werten aus einem neuen Objekt", () => {
     expect(querySignature({ ...DEFAULT_FILTERS, keys: [] }, { ...DEFAULT_SORT })).toBe(base);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ein Klick auf „hochgeladen" im Side-Panel darf nicht das ganze Raster neu
+// laden. `refresh` (der Aktualisieren-Knopf) leert absichtlich den Cover-Cache
+// — daran gehängt flackerte bei jeder Statusänderung jedes Cover.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("refreshUploadBadges", () => {
+  it("holt nur die Badges, ohne die Beats neu zu laden", async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_beats_paginated") {
+        return { beats: [{ id: "0842", name: "NUR HEUTE" }], total_count: 1 };
+      }
+      if (cmd === "get_upload_badges") return [];
+      return undefined;
+    });
+
+    const { result } = renderHook(() => useBeats());
+    await waitFor(() => expect(result.current.beats).toHaveLength(1));
+
+    mockInvoke.mockClear();
+    await act(async () => { await result.current.refreshUploadBadges(); });
+
+    expect(mockInvoke).toHaveBeenCalledWith("get_upload_badges", { beatIds: ["0842"] });
+    expect(mockInvoke).not.toHaveBeenCalledWith("get_beats_paginated", expect.anything());
   });
 });

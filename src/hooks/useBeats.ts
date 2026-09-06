@@ -50,6 +50,12 @@ interface UseBeatsReturn {
   preloadCovers: (beats: Beat[]) => void;
   /** Plattform-Badges (scheduled/uploaded) der aktuellen Seite */
   uploadBadges: UploadBadgeMap;
+  /** Nur die Badges neu holen — ohne die Beats und ohne den Cover-Cache.
+   *  `refresh` ist die Handbremse des Aktualisieren-Knopfes: es wirft die
+   *  Cover weg, damit ein geändertes Artwork durchkommt. Für einen Klick auf
+   *  „hochgeladen" ist das die falsche Größe — dann flackert das ganze
+   *  Raster für eine Änderung, die nur drei Punkte betrifft. */
+  refreshUploadBadges: () => Promise<void>;
   /** Alle Treffer der aktuellen Filter — nicht nur die Seite (Hör-Queue, Zufall) */
   getFilteredBeats: () => Promise<Beat[]>;
   /** Wechselt, sobald ein anderes Ergebnis geladen wird (z.B. für Scroll-Reset) */
@@ -232,6 +238,12 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
       setUploadBadges(map);
     } catch { /* badges sind nice-to-have */ }
   }, []);
+
+  /** Badges der sichtbaren Seite nachziehen, sonst nichts. Liest die ids aus
+   *  dem Spiegel, damit die Funktion ihre Identität behält. */
+  const refreshUploadBadges = useCallback(async () => {
+    await loadUploadBadges(beatsRef.current.map(b => b.id), loadIdRef.current);
+  }, [loadUploadBadges]);
 
   // ─── Load Beats (internal, called by effect) ─────────────────────────────────
   const loadBeatsInternal = useCallback(async (
@@ -449,6 +461,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     getCoverUrl,
     preloadCovers,
     uploadBadges,
+    refreshUploadBadges,
     getFilteredBeats,
     queryKey: sig,
   };
