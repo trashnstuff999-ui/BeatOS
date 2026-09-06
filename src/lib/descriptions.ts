@@ -70,3 +70,35 @@ export function countTags(tagBlock: string): number {
   }
   return lines[0].split(",").map(t => t.trim()).filter(Boolean).length;
 }
+
+/** Alles, was in den gerenderten Text einfließt — und nur das.
+ *
+ *  Die Beschreibungs-Karte rendert nur neu, wenn sich diese Signatur ändert;
+ *  auf jedes `refresh()` neu zu rendern würde beim Tippen Eingaben
+ *  überschreiben. Der Preis dafür: **fehlt ein Feld hier, bleibt seine
+ *  Änderung in der Karte unsichtbar.** Genau das passierte mit den
+ *  Kapitelmarken — sie standen in der Datenbank und in der Vorlagen-Vorschau,
+ *  aber die Karte zeigte weiter den Stand von davor.
+ *
+ *  Wer dem Renderer einen Platzhalter hinzufügt, gehört hier ebenfalls hin. */
+export function renderSignature(
+  beat: {
+    type_beat_main: string | null;
+    type_beat_also_fits: string | null;
+    genre_tags: string | null;
+    youtube_tags: string | null;
+    soundcloud_tags: string | null;
+    timecodes: string | null;
+  },
+  beatstarsUrl: string,
+): string {
+  return [
+    beat.type_beat_main      ?? "",
+    beat.type_beat_also_fits ?? "",
+    beat.genre_tags          ?? "",
+    beat.youtube_tags        ?? "",
+    beat.soundcloud_tags     ?? "",
+    beat.timecodes           ?? "",
+    beatstarsUrl,
+  ].join("|");
+}

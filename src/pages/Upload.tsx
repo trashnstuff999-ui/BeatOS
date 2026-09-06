@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import { renderSignature } from "../lib/descriptions";
 import { Upload as UploadIcon, AlertCircle, Loader2, CalendarDays, ChevronUp } from "lucide-react";
 import { C } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
@@ -52,14 +53,9 @@ export default function Upload() {
   const rerenderKey = useMemo(() => {
     if (!data) return 0;
     const beatstarsUrl = data.uploads.find(u => u.platform === "beatstars")?.url ?? "";
-    const sig = [
-      data.beat.type_beat_main      ?? "",
-      data.beat.type_beat_also_fits ?? "",
-      data.beat.genre_tags          ?? "",
-      data.beat.youtube_tags        ?? "",
-      data.beat.soundcloud_tags     ?? "",
-      beatstarsUrl,
-    ].join("|");
+    // Welche Felder dazugehören, steht in `renderSignature` — mit dem Grund
+    // dabei, warum ein vergessenes Feld still unsichtbar bleibt.
+    const sig = renderSignature(data.beat, beatstarsUrl);
     // Tiny djb2-style hash → stable number, changes only when sig changes.
     let h = 5381;
     for (let i = 0; i < sig.length; i++) h = ((h << 5) + h + sig.charCodeAt(i)) | 0;
