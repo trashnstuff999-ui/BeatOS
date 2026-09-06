@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useCallback, useRef, useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Loader2, AlertCircle, LayoutGrid, List, Shuffle, RotateCcw, LibraryBig } from "lucide-react";
 import { C } from "../lib/theme";
 import { BROWSE_PANEL_WIDTH } from "../lib/constants";
@@ -29,6 +29,7 @@ import { useTagManager } from "../contexts/TagManagerContext";
 
 export default function Browse() {
   const location = useLocation();
+  const navigate = useNavigate();
   const initialFilters = (location.state as { initialFilters?: Partial<FilterState> } | null)?.initialFilters;
 
   // ─── Data & Actions from Hook ──────────────────────────────────────────────
@@ -453,6 +454,7 @@ export default function Browse() {
           }}
           onUploadsChanged={refreshUploadBadges}
           onRenamed={refresh}
+          onOpenInUpload={(b) => navigate("/upload", { state: { beatId: b.id } })}
           onDelete={async (b) => {
             if (!settings.archivePath) {
               throw new Error("Kein Archiv-Ordner gesetzt. Unter Einstellungen festlegen.");

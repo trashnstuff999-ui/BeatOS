@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle, Type } from "lucide-react";
+import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle, Type, Upload as UploadIcon } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -39,6 +39,9 @@ interface DetailPanelProps {
   /** Läuft nach dem Umbenennen. Hier ist der volle Refresh richtig: Ordner-
    *  und Dateinamen ändern sich, also auch der Pfad zum Cover. */
   onRenamed?: () => void;
+  /** Diesen Beat im Upload-Tab öffnen — dort steht alles Ausführliche:
+   *  Beschreibungen, Type-Beat, Tags, Asset-Ampel. */
+  onOpenInUpload?: (beat: Beat) => void;
 }
 
 export function DetailPanel({
@@ -53,6 +56,7 @@ export function DetailPanel({
   onDelete,
   onUploadsChanged,
   onRenamed,
+  onOpenInUpload,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
   const { openTagManager } = useTagManager();
@@ -424,20 +428,44 @@ export function DetailPanel({
           Beat bearbeiten
         </button>
 
-        {/* Open Folder + Favorite */}
+        {/* Die beiden „geh dorthin"-Wege plus Favorit. Sie teilen sich eine
+            Zeile, weil sie dieselbe Art Handlung sind — und weil eine vierte
+            Reihe im Fuss den Rest nach oben schoebe.
+            11px statt 12px: bei 360px Inhalt und 46px fuer das Herz bleiben
+            je 149px, und „Im Upload oeffnen" braucht davon fast alles. */}
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => onOpenInUpload?.(beat)}
+            disabled={!onOpenInUpload}
+            title="Im Upload-Tab öffnen — Beschreibungen, Type-Beat, Tags, Assets"
+            style={{
+              flex: 1, minWidth: 0, padding: "11px 12px",
+              borderRadius: 10, background: C.surfaceContainerHigh,
+              border: `1px solid ${C.border20}`,
+              cursor: onOpenInUpload ? "pointer" : "default",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              fontSize: 11, fontWeight: 700, color: C.onSurface,
+              whiteSpace: "nowrap",
+              opacity: onOpenInUpload ? 1 : 0.4,
+            }}
+          >
+            <UploadIcon size={14} color={C.onSurface} strokeWidth={1.75} />
+            Im Upload öffnen
+          </button>
+
           <button
             onClick={handleOpenFolder}
             style={{
-              flex: 1, padding: "11px 16px",
+              flex: 1, minWidth: 0, padding: "11px 12px",
               borderRadius: 10, background: C.surfaceContainerHigh,
               border: `1px solid ${C.border20}`,
               cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: 12, fontWeight: 700, color: C.onSurface,
+              whiteSpace: "nowrap",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              fontSize: 11, fontWeight: 700, color: C.onSurface,
             }}
           >
-            <FolderOpen size={15} color={C.onSurface} strokeWidth={1.5} />
+            <FolderOpen size={14} color={C.onSurface} strokeWidth={1.5} />
             Ordner öffnen
           </button>
 
