@@ -1,9 +1,20 @@
 // src/components/upload/UploadStatusCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Per-platform upload tracking as a compact table: one row per platform
-// (icon+name | status segments | date), URL row appears under an uploaded
-// platform. Picking a date on a draft row promotes it to "scheduled" in the
-// same write. All writes go through update_upload_status — logic unchanged.
+// Per-platform upload tracking: one Kachel per platform.
+//
+// Der Zustand entscheidet, wie viel Kachel es gibt:
+//   Entwurf      — nur Name und Zustandsleiste. Kein Datum, kein Link.
+//   Geplant      — dazu Datum und Link.
+//   Hochgeladen  — dasselbe, das Datum heisst nur anders.
+//
+// Der Grund: an einem Entwurf ist nichts festgelegt. Ein Datumsfeld und eine
+// Linkzeile, die bei drei von drei Plattformen leer dastehen, sind kein
+// Angebot, sondern Rauschen — und in einem 380px-Panel kosten sie die halbe
+// Hoehe. Zurueck auf Entwurf loescht deshalb auch die Daten: `get_upload_schedule`
+// filtert nur auf `scheduled_at`, ein verstecktes Datum stuende sonst weiter
+// im Planer.
+//
+// All writes go through update_upload_status.
 // Colors come from PLATFORM_CONFIG / UPLOAD_STATUS_CONFIG (theme.ts).
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -19,6 +30,16 @@ interface UploadStatusCardProps {
   beatId: string;
   uploads: UploadPlatformRow[];
   onChanged: () => void;
+  /** Ohne Kacheln: drei Zeilen auf der umgebenden Flaeche, durch Haarlinien
+   *  getrennt.
+   *
+   *  Fuer das Archiv-Side-Panel. Dort besteht jeder andere Abschnitt aus
+   *  Beschriftung und flachem Inhalt auf `background` (#0e0e0e) mit Feldern
+   *  auf `surfaceContainerLow` (#131313) — eine Kachel auf `surfaceContainer`
+   *  (#1a1919) saesse eine Stufe zu hoch und waere der einzige Kasten im
+   *  Panel. Im Upload-Tab stimmt die Kachel dagegen: dort liegt sie in einer
+   *  SectionCard auf #131313, also genau eine Stufe darueber. */
+  flach?: boolean;
 }
 
 const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
@@ -29,10 +50,34 @@ const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
 
 const STATUS_ORDER: UploadStatus[] = ["draft", "scheduled", "uploaded"];
 
-/** Das Datumsfeld traegt keinen Rahmen, soll aber als anklickbar erkennbar
- *  sein. Der native Kalender-Knopf ist im Normalzustand blass und wird beim
- *  Ueberfahren deutlich — Pseudoelemente gehen nur ueber echtes CSS. */
-const DATE_FIELD_CSS = `
+/** Zwei Dinge, die nur ueber echtes CSS gehen:
+ *
+ *  1. Das Datumsfeld traegt keinen Rahmen, soll aber als anklickbar erkennbar
+ *     sein. Der native Kalender-Knopf ist im Normalzustand blass und wird beim
+ *     Ueberfahren deutlich — dafuer braucht es ein Pseudoelement.
+ *  2. Link- und Datumszeile erscheinen erst ab "Geplant". Ohne Uebergang
+ *     springen sie beim Klick ins Bild und die Zeile wird ruckartig hoeher.
+ *
+ *     Animiert wird `grid-template-rows` von `0fr` auf `1fr`. Das ist die
+ *     *echte* Inhaltshoehe — ein erster Versuch mit `max-height: 0 -> 80px`
+ *     ruckelte, weil 80px weit ueber der tatsaechlichen Hoehe (~34px) liegen:
+ *     die Zeile war nach 40% der Laufzeit fertig aufgeklappt, die restlichen
+ *     60% passierte sichtbar nichts. Das Kind braucht dafuer `overflow:hidden`
+ *     und `min-height:0`, sonst kann es nicht unter seine Inhaltshoehe. */
+const ROW_CSS = `
+  @keyframes beatos-aufklappen {
+    from { grid-template-rows: 0fr; opacity: 0; }
+    to   { grid-template-rows: 1fr; opacity: 1; }
+  }
+  .beatos-aufklappen {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: beatos-aufklappen 0.22s ease-out;
+  }
+  .beatos-aufklappen > * {
+    overflow: hidden;
+    min-height: 0;
+  }
   .beatos-date {
     padding: 3px 6px;
     font-size: 12px;
@@ -57,39 +102,55 @@ const DATE_FIELD_CSS = `
   .beatos-date:hover::-webkit-calendar-picker-indicator { opacity: 0.9; }
 `;
 
-export function UploadStatusCard({ beatId, uploads, onChanged }: UploadStatusCardProps) {
+export function UploadStatusCard(props: UploadStatusCardProps) {
   return (
     <SectionCard icon={Send} title="Status">
-      {/* Drei Kacheln nebeneinander statt drei Zeilen untereinander: die Karte
-          steht jetzt über die volle Breite, und untereinander hätten sich die
-          Link-Felder über das halbe Fenster gestreckt. Nebeneinander stehen
-          die Plattformen auch so, wie man sie vergleicht.
-          auto-fit: bricht bei schmalem Fenster von selbst um. */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-        gap: 14,
-      }}>
-        <style>{DATE_FIELD_CSS}</style>
-        {uploads.map(row => (
-          <PlatformRow
-            key={row.platform}
-            beatId={beatId}
-            row={row}
-            onChanged={onChanged}
-          />
-        ))}
-      </div>
+      <UploadPlatformGrid {...props} />
     </SectionCard>
+  );
+}
+
+/** Dasselbe Bedienelement ohne Karte drumherum.
+ *
+ *  Im Archiv-Side-Panel haengt es direkt unter seiner eigenen Beschriftung:
+ *  eine zweite Karte im Panel waere ein Kasten im Kasten, und die Ueberschrift
+ *  "Status" stuende zweimal untereinander — einmal fuer den Beat-Status,
+ *  einmal fuer die Plattformen. Geschrieben wird in beiden Faellen ueber
+ *  denselben Weg (`update_upload_status`), es gibt nur diese eine Umsetzung. */
+export function UploadPlatformGrid({ beatId, uploads, onChanged, flach = false }: UploadStatusCardProps) {
+  return (
+    /* Kacheln: drei nebeneinander statt drei Zeilen untereinander — die Karte
+       steht im Upload-Tab über die volle Breite, und untereinander hätten sich
+       die Link-Felder über das halbe Fenster gestreckt. Nebeneinander stehen
+       die Plattformen auch so, wie man sie vergleicht.
+       Flach: Abschnitte einer Fläche, getrennt durch Haarlinien. */
+    <div style={flach
+      ? { display: "flex", flexDirection: "column" }
+      : { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+      <style>{ROW_CSS}</style>
+      {uploads.map((row, i) => (
+        <PlatformRow
+          key={row.platform}
+          beatId={beatId}
+          row={row}
+          onChanged={onChanged}
+          flach={flach}
+          trennlinie={flach && i > 0}
+        />
+      ))}
+    </div>
   );
 }
 
 // ─── Single Platform Row ────────────────────────────────────────────────────
 
-function PlatformRow({ beatId, row, onChanged }: {
+function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false }: {
   beatId: string;
   row: UploadPlatformRow;
   onChanged: () => void;
+  flach?: boolean;
+  /** Haarlinie nach oben — flach ist die Trennung die einzige Kontur. */
+  trennlinie?: boolean;
 }) {
   const meta = PLATFORM_CONFIG[row.platform];
   const PlatIcon = PLATFORM_ICON[row.platform];
@@ -122,22 +183,23 @@ function PlatformRow({ beatId, row, onChanged }: {
     // Side-effects when crossing into specific states:
     // • Entering "uploaded" stamps uploaded_at with today's date if empty.
     // • Leaving "uploaded" clears uploaded_at so the timestamp doesn't lie.
+    // • Zurueck auf "Entwurf" raeumt beide Daten weg. Sonst traegt die Zeile
+    //   ein Datum, das die Kachel nicht mehr zeigt — und der Planer liest
+    //   `scheduled_at` ohne auf den Status zu schauen.
     const patch: Partial<UploadPlatformRow> = { status: next };
     if (next === "uploaded" && !row.uploaded_at) {
       patch.uploaded_at = todayISO();
     } else if (next !== "uploaded" && row.uploaded_at) {
       patch.uploaded_at = null;
     }
+    if (next === "draft" && row.scheduled_at) {
+      patch.scheduled_at = null;
+    }
     persist(patch);
   };
 
-  // Picking a date on a draft row promotes it to "scheduled" in the same write.
   const handleScheduledChange = (value: string) => {
-    const patch: Partial<UploadPlatformRow> = { scheduled_at: value || null };
-    if (value && row.status === "draft") {
-      patch.status = "scheduled";
-    }
-    persist(patch);
+    persist({ scheduled_at: value || null });
   };
 
   const handleUrlBlur = () => {
@@ -165,28 +227,48 @@ function PlatformRow({ beatId, row, onChanged }: {
 
   return (
     <div style={{
-      // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe ueber
-      // der Karte, nicht darunter.
-      padding: "14px 15px",
-      borderRadius: 10,
-      background: C.surfaceContainer,
-      // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu viel:
-      // drei Kacheln nebeneinander mit farbigem Rahmen UND farbiger Schrift
-      // ergeben eine bunte Reihe, in der nichts mehr heraussticht.
-      //
-      // Farbe traegt jetzt nur die Beschriftung — welche Plattform, und ob
-      // sie im Spiel ist. Den Zustand traegt die Linienart: durchgezogen
-      // steht, gestrichelt ist vorgemerkt.
-      border: geplant
-        ? `1px dashed ${C.border20}`
-        : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
-      display: "flex", flexDirection: "column", gap: 12,
+      ...(flach
+        // Flach: keine eigene Flaeche, keine Kontur ausser der Haarlinie.
+        // Den Zustand traegt hier allein die Zustandsleiste — sie ist das
+        // Bedienelement dafuer und sagt es ohnehin im Klartext.
+        ? {
+            padding: "12px 0",
+            borderTop: trennlinie ? `1px solid ${C.border10}` : undefined,
+          }
+        : {
+            // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe
+            // ueber der Karte, nicht darunter.
+            padding: "14px 15px",
+            borderRadius: 10,
+            background: C.surfaceContainer,
+            // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu
+            // viel: drei Kacheln nebeneinander mit farbigem Rahmen UND
+            // farbiger Schrift ergeben eine bunte Reihe, in der nichts mehr
+            // heraussticht.
+            //
+            // Farbe traegt nur die Beschriftung — welche Plattform, und ob
+            // sie im Spiel ist. Den Zustand traegt die Linienart:
+            // durchgezogen steht, gestrichelt ist vorgemerkt.
+            border: geplant
+              ? `1px dashed ${C.border20}`
+              : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
+          }),
+      // Abstand 0: den zwischen Kopfzeile und aufklappendem Teil traegt der
+      // Block selbst als paddingTop — als Luecke hier waere er sofort da,
+      // waehrend der Rest noch aufklappt.
+      display: "flex", flexDirection: "column", gap: 0,
     }}>
       {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
           es zusammen gelesen wird. Vorher standen der Name oben und der
-          Zustand zwei Zeilen tiefer. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          Zustand zwei Zeilen tiefer.
+          `flexWrap`: im Upload-Tab ist die Kachel breit genug fuer eine Zeile,
+          im 380px-Panel des Archivs nicht — dort fehlen rund 100px. Ohne
+          Umbruch quetscht der Name auf null und die Rakete liegt darauf.
+          Umbrechen statt quetschen, dieselbe Regel fuer beide Breiten. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 10 }}>
+        {/* Die drei Namen sind bekannt und kurz — sie duerfen nicht schrumpfen,
+            sonst bleibt alles einzeilig und "SoundCloud" wird zu "Sou…". */}
+        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           {/* Sobald die Plattform im Spiel ist — geplant oder hochgeladen —
               tragen Symbol und Name ihre Markenfarbe. Im Entwurf bleiben sie
               grau: sonst leuchtete alles von Anfang an, und das Aufleuchten
@@ -195,18 +277,22 @@ function PlatformRow({ beatId, row, onChanged }: {
             size={15}
             color={imSpiel ? meta.color : C.onSurfaceVariant}
             strokeWidth={1.75}
-            style={{ transition: "color 0.15s" }}
+            style={{ transition: "color 0.15s", flexShrink: 0 }}
           />
           <span style={{
             fontSize: 13, fontWeight: 600,
             color: imSpiel ? meta.color : C.onSurface,
             transition: "color 0.15s",
+            whiteSpace: "nowrap",
           }}>
             {meta.label}
           </span>
         </span>
 
-        {row.status !== "uploaded" && (
+        {/* Die Rakete startet den gefuehrten Upload. Im Archiv traegst du nach,
+            was laengst passiert ist — dort waere sie das falsche Angebot, und
+            ihre 34px sind genau das, was der Zeile zum Einzeiler fehlt. */}
+        {!flach && row.status !== "uploaded" && (
           <button
             onClick={() => setAssistantOpen(true)}
             title={`${meta.label}-Upload starten: Seite öffnen, Titel/Beschreibung/Tags kopieren, abhaken`}
@@ -284,13 +370,26 @@ function PlatformRow({ beatId, row, onChanged }: {
         />
       )}
 
-      {/* URL row — uploaded platforms, plus ALWAYS for Beatstars: the link
-          feeds {{BEATSTARS_LINK}} in the SoundCloud/YouTube descriptions,
-          so it must be settable before those uploads happen.
-          Buendig unter Name und Status. Ohne Link-Symbol davor und ohne
-          Oeffnen-Knopf dahinter — beides sagte nichts, was die URL selbst
-          nicht schon zeigt. */}
-      {(row.status === "uploaded" || row.platform === "beatstars") && (
+      {/* Alles ab "Geplant" in EINEM aufklappenden Block. Getrennt animiert
+          klappten zwei Elemente nebeneinander auf, und der Abstand zwischen
+          ihnen erschien trotzdem schlagartig — der Abstand gehoert deshalb
+          nach innen, und der aeussere Zeilen-Abstand ist 0. */}
+      {row.status !== "draft" && (
+      <div className="beatos-aufklappen">
+      <div>
+      <div style={{
+        display: "flex", flexDirection: "column",
+        gap: flach ? 10 : 12,
+        paddingTop: flach ? 10 : 12,
+      }}>
+
+        {/* Linkzeile. Am Entwurf gibt es nichts zu verlinken.
+            Der Beatstars-Link stand hier frueher auch im Entwurf, weil er
+            {{BEATSTARS_LINK}} in den SC/YT-Beschreibungen fuellt — dass er
+            fehlt, meldet aber die Beschreibungs-Karte von sich aus.
+            Buendig unter Name und Status. Ohne Link-Symbol davor und ohne
+            Oeffnen-Knopf dahinter — beides sagte nichts, was die URL selbst
+            nicht schon zeigt. */}
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
         }}>
@@ -302,9 +401,11 @@ function PlatformRow({ beatId, row, onChanged }: {
             title={row.platform === "beatstars"
               ? `Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert${urlDraft ? `\n${urlDraft}` : ""}`
               : urlDraft || undefined}
-            placeholder={row.platform === "beatstars"
-              ? "Beat-Link → {{BEATSTARS_LINK}}"
-              : `https://...${row.platform}...`}
+            /* Der Platzhalter sagt, was zu tun ist. Vorher stand hier bei
+               Beatstars der Name der Vorlagen-Variable — Maschinensprache in
+               einem Feld, in das man einen Link einfügt. Wozu der Link dient,
+               steht weiterhin im Tooltip. */
+            placeholder={`${meta.label}-Link hier einfügen`}
             style={{
               flex: 1, minWidth: 0,
               padding: "7px 10px",
@@ -338,13 +439,13 @@ function PlatformRow({ beatId, row, onChanged }: {
             {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
           </button>
         </div>
-      )}
 
-      {/* Fusszeile: nur noch das Datum, beschriftet. Die Zustandsleiste ist in
-          die Kopfzeile gewandert, wo sie neben den Plattformnamen gehoert. */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
+        {/* Fusszeile: nur noch das Datum, beschriftet. Am Entwurf ist kein Tag
+            festgelegt; ein leeres "Datum waehlen" auf drei Zeilen fuellte nur
+            Hoehe. */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
         <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
           {row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
         </span>
@@ -353,7 +454,7 @@ function PlatformRow({ beatId, row, onChanged }: {
 
         {/* Datum rechtsbuendig. Kein Kasten, aber beim Ueberfahren hebt sich
             das Feld leicht ab — so ist erkennbar, dass man es anklicken kann,
-            ohne dass es dauerhaft laut wird (Regeln in DATE_FIELD_CSS). */}
+            ohne dass es dauerhaft laut wird (Regeln in ROW_CSS). */}
         <div style={{ position: "relative", flexShrink: 0 }}>
           <input
             type="date"
@@ -376,7 +477,12 @@ function PlatformRow({ beatId, row, onChanged }: {
             </span>
           )}
         </div>
+        </div>
+
       </div>
+      </div>
+      </div>
+      )}
     </div>
   );
 }

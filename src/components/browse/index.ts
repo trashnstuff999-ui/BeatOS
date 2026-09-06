@@ -9,3 +9,4 @@ export { BeatTable } from "./BeatTable";
 export { DetailPanel } from "./DetailPanel";
 export { EditBeatModal } from "./EditBeatModal";
 export { Pagination } from "./Pagination";
+export { MigrateArchiveDialog, type AngleichModus } from "./MigrateArchiveDialog";

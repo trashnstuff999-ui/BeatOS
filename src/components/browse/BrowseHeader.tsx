@@ -3,7 +3,7 @@
 // Kopfzeile von Browse: Suche + Refresh. Die Huelle kommt aus ui/PageHeader.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { RefreshCw, Search, LibraryBig } from "lucide-react";
+import { RefreshCw, Search, LibraryBig, FolderSymlink, Type } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { PageHeader, IconButton } from "../ui";
 
@@ -12,9 +12,13 @@ interface BrowseHeaderProps {
   onSearchChange: (value: string) => void;
   onRefresh: () => void;
   isLoading?: boolean;
+  /** Alte Ordnerstruktur flachziehen — einmalige Sache am Altbestand. */
+  onMigrate: () => void;
+  /** Namen auf das Schema ziehen — läuft im Alltag, nach jedem nachgelegten Cover. */
+  onRename: () => void;
 }
 
-export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: BrowseHeaderProps) {
+export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onMigrate, onRename }: BrowseHeaderProps) {
   return (
     <PageHeader
       icon={LibraryBig}
@@ -48,6 +52,18 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading }: B
               onBlur={e => (e.currentTarget.style.borderColor = C.border20)}
             />
           </div>
+
+          <IconButton
+            icon={Type}
+            title="Namen angleichen — Ordner- und Dateinamen auf das Schema ziehen"
+            onClick={onRename}
+          />
+
+          <IconButton
+            icon={FolderSymlink}
+            title="Struktur migrieren — alte Ordnerstruktur (01_AUDIO, 02_VISUALS, 03_PROJECTS) flachziehen"
+            onClick={onMigrate}
+          />
 
           <IconButton
             icon={RefreshCw}

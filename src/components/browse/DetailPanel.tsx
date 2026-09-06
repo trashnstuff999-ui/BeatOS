@@ -3,8 +3,8 @@
 // Detail Panel — Artwork + Metadata (audio is in GlobalAudioPlayer)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from "react";
-import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Heart, FolderOpen, Music, Tag, Edit3, Trash2, AlertTriangle, Type } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -20,6 +20,8 @@ import { parseTags, isFavorite } from "../../types/browse";
 import { STATUS_CONFIG, STATUS_ITEMS } from "../../lib/theme";
 import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
 import { useTagManager } from "../../contexts/TagManagerContext";
+import { UploadPlatformGrid } from "../upload/UploadStatusCard";
+import type { UploadPlatformRow } from "../../types/upload";
 
 interface DetailPanelProps {
   beat: Beat;
@@ -31,6 +33,12 @@ interface DetailPanelProps {
   preloadedCoverUrl?: string | null;
   onUpdateTags?: (beatId: string, tags: string[]) => void;
   onDelete?: (beat: Beat) => Promise<void>;
+  /** Läuft nach jeder Upload-Änderung — damit die Plattform-Punkte in Raster
+   *  und Tabelle nicht stehen bleiben, während das Panel schon weiter ist. */
+  onUploadsChanged?: () => void;
+  /** Läuft nach dem Umbenennen. Hier ist der volle Refresh richtig: Ordner-
+   *  und Dateinamen ändern sich, also auch der Pfad zum Cover. */
+  onRenamed?: () => void;
 }
 
 export function DetailPanel({
@@ -43,6 +51,8 @@ export function DetailPanel({
   preloadedCoverUrl,
   onUpdateTags,
   onDelete,
+  onUploadsChanged,
+  onRenamed,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
   const { openTagManager } = useTagManager();
@@ -74,6 +84,83 @@ export function DetailPanel({
   useEffect(() => {
     setLocalTags(parseTags(beat.tags));
   }, [beat.id, beat.tags]);
+
+  // ── Uploads nachtragen, ohne den Tab zu wechseln ──────────────────────────
+  // `get_upload_data` liefert immer alle drei Plattformen — auch für einen
+  // Beat, zu dem noch gar nichts erfasst ist. Genau das ist der Fall, um den
+  // es hier geht: im Archiv stehen Beats als "nicht hochgeladen", die längst
+  // öffentlich sind.
+  const [uploads, setUploads] = useState<UploadPlatformRow[] | null>(null);
+  const [uploadsNonce, setUploadsNonce] = useState(0);
+  const geladenerBeat = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Zugeklapptes Panel nichts laden lassen: `beat` bleibt während der
+    // Schließ-Animation stehen.
+    if (!isOpen) return;
+    let cancelled = false;
+    // Nur beim Beat-Wechsel leeren. Nach einer eigenen Änderung nachzuladen
+    // und dabei auf `null` zu gehen riss den ganzen Upload-Block ab und baute
+    // ihn neu auf — mit „wird geladen …" dazwischen und einer Animation, die
+    // bei jedem Klick von vorn lief. Die Zeilen bleiben jetzt stehen und
+    // bekommen nur neue Werte.
+    if (geladenerBeat.current !== beat.id) {
+      setUploads(null);
+      geladenerBeat.current = beat.id;
+    }
+    (async () => {
+      try {
+        const data = await api.upload.getData(beat.id);
+        if (!cancelled) setUploads(data.uploads);
+      } catch {
+        // Beim Durchklicken darf ein einzelner Fehlschlag das Panel nicht
+        // sprengen — dann bleibt die Zeile eben leer.
+        if (!cancelled) setUploads([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [beat.id, isOpen, uploadsNonce]);
+
+  const handleUploadsChanged = () => {
+    onUploadsChanged?.();            // Punkte im Raster nachziehen
+    setUploadsNonce(n => n + 1);     // und die eigene Anzeige neu holen
+  };
+
+  // ── Namen angleichen, ein Beat ────────────────────────────────────────────
+  // Derselbe Lauf wie der Stapel im Kopf, nur auf diesen einen Beat. Gedacht
+  // fürs Durchgehen: Cover oder Thumbnail nachgelegt, Name ist generisch,
+  // ein Klick zieht ihn aufs Schema.
+  const [namenBusy, setNamenBusy] = useState(false);
+  const [namenErgebnis, setNamenErgebnis] = useState<string | null>(null);
+
+  useEffect(() => { setNamenErgebnis(null); }, [beat.id]);
+
+  const namenAngleichen = async () => {
+    setNamenBusy(true);
+    setNamenErgebnis(null);
+    try {
+      const [r] = await api.archive.syncFolders([beat.id], false);
+      if (!r || r.error) {
+        setNamenErgebnis(r?.error ?? "Kein Ergebnis");
+      } else {
+        const ordner  = r.to !== r.from ? 1 : 0;
+        const dateien = r.files_renamed;
+        setNamenErgebnis(
+          ordner + dateien === 0
+            ? "Namen passen schon"
+            : [
+                ordner  ? "Ordner umbenannt" : null,
+                dateien ? `${dateien} Datei${dateien === 1 ? "" : "en"} umbenannt` : null,
+              ].filter(Boolean).join(" · ")
+        );
+        if (ordner + dateien > 0) onRenamed?.();
+      }
+    } catch (e) {
+      setNamenErgebnis(String(e));
+    } finally {
+      setNamenBusy(false);
+    }
+  };
 
   const handleOpenTagManager = () => {
     openTagManager({
@@ -256,6 +343,23 @@ export function DetailPanel({
             </div>
           </div>
 
+          {/* Uploads — dieselbe Bedienung wie im Upload-Tab, derselbe
+              Schreibweg. Steht direkt unter dem Beat-Status, weil beide
+              zusammen gelesen werden: fertig, und wo liegt es draußen? */}
+          <div>
+            <div style={labelStyle}>Uploads</div>
+            {uploads
+              ? <UploadPlatformGrid
+                  beatId={beat.id}
+                  uploads={uploads}
+                  onChanged={handleUploadsChanged}
+                  flach
+                />
+              : <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, padding: "6px 0" }}>
+                  wird geladen …
+                </div>}
+          </div>
+
           {/* Tags */}
           <div>
             <div style={labelStyle}>Tags</div>
@@ -351,6 +455,30 @@ export function DetailPanel({
             <Heart size={20} fill={fav ? C.primary : "none"} color={C.primary} strokeWidth={1.5} />
           </button>
         </div>
+
+        {/* Namen angleichen — eine Zeile, das Ergebnis steht danach drin.
+            Kein Dialog: beim Durchgehen zählt der eine Klick. */}
+        <button
+          onClick={namenAngleichen}
+          disabled={namenBusy}
+          title="Ordner- und Dateinamen dieses Beats auf das Schema ziehen"
+          style={{
+            width: "100%", padding: "10px 16px",
+            borderRadius: 10,
+            background: "transparent",
+            border: `1px solid ${C.border20}`,
+            cursor: namenBusy ? "wait" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            fontSize: 11, fontWeight: 700,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            color: namenErgebnis ? C.mint : C.onSurfaceVariant,
+            opacity: namenBusy ? 0.6 : 1,
+            transition: "color 0.15s",
+          }}
+        >
+          <Type size={13} strokeWidth={2} />
+          {namenBusy ? "läuft …" : (namenErgebnis ?? "Namen angleichen")}
+        </button>
 
         {/* Delete Beat */}
         {onDelete && (

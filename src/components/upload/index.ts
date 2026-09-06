@@ -1,7 +1,7 @@
 export { AssetChecklistCard } from "./AssetChecklistCard";
 export { TypeBeatCard } from "./TypeBeatCard";
 export { SampleCreditsCard } from "./SampleCreditsCard";
-export { UploadStatusCard } from "./UploadStatusCard";
+export { UploadStatusCard, UploadPlatformGrid } from "./UploadStatusCard";
 export { DescriptionFilesCard } from "./DescriptionFilesCard";
 export { LegacyMigrationBanner } from "./LegacyMigrationBanner";
 export { ConvertFilenamesDialog } from "./ConvertFilenamesDialog";

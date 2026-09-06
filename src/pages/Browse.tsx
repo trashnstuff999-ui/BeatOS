@@ -17,6 +17,8 @@ import {
   DetailPanel,
   EditBeatModal,
   Pagination,
+  MigrateArchiveDialog,
+  type AngleichModus,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
 import { PageBody, EmptyState, Button } from "../components/ui";
@@ -53,6 +55,7 @@ export default function Browse() {
     getCoverUrl,
     preloadCovers,
     uploadBadges,
+    refreshUploadBadges,
     getFilteredBeats,
     queryKey,
   } = useBeats(initialFilters);
@@ -63,6 +66,7 @@ export default function Browse() {
 
   // ─── Edit Modal State ──────────────────────────────────────────────────────
   const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
+  const [angleich, setAngleich] = useState<AngleichModus | null>(null);
 
   // ─── View Mode: Tabelle ⇄ Cover-Grid (persistiert) ─────────────────────────
   const [viewMode, setViewMode] = useState<"table" | "grid">(
@@ -228,6 +232,8 @@ export default function Browse() {
         onSearchChange={value => setFilters(prev => ({ ...prev, search: value }))}
         onRefresh={refresh}
         isLoading={isLoading}
+        onMigrate={() => setAngleich("struktur")}
+        onRename={() => setAngleich("namen")}
       />
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -445,6 +451,8 @@ export default function Browse() {
           onUpdateTags={async (beatId, tags) => {
             await updateBeat({ id: beatId, tags: tags.join(", ") });
           }}
+          onUploadsChanged={refreshUploadBadges}
+          onRenamed={refresh}
           onDelete={async (b) => {
             if (!settings.archivePath) {
               throw new Error("Kein Archiv-Ordner gesetzt. Unter Einstellungen festlegen.");
@@ -463,6 +471,17 @@ export default function Browse() {
           isOpen={true}
           onClose={handleCloseEditModal}
           onSave={handleSaveFromModal}
+        />
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          Angleichen — Struktur und Namen als zwei getrennte Läufe
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {angleich && (
+        <MigrateArchiveDialog
+          modus={angleich}
+          onClose={() => setAngleich(null)}
+          onDone={refresh}
         />
       )}
 
