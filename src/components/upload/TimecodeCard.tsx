@@ -14,7 +14,7 @@
 // halbe Upload-Seite mitrendern würde.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ListOrdered, Play, Pause, Plus, X, CornerDownLeft, Lock } from "lucide-react";
 import { api } from "../../lib/api";
 import { C, radius } from "../../lib/theme";
@@ -101,23 +101,35 @@ export function TimecodeCard({ beat, onSaved }: {
 
   // Speichern nach kurzer Ruhe — wie an den anderen Karten auch, damit kein
   // eigener Knopf nötig ist.
-  const gespeichertRef = useRef<string>("");
+  //
+  // Was noch aussteht, liegt in `offenRef` — MIT der Beat-Id, zu der es
+  // gehört. Ohne das ginge beim Beat-Wechsel innerhalb der 700 ms die letzte
+  // Änderung verloren: React räumt beim Wechsel den Timer weg, und die
+  // Zeilen werden gleich darauf aus dem neuen Beat neu gefüllt.
+  const offenRef = useRef<{ beatId: string; marks: Timecode[] } | null>(null);
+
+  const wegschreiben = useCallback(async () => {
+    const offen = offenRef.current;
+    if (!offen) return;
+    offenRef.current = null;
+    try {
+      await api.upload.updateTimecodes(offen.beatId, offen.marks);
+      onSaved();
+    } catch (e) {
+      console.error("[Timecodes] speichern fehlgeschlagen:", e);
+    }
+  }, [onSaved]);
+
   useEffect(() => {
     if (!dreckig) return;
-    const t = setTimeout(async () => {
-      const nutzlast = JSON.stringify(marken);
-      if (nutzlast === gespeichertRef.current) return;
-      try {
-        await api.upload.updateTimecodes(beat.id, marken);
-        gespeichertRef.current = nutzlast;
-        setDreckig(false);
-        onSaved();
-      } catch (e) {
-        console.error("[Timecodes] speichern fehlgeschlagen:", e);
-      }
-    }, 700);
+    offenRef.current = { beatId: beat.id, marks: marken };
+    const t = setTimeout(() => { setDreckig(false); wegschreiben(); }, 700);
     return () => clearTimeout(t);
-  }, [marken, dreckig, beat.id, onSaved]);
+  }, [marken, dreckig, beat.id, wegschreiben]);
+
+  // Beat-Wechsel oder Karte verlassen: was offen ist, geht trotzdem raus.
+  // Die Id kommt aus dem Ref, also landet es beim richtigen Beat.
+  useEffect(() => () => { wegschreiben(); }, [beat.id, wegschreiben]);
 
   const aendern = (i: number, patch: Partial<Timecode>) => {
     setMarken(prev => prev.map((m, k) => (k === i ? { ...m, ...patch } : m)));
