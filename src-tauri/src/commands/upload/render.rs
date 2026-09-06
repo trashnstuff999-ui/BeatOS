@@ -145,10 +145,7 @@ fn build_renderer(beat_id: &str) -> Result<impl Fn(&str, &str) -> String, String
         ("PRODUCER_LINE",  producer_line(&producer, &credits)),
         ("CREDITS",        credits_block(&producer, &credits)),
         ("COLLAB_SOCIALS", collab_socials(&credits)),
-        // Steht so in der Spalte, wie er in die Beschreibung gehört — eine
-        // Zeile je Marke. Ohne Marken bleibt er leer, und collapse_blank_runs
-        // zieht die Lücke zusammen, genau wie bei COLLAB_SOCIALS.
-        ("TIMECODES",      timecodes.clone().unwrap_or_default()),
+        ("TIMECODES",      timecodes_block(timecodes.as_deref())),
         ("EMAIL",          settings.get("contact_email").cloned().unwrap_or_default()),
         ("IG_URL",         settings.get("instagram_url").cloned().unwrap_or_default()),
         ("SC_URL",         settings.get("soundcloud_url").cloned().unwrap_or_default()),
@@ -249,6 +246,24 @@ fn render_template(template: &str, vars: &[(&str, String)]) -> String {
 /// Das ersetzt Bedingungen im Renderer: alle anderen Platzhalter sind so
 /// gebaut, dass sie nie leer werden, und die Vorlagen trennen Absätze mit
 /// genau einer Leerzeile — an denen ändert die Regel also nichts.
+/// Überschrift über den Kapitelmarken.
+///
+/// Sie steht hier und nicht in der Vorlage, weil sie sonst stehen bliebe,
+/// sobald ein Beat keine Marken hat — eine Zeile „CHAPTERS:" mit nichts
+/// darunter. Als Teil des Platzhalters verschwindet sie mit ihm.
+/// Wer sie umbenennen will, ändert diesen einen String.
+const TIMECODES_HEADING: &str = "CHAPTERS:";
+
+/// Überschrift plus Marken — oder gar nichts. Dieselbe Idee wie bei
+/// `{{COLLAB_SOCIALS}}`: ein Block, der als Ganzes da ist oder als Ganzes
+/// fehlt, und `collapse_blank_runs` räumt die Lücke hinterher weg.
+fn timecodes_block(marks: Option<&str>) -> String {
+    match marks.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(block) => format!("{}\n{}", TIMECODES_HEADING, block),
+        None => String::new(),
+    }
+}
+
 fn collapse_blank_runs(s: &str) -> String {
     let mut kept: Vec<&str> = Vec::new();
     let mut blank_run = 0usize;
@@ -473,6 +488,44 @@ fn split_csv(s: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
+
+    /// Ueberschrift und Marken sind EIN Block: entweder beide oder keins.
+    /// Stuende "CHAPTERS:" in der Vorlage, bliebe sie bei einem Beat ohne
+    /// Marken als leere Ueberschrift stehen.
+    #[test]
+    fn kapitel_bringen_ihre_ueberschrift_mit() {
+        assert_eq!(
+            timecodes_block(Some("0:00 Intro
+0:24 Hook")),
+            "CHAPTERS:
+0:00 Intro
+0:24 Hook",
+        );
+    }
+
+    #[test]
+    fn ohne_marken_bleibt_auch_die_ueberschrift_weg() {
+        assert_eq!(timecodes_block(None), "");
+        assert_eq!(timecodes_block(Some("")), "");
+        assert_eq!(timecodes_block(Some("   
+  ")), "");
+    }
+
+    /// Der leere Block darf keine Luecke hinterlassen — dieselbe Zusage wie
+    /// bei COLLAB_SOCIALS.
+    #[test]
+    fn leerer_kapitelblock_hinterlaesst_keine_luecke() {
+        let vorlage = "Tags
+
+{{TIMECODES}}
+
+Kontakt";
+        let text = render_template(vorlage, &[("TIMECODES", timecodes_block(None))]);
+        assert!(!text.contains("
+
+
+"), "keine doppelte Leerzeile: {:?}", text);
+    }
     fn credit(name: &str, contribution: &str, links: &[&str]) -> ResolvedCredit {
         ResolvedCredit {
             name: name.into(),
@@ -622,7 +675,7 @@ mod tests {
 //   {{ALSO_FITS}}         — e.g. "Lil Peep, Convolk, Scorey"
 //   {{GENRE_TAGS}}        — e.g. "Dark Melodic Trap"
 //   {{HASHTAGS}}          — derived hashtag block, one per line
-//   {{TIMECODES}}         — Kapitelmarken, eine Zeile je Marke ("0:00 Intro")
+//   {{TIMECODES}}         — Ueberschrift + Kapitelmarken, oder gar nichts
 //   {{PRODUCER}}          — settings.producer_name (e.g. "goodbxy")
 //   {{PRODUCER_PROD}}     — "prod. " + producer name (e.g. "prod. goodbxy")
 //   {{EMAIL}}             — settings.contact_email

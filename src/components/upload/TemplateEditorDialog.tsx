@@ -59,7 +59,7 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
       { label: "Passt auch zu", name: "ALSO_FITS",      was: "Die zweite Reihe Artists",                       beispiel: "Scorey, Polo G, Convolk" },
       { label: "Genres",        name: "GENRE_TAGS",     was: "Die Genres dieses Beats",                        beispiel: "Sad Guitar | Melodic" },
       { label: "Hashtags",      name: "HASHTAGS",       was: "Fertiger Tag-Block, je Plattform anders gebaut", beispiel: "#lilpeeptypebeat …" },
-      { label: "Kapitel",       name: "TIMECODES",      was: "Kapitelmarken dieses Beats, eine Zeile je Marke. Ohne Marken bleibt nichts stehen", beispiel: "0:00 Intro" },
+      { label: "Kapitel",       name: "TIMECODES",      was: "Überschrift und Kapitelmarken dieses Beats. Ohne Marken verschwindet der ganze Block samt Überschrift — sie gehört deshalb NICHT extra in die Vorlage", beispiel: "CHAPTERS: / 0:00 Intro" },
     ],
   },
   {
