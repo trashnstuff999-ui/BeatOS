@@ -8,11 +8,11 @@
 import { useState, useEffect } from "react";
 import {
   ShoppingBag, Music2, Youtube, Copy, Save, FileCode2,
-  Check, AlertCircle, Loader2, FileText, ChevronDown,
+  Check, AlertCircle, Loader2, FileText, Pencil,
 } from "lucide-react";
 import { C, PLATFORM_CONFIG } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
-import { Button } from "../ui";
+import { Button, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
@@ -172,8 +172,10 @@ export function DescriptionFilesCard({
 
   const [showTemplates, setShowTemplates] = useState(false);
 
-  // Editor collapsed by default — the title panel is the main output.
-  // Stays open while the active tab has unsaved edits so nothing hides.
+  // Volltext-Dialog. Ungesicherte Aenderungen meldet der Punkt am Knopf —
+  // frueher klappte der Editor dafuer von selbst auf, was im Dialog nicht
+  // ginge, ohne einem beim Tippen ein Fenster vor die Nase zu setzen.
+
   const [editorOpen, setEditorOpen] = useState(false);
 
   const activeContent = drafts?.[active] ?? "";
@@ -181,7 +183,6 @@ export function DescriptionFilesCard({
   const activeDescription = extractDescription(activeContent);
   const activeTags = extractTags(activeContent);
   const activeTagCount = countTags(activeTags);
-  const showEditor = editorOpen || dirty[active];
   const fileExistsMap: Record<TabKey, boolean> = {
     beatstars:  uploadFiles.beatstars_txt,
     soundcloud: uploadFiles.soundcloud_txt,
@@ -203,6 +204,27 @@ export function DescriptionFilesCard({
         // Karte braucht keine Fusszeile, die bei kurzen Vorlagen eine Luecke
         // ueber sich laesst.
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Der Rohtext ist der Notausgang, nicht die Hauptsache — und ein
+              Notausgang braucht keine Klapptuer mitten in der Karte. Im
+              Dialog bekommt er ausserdem das ganze Fenster statt der halben
+              Spalte. Der Punkt daneben meldet Ungesichertes, das sonst hinter
+              einem geschlossenen Fenster verschwaende. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={Pencil}
+            onClick={() => setEditorOpen(true)}
+            disabled={!drafts}
+            title="Volltext dieser Plattform bearbeiten"
+          >
+            Volltext
+            {dirty[active] && (
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: "#fda124", marginLeft: 6, flexShrink: 0,
+              }} />
+            )}
+          </Button>
           <Button
             size="sm"
             variant="secondary"
@@ -347,12 +369,12 @@ export function DescriptionFilesCard({
           <div style={{
             fontSize: 11, color: C.onSurfaceVariant,
             lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
-            display: "-webkit-box",
-            // 6 Zeilen liessen die Beschreibung unlesbar und darunter die
-            // halbe Karte leer. Der Bereich scrollt ohnehin.
-            WebkitLineClamp: 20,
-            WebkitBoxOrient: "vertical" as const,
-            overflow: "hidden",
+            // Kein Zeilenlimit mehr. Vorher stand hier eine Klammer auf 20
+            // Zeilen mit overflow:hidden — der Rest war nicht weggescrollt,
+            // sondern weggeschnitten und damit unerreichbar. Getroffen hat es
+            // ausgerechnet das Ende, wo Kapitelmarken und Tags stehen: man
+            // trug sie links ein und sah rechts nie, was daraus wurde.
+            // Der Inhaltsbereich der Karte scrollt ohnehin.
           }}>
             {isLoading
               ? "Rendering…"
@@ -391,82 +413,6 @@ export function DescriptionFilesCard({
           </OutputRow>
         )}
 
-      {/* ─── Full text — collapsed by default ─────────────────────────────
-          Steht innerhalb des scrollenden Bereichs, direkt unter den Tags:
-          ausserhalb schob ihn der wachsende Bereich an den Kartenfuss, und
-          beim Aufklappen wuchs die ganze Karte nach unten. Jetzt bleibt die
-          Kartenhoehe, wie sie ist, und der Inhalt scrollt. */}
-      <button
-        onClick={() => setEditorOpen(o => !o)}
-        style={{
-          width: "100%",
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 12px",
-          background: "transparent",
-          border: `1px solid ${C.border10}`,
-          borderRadius: 8,
-          cursor: "pointer",
-          fontSize: 10, fontWeight: 600,
-          color: C.onSurfaceVariant,
-          letterSpacing: "0.04em",
-        }}
-      >
-        <ChevronDown
-          size={12}
-          style={{ transition: "transform 0.15s", transform: showEditor ? "rotate(180deg)" : "rotate(0)" }}
-        />
-        Volltext anzeigen & bearbeiten
-        {dirty[active] && (
-          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, color: "#fda124" }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fda124" }} />
-            ungespeicherte Änderungen
-          </span>
-        )}
-      </button>
-
-      {showEditor && (
-        <div style={{ position: "relative", marginTop: 8 }}>
-          <textarea
-            value={activeContent}
-            onChange={e => setDraft(active, e.target.value)}
-            spellCheck={false}
-            style={{
-              width: "100%",
-              minHeight: 460,
-              padding: "12px 14px",
-              // NICHT surfaceContainerLowest — das ist reines Schwarz und
-              // liest sich auf der Karte als Loch. Ein Feld steht eine Stufe
-              // von seiner Karte ab; weil die Karte schon auf der zweiten
-              // Stufe von unten liegt, geht dieser Schritt nach oben.
-              background: C.surfaceContainer,
-              border: `1px solid ${C.border20}`,
-              borderRadius: 8,
-              outline: "none",
-              color: C.onSurface,
-              fontFamily: "monospace",
-              fontSize: 12,
-              lineHeight: 1.55,
-              resize: "vertical",
-              boxSizing: "border-box",
-              whiteSpace: "pre-wrap",
-            }}
-          />
-          {isLoading && (
-            <div style={{
-              position: "absolute", inset: 0,
-              background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: 8,
-              color: C.onSurfaceVariant,
-              fontSize: 11, fontWeight: 600,
-              letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>
-              <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite", marginRight: 8 }} />
-              Rendering…
-            </div>
-          )}
-        </div>
-      )}
       </div>
 
       {/* ─── Banner ──────────────────────────────────────────────────────── */}
@@ -487,6 +433,64 @@ export function DescriptionFilesCard({
           }
           {banner.msg}
         </div>
+      )}
+
+      {/* Volltext im Dialog statt aufgeklappt in der Karte: hier bekommt er
+          das ganze Fenster, und die Karte bleibt bei ihrer Hauptsache —
+          Titel, Beschreibung, Tags zum Kopieren. */}
+      {editorOpen && (
+        <Modal
+          title={`Volltext — ${TABS.find(t => t.key === active)?.label ?? active}`}
+          subtitle={TABS.find(t => t.key === active)?.file}
+          icon={Pencil}
+          width={900}
+          onClose={() => setEditorOpen(false)}
+          footerLeft={dirty[active] ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#fda124" }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fda124" }} />
+              ungespeicherte Änderungen
+            </span>
+          ) : undefined}
+          footer={
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setEditorOpen(false)}>Schließen</Button>
+              <Button
+                size="sm" variant="primary" icon={Save}
+                onClick={async () => { await persist(); setEditorOpen(false); }}
+                loading={isSaving}
+                disabled={!drafts}
+              >
+                Speichern
+              </Button>
+            </>
+          }
+        >
+          <textarea
+            value={activeContent}
+            onChange={e => setDraft(active, e.target.value)}
+            spellCheck={false}
+            autoFocus
+            style={{
+              width: "100%",
+              height: "60vh",
+              padding: "12px 14px",
+              // NICHT surfaceContainerLowest — das ist reines Schwarz und
+              // liest sich als Loch. Ein Feld steht eine Stufe von seiner
+              // Flaeche ab, und der Schritt geht nach oben.
+              background: C.surfaceContainer,
+              border: `1px solid ${C.border20}`,
+              borderRadius: 8,
+              outline: "none",
+              color: C.onSurface,
+              fontFamily: "monospace",
+              fontSize: 12,
+              lineHeight: 1.55,
+              resize: "none",
+              boxSizing: "border-box",
+              whiteSpace: "pre-wrap",
+            }}
+          />
+        </Modal>
       )}
 
       {showTemplates && (

@@ -60,9 +60,10 @@ describe("naechsterName", () => {
     expect(naechsterName("Verse", ["Verse 1", "Verse 2"])).toBe("Verse 3");
   });
 
-  it("laesst Hook und Pre-Hook in Ruhe", () => {
-    expect(naechsterName("Hook", ["Hook"])).toBe("Hook");
-    expect(naechsterName("Pre-Hook", ["Pre-Hook"])).toBe("Pre-Hook");
+  it("laesst alles andere in Ruhe", () => {
+    // „Pre-Hook / Hook" ist ein Kapitel, keine zwei — und wird nie nummeriert.
+    expect(naechsterName("Pre-Hook / Hook", ["Pre-Hook / Hook"])).toBe("Pre-Hook / Hook");
     expect(naechsterName("Intro", ["Intro"])).toBe("Intro");
+    expect(naechsterName("Outro", [])).toBe("Outro");
   });
 });

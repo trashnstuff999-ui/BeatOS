@@ -23,9 +23,10 @@ import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { UploadBeatInfo, Timecode } from "../../types/upload";
 import type { Beat } from "../../types/browse";
 
-/** Stephans Abschnitte. „Verse" nummeriert sich beim zweiten Mal von selbst,
- *  Hook und Pre-Hook bleiben wie sie sind. */
-const VORSCHLAEGE = ["Intro", "Verse", "Pre-Hook", "Hook", "Bridge", "Outro"] as const;
+/** Die Abschnitte, wie sie hier benutzt werden. „Verse" nummeriert sich beim
+ *  zweiten Mal von selbst; „Pre-Hook / Hook" ist EIN Kapitel und bleibt, wie
+ *  es dasteht — die beiden werden nie getrennt vergeben. */
+const VORSCHLAEGE = ["Intro", "Verse", "Pre-Hook / Hook", "Bridge", "Outro"] as const;
 const NUMMERIERT = new Set(["Verse"]);
 
 /** Mindestlänge eines Kapitels bei YouTube. */
