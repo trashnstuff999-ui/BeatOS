@@ -73,6 +73,33 @@ export function naechsterName(basis: string, vorhanden: string[]): string {
   return treffer.length === 0 ? `${basis} 1` : `${basis} ${treffer.length + 1}`;
 }
 
+/** Eine Zeile in der Karte: die Marke plus eine Identität, die das Löschen
+ *  überlebt.
+ *
+ *  Ohne sie stand der Array-Index als React-Key da, und das Zeitfeld ist
+ *  unkontrolliert (`defaultValue`, damit man „0:2…" tippen darf, ohne dass
+ *  jeder Tastendruck geparst wird). Beim Löschen rückt die nächste Zeile auf
+ *  den Platz der gelöschten, React hält die alte DOM-Node — und in ihr stand
+ *  weiterhin die Zeit der gelöschten Marke. Beim nächsten Blur wurde daraus
+ *  echter Zustand. Die Id ist nur für die Anzeige da, gespeichert wird sie nie.
+ */
+interface Zeile extends Timecode {
+  id: number;
+}
+
+let naechsteId = 1;
+const alsZeilen = (marks: Timecode[]): Zeile[] =>
+  marks.map(m => ({ ...m, id: naechsteId++ }));
+
+/** Anzeige und Speicherung müssen dieselbe Reihenfolge haben: nach Zeit
+ *  sortiert, und die früheste Marke liegt auf 0:00. Dieselbe Regel wie in
+ *  `build_timecode_block` im Backend — sonst sitzt die Sperre in der Karte auf
+ *  einer anderen Zeile als die 0:00 nach dem Speichern. */
+export function normalisieren(zeilen: Zeile[]): Zeile[] {
+  const sortiert = [...zeilen].sort((a, b) => a.seconds - b.seconds);
+  return sortiert.map((z, i) => (i === 0 && z.seconds !== 0 ? { ...z, seconds: 0 } : z));
+}
+
 export function TimecodeCard({ beat, onSaved }: {
   beat: UploadBeatInfo;
   onSaved: () => void;
@@ -80,7 +107,7 @@ export function TimecodeCard({ beat, onSaved }: {
   const { playBeat, togglePlay, currentBeat, isPlaying, getCurrentSeconds, seekSeconds } =
     useAudioPlayerContext();
 
-  const [marken, setMarken] = useState<Timecode[]>(() => parseBlock(beat.timecodes));
+  const [marken, setMarken] = useState<Zeile[]>(() => alsZeilen(parseBlock(beat.timecodes)));
   const [dreckig, setDreckig] = useState(false);
   // Die Zeit im Knopf soll mitlaufen, ohne den Fortschritts-Kontext zu
   // abonnieren — ein eigener, langsamer Takt nur für diese eine Zahl.
@@ -89,7 +116,7 @@ export function TimecodeCard({ beat, onSaved }: {
   const laeuftHier = currentBeat?.id === beat.id;
 
   useEffect(() => {
-    setMarken(parseBlock(beat.timecodes));
+    setMarken(alsZeilen(parseBlock(beat.timecodes)));
     setDreckig(false);
   }, [beat.id, beat.timecodes]);
 
@@ -106,14 +133,18 @@ export function TimecodeCard({ beat, onSaved }: {
   // gehört. Ohne das ginge beim Beat-Wechsel innerhalb der 700 ms die letzte
   // Änderung verloren: React räumt beim Wechsel den Timer weg, und die
   // Zeilen werden gleich darauf aus dem neuen Beat neu gefüllt.
-  const offenRef = useRef<{ beatId: string; marks: Timecode[] } | null>(null);
+  const offenRef = useRef<{ beatId: string; marks: Zeile[] } | null>(null);
 
   const wegschreiben = useCallback(async () => {
     const offen = offenRef.current;
     if (!offen) return;
     offenRef.current = null;
     try {
-      await api.upload.updateTimecodes(offen.beatId, offen.marks);
+      // Die Id bleibt hier: sie ist nur die Identität der Zeile in der Anzeige.
+      await api.upload.updateTimecodes(
+        offen.beatId,
+        offen.marks.map(({ seconds, label }) => ({ seconds, label })),
+      );
       onSaved();
     } catch (e) {
       console.error("[Timecodes] speichern fehlgeschlagen:", e);
@@ -131,24 +162,30 @@ export function TimecodeCard({ beat, onSaved }: {
   // Die Id kommt aus dem Ref, also landet es beim richtigen Beat.
   useEffect(() => () => { wegschreiben(); }, [beat.id, wegschreiben]);
 
-  const aendern = (i: number, patch: Partial<Timecode>) => {
-    setMarken(prev => prev.map((m, k) => (k === i ? { ...m, ...patch } : m)));
+  /** Beschriftung ändern — ändert die Reihenfolge nicht, also nicht sortieren.
+   *  Sonst spränge die Zeile beim Tippen unter dem Cursor weg. */
+  const beschriften = (id: number, label: string) => {
+    setMarken(prev => prev.map(m => (m.id === id ? { ...m, label } : m)));
     setDreckig(true);
   };
 
-  const entfernen = (i: number) => {
-    setMarken(prev => prev.filter((_, k) => k !== i));
+  /** Zeit ändern — hier wird neu sortiert, damit Anzeige und Speicherung
+   *  dieselbe Reihenfolge haben. Läuft nur beim Verlassen des Feldes. */
+  const zeitSetzen = (id: number, seconds: number) => {
+    setMarken(prev => normalisieren(prev.map(m => (m.id === id ? { ...m, seconds } : m))));
+    setDreckig(true);
+  };
+
+  const entfernen = (id: number) => {
+    // Normalisieren, weil die neue früheste Marke auf 0:00 rutscht — genau
+    // das macht das Backend beim Speichern auch.
+    setMarken(prev => normalisieren(prev.filter(m => m.id !== id)));
     setDreckig(true);
   };
 
   const hinzufuegen = (label = "") => {
     const secs = laeuftHier ? Math.floor(getCurrentSeconds()) : 0;
-    setMarken(prev => {
-      // Die erste Marke ist immer 0:00 — auch wenn beim Hinzufügen etwas
-      // anderes läuft. Danach zählt die Abspielposition.
-      const neu: Timecode = { seconds: prev.length === 0 ? 0 : secs, label };
-      return [...prev, neu];
-    });
+    setMarken(prev => normalisieren([...prev, { id: naechsteId++, seconds: secs, label }]));
     setDreckig(true);
   };
 
@@ -222,7 +259,10 @@ export function TimecodeCard({ beat, onSaved }: {
         {marken.map((m, i) => {
           const ersteZeile = i === 0;
           return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            // Key ist die Id, nicht der Index: sonst erbt die aufrueckende
+            // Zeile beim Loeschen die DOM-Node — und damit die Zeit — ihrer
+            // Vorgaengerin.
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {ersteZeile ? (
                 <span
                   title="Die erste Marke muss bei 0:00 liegen, sonst ignoriert YouTube alle Kapitel"
@@ -238,11 +278,14 @@ export function TimecodeCard({ beat, onSaved }: {
                 </span>
               ) : (
                 <input
+                  // Unkontrolliert, damit man „0:2…" tippen darf, ohne dass
+                  // jeder Tastendruck geparst wird. Der Wert kommt beim Blur
+                  // an; ungueltiges springt auf den letzten guten zurueck.
                   defaultValue={mmss(m.seconds)}
                   onBlur={e => {
                     const s = parseMmss(e.target.value);
                     if (s === null) { e.target.value = mmss(m.seconds); return; }
-                    aendern(i, { seconds: s });
+                    zeitSetzen(m.id, s);
                     e.target.value = mmss(s);
                   }}
                   style={{
@@ -257,7 +300,7 @@ export function TimecodeCard({ beat, onSaved }: {
 
               <input
                 value={m.label}
-                onChange={e => aendern(i, { label: e.target.value })}
+                onChange={e => beschriften(m.id, e.target.value)}
                 placeholder="Abschnitt"
                 style={{
                   flex: 1, minWidth: 0, padding: "7px 10px",
@@ -284,7 +327,7 @@ export function TimecodeCard({ beat, onSaved }: {
               </button>
 
               <button
-                onClick={() => entfernen(i)}
+                onClick={() => entfernen(m.id)}
                 title="Marke entfernen"
                 style={{
                   width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,

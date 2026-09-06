@@ -100,3 +100,37 @@ describe("Kapitelmarken speichern und wiederfinden", () => {
     });
   });
 });
+
+describe("Zeilen loeschen und sortieren", () => {
+  const zeitfelder = () =>
+    [...document.querySelectorAll<HTMLInputElement>('input[type="text"], input:not([type])')]
+      .filter(i => /^\d+:\d{2}$/.test(i.value))
+      .map(i => i.value);
+
+  it("die uebrigen Marken behalten ihre eigene Zeit", async () => {
+    // Der gemeldete Fehler: Index als React-Key plus unkontrolliertes
+    // Zeitfeld — beim Loeschen erbte die aufrueckende Zeile die DOM-Node
+    // und damit die Zeit ihrer Vorgaengerin.
+    zeigen(beat("0897", "0:00 Intro\n0:10 A\n0:25 B"));
+    expect(zeitfelder()).toEqual(["0:10", "0:25"]);
+
+    const knoepfe = screen.getAllByTitle("Marke entfernen");
+    await userEvent.click(knoepfe[1]);          // A raus
+
+    expect(screen.queryByDisplayValue("A")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("B")).toBeInTheDocument();
+    // B behaelt 0:25 — vorher stand hier A's 0:10.
+    expect(zeitfelder()).toEqual(["0:25"]);
+  });
+
+  it("faellt die 0:00-Marke weg, rutscht die naechste darauf", async () => {
+    // Dieselbe Regel wie im Backend: ohne Startmarke ignoriert YouTube alles.
+    zeigen(beat("0897", "0:00 Intro\n0:40 Hook"));
+    await userEvent.click(screen.getAllByTitle("Marke entfernen")[0]);
+
+    expect(screen.getByDisplayValue("Hook")).toBeInTheDocument();
+    // Hook ist jetzt die erste Zeile — gesperrt auf 0:00, kein Zeitfeld mehr.
+    expect(zeitfelder()).toEqual([]);
+    expect(screen.getByText("0:00")).toBeInTheDocument();
+  });
+});
