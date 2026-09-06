@@ -119,6 +119,19 @@ export interface LegacyStructure {
   savefiles_conflict: boolean;
 }
 
+/** Eine Zeile aus dem Stapellauf. Im Trockenlauf sagt `files`, was bewegt
+ *  WÜRDE; nach dem Lauf, was bewegt WURDE. */
+export interface StructureMigration {
+  beat_id: string;
+  is_legacy: boolean;
+  files: number;
+  moved_to_old: number;
+  removed_subfolders: string[];
+  collisions: string[];
+  savefiles_conflict: boolean;
+  error: string | null;
+}
+
 export interface MigrationResult {
   moved_files: number;
   renamed_savefiles: boolean;

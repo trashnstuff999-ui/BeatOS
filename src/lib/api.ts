@@ -33,6 +33,7 @@ import type {
   SaveUploadDescriptionsParams,
   LegacyStructure,
   MigrationResult,
+  StructureMigration,
   RenamePlan,
   RenameResult,
   FolderSync,
@@ -372,6 +373,11 @@ export const api = {
 
     migrateLegacyBeatStructure: (beatId: string) =>
       invoke<MigrationResult>("migrate_legacy_beat_structure", { beatId }),
+
+    /** Alte Ordnerstruktur flachziehen — im Stapel.
+     *  Leere ID-Liste = alle Beats, dryRun = nur Vorschau. */
+    migrateStructures: (beatIds: string[], dryRun: boolean) =>
+      invoke<StructureMigration[]>("migrate_beat_structures", { beatIds, dryRun }),
 
     planFilenameConvention: (beatId: string) =>
       invoke<RenamePlan>("plan_filename_convention", { beatId }),

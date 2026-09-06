@@ -126,12 +126,50 @@ pub fn apply_filename_convention(beat_id: String) -> Result<RenameResult, String
     Ok(RenameResult { renamed, noops, errors })
 }
 
-/// Ältere MP3/WAV aus dem Beat-Root nach `02_OLD/` wegräumen: die neueste MP3
-/// und die neueste WAV bleiben liegen, alles Ältere zieht mit Originalnamen um
-/// (bei Namensgleichheit _2, _3 …). Ohne DB und ohne Namenskonvention — damit
-/// auch Flows ohne Auto-Rename aufräumen: Legacy-Migration und Archivieren mit
-/// abgeschaltetem Auto-Rename. Gibt die Zahl der verschobenen Dateien zurück;
-/// ein fehlgeschlagener Umzug lässt die Datei liegen und bricht nichts ab.
+/// Trägt der Dateiname, dass es die ungetaggte Fassung ist?
+/// „untagged" enthält „tagged" — deshalb wird auf das lange Wort geprüft.
+fn wirkt_untagged(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("untagged") || n.contains("unmastered")
+}
+
+/// Welche Datei einer Endung im Beat-Root liegen bleibt.
+///
+/// Das Datum allein reicht nicht. Im Altbestand liegen getaggte und ungetaggte
+/// WAVs nebeneinander, und die getaggte ist oft die neuere — sie bekäme beim
+/// Umbenennen `_untagged.wav`, also ein falsches Etikett auf der falschen
+/// Datei. Im Archiv gemessen: 14 Beats haben mehrere WAVs, bei 5 davon wäre
+/// die neueste eine getaggte.
+///
+/// Deshalb entscheidet erst die Sorte, dann das Datum:
+///   * `wav` → eine ungetaggte gewinnt (das ist die Fassung, die verkauft wird)
+///   * `mp3` → eine, die NICHT ungetaggt ist, gewinnt (die getaggte geht raus)
+///
+/// Gibt es in der bevorzugten Sorte nichts, zählt wieder allein das Datum —
+/// die Regel schiebt also nur um, wo es überhaupt eine Wahl gibt.
+fn waehle_behalten<'a>(
+    kandidaten: &[&'a (String, SystemTime)],
+    ext: &str,
+) -> &'a (String, SystemTime) {
+    let bevorzugt_untagged = ext == "wav";
+    let neueste_mit = |untagged: bool| -> Option<&'a (String, SystemTime)> {
+        kandidaten.iter()
+            .filter(|(n, _)| wirkt_untagged(n) == untagged)
+            .max_by_key(|(_, t)| *t)
+            .copied()
+    };
+    neueste_mit(bevorzugt_untagged)
+        .or_else(|| neueste_mit(!bevorzugt_untagged))
+        .unwrap_or(kandidaten[0])
+}
+
+/// Ältere MP3/WAV aus dem Beat-Root nach `02_OLD/` wegräumen: je eine MP3 und
+/// eine WAV bleiben liegen, alles Übrige zieht mit Originalnamen um (bei
+/// Namensgleichheit _2, _3 …). Welche bleibt, entscheidet `waehle_behalten` —
+/// Sorte vor Datum. Ohne DB und ohne Namenskonvention, damit auch Flows ohne
+/// Auto-Rename aufräumen: Legacy-Migration und Archivieren mit abgeschaltetem
+/// Auto-Rename. Gibt die Zahl der verschobenen Dateien zurück; ein
+/// fehlgeschlagener Umzug lässt die Datei liegen und bricht nichts ab.
 pub fn sweep_old_audio(beat_root: &Path) -> usize {
     let files = list_files(beat_root);
     let mut moved = 0usize;
@@ -148,8 +186,8 @@ pub fn sweep_old_audio(beat_root: &Path) -> usize {
             return moved;
         }
 
-        let newest = matching.iter().max_by_key(|(_, t)| *t).copied().unwrap();
-        for (n, _) in matching.iter().filter(|(n, _)| n != &newest.0) {
+        let behalten = waehle_behalten(&matching, ext);
+        for (n, _) in matching.iter().filter(|(n, _)| n != &behalten.0) {
             let dest = unique_dest(&old_dir, n);
             match fs::rename(beat_root.join(n), &dest) {
                 Ok(_)  => moved += 1,
@@ -782,6 +820,69 @@ mod tests {
         assert_eq!(super::sweep_old_audio(&tmp), 0);
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Sorte vor Datum. Im Altbestand ist die getaggte WAV oft die neuere —
+    /// nach Datum allein bliebe sie liegen und bekaeme `_untagged.wav`.
+    #[test]
+    fn wav_behaelt_die_untagged_auch_wenn_die_getaggte_neuer_ist() {
+        let tmp = std::env::temp_dir().join(format!("beatos_sweep_sorte_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        write_at(&tmp.join("EDGE [F#m 162]_untagged.wav"), 1_000_000);
+        write_at(&tmp.join("EDGE [F#m 162]_Tagged.wav"),   2_000_000);   // neuer!
+
+        assert_eq!(super::sweep_old_audio(&tmp), 1);
+        assert!(tmp.join("EDGE [F#m 162]_untagged.wav").is_file(), "die ungetaggte bleibt");
+        assert!(tmp.join("02_OLD").join("EDGE [F#m 162]_Tagged.wav").is_file());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Spiegelbild: die MP3 ist die getaggte Fassung. Eine ungetaggte MP3
+    /// gewinnt nicht, auch wenn sie neuer ist.
+    #[test]
+    fn mp3_behaelt_die_getaggte() {
+        let tmp = std::env::temp_dir().join(format!("beatos_sweep_mp3_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        write_at(&tmp.join("BEAT_Master.mp3"),   1_000_000);
+        write_at(&tmp.join("BEAT_untagged.mp3"), 2_000_000);   // neuer!
+
+        assert_eq!(super::sweep_old_audio(&tmp), 1);
+        assert!(tmp.join("BEAT_Master.mp3").is_file(), "die nicht-ungetaggte bleibt");
+        assert!(tmp.join("02_OLD").join("BEAT_untagged.mp3").is_file());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Gibt es die bevorzugte Sorte nicht, zaehlt wieder allein das Datum —
+    /// die Regel schiebt nur um, wo es eine Wahl gibt.
+    #[test]
+    fn ohne_untagged_entscheidet_wieder_das_datum() {
+        let tmp = std::env::temp_dir().join(format!("beatos_sweep_fallback_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        write_at(&tmp.join("Hook.wav"),   2_000_000);
+        write_at(&tmp.join("Master.wav"), 1_000_000);
+
+        assert_eq!(super::sweep_old_audio(&tmp), 1);
+        assert!(tmp.join("Hook.wav").is_file(), "neueste gewinnt, wie bisher");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// „untagged" enthaelt „tagged" — die Pruefung darf nicht darauf reinfallen.
+    #[test]
+    fn untagged_wird_nicht_als_tagged_gelesen() {
+        assert!(super::wirkt_untagged("BEAT_untagged.wav"));
+        assert!(super::wirkt_untagged("GONE [Fm 135]_unmastered.wav"));
+        assert!(!super::wirkt_untagged("EDGE II [F#m 162]_Tagged.wav"));
+        assert!(!super::wirkt_untagged("LONELY WORLD - Type Beat - tagged.wav"));
+        assert!(!super::wirkt_untagged("Hook.wav"));
     }
 
     #[test]
