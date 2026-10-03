@@ -8,9 +8,9 @@
 
 import { useState } from "react";
 import { Images, Film, Plus, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
-import { C } from "../lib/theme";
+import { C, alpha, radius } from "../lib/theme";
 import { SectionCard } from "./ui/SectionCard";
-import { AssetPickerDialog, type AssetSlotKind } from "./AssetPickerDialog";
+import { AssetPickerDialog, AssetVideo, type AssetSlotKind } from "./AssetPickerDialog";
 import type { FolderAssets } from "../hooks/useFolderAssets";
 
 const SLOT_TITLE: Record<AssetSlotKind, string> = {
@@ -52,7 +52,7 @@ export function BeatAssetsCard({
           disabled={noFolder || isRefreshing}
           title="Ordner neu einlesen"
           style={{
-            width: 26, height: 26, borderRadius: 6,
+            width: 26, height: 26, borderRadius: radius.control,
             background: "transparent",
             border: `1px solid ${C.border15}`,
             cursor: noFolder ? "not-allowed" : "pointer",
@@ -72,9 +72,9 @@ export function BeatAssetsCard({
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "9px 12px", marginBottom: 12,
-          background: "rgba(253,161,36,0.08)",
-          border: "1px solid rgba(253,161,36,0.30)",
-          borderRadius: 8,
+          background: alpha(C.primary, 0.08),
+          border: `1px solid ${alpha(C.primary, 0.30)}`,
+          borderRadius: radius.control,
           fontSize: 11, color: C.primary,
         }}>
           <AlertTriangle size={13} strokeWidth={2} />
@@ -83,13 +83,14 @@ export function BeatAssetsCard({
       )}
 
       {/* Cover (1:1) links groß, Thumbnail + Video (16:9) rechts gestapelt.
-          Die Cover-Spalte ist breiter, damit das Quadrat so hoch wird wie
-          die zwei 16:9-Slots — und der Cover-Slot füllt die volle Zellenhöhe,
-          sodass die Unterkanten links/rechts exakt bündig sind. */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
+          Jeder Slot hält sein echtes Format und wird randlos gefüllt. Vorher
+          streckte sich das Cover auf die Zellenhöhe — kein Quadrat mehr, und
+          „contain" liess Balken stehen. 1.15fr: das Cover bleibt gross, und
+          Thumbnail/Video daneben sind breit genug, um sie zu erkennen. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 10, alignItems: "start" }}>
         <AssetSlot
           label="Cover"
-          fill
+          aspect="1 / 1"
           preview={assets.coverPreview}
           fileName={fileNameOf(assets.coverPath)}
           disabled={noFolder || noAssetPath}
@@ -108,6 +109,7 @@ export function BeatAssetsCard({
             label="Video"
             aspect="16 / 9"
             preview={null}
+            videoPath={assets.videoPath}
             icon={Film}
             fileName={fileNameOf(assets.videoPath)}
             disabled={noFolder || noAssetPath}
@@ -116,13 +118,15 @@ export function BeatAssetsCard({
         </div>
       </div>
 
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
-        {noFolder
-          ? "Erst einen Ordner wählen."
-          : noAssetPath
-            ? "Kein Asset-Pfad in den Settings gesetzt — dort den Media-Ordner eintragen."
-            : "Die gewählte Datei wandert in den Projektordner."}
-      </div>
+      {/* Nur was man tun muss — wie Zuweisen funktioniert, steht im Tooltip
+          der Slots, nicht als Dauer-Fussnote. */}
+      {(noFolder || noAssetPath) && (
+        <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 10, lineHeight: 1.5 }}>
+          {noFolder
+            ? "Erst einen Ordner wählen."
+            : "Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner eintragen."}
+        </div>
+      )}
 
       {picker && folderPath && (
         <AssetPickerDialog
@@ -140,13 +144,13 @@ export function BeatAssetsCard({
 
 // ─── Ein Slot ────────────────────────────────────────────────────────────────
 
-function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disabled, onPick }: {
+function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, disabled, onPick }: {
   label: string;
-  /** Festes Seitenverhältnis (z.B. "16 / 9"); ignoriert wenn fill gesetzt ist */
-  aspect?: string;
-  /** Füllt die volle Höhe der Grid-Zelle statt eines festen Seitenverhältnisses */
-  fill?: boolean;
+  /** Festes Seitenverhältnis (z.B. "16 / 9") */
+  aspect: string;
   preview: string | null;
+  /** Video-Slot: erstes Bild statt Symbol */
+  videoPath?: string | null;
   fileName: string | null;
   icon?: React.ElementType;
   disabled: boolean;
@@ -156,7 +160,7 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
   const filled = Boolean(fileName);
 
   return (
-    <div style={fill ? { display: "flex", flexDirection: "column", height: "100%" } : undefined}>
+    <div>
       {/* Feldbeschriftung, nicht Abschnittsüberschrift: GROSSBUCHSTABEN sind in
           diesem Panel für Abschnitte reserviert. Standen beide gleich da, las
           sich der Slot als eigener Abschnitt. */}
@@ -172,15 +176,15 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
         disabled={disabled}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        title={filled ? `${fileName} — Klick zum Ersetzen` : disabled ? undefined : `${label} zuweisen`}
+        title={filled ? `${fileName} — Klick zum Ersetzen. Die alte Datei geht zurück in den Asset-Ordner.` : disabled ? undefined : `${label} aus dem Asset-Ordner zuweisen`}
         style={{
           width: "100%",
-          ...(fill ? { flex: 1, minHeight: 180 } : { aspectRatio: aspect }),
+          aspectRatio: aspect,
           background: filled ? C.surfaceContainerHigh : "transparent",
           border: filled
             ? `1px solid ${C.border20}`
             : `1px dashed ${disabled ? C.border15 : C.border30}`,
-          borderRadius: 10,
+          borderRadius: radius.card,
           cursor: disabled ? "not-allowed" : "pointer",
           padding: 0, overflow: "hidden", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -189,7 +193,9 @@ function AssetSlot({ label, aspect, fill, preview, fileName, icon: Icon, disable
         }}
       >
         {preview ? (
-          <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+          <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        ) : videoPath ? (
+          <AssetVideo path={videoPath} fit="cover" />
         ) : filled ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: C.mint }}>
             {Icon ? <Icon size={22} strokeWidth={1.5} /> : <Images size={22} strokeWidth={1.5} />}

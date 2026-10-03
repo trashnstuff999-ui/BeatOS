@@ -10,7 +10,7 @@ import {
   ShoppingBag, Music2, Youtube, Copy, Save, FileCode2,
   Check, AlertCircle, Loader2, FileText, Pencil,
 } from "lucide-react";
-import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Button, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -221,7 +221,7 @@ export function DescriptionFilesCard({
             {dirty[active] && (
               <span style={{
                 width: 6, height: 6, borderRadius: "50%",
-                background: "#fda124", marginLeft: 6, flexShrink: 0,
+                background: C.primary, marginLeft: 6, flexShrink: 0,
               }} />
             )}
           </Button>
@@ -258,10 +258,10 @@ export function DescriptionFilesCard({
       {!beatstarsUrl?.trim() && (
         <div style={{
           display: "flex", alignItems: "flex-start", gap: 8,
-          padding: "9px 12px", borderRadius: 8,
-          background: "rgba(253,161,36,0.10)",
-          border: "1px solid rgba(253,161,36,0.35)",
-          fontSize: 11, lineHeight: 1.5, color: "#fda124",
+          padding: "9px 12px", borderRadius: radius.control,
+          background: alpha(C.primary, 0.10),
+          border: `1px solid ${alpha(C.primary, 0.35)}`,
+          fontSize: 11, lineHeight: 1.5, color: C.primary,
         }}>
           <AlertCircle size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
@@ -282,7 +282,7 @@ export function DescriptionFilesCard({
         // vorher auf der dunkelsten Flaeche und las sich als Ausschnitt.
         background: C.surfaceContainer,
         border: `1px solid ${C.border15}`,
-        borderRadius: 8,
+        borderRadius: radius.control,
         overflow: "hidden",
       }}>
         {TABS.map((tab, i) => {
@@ -319,7 +319,7 @@ export function DescriptionFilesCard({
               {isDirty && (
                 <span title="Ungespeicherte Änderungen" style={{
                   width: 6, height: 6, borderRadius: "50%",
-                  background: "#fda124",
+                  background: C.primary,
                 }} />
               )}
               {exists && !isDirty && (
@@ -420,12 +420,12 @@ export function DescriptionFilesCard({
         <div style={{
           marginTop: 10,
           padding: "8px 12px",
-          background: banner.kind === "ok" ? "rgba(52,211,153,0.10)" : "rgba(229,72,77,0.10)",
-          border: `1px solid ${banner.kind === "ok" ? "rgba(52,211,153,0.35)" : "rgba(229,72,77,0.35)"}`,
-          borderRadius: 6,
+          background: banner.kind === "ok" ? alpha(C.mint, 0.10) : alpha(C.error, 0.10),
+          border: `1px solid ${banner.kind === "ok" ? alpha(C.mint, 0.35) : alpha(C.error, 0.35)}`,
+          borderRadius: radius.control,
           display: "flex", alignItems: "center", gap: 8,
           fontSize: 11,
-          color: banner.kind === "ok" ? "#34d399" : "#e5484d",
+          color: banner.kind === "ok" ? C.mint : C.error,
         }}>
           {banner.kind === "ok"
             ? <Check size={12} strokeWidth={2.5} />
@@ -446,8 +446,8 @@ export function DescriptionFilesCard({
           width={900}
           onClose={() => setEditorOpen(false)}
           footerLeft={dirty[active] ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#fda124" }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fda124" }} />
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.primary }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.primary }} />
               ungespeicherte Änderungen
             </span>
           ) : undefined}
@@ -479,7 +479,7 @@ export function DescriptionFilesCard({
               // Flaeche ab, und der Schritt geht nach oben.
               background: C.surfaceContainer,
               border: `1px solid ${C.border20}`,
-              borderRadius: 8,
+              borderRadius: radius.control,
               outline: "none",
               color: C.onSurface,
               fontFamily: "monospace",
@@ -533,9 +533,9 @@ function OutputRow({ label, badge, badgeWarn, onCopy, disabled, children }: {
           {label}
           {badge && (
             <span style={{
-              padding: "1px 7px", borderRadius: 9999,
+              padding: "1px 7px", borderRadius: radius.full,
               fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
-              background: badgeWarn ? "rgba(255,115,81,0.15)" : "rgba(255,255,255,0.05)",
+              background: badgeWarn ? alpha(C.error, 0.15) : "rgba(255,255,255,0.05)",
               color: badgeWarn ? C.error : C.onSurfaceVariant,
             }}>
               {badge}
@@ -549,7 +549,7 @@ function OutputRow({ label, badge, badgeWarn, onCopy, disabled, children }: {
         disabled={disabled}
         title={`${label} kopieren`}
         style={{
-          width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+          width: 28, height: 28, borderRadius: radius.control, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           background: "transparent",
           border: `1px solid ${C.border20}`,

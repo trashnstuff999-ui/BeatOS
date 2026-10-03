@@ -4,11 +4,11 @@
 // per-platform upload status, and description rendering/saving.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { renderSignature } from "../lib/descriptions";
 import { Upload as UploadIcon, AlertCircle, Loader2, CalendarDays, ChevronUp } from "lucide-react";
-import { C } from "../lib/theme";
+import { C, alpha, radius } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 import { GLOBAL_PLAYER_HEIGHT } from "../components/GlobalAudioPlayer";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
@@ -39,6 +39,8 @@ export default function Upload() {
   const [selectedBeat, setSelectedBeat] = useState<Beat | null>(null);
   const [convertOpen, setConvertOpen]   = useState(false);
   const [plannerRefresh, setPlannerRefresh] = useState(0);
+  /** Hoehe der zugeklappten Planungs-Leiste, von ihr selbst gemessen. */
+  const [dockHoehe, setDockHoehe] = useState(39);
   const { data, isLoading, error, refresh } = useUploadData(selectedBeat?.id ?? null);
 
   // Status/date changes must also update the planner strip
@@ -232,12 +234,13 @@ export default function Upload() {
             />
           )}
 
-          {/* Luft fuer die fixierte Planungs-Leiste am unteren Rand */}
-          <div style={{ height: PLANNER_DOCK_HEIGHT + 16, flexShrink: 0 }} />
+          {/* Luft fuer die fixierte Planungs-Leiste am unteren Rand — die
+              Hoehe misst die Leiste selbst und meldet sie herauf. */}
+          <div style={{ height: dockHoehe + 16, flexShrink: 0 }} />
       </PageBody>
 
       {/* Planung — fixiert am unteren Rand, klappt nach oben auf */}
-      <PlannerDock>
+      <PlannerDock onHoehe={setDockHoehe}>
         <PlannerStrip
           refreshKey={plannerRefresh}
           beatId={data?.beat.id ?? null}
@@ -264,13 +267,33 @@ export default function Upload() {
 /** Der Planer beantwortet „was steht diese Woche an", nicht „was mache ich mit
  *  diesem Song". Deshalb liegt er als schmale Leiste am unteren Fensterrand
  *  und klappt bei Bedarf nach oben auf — ueber dem Player, wenn der laeuft. */
-function PlannerDock({ children }: { children: React.ReactNode }) {
+function PlannerDock({ children, onHoehe }: {
+  children: React.ReactNode;
+  /** Meldet die gemessene Hoehe nach oben — daraus entsteht die Luft am Seitenende. */
+  onHoehe: (px: number) => void;
+}) {
   const [open, setOpen] = useState(false);
   const { currentBeat } = useAudioPlayerContext();
   const bottom = currentBeat ? GLOBAL_PLAYER_HEIGHT : 0;
 
+  // Statt einer geschaetzten Konstante: die Leiste misst sich selbst.
+  // Vorher stand hier `PLANNER_DOCK_HEIGHT = 39` — eine Zahl, die von Hand zur
+  // Knopfhoehe passen musste. Jede Aenderung an Polsterung oder Schriftgroesse
+  // haette sie stillschweigend falsch gemacht, und die letzte Karte waere
+  // unter der Leiste verschwunden. ResizeObserver kann das ohne Bibliothek.
+  const leiste = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = leiste.current;
+    if (!el) return;
+    const beobachter = new ResizeObserver(([eintrag]) => {
+      onHoehe(eintrag.contentRect.height);
+    });
+    beobachter.observe(el);
+    return () => beobachter.disconnect();
+  }, [onHoehe]);
+
   return (
-    <div style={{
+    <div ref={leiste} style={{
       position: "fixed",
       bottom, left: SIDEBAR_WIDTH, right: 0,
       zIndex: 90,
@@ -305,10 +328,6 @@ function PlannerDock({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Hoehe der zugeklappten Dock-Leiste — so viel Luft braucht die Seite unten,
- *  damit die letzte Karte nicht darunter verschwindet. */
-const PLANNER_DOCK_HEIGHT = 39;
-
 function UploadEmptyState() {
   return (
     <EmptyState
@@ -326,7 +345,7 @@ function LoadingBanner() {
       padding: "14px 18px",
       background: C.surfaceContainerLowest,
       border: `1px solid ${C.border15}`,
-      borderRadius: 10,
+      borderRadius: radius.card,
       fontSize: 12, color: C.onSurfaceVariant,
     }}>
       <Loader2 size={14} color={C.primary} style={{ animation: "spin 0.8s linear infinite" }} />
@@ -340,9 +359,9 @@ function ErrorBanner({ message }: { message: string }) {
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 12,
       padding: "14px 18px",
-      background: "rgba(229,72,77,0.08)",
-      border: "1px solid rgba(229,72,77,0.30)",
-      borderRadius: 10,
+      background: alpha(C.error, 0.08),
+      border: `1px solid ${alpha(C.error, 0.30)}`,
+      borderRadius: radius.card,
     }}>
       <AlertCircle size={16} color={C.error} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />
       <span style={{ fontSize: 12, color: C.error, lineHeight: 1.5 }}>

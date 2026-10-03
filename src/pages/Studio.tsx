@@ -9,15 +9,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo } from "react";
-import { Disc3, FolderKanban, Image as ImageIcon } from "lucide-react";
+import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon } from "lucide-react";
 import { C, radius } from "../lib/theme";
 import { PageHeader, PageBody } from "../components/ui";
 import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
 import { ProjectsPane } from "../components/studio/ProjectsPane";
 import { AssetsPane } from "../components/studio/AssetsPane";
+import { INSPECTOR_WIDTH } from "../components/studio/ProjectInspector";
 import type { StudioProject } from "../types/studio";
 
-type StudioTab = "projects" | "assets";
+type StudioTab = "projects" | "cleanup" | "assets";
 
 export default function Studio() {
   const { settings } = useSettings();
@@ -25,6 +26,7 @@ export default function Studio() {
   // Der letzte Scan — der Assets-Tab braucht ihn als Zielliste beim Zuweisen.
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const productionPaths = useMemo(
     () => parseProductionPaths(settings.productionPath),
@@ -32,7 +34,9 @@ export default function Studio() {
   );
 
   return (
-    <div style={{
+    // data-app-flaeche: ein Klick auf den Hintergrund schliesst den Inspector
+    // (siehe hooks/useKlickDaneben.ts).
+    <div data-app-flaeche style={{
       height: "100%",
       display: "flex", flexDirection: "column",
       overflow: "hidden",
@@ -54,6 +58,12 @@ export default function Studio() {
             onClick={() => setTab("projects")}
           />
           <TabBtn
+            icon={BrushCleaning}
+            label="Aufräumen"
+            active={tab === "cleanup"}
+            onClick={() => setTab("cleanup")}
+          />
+          <TabBtn
             icon={ImageIcon}
             label="Assets"
             active={tab === "assets"}
@@ -63,14 +73,26 @@ export default function Studio() {
       </PageHeader>
 
       {/* Content */}
-      <PageBody>
+      {/* Das Projekt-Panel schwebt rechts. Solange es offen ist, rückt der
+          Inhalt um seine Breite ein — vorher deckte es den rechten Rand der
+          Liste zu („Sc…", „In den Papierko…"). */}
+      <div style={{
+        flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+        paddingRight: tab !== "assets" && inspectorOpen ? INSPECTOR_WIDTH : 0,
+        transition: "padding-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
+      }}>
+      {/* Das Inbox-Raster nutzt die ganze Breite — mehr Kacheln pro Reihe.
+          Die Projektlisten bleiben auf Lesebreite. */}
+      <PageBody width={tab === "assets" ? "full" : "wide"}>
         {/* Beide Panes bleiben montiert: der Assets-Tab braucht die Projektliste
             beim Zuweisen, und ein Tabwechsel darf keinen Scan wegwerfen. */}
-        <div style={{ display: tab === "projects" ? "block" : "none" }}>
+        <div style={{ display: tab !== "assets" ? "block" : "none" }}>
           <ProjectsPane
             productionPaths={productionPaths}
             refreshKey={refreshKey}
             onProjects={setProjects}
+            onInspectorOpen={setInspectorOpen}
+            view={tab === "cleanup" ? "cleanup" : "work"}
           />
         </div>
         <div style={{ display: tab === "assets" ? "block" : "none" }}>
@@ -83,6 +105,7 @@ export default function Studio() {
         </div>
         <div style={{ height: 40 }} />
       </PageBody>
+      </div>
     </div>
   );
 }
@@ -100,7 +123,7 @@ function TabBtn({ icon: Icon, label, active, onClick }: {
         display: "flex", alignItems: "center", gap: 6,
         padding: "6px 14px",
         background: active ? C.surfaceContainerHigh : "transparent",
-        border: "none", borderRadius: 6,
+        border: "none", borderRadius: radius.control,
         cursor: "pointer",
         fontSize: 11, fontWeight: 700,
         letterSpacing: "0.05em", textTransform: "uppercase",

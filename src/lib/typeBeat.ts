@@ -10,15 +10,19 @@
 //   genres       : ["G1","G2"]      ⇄ "G1 | G2"  ({{GENRE_TAGS}} in titles)
 //
 // The parsers MUST stay tolerant of legacy freetext (mixed separators) and
-// mirror the Rust side: split_artists (render.rs) splits on comma / " x " /
+// mirror the Rust side: split_artists (render.rs) splits on ", " / " x " /
 // " X " / " & "; split_csv splits on comma and "|".
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Mirror of Rust split_artists: comma, " x ", " X ", " & " (with spaces). */
+/** Mirror of Rust split_artists: ", ", " x ", " X ", " & " (with spaces).
+ *
+ *  Das Komma trennt nur MIT folgendem Leerzeichen. Sonst liesse sich ein
+ *  Artist wie "nothing,nowhere" nicht eingeben: er zerfiele beim naechsten
+ *  Laden wieder in zwei Chips. */
 export function parseArtists(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
   return s
-    .split(",")
+    .split(/,\s/)
     .flatMap(chunk =>
       chunk
         .split(" X ").join(" x ")

@@ -461,8 +461,9 @@ fn split_tag_text(s: &str) -> Vec<String> {
 /// into individual artist names.
 fn split_artists(s: &str) -> Vec<String> {
     if s.trim().is_empty() { return Vec::new(); }
-    // Split on commas first, then split each piece on " x ", " X ", " & "
-    s.split(',')
+    // Split on ", " first, then each piece on " x ", " X ", " & ".
+    // Nur MIT Leerzeichen: "nothing,nowhere" ist ein Artist, kein Paar.
+    s.split(", ")
         .flat_map(|chunk| {
             chunk
                 .replace(" X ", " x ")
@@ -635,6 +636,12 @@ Kontakt";
         assert_eq!(split_artists(""), Vec::<String>::new());
         // "x" inside a name must not split (only " x " with spaces does)
         assert_eq!(split_artists("Xavier Wulf"), vec!["Xavier Wulf"]);
+        // Komma ohne Leerzeichen gehoert zum Namen
+        assert_eq!(split_artists("nothing,nowhere"), vec!["nothing,nowhere"]);
+        assert_eq!(
+            split_artists("nothing,nowhere x Scorey"),
+            vec!["nothing,nowhere", "Scorey"]
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Lock } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { Card, Label } from "../ui";
 
 interface PlaceholderCardProps {
@@ -26,7 +26,7 @@ export function PlaceholderCard({ title, phase, description }: PlaceholderCardPr
           padding: "3px 8px",
           background: C.surfaceContainerLowest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 4,
+          borderRadius: radius.control,
         }}>
           {phase}
         </span>
@@ -36,7 +36,7 @@ export function PlaceholderCard({ title, phase, description }: PlaceholderCardPr
         padding: "16px 18px",
         background: C.surfaceContainerLowest,
         border: `1px dashed ${C.border20}`,
-        borderRadius: 8,
+        borderRadius: radius.control,
       }}>
         <Lock size={16} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
         <span style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>

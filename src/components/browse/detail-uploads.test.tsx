@@ -6,7 +6,8 @@
 // die längst öffentlich sind — `beat_uploads` wurde erst ab 02/2026 gefüllt.
 // Zum Nachtragen muss das Panel auch für einen Beat OHNE jeden Upload-Eintrag
 // alle drei Plattformen anbieten, und ein Klick muss beim Backend ankommen.
-// Dazu der Knopf, der die Namen dieses einen Beats aufs Schema zieht.
+// Dazu der Hinweis, der nach einer Namensaenderung anbietet, Ordner- und
+// Dateinamen dieses einen Beats nachzuziehen.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -20,6 +21,14 @@ import type { Beat } from "../../types/browse";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn(), revealItemInDir: vi.fn(),
+}));
+// „Neue Version" im Panel braucht Pfade und Meldungen — hier nicht Thema.
+vi.mock("../../contexts/SettingsContext", () => ({
+  useSettings: () => ({ settings: { productionPath: "" } }),
+  parseProductionPaths: () => [],
+}));
+vi.mock("../../contexts/DialogContext", () => ({
+  useDialog: () => ({ melde: vi.fn(), frage: vi.fn() }),
 }));
 vi.mock("@tauri-apps/api/core", async () => ({
   invoke: vi.fn(),
@@ -47,7 +56,11 @@ const OHNE_EINTRAG = {
 
 const mockInvoke = vi.mocked(invoke);
 
-function panelRendern(onUploadsChanged = vi.fn(), onRenamed = vi.fn()) {
+function panelRendern(
+  onUploadsChanged = vi.fn(),
+  onRenamed = vi.fn(),
+  onSaveBeat: (p: unknown) => Promise<void> = vi.fn().mockResolvedValue(undefined),
+) {
   render(
     <AudioPlayerProvider>
       <TagManagerProvider>
@@ -57,7 +70,7 @@ function panelRendern(onUploadsChanged = vi.fn(), onRenamed = vi.fn()) {
           onClose={vi.fn()}
           onToggleFavorite={vi.fn()}
           onUpdateStatus={vi.fn()}
-          onOpenEditModal={vi.fn()}
+          onSaveBeat={onSaveBeat}
           onUploadsChanged={onUploadsChanged}
           onRenamed={onRenamed}
         />
@@ -212,7 +225,7 @@ describe("Uploads im Side-Panel", () => {
             onClose={vi.fn()}
             onToggleFavorite={vi.fn()}
             onUpdateStatus={vi.fn()}
-            onOpenEditModal={vi.fn()}
+            onSaveBeat={vi.fn()}
           />
         </TagManagerProvider>
       </AudioPlayerProvider>,
@@ -223,70 +236,96 @@ describe("Uploads im Side-Panel", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Namen angleichen — derselbe Lauf wie im Kopf, nur auf diesen einen Beat.
-// Der Knopf schreibt direkt auf die Platte, ohne Vorschau: gedacht fürs
-// Durchgehen Beat für Beat.
+// Namen angleichen — am Ort der Aenderung statt als Dauerknopf im Fuss
+//
+// Der Ordnername auf der Platte wird aus Name, Tonart und BPM gebaut. Wer den
+// Namen aendert, hat danach einen Ordner, der anders heisst als der Beat —
+// vorher sagte das niemand, und der Knopf dafuer stand unten zwischen
+// „Ordner oeffnen" und „Loeschen". Jetzt fragt das Panel nach dem Speichern
+// einmal im Trockenlauf nach und bietet es genau dann an.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("Namen angleichen im Panel", () => {
-  const knopf = () => screen.getByTitle(/auf das Schema ziehen/);
+describe("Namen angleichen", () => {
+  const ZIEL = "0842 - NEU [Am 140]";
+  const nameFeld = () => screen.getByTitle(/Beat-Name/);
 
-  it("laeuft nur ueber diesen Beat und meldet, was passiert ist", async () => {
-    const onRenamed = vi.fn();
+  /** Antwortet auf beide Laeufe (Trockenlauf und echt) mit demselben Plan. */
+  function syncAntwort(plan: Record<string, unknown>) {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "get_upload_data") return OHNE_EINTRAG;
-      if (cmd === "sync_beat_folders") {
-        return [{ beat_id: "0842", from: "alt", to: "neu", files_renamed: 2, error: null }];
-      }
+      if (cmd === "sync_beat_folders") return [plan];
       return undefined;
     });
+  }
 
-    panelRendern(vi.fn(), onRenamed);
+  async function nameAendern() {
     await screen.findByText("Beatstars");
-    await userEvent.click(knopf());
+    await userEvent.clear(nameFeld());
+    await userEvent.type(nameFeld(), "NEU");
+    await userEvent.click(screen.getByText("Speichern"));
+  }
 
-    // Genau dieser Beat, und kein Trockenlauf — der Knopf tut es wirklich.
+  it("bietet das Angleichen erst an, wenn der Ordner hinterherhinkt", async () => {
+    const onRenamed = vi.fn();
+    const onSaveBeat = vi.fn().mockResolvedValue(undefined);
+    syncAntwort({ beat_id: "0842", from: "alt", to: ZIEL, files_renamed: 2, error: null });
+
+    panelRendern(vi.fn(), onRenamed, onSaveBeat);
+    await screen.findByText("Beatstars");
+
+    // Ohne Aenderung kein Hinweis — vorher stand hier ein Dauerknopf.
+    expect(screen.queryByText("Angleichen")).not.toBeInTheDocument();
+
+    await nameAendern();
+
+    expect(onSaveBeat).toHaveBeenCalledWith(expect.objectContaining({ id: "0842", name: "NEU" }));
+    // Erst nachsehen, nichts anfassen.
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("sync_beat_folders", {
-        beatIds: ["0842"], dryRun: false,
-      });
+      expect(mockInvoke).toHaveBeenCalledWith("sync_beat_folders", { beatIds: ["0842"], dryRun: true });
     });
-    expect(await screen.findByText("Ordner umbenannt · 2 Dateien umbenannt")).toBeInTheDocument();
+    expect(await screen.findByText(ZIEL)).toBeInTheDocument();
+
+    // Und dann auf Klick wirklich umbenennen.
+    await userEvent.click(screen.getByText("Angleichen"));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("sync_beat_folders", { beatIds: ["0842"], dryRun: false });
+    });
     // Pfad und Cover-Dateiname haben sich geaendert — das Archiv muss neu laden.
-    expect(onRenamed).toHaveBeenCalled();
+    await waitFor(() => expect(onRenamed).toHaveBeenCalled());
   });
 
-  it("sagt Bescheid, wenn nichts zu tun war — und laedt dann auch nichts neu", async () => {
-    const onRenamed = vi.fn();
-    mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "get_upload_data") return OHNE_EINTRAG;
-      if (cmd === "sync_beat_folders") {
-        return [{ beat_id: "0842", from: "gleich", to: "gleich", files_renamed: 0, error: null }];
-      }
-      return undefined;
+  it("schweigt, wenn der Ordner schon passt", async () => {
+    syncAntwort({ beat_id: "0842", from: "gleich", to: "gleich", files_renamed: 0, error: null });
+
+    panelRendern();
+    await nameAendern();
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("sync_beat_folders", { beatIds: ["0842"], dryRun: true });
     });
-
-    panelRendern(vi.fn(), onRenamed);
-    await screen.findByText("Beatstars");
-    await userEvent.click(knopf());
-
-    expect(await screen.findByText("Namen passen schon")).toBeInTheDocument();
-    expect(onRenamed).not.toHaveBeenCalled();
+    expect(screen.queryByText("Angleichen")).not.toBeInTheDocument();
   });
 
   it("zeigt den Fehler statt ihn zu schlucken", async () => {
-    mockInvoke.mockImplementation(async (cmd: string) => {
+    let echterLauf = false;
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
       if (cmd === "get_upload_data") return OHNE_EINTRAG;
       if (cmd === "sync_beat_folders") {
-        return [{ beat_id: "0842", from: "a", to: "b", files_renamed: 0, error: "„b“ gibt es in diesem Ordner schon" }];
+        const trocken = (args as { dryRun: boolean }).dryRun;
+        if (!trocken) echterLauf = true;
+        return [{
+          beat_id: "0842", from: "a", to: ZIEL, files_renamed: 0,
+          error: trocken ? null : `„b“ gibt es in diesem Ordner schon`,
+        }];
       }
       return undefined;
     });
 
     panelRendern();
-    await screen.findByText("Beatstars");
-    await userEvent.click(knopf());
+    await nameAendern();
 
+    await userEvent.click(await screen.findByText("Angleichen"));
     expect(await screen.findByText(/gibt es in diesem Ordner schon/)).toBeInTheDocument();
+    expect(echterLauf).toBe(true);
   });
 });

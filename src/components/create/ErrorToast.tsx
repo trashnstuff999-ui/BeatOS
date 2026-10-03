@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { AlertCircle, X } from "lucide-react";
+import { C, alpha, radius } from "../../lib/theme";
 
 interface ErrorToastProps {
   message: string;
@@ -14,8 +15,8 @@ export function ErrorToast({ message, onClose }: ErrorToastProps) {
   return (
     <div style={{
       position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
-      background: "rgba(239,68,68,0.95)", color: "#fff",
-      padding: "16px 24px", borderRadius: 12,
+      background: alpha(C.error, 0.95), color: "#fff",
+      padding: "16px 24px", borderRadius: radius.card,
       boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
       display: "flex", alignItems: "center", gap: 12,
       zIndex: 100, maxWidth: 500,

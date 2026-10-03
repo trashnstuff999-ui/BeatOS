@@ -9,9 +9,10 @@ import {
   Search, X, Music, Sparkles, Piano, Star,
   Plus, Trash2, Check, MoveRight,
 } from "lucide-react";
-import { C, commonStyles } from "../../../lib/theme";
-import { Button } from "../../ui";
+import { C, commonStyles, alpha, radius } from "../../../lib/theme";
+import { Button, useEscapeStack } from "../../ui";
 import { CATEGORY_LABELS } from "../../../lib/tags";
+import { useDialog } from "../../../contexts/DialogContext";
 import {
   TAG_COLORS, PRESET_TAGS, normalizeTag, sortTagsByCategory,
   updateCustomTagsCache,
@@ -81,6 +82,10 @@ export interface AllTagsModalProps {
 export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = true }: AllTagsModalProps) {
 
   const [internalSelected, setInternalSelected] = useState<string[]>(initialSelected);
+  const { melde } = useDialog();
+  // Esc schließt — über denselben Stapel wie ui/Modal, damit ein Druck nicht
+  // auch noch die Auswahl auf der Seite darunter aufhebt.
+  useEscapeStack(onClose);
   const [staged, setStaged] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [allTags, setAllTags] = useState<CustomTag[]>([]);
@@ -209,7 +214,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
       }
     }
     setStaged(new Set());
-    if (failed.length) alert(`Tags konnten nicht gelöscht werden:\n${failed.join("\n")}`);
+    if (failed.length) melde(`Tags konnten nicht gelöscht werden:\n${failed.join("\n")}`);
   };
 
   const handleCreate = async () => {
@@ -264,7 +269,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     });
     setStaged(new Set());
     setShowMoveMenu(false);
-    if (failed.length) alert(`Tags konnten nicht verschoben werden:\n${failed.join("\n")}`);
+    if (failed.length) melde(`Tags konnten nicht verschoben werden:\n${failed.join("\n")}`);
   };
 
   const handleMoveTag = async (targetKey: ColKey) => {
@@ -280,7 +285,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         return next;
       });
     } catch (e) {
-      alert(`Tag konnte nicht verschoben werden: ${String(e)}`);
+      melde(`Tag konnte nicht verschoben werden: ${String(e)}`);
     }
   };
 
@@ -334,11 +339,13 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             onBlur={handleRenameCommit}
             onKeyDown={e => {
               if (e.key === "Enter") { e.preventDefault(); handleRenameCommit(); }
-              if (e.key === "Escape") { e.preventDefault(); setEditingTag(null); }
+              // stopPropagation: sonst räumt derselbe Druck auch den ganzen
+              // Dialog weg, statt nur das Umbenennen abzubrechen.
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditingTag(null); }
             }}
             onClick={e => e.stopPropagation()}
             style={{
-              width: "100%", padding: "6px 10px", borderRadius: 5,
+              width: "100%", padding: "6px 10px", borderRadius: radius.control,
               fontSize: 12, fontWeight: 500,
               background: C.surfaceContainerHighest,
               border: `2px solid ${C.primary}`,
@@ -355,10 +362,12 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     const isDragging = draggingTag?.tag === t.tag;
 
     return (
-      <div
+      <button
         key={t.tag}
+        type="button"
         onClick={() => handleTagClick(t)}
         onDoubleClick={e => { e.stopPropagation(); if (editMode) setEditingTag({ original: t, name: t.display_name }); }}
+        aria-pressed={active || stg}
         draggable
         onDragStart={e => { e.dataTransfer.effectAllowed = "move"; draggingTagRef.current = t; setDraggingTag(t); }}
         onDragEnd={() => { draggingTagRef.current = null; setDraggingTag(null); setDragOverCol(null); }}
@@ -381,6 +390,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           transition: "background 0.1s",
           opacity: isDragging ? 0.35 : 1,
           userSelect: "none",
+          width: "100%", textAlign: "left", font: "inherit", border: "none",
         }}
         onMouseEnter={e => { if (!stg && !active) e.currentTarget.style.background = C.surfaceContainerHighest; }}
         onMouseLeave={e => { if (!stg && !active) e.currentTarget.style.background = C.surfaceContainerHigh; }}
@@ -399,7 +409,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         {active && !stg && (
           <Check size={11} color={colors.text} strokeWidth={2.5} style={{ flexShrink: 0 }} />
         )}
-      </div>
+      </button>
     );
   };
 
@@ -434,7 +444,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         style={{
           flex: 1, minWidth: 0,
           display: "flex", flexDirection: "column",
-          borderRadius: 12,
+          borderRadius: radius.card,
           background: isDragTarget ? `${colors.bg}` : C.surfaceContainerLow,
           border: isDragTarget ? `1px solid ${colors.border}` : `1px solid ${C.border10}`,
           borderTop: `4px solid ${colors.text}`,
@@ -482,7 +492,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           )}
           {isDragTarget && tags.length > 0 && (
             <div style={{
-              margin: "8px 12px", padding: "9px 12px", borderRadius: 6,
+              margin: "8px 12px", padding: "9px 12px", borderRadius: radius.control,
               border: `1px dashed ${colors.border}`,
               fontSize: 11, textAlign: "center", color: colors.text, opacity: 0.8,
             }}>
@@ -500,7 +510,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
+        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "24px 32px",
       }}
@@ -509,7 +519,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: "#111", borderRadius: 14,
+          background: C.surfaceContainerLowest, borderRadius: radius.card,
           border: `1px solid ${C.border15}`,
           width: "100%", maxWidth: 1160, height: "88vh",
           display: "flex", flexDirection: "column",
@@ -521,7 +531,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         {/* ═══ HEADER ═══ */}
         <div style={{
           height: 56, flexShrink: 0,
-          background: "#0d0d0d", borderBottom: `1px solid ${C.border15}`,
+          background: C.background, borderBottom: `1px solid ${C.border15}`,
           display: "flex", alignItems: "center", padding: "0 20px", gap: 16,
         }}>
 
@@ -562,14 +572,14 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           <div style={{
             display: "flex", gap: 2,
             background: C.surfaceContainerHighest,
-            borderRadius: 7, padding: 3,
+            borderRadius: radius.control, padding: 3,
           }}>
             {([{ key: "all" as ViewMode, label: "Alle" }, ...COLUMNS] as { key: ViewMode; label: string }[]).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setViewMode(key)}
                 style={{
-                  padding: "4px 11px", borderRadius: 5,
+                  padding: "4px 11px", borderRadius: radius.control,
                   fontSize: 10, fontWeight: 700,
                   letterSpacing: "0.05em", textTransform: "uppercase",
                   background: viewMode === key ? C.surfaceContainerHigh : "transparent",
@@ -597,7 +607,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 <div style={{
                   position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 200,
                   background: C.surfaceContainerHigh, border: `1px solid ${C.border20}`,
-                  borderRadius: 10, padding: 16, width: 360,
+                  borderRadius: radius.card, padding: 16, width: 360,
                   boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
                 }}>
                   <p style={{
@@ -615,7 +625,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                           key={cat}
                           onClick={() => setNewTagCategory(cat)}
                           style={{
-                            flex: 1, padding: "6px 4px", borderRadius: 8,
+                            flex: 1, padding: "6px 4px", borderRadius: radius.control,
                             fontSize: 10, fontWeight: 700,
                             border: `1px solid ${active ? clrs.text + "80" : clrs.border}`,
                             background: active ? clrs.bg : `${clrs.bg}40`,
@@ -660,7 +670,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           <button
             onClick={onClose}
             style={{
-              width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+              width: 32, height: 32, borderRadius: radius.control, flexShrink: 0,
               background: C.surfaceContainerHighest, border: `1px solid ${C.border20}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer", color: C.onSurfaceVariant,
@@ -688,7 +698,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         {hasChanges && (
           <div style={{
             height: 56, flexShrink: 0,
-            background: "rgba(13,13,13,0.98)", borderTop: `1px solid ${C.border20}`,
+            background: alpha(C.background, 0.98), borderTop: `1px solid ${C.border20}`,
             padding: "0 20px",
             display: "flex", alignItems: "center", gap: 12,
           }}>
@@ -720,20 +730,20 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 <button
                   onClick={() => setShowMoveMenu(v => !v)}
                   style={{
-                    padding: "7px 14px", borderRadius: 6,
+                    padding: "7px 14px", borderRadius: radius.control,
                     fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
                     background: C.surfaceContainerHighest, border: `1px solid ${C.border30}`,
                     color: C.onSurfaceVariant, cursor: "pointer",
                     display: "flex", alignItems: "center", gap: 6,
                   }}
                 >
-                  <MoveRight size={13} /> Move
+                  <MoveRight size={13} /> Verschieben
                 </button>
                 {showMoveMenu && (
                   <div style={{
                     position: "absolute", bottom: "calc(100% + 6px)", left: 0,
                     background: C.surfaceContainerHigh, border: `1px solid ${C.border20}`,
-                    borderRadius: 8, overflow: "hidden", zIndex: 10, minWidth: 160,
+                    borderRadius: radius.control, overflow: "hidden", zIndex: 10, minWidth: 160,
                     boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
                   }}>
                     {(["genre", "vibe", "instrument", "custom"] as const).map(cat => {
@@ -773,15 +783,15 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 onClick={handleTrashStaged}
                 title="Vorgemerkte Tags aus der Datenbank löschen"
                 style={{
-                  padding: "7px 14px", borderRadius: 6,
+                  padding: "7px 14px", borderRadius: radius.control,
                   fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-                  background: "rgba(248,113,113,0.08)", border: `1px solid rgba(248,113,113,0.25)`,
-                  color: "#f87171", cursor: "pointer",
+                  background: alpha(C.error, 0.08), border: `1px solid ${alpha(C.error, 0.25)}`,
+                  color: C.error, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 6,
                   transition: "all 0.13s",
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.18)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.08)"; }}
+                onMouseEnter={e => { e.currentTarget.style.background = alpha(C.error, 0.18); }}
+                onMouseLeave={e => { e.currentTarget.style.background = alpha(C.error, 0.08); }}
               >
                 <Trash2 size={13} /> Delete
               </button>
@@ -797,7 +807,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
               onClick={() => { setStaged(new Set()); setInternalSelected(initialSelected); }}
               title="Änderungen verwerfen"
               style={{
-                width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+                width: 30, height: 30, borderRadius: radius.control, flexShrink: 0,
                 background: "transparent", border: `1px solid ${C.border20}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", color: C.onSecondaryFixedVar,

@@ -6,6 +6,7 @@
 import { useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { useSettings } from "../contexts/SettingsContext";
+import { useDialog } from "../contexts/DialogContext";
 import type {
   DuplicateDialogState,
   SuccessDialogState,
@@ -57,6 +58,7 @@ export function useCreateBeat({
   const { settings } = useSettings();
 
   const [isArchiving, setIsArchiving] = useState(false);
+  const { frage } = useDialog();
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState | null>(null);
   const [successDialog, setSuccessDialog] = useState<SuccessDialogState | null>(null);
@@ -65,7 +67,7 @@ export function useCreateBeat({
   const handleCreateBeatstructure = useCallback(async (forceV2 = false, overrideCatalogId?: string) => {
     if (!sourceFolderPath || !title) return;
     if (!settings.archivePath) {
-      setArchiveError("Archive path is not configured. Please set it in Settings.");
+      setArchiveError("Kein Archiv-Pfad gesetzt — in den Einstellungen unter „Pfade“ nachtragen.");
       return;
     }
 
@@ -77,10 +79,14 @@ export function useCreateBeat({
         !assets.hasThumbnail && "Thumbnail",
         !assets.hasVideo && "Video",
       ].filter(Boolean).join(", ");
-      const lines = ["Kein Cover zugewiesen."];
-      if (alsoMissing) lines.push(`Fehlt außerdem: ${alsoMissing}`);
-      lines.push("", "Trotzdem archivieren?");
-      if (!confirm(lines.join("\n"))) return;
+      const ok = await frage({
+        titel: "Ohne Cover archivieren?",
+        text: alsoMissing
+          ? `Kein Cover zugewiesen.\nFehlt außerdem: ${alsoMissing}`
+          : "Kein Cover zugewiesen.",
+        bestaetigen: "Trotzdem archivieren",
+      });
+      if (!ok) return;
     }
 
     setArchiveError(null);
@@ -156,7 +162,7 @@ export function useCreateBeat({
           sourceTrashed,
         });
       } else {
-        setArchiveError(result.error || "Unknown error occurred");
+        setArchiveError(result.error || "Unbekannter Fehler beim Archivieren.");
       }
     } catch (err) {
       console.error("Archive failed:", err);
@@ -164,7 +170,12 @@ export function useCreateBeat({
     } finally {
       setIsArchiving(false);
     }
-  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp, yearMonth, settings.archivePath]);
+    // `preset`, `assets`, `autoRename` und `trashSource` fehlten hier. Die
+    // Funktion hielt dadurch den Stand aus dem Render, in dem zuletzt eine der
+    // uebrigen Angaben geaendert wurde: wer das Preset ODER den Papierkorb-
+    // Haken als LETZTES anfasste und dann archivierte, archivierte ohne beides.
+  }, [sourceFolderPath, title, catalogId, key, bpm, status, tags, notes, selectedFile, selectedFlp,
+      yearMonth, settings.archivePath, autoRename, trashSource, preset, assets, frage]);
 
   const handleDuplicateCreateV2 = useCallback(() => {
     setDuplicateDialog(null);

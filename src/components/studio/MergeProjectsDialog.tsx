@@ -15,9 +15,10 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { FolderInput, AlertTriangle, Undo2, CheckCircle2, ScanSearch, FileDown, Loader2, Archive } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Modal, Button } from "../ui";
+import { Modal, Button, Select } from "../ui";
+import { useDialog } from "../../contexts/DialogContext";
 import {
   buildMergeRows, buildPreviewCsv, countByClass,
   MERGE_CLASSES, MERGE_CLASS_ORDER,
@@ -36,6 +37,7 @@ interface MergeProjectsDialogProps {
 }
 
 export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: MergeProjectsDialogProps) {
+  const { frage } = useDialog();
   const [target, setTarget] = useState(roots[0] ?? "");
   const [plan, setPlan] = useState<MergePlan | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -125,12 +127,14 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
       .map(s => s.project_path);
     if (kandidaten.length === 0) return;
 
-    const ok = window.confirm(
-      `${kandidaten.length} vollständig archivierte Projekte nach\n${parkDir}\nverschieben?\n\n` +
-      `Sie sind Byte für Byte mit dem Archiv verglichen — dort fehlt keine einzige\n` +
-      `Datei. Gelöscht wird nichts: es ist ein Umzug, mit Protokoll und Rückgängig.\n\n` +
-      `Danach sind sie aus der Studio-Liste raus und liegen an einem Ort beisammen.`
-    );
+    const ok = await frage({
+      titel: `${kandidaten.length} archivierte Projekte parken?`,
+      text: `Ziel: ${parkDir}\n\n` +
+            `Sie sind Byte für Byte mit dem Archiv verglichen — dort fehlt keine einzige ` +
+            `Datei. Gelöscht wird nichts: es ist ein Umzug, mit Protokoll und Rückgängig.\n\n` +
+            `Danach sind sie aus der Studio-Liste raus und liegen an einem Ort beisammen.`,
+      bestaetigen: "Verschieben",
+    });
     if (!ok) return;
 
     setIsBusy(true);
@@ -162,21 +166,24 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
   const run = async () => {
     if (!plan) return;
     const heikel = counts.archived_incomplete;
-    const ok = window.confirm(
-      `${plan.steps.length} Projekte werden neu nummeriert, davon ${moves.length} nach\n${target} verschoben.\n\n` +
-      (counts.archived_complete > 0
-        ? `${counts.archived_complete} vollständig archivierte Ordner bleiben liegen und\n` +
-          `verbrauchen keine Nummer.\n\n`
-        : "") +
-      (heikel > 0
-        ? `ACHTUNG: ${heikel} davon sind bereits archiviert und tragen trotzdem noch\n` +
-          `Arbeitsdateien, die es im Archiv nicht gibt. Sie ziehen mit um — es geht\n` +
-          `nichts verloren —, aber sieh sie dir hinterher an.\n\n`
-        : "") +
-      `FL Studio sollte dabei geschlossen sein.\n` +
-      `Bei vielen Ordnern lohnt es sich, die OneDrive-Synchronisierung zu pausieren.\n\n` +
-      `Ein Protokoll wird geschrieben — der Vorgang lässt sich danach rückgängig machen.`
-    );
+    const ok = await frage({
+      titel: `${plan.steps.length} Projekte neu nummerieren?`,
+      text: `Davon ziehen ${moves.length} nach ${target} um.\n\n` +
+        (counts.archived_complete > 0
+          ? `${counts.archived_complete} vollständig archivierte Ordner bleiben liegen und ` +
+            `verbrauchen keine Nummer.\n\n`
+          : "") +
+        (heikel > 0
+          ? `ACHTUNG: ${heikel} davon sind bereits archiviert und tragen trotzdem noch ` +
+            `Arbeitsdateien, die es im Archiv nicht gibt. Sie ziehen mit um — es geht ` +
+            `nichts verloren —, aber sieh sie dir hinterher an.\n\n`
+          : "") +
+        `FL Studio sollte dabei geschlossen sein.\n` +
+        `Bei vielen Ordnern lohnt es sich, die OneDrive-Synchronisierung zu pausieren.\n\n` +
+        `Ein Protokoll wird geschrieben — der Vorgang lässt sich danach rückgängig machen.`,
+      bestaetigen: "Nummerieren",
+      gefahr: heikel > 0,
+    });
     if (!ok) return;
     setIsBusy(true);
     setError(null);
@@ -191,8 +198,8 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
   };
 
   /** Einen Lauf zurückdrehen — den gerade gemachten oder einen aus der Liste. */
-  const undoLog = async (logPath: string, frage: string) => {
-    if (!window.confirm(frage)) return;
+  const undoLog = async (logPath: string, titel: string, text: string) => {
+    if (!await frage({ titel, text, bestaetigen: "Zurückdrehen", gefahr: true })) return;
     setIsBusy(true);
     setError(null);
     try {
@@ -208,7 +215,12 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
 
   const undo = () => {
     if (!report?.log_path) return;
-    undoLog(report.log_path, "Alle Ordner wieder auf ihre alten Namen und Pfade zurücksetzen?");
+    undoLog(
+      report.log_path,
+      "Lauf zurückdrehen?",
+      "Alle Ordner wandern wieder auf ihre alten Namen und Pfade zurück.\n\n" +
+      "FL Studio sollte dabei geschlossen sein.",
+    );
   };
 
   return (
@@ -276,20 +288,19 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
         <>
           <div>
             <Label>Zielordner</Label>
-            <select
+            <Select
               value={target}
-              onChange={e => setTarget(e.target.value)}
+              onChange={setTarget}
               disabled={isBusy}
-              style={{
+              options={roots.map(r => ({ value: r, label: r }))}
+              triggerStyle={{
                 width: "100%", padding: "9px 12px", marginTop: 6,
-                fontSize: 12, fontFamily: "inherit",
-                background: C.surfaceContainerLowest,
+                fontSize: 12,
+                background: C.surfaceContainerHighest,
                 border: `1px solid ${C.border20}`,
-                borderRadius: 7, color: C.onSurface, outline: "none",
+                color: C.onSurface,
               }}
-            >
-              {roots.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            />
           </div>
 
           {isBusy && !plan && <Note>Vorschau wird berechnet …</Note>}
@@ -309,8 +320,8 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
               {!archive ? (
                 <div style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: "12px 14px", borderRadius: 8,
-                  background: C.surfaceContainerLowest,
+                  padding: "12px 14px", borderRadius: radius.control,
+                  background: C.surfaceContainerHighest,
                   border: `1px dashed ${C.border30}`,
                 }}>
                   <div style={{ flex: 1, fontSize: 12, lineHeight: 1.6, color: C.onSurfaceVariant }}>
@@ -336,7 +347,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
                   {counts.archived_complete > 0 && (
                     <div style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "12px 14px", borderRadius: 8,
+                      padding: "12px 14px", borderRadius: radius.control,
                       background: `${C.mint}0e`,
                       border: `1px solid ${C.mint}33`,
                     }}>
@@ -402,7 +413,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
 function PastRuns({ runs, busy, onUndo }: {
   runs: MergeRun[];
   busy: boolean;
-  onUndo: (logPath: string, frage: string) => void;
+  onUndo: (logPath: string, titel: string, text: string) => void;
 }) {
   return (
     <details>
@@ -417,8 +428,8 @@ function PastRuns({ runs, busy, onUndo }: {
               key={r.log_path}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 12px", borderRadius: 8,
-                background: C.surfaceContainerLowest,
+                padding: "9px 12px", borderRadius: radius.control,
+                background: C.surfaceContainerHighest,
                 border: `1px solid ${C.border15}`,
                 opacity: zurueckdrehbar ? 1 : 0.6,
               }}
@@ -450,7 +461,7 @@ function PastRuns({ runs, busy, onUndo }: {
                 disabled={busy || !zurueckdrehbar}
                 onClick={() => onUndo(
                   r.log_path,
-                  `Lauf vom ${r.date} zurückdrehen?\n\n` +
+                  `Lauf vom ${r.date} zurückdrehen?`,
                   `${r.present} von ${r.steps} Ordnern liegen noch am Zielort und wandern ` +
                   `auf ihre alten Namen und Pfade zurück.\n\n` +
                   `FL Studio sollte dabei geschlossen sein.`
@@ -484,7 +495,7 @@ function ClassSummary({ counts }: { counts: Record<MergeClassKey, number> }) {
           key={k}
           style={{
             display: "flex", alignItems: "baseline", gap: 10,
-            padding: "9px 12px", borderRadius: 8,
+            padding: "9px 12px", borderRadius: radius.control,
             background: `${CLASS_COLOR[k]}0e`,
             border: `1px solid ${CLASS_COLOR[k]}33`,
           }}
@@ -515,7 +526,7 @@ function ClassTable({ rows, checked }: { rows: MergeRow[]; checked: boolean }) {
   return (
     <div style={{
       maxHeight: 300, overflowY: "auto",
-      border: `1px solid ${C.border15}`, borderRadius: 8,
+      border: `1px solid ${C.border15}`, borderRadius: radius.control,
     }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
         <thead>
@@ -639,7 +650,7 @@ function Note({ children, tone = "info" }: { children: React.ReactNode; tone?: "
   return (
     <div style={{
       display: "flex", gap: 10,
-      padding: "11px 13px", borderRadius: 8,
+      padding: "11px 13px", borderRadius: radius.control,
       background: `${color}12`,
       border: `1px solid ${color}33`,
       fontSize: 12, lineHeight: 1.6, color: C.onSurface,

@@ -20,7 +20,7 @@
 
 import { useState } from "react";
 import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check } from "lucide-react";
-import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
@@ -239,7 +239,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
             // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe
             // ueber der Karte, nicht darunter.
             padding: "14px 15px",
-            borderRadius: 10,
+            borderRadius: radius.card,
             background: C.surfaceContainer,
             // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu
             // viel: drei Kacheln nebeneinander mit farbigem Rahmen UND
@@ -298,7 +298,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
             title={`${meta.label}-Upload starten: Seite öffnen, Titel/Beschreibung/Tags kopieren, abhaken`}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+              width: 24, height: 24, borderRadius: radius.control, flexShrink: 0,
               background: "transparent",
               border: `1px solid ${meta.color}45`,
               color: meta.color,
@@ -318,7 +318,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
         <div style={{
           display: "flex", flexShrink: 0,
           border: `1px solid ${C.border15}`,
-          borderRadius: 6,
+          borderRadius: radius.control,
           overflow: "hidden",
         }}>
           {STATUS_ORDER.map((s, i) => {
@@ -336,7 +336,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
                   border: "none",
                   borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
                   cursor: isSaving ? "wait" : "pointer",
-                  fontSize: 9, fontWeight: active ? 700 : 500,
+                  fontSize: 10, fontWeight: active ? 700 : 500,
                   fontFamily: "inherit",
                   color: active ? m.color : C.onSecondaryFixedVar,
                   letterSpacing: "0.06em", textTransform: "uppercase",
@@ -415,7 +415,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
               // eine Vertiefung richtig, weil man hineinschreibt.
               background: C.surfaceContainerLow,
               border: `1px solid ${C.border15}`,
-              borderRadius: 6,
+              borderRadius: radius.control,
               outline: "none",
               color: C.onSurface,
             }}
@@ -428,7 +428,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
             title={copied ? "Kopiert" : "Link kopieren"}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+              width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
               background: "transparent",
               border: `1px solid ${copied ? C.mint : C.border15}`,
               color: copied ? C.mint : C.onSurfaceVariant,

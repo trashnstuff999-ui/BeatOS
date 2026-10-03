@@ -11,13 +11,16 @@
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, FileAudio, FileImage, FileVideo,
-  FolderOpen, FolderTree, RefreshCw, Wand2, ChevronDown, ListChecks, X,
+  FolderOpen, FolderTree, RefreshCw, Wand2, ChevronDown, ListChecks, X, Plus,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { C } from "../../lib/theme";
+import { C, alpha, radius } from "../../lib/theme";
 import { SectionCard, SectionIconBtn } from "../ui/SectionCard";
+import { useEscapeStack } from "../ui";
 import { api } from "../../lib/api";
+import { useSettings } from "../../contexts/SettingsContext";
+import { AssetPickerDialog, type AssetSlotKind } from "../AssetPickerDialog";
 import type { AssetCheck } from "../../types/upload";
 
 interface AssetChecklistCardProps {
@@ -28,6 +31,12 @@ interface AssetChecklistCardProps {
   /** Ohne eigene Karte rendern — haengt im Upload-Tab unter der Kopfzeile. */
   bare?: boolean;
 }
+
+/** Fehlt eine dieser Dateien, lässt sie sich hier direkt aus dem
+ *  Asset-Ordner zuweisen — vorher hiess „fehlt" nur: woanders suchen gehen. */
+const SLOT_FUER: Record<string, AssetSlotKind> = {
+  Cover: "cover", Thumbnail: "thumbnail", "Video MP4": "video",
+};
 
 type Row = {
   label: string;
@@ -76,6 +85,8 @@ function useImageSize(pfad: string | null, regel?: { verhaeltnis: number; minBre
 }
 
 export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bare = false }: AssetChecklistCardProps) {
+  const { settings } = useSettings();
+  const [picker, setPicker] = useState<AssetSlotKind | null>(null);
   const allRows: Row[] = [
     { label: "MP3",       filename: assets.mp3,       icon: FileAudio },
     { label: "WAV",       filename: assets.wav,       icon: FileAudio },
@@ -97,7 +108,12 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
   const [preview, setPreview] = useState<{ label: string; path: string } | null>(null);
 
   const handleRowClick = (row: Row) => {
-    if (!row.filename || !beatPath) return;
+    if (!beatPath) return;
+    if (!row.filename) {
+      const slot = SLOT_FUER[row.label];
+      if (slot) setPicker(slot);
+      return;
+    }
     // Trenner aus dem Pfad selbst ablesen statt fest annehmen: die Bibliothek
     // kann unter Windows wie unter macOS liegen, und „/pfad\datei.wav" ist
     // auf keinem von beiden ein Pfad.
@@ -151,7 +167,7 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
             padding: "9px 12px",
             background: "transparent",
             border: `1px solid ${C.border15}`,
-            borderRadius: 8,
+            borderRadius: radius.control,
             cursor: "pointer",
             textAlign: "left",
           }}
@@ -176,7 +192,7 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
                     // wirklich etwas melden — „Bereit zum Hochladen" oben und
                     // „Hochgeladen" im Status. Sonst ist die Seite so grün,
                     // dass nichts mehr heraussticht.
-                    background: !r.filename ? C.border20 : falsch ? "#fda124" : C.onSurfaceVariant,
+                    background: !r.filename ? C.border20 : falsch ? C.primary : C.onSurfaceVariant,
                   }}
                 />
               );
@@ -208,7 +224,7 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
               title="Dateinamen im Beat-Ordner auf das Namensschema bringen"
               style={{
                 display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                padding: "8px 12px", borderRadius: 7,
+                padding: "8px 12px", borderRadius: radius.control,
                 background: "transparent",
                 border: `1px solid ${C.border20}`,
                 color: C.onSurfaceVariant, cursor: "pointer",
@@ -227,11 +243,20 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
       </div>
 
       {open && (
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 3 }}>
-          {/* Missing first — that's what needs attention */}
-          {[...missing, ...present].map(row => (
-            <AssetRow key={row.label} {...row} mass={massFuer(row.label)} onClick={() => handleRowClick(row)} />
-          ))}
+        <div style={{ marginTop: 10 }}>
+          {/* Eine Flaeche mit duennen Trennstrichen statt sechs einzelnen
+              Kaesten: die Liste ist eine Aufzaehlung, kein halbes Dutzend
+              Elemente. Fehlende zuerst — das ist, was Aufmerksamkeit braucht. */}
+          <div style={{
+            background: C.surfaceContainer,
+            border: `1px solid ${C.border15}`,
+            borderRadius: radius.control,
+            overflow: "hidden",
+          }}>
+            {[...missing, ...present].map((row, i) => (
+              <AssetRow key={row.label} {...row} first={i === 0} mass={massFuer(row.label)} onClick={() => handleRowClick(row)} />
+            ))}
+          </div>
 
           {/* Nur in der Kartenansicht: rahmenlos steht der Knopf oben
               neben dem Fortschritt, wo man ihn auch findet. */}
@@ -240,12 +265,13 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
               onClick={onConvert}
               style={{
                 marginTop: 10,
-                alignSelf: "flex-start",
-                display: "flex", alignItems: "center", gap: 6,
+                // inline-flex: die Liste darueber ist kein Flex-Container mehr,
+                // ein Block-Knopf zoege sich sonst ueber die ganze Breite.
+                display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "6px 10px",
                 background: "transparent",
                 border: `1px solid ${C.border20}`,
-                borderRadius: 6,
+                borderRadius: radius.control,
                 cursor: "pointer",
                 fontSize: 10, fontWeight: 600,
                 color: C.onSurfaceVariant,
@@ -260,31 +286,19 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
         </div>
       )}
 
-      {/* Image preview overlay */}
+      {/* Bild-Lupe */}
       {preview && (
-        <div
-          onClick={() => setPreview(null)}
-          style={{
-            position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 100, cursor: "zoom-out",
-          }}
-        >
-          <div style={{ position: "relative", maxWidth: "80vw", maxHeight: "82vh" }}>
-            <PreviewImage path={preview.path} />
-            <div style={{
-              position: "absolute", top: -34, left: 0, right: 0,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                {preview.label}
-              </span>
-              <span style={{ flex: 1 }} />
-              <X size={16} color={C.onSurfaceVariant} />
-            </div>
-          </div>
-        </div>
+        <Lupe label={preview.label} path={preview.path} onClose={() => setPreview(null)} />
+      )}
+
+      {picker && (
+        <AssetPickerDialog
+          targetDir={beatPath}
+          assetRoot={settings.assetPath}
+          slot={picker}
+          onAssigned={() => onRefresh()}
+          onClose={() => setPicker(null)}
+        />
       )}
     </>
   );
@@ -304,6 +318,37 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
     >
       {body}
     </SectionCard>
+  );
+}
+
+/** Das Bild gross, Klick daneben oder Esc schliesst. */
+function Lupe({ label, path, onClose }: { label: string; path: string; onClose: () => void }) {
+  useEscapeStack(onClose);
+  return (
+        <div
+          data-modal
+          onClick={onClose}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 100, cursor: "zoom-out",
+          }}
+        >
+          <div style={{ position: "relative", maxWidth: "80vw", maxHeight: "82vh" }}>
+            <PreviewImage path={path} />
+            <div style={{
+              position: "absolute", top: -34, left: 0, right: 0,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                {label}
+              </span>
+              <span style={{ flex: 1 }} />
+              <X size={16} color={C.onSurfaceVariant} />
+            </div>
+          </div>
+    </div>
   );
 }
 
@@ -327,7 +372,7 @@ function PreviewImage({ path }: { path: string }) {
       alt=""
       style={{
         maxWidth: "80vw", maxHeight: "82vh",
-        borderRadius: 10, border: `1px solid ${C.border30}`,
+        borderRadius: radius.card, border: `1px solid ${C.border30}`,
         boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         display: "block",
       }}
@@ -335,19 +380,27 @@ function PreviewImage({ path }: { path: string }) {
   );
 }
 
-function AssetRow({ label, filename, icon: Icon, onClick, mass }: Row & { onClick?: () => void; mass?: Mass | null }) {
+function AssetRow({ label, filename, icon: Icon, onClick, mass, first }: Row & { onClick?: () => void; mass?: Mass | null; first?: boolean }) {
   const ok = filename !== null;
-  const clickable = ok && (label === "Cover" || label === "Thumbnail" || label === "Video MP4");
+  // Vorhanden: Vorschau/Explorer. Fehlt: direkt zuweisen.
+  const zuweisbar = !ok && label in SLOT_FUER;
+  const clickable = zuweisbar || (ok && (label === "Cover" || label === "Thumbnail" || label === "Video MP4"));
+  // Anklickbare Zeilen sind echte Knoepfe — sonst kommt man nur mit der Maus an
+  // die Vorschau. Nicht anklickbare bleiben ein <div>, sie sind reine Anzeige.
+  const Element = clickable ? "button" : "div";
   return (
-    <div
+    <Element
+      type={clickable ? "button" : undefined}
       onClick={clickable ? onClick : undefined}
-      title={clickable ? (label === "Video MP4" ? "Im Explorer zeigen" : "Vorschau anzeigen") : undefined}
+      title={zuweisbar ? "Aus dem Asset-Ordner zuweisen" : clickable ? (label === "Video MP4" ? "Im Explorer zeigen" : "Vorschau anzeigen") : undefined}
       style={{
+      width: "100%", textAlign: "left", font: "inherit", border: "none",
       display: "flex", alignItems: "center", gap: 10,
-      padding: "7px 10px",
-      background: ok ? C.surfaceContainerLowest : "rgba(255,115,81,0.04)",
-      border: `1px solid ${ok ? C.border10 : "rgba(255,115,81,0.20)"}`,
-      borderRadius: 7,
+      padding: "8px 12px",
+      // Zeile in einer gemeinsamen Flaeche: kein eigener Kasten, nur ein
+      // Trennstrich nach oben. Fehlendes bleibt getoent, das ist die Meldung.
+      background: ok ? "transparent" : alpha(C.error, 0.06),
+      borderTop: first ? "none" : `1px solid ${C.border10}`,
       cursor: clickable ? "pointer" : "default",
     }}>
       {ok
@@ -372,6 +425,15 @@ function AssetRow({ label, filename, icon: Icon, onClick, mass }: Row & { onClic
       }}>
         {filename ?? "fehlt"}
       </span>
+      {zuweisbar && (
+        <span style={{
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
+          fontSize: 10, fontWeight: 700, color: C.primary,
+        }}>
+          <Plus size={11} strokeWidth={2.25} />
+          Zuweisen
+        </span>
+      )}
       {/* Maße nur bei Cover und Thumbnail, und nur wenn sie gelesen werden
           konnten. Stimmen sie nicht, steht daneben, was erwartet wird. */}
       {mass && (
@@ -379,14 +441,14 @@ function AssetRow({ label, filename, icon: Icon, onClick, mass }: Row & { onClic
           title={mass.ok ? undefined : `Erwartet: ${MASSE[label]?.soll}`}
           style={{
             flexShrink: 0, fontSize: 10, fontFamily: "monospace",
-            padding: "2px 7px", borderRadius: 9999,
-            background: mass.ok ? "rgba(255,255,255,0.04)" : "rgba(253,161,36,0.12)",
-            color: mass.ok ? C.onSecondaryFixedVar : "#fda124",
+            padding: "2px 7px", borderRadius: radius.full,
+            background: mass.ok ? "rgba(255,255,255,0.04)" : alpha(C.primary, 0.12),
+            color: mass.ok ? C.onSecondaryFixedVar : C.primary,
           }}
         >
           {mass.breite}×{mass.hoehe}
         </span>
       )}
-    </div>
+    </Element>
   );
 }

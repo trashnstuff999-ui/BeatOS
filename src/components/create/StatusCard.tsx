@@ -3,7 +3,7 @@
 // Production Status Card - Idea/WIP/Finished/Sold
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { C, STATUS_ITEMS } from "../../lib/theme";
+import { C, STATUS_ITEMS, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Flag } from "lucide-react";
 
@@ -23,7 +23,7 @@ export function StatusCard({ status, setStatus }: StatusCardProps) {
               key={item.key}
               onClick={() => setStatus(item.key)}
               style={{
-                padding: "12px 8px", borderRadius: 6,
+                padding: "12px 8px", borderRadius: radius.control,
                 fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
                 border: "none", borderBottom: `2px solid ${isActive ? item.color : "transparent"}`,
                 background: isActive ? C.surfaceContainerHighest : C.surfaceContainer,

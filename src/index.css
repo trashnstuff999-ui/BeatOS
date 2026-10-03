@@ -40,12 +40,21 @@ html, body, #root {
 /* Tastatur-Fokus. Die Komponenten setzen durchgehend `outline: none` und malen
    ihren Fokus per onFocus-Handler — das greift nur bei Feldern, die einen
    Handler haben. Der Ring hier gilt fuer alles Uebrige und nur bei Bedienung
-   per Tastatur, nicht bei Mausklick. */
+   per Tastatur, nicht bei Mausklick.
+
+   `!important` ist hier kein Notnagel, sondern die einzige Moeglichkeit: das
+   `outline: "none"` steht an 25 Stellen als INLINE-Stil, und der schlaegt jede
+   Regel aus dem Stylesheet. Ohne das Wort hatte die Haelfte aller Bedienelemente
+   — darunter jedes Dropdown — bei Tastaturbedienung keinen sichtbaren Fokus.
+   Fuer die Maus aendert sich nichts: :focus-visible greift nur bei Tastatur. */
 :focus-visible {
-  outline: 2px solid #fda124;
+  outline: 2px solid #fda124 !important;
   outline-offset: 2px;
 }
 
 /* Spinner — global, damit kein Spinner davon abhaengt, dass eine andere
    Komponente die Keyframes zufaellig mit einblendet. */
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Seitenpanel gleitet von rechts herein (Studio-Inspector). */
+@keyframes panelIn { from { transform: translateX(100%); } to { transform: translateX(0); } }

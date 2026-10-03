@@ -5,7 +5,7 @@
 
 import { HelpCircle, Keyboard, BookOpen, Info, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { C } from "../lib/theme";
+import { C, radius } from "../lib/theme";
 import { PageHeader, PageBody } from "../components/ui";
 
 // ─── Section ─────────────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ function Section({ icon: Icon, title, children }: {
     <div style={{
       background: C.surfaceContainerLowest,
       border: `1px solid ${C.border10}`,
-      borderRadius: 12,
+      borderRadius: radius.card,
       padding: 28,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
@@ -28,6 +28,20 @@ function Section({ icon: Icon, title, children }: {
           {title}
         </h2>
       </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Zwischenüberschrift in einer Sektion ────────────────────────────────────
+
+function Untertitel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
+      textTransform: "uppercase", letterSpacing: "0.12em",
+      marginTop: 18, marginBottom: 4,
+    }}>
       {children}
     </div>
   );
@@ -46,7 +60,7 @@ function ShortcutRow({ keys, description }: { keys: string[]; description: strin
       <div style={{ display: "flex", gap: 4 }}>
         {keys.map((k, i) => (
           <kbd key={i} style={{
-            padding: "2px 8px", borderRadius: 4,
+            padding: "2px 8px", borderRadius: radius.control,
             background: C.surfaceContainerHigh,
             border: `1px solid ${C.border20}`,
             fontSize: 11, color: C.onSurface,
@@ -99,11 +113,37 @@ export function Support() {
       {/* Content */}
       <PageBody width="reading">
 
-          {/* Keyboard Shortcuts — only list what is actually implemented */}
+          {/* Nur, was wirklich belegt ist — jede Zeile hat eine Entsprechung im
+              Code. „Strg + Enter“ stand hier jahrelang und war nie belegt. */}
           <Section icon={Keyboard} title="Tastenkürzel">
+            <Untertitel>Archiv</Untertitel>
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <ShortcutRow keys={["Esc"]} description="Dialog schließen" />
-              <ShortcutRow keys={["Strg", "Enter"]} description="Im Bearbeiten-Dialog speichern" />
+              <ShortcutRow keys={["/"]} description="Ins Suchfeld springen" />
+              <ShortcutRow keys={["Esc"]} description="Suche leeren · Auswahl aufheben · Dialog schließen" />
+              <ShortcutRow keys={["↑", "↓"]} description="Vorigen / nächsten Beat auswählen" />
+            </div>
+
+            <Untertitel>Wiedergabe</Untertitel>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <ShortcutRow keys={["Leertaste"]} description="Abspielen / Pause" />
+              <ShortcutRow keys={["←", "→"]} description="5 Sekunden springen" />
+              <ShortcutRow keys={["Shift", "←/→"]} description="30 Sekunden springen" />
+              <ShortcutRow keys={["Shift", "↑/↓"]} description="Lautstärke" />
+            </div>
+
+            <Untertitel>Studio</Untertitel>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <ShortcutRow keys={["↑", "↓"]} description="Voriges / nächstes Projekt öffnen" />
+              <ShortcutRow keys={["Esc"]} description="Projekt-Inspector schließen" />
+              <ShortcutRow keys={["Strg", "Klick"]} description="Einzelnes Projekt zur Auswahl dazunehmen" />
+              <ShortcutRow keys={["Shift", "Klick"]} description="Ganze Spanne auswählen" />
+            </div>
+
+            <Untertitel>Tags &amp; Textfelder</Untertitel>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <ShortcutRow keys={["Enter"]} description="Eingabe übernehmen (Tag anlegen, umbenennen, Preset speichern)" />
+              <ShortcutRow keys={[","]} description="Tag übernehmen und nächsten beginnen" />
+              <ShortcutRow keys={["⌫"]} description="Bei leerem Feld: letzten Tag entfernen" />
             </div>
           </Section>
 
@@ -111,11 +151,12 @@ export function Support() {
           <Section icon={BookOpen} title="Erste Schritte">
             <ol style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                { step: "1. Archiv-Pfad setzen", desc: "Unter Einstellungen den Ordner festlegen, in dem deine Beats liegen." },
-                { step: "2. Ersten Beat archivieren", desc: "Unter „Neuer Beat“ einen Beat-Ordner wählen, die Metadaten ausfüllen und archivieren." },
-                { step: "3. Archiv durchsuchen", desc: "Im Archiv suchen, nach BPM/Tonart/Status filtern und Beats direkt abspielen." },
-                { step: "4. Tags pflegen", desc: "Einen Beat im Archiv öffnen und im Tag-Editor nach Genre, Vibe oder Instrument einsortieren." },
-                { step: "5. Fortschritt verfolgen", desc: "Die Übersicht zeigt anstehende Aufgaben, monatlichen Output und die Status-Verteilung auf einen Blick." },
+                { step: "1. Pfade setzen", desc: "Unter Einstellungen → Pfade das Archiv, die Produktions-Ordner und den Asset-Ordner festlegen." },
+                { step: "2. Im Studio anfangen", desc: "„Neues Projekt“ legt Ordner und Start-FLP an und öffnet FL Studio. Exporte und Cover landen im selben Ordner." },
+                { step: "3. Archivieren", desc: "Im Studio auf „Archivieren“ am Projekt — oder oben „Ordner archivieren“ für einen Ordner von aussen. BeatOS vergibt die Nummer und sortiert ein." },
+                { step: "4. Archiv durchsuchen", desc: "Im Archiv suchen, nach Tempo, Tonart und Status filtern, Beats direkt abspielen und Angaben im Detailpanel ändern." },
+                { step: "5. Upload vorbereiten", desc: "Im Upload-Tab entstehen Titel, Beschreibung und Tags je Plattform aus den Vorlagen. Die Planungs-Leiste unten setzt Termine." },
+                { step: "6. Fortschritt verfolgen", desc: "Die Übersicht zeigt, was ansteht, den monatlichen Output und die Status-Verteilung auf einen Blick." },
               ].map(({ step, desc }) => (
                 <li key={step} style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6 }}>
                   <span style={{ fontWeight: 700, color: C.onSurface }}>{step} — </span>{desc}
@@ -129,23 +170,27 @@ export function Support() {
             <div>
               <FaqItem
                 question="Meine Beats tauchen im Archiv nicht auf."
-                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Nach dem Ändern des Pfads das Archiv über „Scan“ neu einlesen."
+                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Danach in den Einstellungen unter „Wartung“ den System Repair laufen lassen — er liest fehlende Beats aus dem Archiv nach."
               />
               <FaqItem
                 question="Die Wiedergabe funktioniert nicht."
-                answer="BeatOS unterstützt MP3, WAV und FLAC. Stelle sicher, dass beim Archivieren eine Audiodatei ausgewählt war. Wurde die Datei danach außerhalb der App verschoben, archiviere den Beat erneut."
+                answer="BeatOS liest WAV, MP3, FLAC, AIFF, OGG und M4A. Stelle sicher, dass beim Archivieren eine Audiodatei ausgewählt war. Wurde die Datei danach außerhalb der App verschoben, findet der Player sie nicht mehr — dann den Ordner-Abgleich in den Einstellungen laufen lassen."
               />
               <FaqItem
                 question="Wie lege ich eigene Tags an?"
-                answer="Einen Beat im Archiv öffnen und ins Tag-Feld klicken. Neuen Tag-Namen eintippen und mit Enter anlegen. Eigene Tags werden global gespeichert und stehen für alle Beats zur Verfügung."
+                answer="Einen Beat im Archiv auswählen und im Detailpanel ins Tag-Feld klicken. Neuen Namen eintippen und mit Enter anlegen. Eigene Tags gelten global und stehen danach für alle Beats bereit; sortieren und umbenennen lassen sie sich in der Tag-Verwaltung."
               />
               <FaqItem
-                question="Kann ich Metadaten nach dem Archivieren noch ändern?"
-                answer="Ja. Beat im Archiv auswählen, das Detail-Panel öffnen und auf „Beat bearbeiten“ klicken. Titel, BPM, Tonart, Status, Tags und Notizen lassen sich jederzeit ändern."
+                question="Kann ich Angaben nach dem Archivieren noch ändern?"
+                answer="Ja. Beat im Archiv auswählen — das Detailpanel rechts ist direkt bearbeitbar. Titel, Tempo, Tonart, Status, Tags und Notizen werden beim Verlassen des Feldes gespeichert, ein eigener Dialog ist dafür nicht nötig."
               />
               <FaqItem
-                question="Welche Formate sind für Cover möglich?"
-                answer="PNG, JPG und JPEG. Das Bild unter „Neuer Beat“ auf die Cover-Fläche ziehen oder über die Dateiauswahl wählen."
+                question="Welche Formate sind für Cover und Video möglich?"
+                answer="Bilder: PNG, JPG, JPEG, WEBP und GIF. Videos: MP4, MOV, WEBM, MKV und AVI. Dateien lassen sich im Studio direkt in den Projekt-Inspector ziehen oder über den Asset-Ordner zuweisen."
+              />
+              <FaqItem
+                question="Warum ist ein Beat im falschen Monat einsortiert?"
+                answer="Der Archivmonat kommt aus dem Erstelldatum der ältesten FLP im Ordner. Kam der Beat über einen Umweg — gezippt, über einen Cloud-Ordner — ist dieses Datum durch das Entpacken auf „jetzt“ gesetzt, und er landet im Monat des Imports."
               />
             </div>
           </Section>

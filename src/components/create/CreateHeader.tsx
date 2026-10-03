@@ -1,6 +1,7 @@
 // src/components/create/CreateHeader.tsx
 
-import { Tag, RotateCcw, PlusSquare } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Tag, RotateCcw, PlusSquare, ArrowLeft } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { PageHeader, Button } from "../ui";
 
@@ -14,6 +15,7 @@ interface CreateHeaderProps {
 }
 
 export function CreateHeader({ hasData, onResetClick, tagCount, hasNotes, sidebarOpen, onToggleSidebar }: CreateHeaderProps) {
+  const navigate = useNavigate();
   return (
     <PageHeader
       icon={PlusSquare}
@@ -45,6 +47,10 @@ export function CreateHeader({ hasData, onResetClick, tagCount, hasNotes, sideba
         </Button>
       }
     >
+      {/* Kein eigener Tab mehr: man kommt aus dem Studio und geht dorthin zurück. */}
+      <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => navigate("/studio")}>
+        Studio
+      </Button>
       {hasData && (
         <Button variant="secondary" size="sm" icon={RotateCcw} onClick={onResetClick}>
           Reset

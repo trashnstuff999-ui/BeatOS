@@ -1,11 +1,19 @@
 // src/components/browse/FilterBar.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Advanced Filtering Bar with Multi-Select Key Filter
+// Die Bedienleiste ueber dem Archiv: Filter links, Ansicht/Sortierung rechts.
+//
+// Vorher lag die Leiste als Kasten *neben* den Bedienknoepfen in einer
+// Flex-Zeile mit alignItems:center. Aufgeklappt wuchs der Kasten auf ~150px,
+// die Knoepfe blieben 32px — und schwebten auf halber Hoehe daneben. Jetzt
+// sitzt alles in einer Kopfzeile fester Hoehe, das Filter-Raster klappt
+// darunter ueber die volle Breite auf (und hat dadurch die ~400px mehr Platz,
+// die es vorher an die Knoepfe verloren hat).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Filter, RotateCcw, Heart, ChevronDown, X, UploadCloud } from "lucide-react";
-import { C, STATUS_CONFIG } from "../../lib/theme";
+import { C, radius, STATUS_CONFIG, alpha } from "../../lib/theme";
+import { Dropdown, Select } from "../ui";
 import type { FilterState, BeatStatus } from "../../types/browse";
 import { MINOR_KEYS, MAJOR_KEYS } from "../../types/browse";
 
@@ -14,7 +22,17 @@ interface FilterBarProps {
   onChange: (filters: FilterState) => void;
   onReset: () => void;
   resultCount: number;
+  /** Sortierung, Ansichtsumschalter, Zufall — teilen sich die Kopfzeile. */
+  actions?: React.ReactNode;
 }
+
+const STATUS_OPTIONS = [
+  { value: "all" as const, label: "Alle Status" },
+  { value: "idea" as const, label: "Idee" },
+  { value: "wip" as const, label: "In Arbeit" },
+  { value: "finished" as const, label: "Fertig" },
+  { value: "sold" as const, label: "Verkauft" },
+];
 
 /** Aktive Filter als einzeln abwerfbare Chips — sichtbar auch wenn eingeklappt. */
 function activeChips(filters: FilterState, set: (patch: Partial<FilterState>) => void) {
@@ -48,9 +66,7 @@ function activeChips(filters: FilterState, set: (patch: Partial<FilterState>) =>
   return chips;
 }
 
-export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBarProps) {
-  const [keyDropdownOpen, setKeyDropdownOpen] = useState(false);
-
+export function FilterBar({ filters, onChange, onReset, resultCount, actions }: FilterBarProps) {
   // Eingeklappt spart ~150px ueber der Liste; die Chips zeigen trotzdem, was aktiv ist.
   const [open, setOpen] = useState(() => localStorage.getItem("beatos_browse_filters_open") === "1");
   useEffect(() => {
@@ -58,22 +74,23 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
   }, [open]);
 
   const inputStyle: React.CSSProperties = {
-    background: C.surfaceContainerLowest,
-    border: "none",
-    borderRadius: 2,
-    padding: "8px 10px",
+    background: C.surfaceContainer,
+    border: `1px solid ${C.border15}`,
+    borderRadius: radius.control,
+    padding: "7px 10px",
     fontSize: 11,
-    fontWeight: 500,
+    fontWeight: 600,
     color: C.onSurface,
     outline: "none",
     width: "100%",
+    fontFamily: "inherit",
   };
 
   const labelStyle: React.CSSProperties = {
     fontSize: 10,
     fontWeight: 700,
     textTransform: "uppercase",
-    letterSpacing: "0.15em",
+    letterSpacing: "0.12em",
     color: C.onSecondaryFixedVar,
   };
 
@@ -90,64 +107,71 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
     updateFilter("keys", newKeys);
   };
 
-  const clearKeys = () => {
-    updateFilter("keys", []);
-    setKeyDropdownOpen(false);
-  };
+  const keyLabel = filters.keys.length === 0
+    ? "Alle Tonarten"
+    : filters.keys.length <= 3
+      ? filters.keys.join(", ")
+      : `${filters.keys.length} Tonarten gewählt`;
 
   return (
     <section style={{
       background: C.surfaceContainerLow,
-      borderRadius: 8,
-      padding: 16,
+      borderRadius: radius.card,
       border: `1px solid ${C.border10}`,
+      padding: "10px 12px",
     }}>
-      {/* Header — klickbar zum Auf-/Zuklappen */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* ── Kopfzeile: feste Hoehe, damit die Knoepfe rechts nicht mitwachsen ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 32 }}>
         <button
           onClick={() => setOpen(o => !o)}
           style={{
-            display: "flex", alignItems: "center", gap: 8,
-            background: "none", border: "none", padding: 0, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+            padding: "6px 10px", borderRadius: radius.control,
+            background: open ? C.surfaceContainerHigh : "transparent",
+            border: `1px solid ${open ? C.border20 : "transparent"}`,
+            cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          <Filter size={14} color={C.primary} strokeWidth={1.5} />
-          <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "-0.02em", color: C.onSurface, margin: 0 }}>
+          <Filter size={13} color={C.primary} strokeWidth={2} />
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.onSurface }}>
             Filter
-          </h3>
-          <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            ({resultCount} Beats)
           </span>
           <ChevronDown
-            size={14}
+            size={13}
             color={C.onSecondaryFixedVar}
-            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
           />
         </button>
-        <button
-          onClick={onReset}
-          style={{
-            fontSize: 11,
-            color: C.onSurfaceVariant,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontWeight: 600,
-            letterSpacing: "0.02em",
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = C.onSurface)}
-          onMouseLeave={e => (e.currentTarget.style.color = C.onSurfaceVariant)}
-        >
-          Alle zurücksetzen <RotateCcw size={12} />
-        </button>
+
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
+          {resultCount} Beats
+        </span>
+
+        {chips.length > 0 && (
+          <button
+            onClick={onReset}
+            title="Alle Filter zurücksetzen"
+            style={{
+              display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+              fontSize: 11, fontWeight: 600,
+              color: C.onSurfaceVariant, background: "none", border: "none", cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = C.onSurface)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.onSurfaceVariant)}
+          >
+            <RotateCcw size={12} /> Zurücksetzen
+          </button>
+        )}
+
+        <div style={{ flex: 1, minWidth: 0 }} />
+
+        {actions}
       </div>
 
-      {/* Aktive Filter — auch im eingeklappten Zustand sichtbar */}
+      {/* ── Aktive Filter — auch im eingeklappten Zustand sichtbar ── */}
       {chips.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
           {chips.map(chip => (
             <button
               key={chip.label}
@@ -155,12 +179,12 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
               title="Filter entfernen"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "3px 8px", borderRadius: 9999,
-                background: "rgba(253,161,36,0.12)",
-                border: "1px solid rgba(253,161,36,0.3)",
+                padding: "3px 8px", borderRadius: radius.full,
+                background: alpha(C.primary, 0.12),
+                border: `1px solid ${alpha(C.primary, 0.3)}`,
                 color: C.primary, cursor: "pointer",
                 fontSize: 10, fontWeight: 700, letterSpacing: "0.03em",
-                maxWidth: 240,
+                maxWidth: 240, fontFamily: "inherit",
               }}
             >
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -172,273 +196,154 @@ export function FilterBar({ filters, onChange, onReset, resultCount }: FilterBar
         </div>
       )}
 
-      {/* Filter Grid */}
+      {/* ── Filter-Raster: volle Breite, unter der Kopfzeile ── */}
       {open && (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr", gap: 24, marginTop: 16 }}>
-        {/* Status */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={labelStyle}>Status</label>
-          <select
-            value={filters.status}
-            onChange={e => updateFilter("status", e.target.value as BeatStatus | "all")}
-            style={inputStyle}
-          >
-            <option value="all">Alle Status</option>
-            <option value="idea">Idee</option>
-            <option value="wip">In Arbeit</option>
-            <option value="finished">Fertig</option>
-            <option value="sold">Verkauft</option>
-          </select>
-        </div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1.5fr 1fr 1.2fr",
+          gap: 20,
+          marginTop: 14,
+          paddingTop: 14,
+          borderTop: `1px solid ${C.border10}`,
+        }}>
+          {/* Status */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <label style={labelStyle}>Status</label>
+            <Select
+              value={filters.status}
+              options={STATUS_OPTIONS}
+              onChange={v => updateFilter("status", v as BeatStatus | "all")}
+              triggerStyle={{ ...inputStyle, display: "flex" }}
+            />
+          </div>
 
-        {/* Musical Key - Multi-Select Dropdown */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
-          <label style={labelStyle}>Tonart</label>
-          <button
-            onClick={() => setKeyDropdownOpen(!keyDropdownOpen)}
-            style={{
-              ...inputStyle,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
-          >
-            <span style={{ 
-              overflow: "hidden", 
-              textOverflow: "ellipsis", 
-              whiteSpace: "nowrap",
-              flex: 1,
-            }}>
-              {filters.keys.length === 0 
-                ? "Alle Tonarten" 
-                : filters.keys.length <= 3 
-                  ? filters.keys.join(", ")
-                  : `${filters.keys.length} Tonarten gewählt`
-              }
-            </span>
-            <ChevronDown size={14} style={{ 
-              transform: keyDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-              flexShrink: 0,
-            }} />
-          </button>
+          {/* Tonart — mehrere gleichzeitig, deshalb eigenes Feld statt Select */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <label style={labelStyle}>Tonart</label>
+            <Dropdown
+              label={keyLabel}
+              triggerStyle={{ ...inputStyle, display: "flex", color: filters.keys.length ? C.onSurface : C.onSurfaceVariant }}
+              panelStyle={{ padding: 12 }}
+            >
+              {() => (
+                <>
+                  {filters.keys.length > 0 && (
+                    <button
+                      onClick={() => updateFilter("keys", [])}
+                      style={{
+                        width: "100%", padding: "7px 12px", marginBottom: 12,
+                        background: alpha(C.error, 0.10),
+                        border: `1px solid ${alpha(C.error, 0.30)}`,
+                        borderRadius: radius.control,
+                        color: C.error, fontSize: 10, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                      }}
+                    >
+                      <X size={12} /> Auswahl leeren ({filters.keys.length})
+                    </button>
+                  )}
 
-          {/* Dropdown */}
-          {keyDropdownOpen && (
-            <>
-              {/* Backdrop */}
-              <div 
-                style={{ position: "fixed", inset: 0, zIndex: 49 }}
-                onClick={() => setKeyDropdownOpen(false)}
+                  {([["Moll", MINOR_KEYS, C.tertiary], ["Dur", MAJOR_KEYS, C.primary]] as const).map(([titel, keys, farbe]) => (
+                    <div key={titel} style={{ marginBottom: titel === "Moll" ? 12 : 0 }}>
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, color: farbe,
+                        textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8,
+                      }}>
+                        {titel}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {keys.map(key => {
+                          const isSelected = filters.keys.includes(key);
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => toggleKey(key)}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: radius.control - 1,
+                                fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                                cursor: "pointer",
+                                background: isSelected ? farbe : C.surfaceContainer,
+                                color: isSelected ? "#000" : C.onSurfaceVariant,
+                                border: `1px solid ${isSelected ? farbe : C.border15}`,
+                                transition: "all 0.15s",
+                              }}
+                            >
+                              {key}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </Dropdown>
+          </div>
+
+          {/* BPM-Bereich */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <label style={labelStyle}>BPM-Bereich</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="number"
+                placeholder="min."
+                value={filters.bpmMin}
+                onChange={e => updateFilter("bpmMin", e.target.value)}
+                style={{ ...inputStyle, width: "50%" }}
               />
-              
-              {/* Dropdown Content */}
-              <div style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                right: 0,
-                marginTop: 4,
-                background: C.surfaceContainerHighest,
-                border: `1px solid ${C.border20}`,
-                borderRadius: 8,
-                padding: 12,
-                zIndex: 50,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                maxHeight: 320,
-                overflowY: "auto",
-              }}>
-                {/* Clear Button */}
-                {filters.keys.length > 0 && (
+              <input
+                type="number"
+                placeholder="max."
+                value={filters.bpmMax}
+                onChange={e => updateFilter("bpmMax", e.target.value)}
+                style={{ ...inputStyle, width: "50%" }}
+              />
+            </div>
+          </div>
+
+          {/* Schnellschalter */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <label style={labelStyle}>Nur zeigen</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {([
+                ["onlyFavs", Heart, "Favs", C.primary, alpha(C.primary, 0.15), alpha(C.primary, 0.35), 1] as const,
+                ["unpublishedOnly", UploadCloud, "Unveröffentlicht", C.mint, alpha(C.mint, 0.12), alpha(C.mint, 0.35), 1.5] as const,
+              ]).map(([key, Icon, label, farbe, bg, rand, wachs]) => {
+                const an = filters[key];
+                return (
                   <button
-                    onClick={clearKeys}
+                    key={key}
+                    onClick={() => updateFilter(key, !an)}
+                    title={key === "unpublishedOnly" ? "Nur Beats, die auf keiner Plattform hochgeladen wurden" : undefined}
                     style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      marginBottom: 12,
-                      background: "rgba(239,68,68,0.1)",
-                      border: "1px solid rgba(239,68,68,0.3)",
-                      borderRadius: 4,
-                      color: "#ef4444",
-                      fontSize: 10,
-                      fontWeight: 600,
+                      flex: wachs,
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "7px 10px",
+                      borderRadius: radius.control,
+                      background: an ? bg : C.surfaceContainer,
+                      border: `1px solid ${an ? rand : C.border15}`,
                       cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 4,
+                      fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                      fontFamily: "inherit",
+                      color: an ? farbe : C.onSurfaceVariant,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    <X size={12} /> Clear Selection ({filters.keys.length})
+                    <Icon
+                      size={12}
+                      fill={key === "onlyFavs" && an ? farbe : "none"}
+                      color={an ? farbe : C.onSurfaceVariant}
+                      strokeWidth={1.75}
+                    />
+                    {label}
                   </button>
-                )}
-
-                {/* Minor Keys */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ 
-                    fontSize: 10, 
-                    fontWeight: 700, 
-                    color: C.tertiary, 
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 8,
-                  }}>
-                    Minor
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {MINOR_KEYS.map(key => {
-                      const isSelected = filters.keys.includes(key);
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => toggleKey(key)}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            background: isSelected ? C.tertiary : C.surfaceContainer,
-                            color: isSelected ? "#000" : C.onSurfaceVariant,
-                            border: `1px solid ${isSelected ? C.tertiary : C.border10}`,
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {key}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Major Keys */}
-                <div>
-                  <div style={{ 
-                    fontSize: 10, 
-                    fontWeight: 700, 
-                    color: C.primary, 
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 8,
-                  }}>
-                    Major
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {MAJOR_KEYS.map(key => {
-                      const isSelected = filters.keys.includes(key);
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => toggleKey(key)}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            background: isSelected ? C.primary : C.surfaceContainer,
-                            color: isSelected ? "#000" : C.onSurfaceVariant,
-                            border: `1px solid ${isSelected ? C.primary : C.border10}`,
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {key}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* BPM Range */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={labelStyle}>BPM-Bereich</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="number"
-              placeholder="min."
-              value={filters.bpmMin}
-              onChange={e => updateFilter("bpmMin", e.target.value)}
-              style={{ ...inputStyle, width: "50%" }}
-            />
-            <input
-              type="number"
-              placeholder="max."
-              value={filters.bpmMax}
-              onChange={e => updateFilter("bpmMax", e.target.value)}
-              style={{ ...inputStyle, width: "50%" }}
-            />
+                );
+              })}
+            </div>
           </div>
         </div>
-
-        {/* Quick toggles */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={labelStyle}>Filter</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => updateFilter("onlyFavs", !filters.onlyFavs)}
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                padding: "8px 10px",
-                borderRadius: 2,
-                background: filters.onlyFavs ? "rgba(253,161,36,0.15)" : C.surfaceContainerLowest,
-                border: filters.onlyFavs ? "1px solid rgba(253,161,36,0.3)" : "1px solid transparent",
-                cursor: "pointer",
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                color: filters.onlyFavs ? C.primary : C.onSurfaceVariant,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <Heart
-                size={12}
-                fill={filters.onlyFavs ? C.primary : "none"}
-                color={filters.onlyFavs ? C.primary : C.onSurfaceVariant}
-                strokeWidth={1.5}
-              />
-              Favs
-            </button>
-            <button
-              onClick={() => updateFilter("unpublishedOnly", !filters.unpublishedOnly)}
-              title="Nur Beats, die auf keiner Plattform hochgeladen wurden"
-              style={{
-                flex: 1.4,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                padding: "8px 10px",
-                borderRadius: 2,
-                background: filters.unpublishedOnly ? "rgba(52,211,153,0.12)" : C.surfaceContainerLowest,
-                border: filters.unpublishedOnly ? "1px solid rgba(52,211,153,0.35)" : "1px solid transparent",
-                cursor: "pointer",
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                color: filters.unpublishedOnly ? C.mint : C.onSurfaceVariant,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <UploadCloud
-                size={12}
-                color={filters.unpublishedOnly ? C.mint : C.onSurfaceVariant}
-                strokeWidth={1.75}
-              />
-              Unveröffentlicht
-            </button>
-          </div>
-        </div>
-      </div>
       )}
     </section>
   );

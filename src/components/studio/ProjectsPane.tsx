@@ -13,14 +13,17 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, Loader2, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, Trash2, X, Settings } from "lucide-react";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
+import { RefreshCw, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings } from "lucide-react";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { open } from "@tauri-apps/plugin-dialog";
+import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useSettings } from "../../contexts/SettingsContext";
+import { useDialog } from "../../contexts/DialogContext";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
+import { useKlickDaneben } from "../../hooks/useKlickDaneben";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
 import { EmptyState, Button, IconButton } from "../ui";
 import { MergeProjectsDialog } from "./MergeProjectsDialog";
@@ -33,6 +36,15 @@ import type { Beat } from "../../types/browse";
 /** Ideen ohne Aktivität länger als das gelten als "Lange inaktiv" */
 const STALE_DAYS = 30;
 
+/** Arbeiten: woran du gerade sitzt. Aufräumen: Lange inaktiv + Kann weg. */
+export type StudioView = "work" | "cleanup";
+const CLEANUP_SECTIONS: SectionKey[] = ["stale", "discard"];
+// Die Chips einer Ansicht sind ihre Sektionen — in Listen-Reihenfolge.
+const VIEW_SECTIONS: Record<StudioView, SectionKey[]> = {
+  work: ["priority", "ready", "exported", "wip", "idea"],
+  cleanup: ["stale", "discard"],
+};
+
 /** So viele Zeilen zeigt eine Sektion, bevor sie „… weitere anzeigen" anbietet. */
 const SECTION_LIMIT = 50;
 
@@ -40,7 +52,7 @@ type SectionKey = StudioStatus | "stale" | "priority";
 
 const SECTION_ORDER: SectionKey[] = ["priority", "ready", "exported", "wip", "idea", "stale", "discard"];
 const SECTION_META: Record<SectionKey, { label: string; color: string }> = {
-  priority: { label: "Priorität",                         color: "#fda124" },
+  priority: { label: "Priorität",                         color: C.primary },
   ready:    { label: STUDIO_STATUS_CONFIG.ready.label,    color: STUDIO_STATUS_CONFIG.ready.color },
   exported: { label: STUDIO_STATUS_CONFIG.exported.label, color: STUDIO_STATUS_CONFIG.exported.color },
   wip:      { label: STUDIO_STATUS_CONFIG.wip.label,      color: STUDIO_STATUS_CONFIG.wip.color },
@@ -83,9 +95,13 @@ interface ProjectsPaneProps {
   productionPaths: string[];
   refreshKey: number;
   onProjects?: (projects: StudioProject[]) => void;
+  /** Panel auf/zu — die Studio-Seite macht rechts dafür Platz. */
+  onInspectorOpen?: (open: boolean) => void;
+  /** Arbeitsliste oder Aufräumen — dieselben Daten, ein Scan. */
+  view?: StudioView;
 }
 
-export function ProjectsPane({ productionPaths, refreshKey, onProjects }: ProjectsPaneProps) {
+export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspectorOpen, view = "work" }: ProjectsPaneProps) {
   const [projects, setProjects] = useState<StudioProject[]>([]);
   /** Der aktuelle Stand — auch in einer Closure aus einem älteren Render. */
   const projectsRef = useRef(projects);
@@ -95,11 +111,12 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   const navigate = useNavigate();
   const { playBeat, setQueue } = useAudioPlayerContext();
   const { settings } = useSettings();
+  const { frage, melde } = useDialog();
 
   // Filters & view state
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StudioStatus | null>(null);
-  const [onlyPriority, setOnlyPriority] = useState(false);
+  /** Eine Sektion als Filter — dieselbe Einteilung wie die Liste darunter. */
+  const [sectionFilter, setSectionFilter] = useState<SectionKey | null>(null);
   const [rootFilter, setRootFilter] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>(loadSort);
   const [collapsed, setCollapsed] = useState<Set<SectionKey>>(loadCollapsed);
@@ -109,6 +126,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
   const [inspectorPath, setInspectorPath] = useState<string | null>(null);
+  // Klick daneben — in die Projektliste oder in die Seitenleiste — schliesst
+  // den Inspector. Dieselbe Geste wie im Archiv.
+  useKlickDaneben(!!inspectorPath, () => setInspectorPath(null));
   const [isCreating, setIsCreating] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
@@ -121,7 +141,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   const scan = useCallback(async () => {
     if (productionPaths.length === 0) {
       setProjects([]);
-      setError("Kein Produktions-Pfad gesetzt — in den Settings unter 'Active Production Paths' hinzufügen.");
+      setError("Kein Produktions-Pfad gesetzt — in den Einstellungen unter „Pfade“ hinzufügen.");
       return;
     }
     setIsLoading(true);
@@ -188,7 +208,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
       return true;
     } catch (e) {
       setProjects(prev => swap(prev, aktuell));
-      alert(`Speichern fehlgeschlagen: ${String(e)}`);
+      melde(`Speichern fehlgeschlagen: ${String(e)}`);
       return false;
     }
   };
@@ -207,47 +227,46 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionPaths.join("\n"), projects.length]);
 
-  const handleNewProject = async () => {
-    if (!settings.flpTemplatePath.trim()) {
-      alert("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen.");
+  // `vorlage` ersetzt die Template-FLP aus den Einstellungen — sonst identisch:
+  // dieselbe Nummer, derselbe Ordner, dasselbe Oeffnen in FL. create_project_folder
+  // kopiert ohnehin jede FLP und benennt sie nach dem Projekt, der alte Name ist
+  // damit weg.
+  const handleNewProject = async (vorlage?: string) => {
+    const template = vorlage ?? settings.flpTemplatePath.trim();
+    if (!template) {
+      melde("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen.");
       return;
     }
     setIsCreating(true);
     try {
       const name = await api.studio.nextProjectName(productionPaths);
-      const flp = await api.studio.createProject(newProjectRoot, name, settings.flpTemplatePath);
+      const flp = await api.studio.createProject(newProjectRoot, name, template);
       try { await openPath(flp); }
-      catch (e) { alert(`„${name}“ liegt bereit, FL öffnet es nicht: ${String(e)}`); }
+      catch (e) { melde(`„${name}“ liegt bereit, FL öffnet es nicht: ${String(e)}`); }
       scan();
     } catch (e) {
-      alert(`Projekt konnte nicht angelegt werden: ${String(e)}`);
+      melde(`Projekt konnte nicht angelegt werden: ${String(e)}`);
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleRename = async (p: StudioProject, newName: string) => {
-    if (newName.trim() === p.name) return;
-    try {
-      const newPath = await api.studio.renameProject(p.path, newName.trim());
-      // Die Zeile im selben Zug auf den neuen Pfad ziehen, nicht erst mit dem
-      // Scan: sonst zeigt der Inspector einen Render lang auf einen Pfad, den
-      // es in der Liste noch nicht gibt — das Panel ging zu und wieder auf.
-      // Alles Übrige (parsed_name, FLP-Pfade) holt der Scan gleich nach.
-      const neuerName = newPath.split(/[/\\]/).filter(Boolean).pop() ?? newName.trim();
-      setProjects(prev => prev.map(x =>
-        x.path === p.path ? { ...x, path: newPath, name: neuerName } : x));
-      if (inspectorPath === p.path) setInspectorPath(newPath);
-      scan();
-    } catch (e) {
-      alert(`Umbenennen fehlgeschlagen: ${String(e)}`);
-    }
+  // Vorlage aussuchen: der native Dateidialog startet im Archiv, nimmt aber
+  // jede FLP — ein eigener Beat-Picker waere eine zweite Liste, die dasselbe kann.
+  const handleNewFromFlp = async () => {
+    const quelle = await open({
+      multiple: false,
+      title: "FLP als Vorlage fuer das neue Projekt waehlen",
+      defaultPath: settings.archivePath || newProjectRoot,
+      filters: [{ name: "FL Studio Projekt", extensions: ["flp"] }],
+    }).catch(() => null);
+    if (typeof quelle === "string") handleNewProject(quelle);
   };
 
   const handleOpenDaw = async (p: StudioProject) => {
     if (!p.newest_flp) return;
     try { await openPath(p.newest_flp); }
-    catch (e) { alert(`FLP konnte nicht geöffnet werden: ${String(e)}`); }
+    catch (e) { melde(`FLP konnte nicht geöffnet werden: ${String(e)}`); }
   };
 
   const handleArchive = (p: StudioProject) => {
@@ -258,18 +277,20 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   // optimistisch aus der Liste nehmen; die Auswahl/Inspector ggf. lösen.
   const handleTrash = async (p: StudioProject) => {
     const name = projectDisplayName(p);
-    const ok = window.confirm(
-      `„${name}" in den Papierkorb verschieben?\n\n` +
-      `Der komplette Projektordner wandert in den Windows-Papierkorb ` +
-      `(wiederherstellbar):\n${p.path}`
-    );
+    const ok = await frage({
+      titel: "In den Papierkorb verschieben?",
+      text: `„${name}"\n\nDer komplette Projektordner wandert in den Windows-Papierkorb ` +
+            `und lässt sich von dort zurückholen:\n${p.path}`,
+      bestaetigen: "In den Papierkorb",
+      gefahr: true,
+    });
     if (!ok) return;
     try {
       await api.archive.trashSourceFolder(p.path, settings.archivePath);
       setProjects(prev => prev.filter(x => x.path !== p.path));
       if (inspectorPath === p.path) setInspectorPath(null);
     } catch (e) {
-      alert(`Löschen fehlgeschlagen: ${String(e)}`);
+      melde(`Löschen fehlgeschlagen: ${String(e)}`);
     }
   };
 
@@ -281,10 +302,13 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
     const n = discardable.length;
     const namen = discardable.slice(0, 8).map(p => `• ${projectDisplayName(p)}`).join("\n");
     const rest = n > 8 ? `\n… und ${n - 8} weitere` : "";
-    const ok = window.confirm(
-      `${n} ${n === 1 ? "Projekt" : "Projekte"} in den Papierkorb verschieben?\n\n${namen}${rest}\n\n` +
-      `Die kompletten Ordner wandern in den Windows-Papierkorb und lassen sich von dort zurückholen.`
-    );
+    const ok = await frage({
+      titel: `${n} ${n === 1 ? "Projekt" : "Projekte"} in den Papierkorb?`,
+      text: `${namen}${rest}\n\n` +
+            `Die kompletten Ordner wandern in den Windows-Papierkorb und lassen sich von dort zurückholen.`,
+      bestaetigen: "In den Papierkorb",
+      gefahr: true,
+    });
     if (!ok) return;
 
     setIsCleaning(true);
@@ -303,17 +327,22 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
     setIsCleaning(false);
 
     if (fehler.length > 0) {
-      alert(
-        `${weg.size} im Papierkorb, ${fehler.length} nicht:\n\n${fehler.join("\n")}\n\n` +
-        `Die übrigen bleiben markiert — Leiste nochmal drücken, wenn die Ursache weg ist.`
-      );
+      await frage({
+        titel: `${weg.size} im Papierkorb, ${fehler.length} nicht`,
+        text: `${fehler.join("\n")}\n\n` +
+              `Die übrigen bleiben markiert — Leiste nochmal drücken, wenn die Ursache weg ist.`,
+        bestaetigen: "Verstanden",
+        nurHinweis: true,
+      });
       return;
     }
-    if (weg.size > 0 && window.confirm(
-      `${weg.size} ${weg.size === 1 ? "Ordner ist" : "Ordner sind"} im Papierkorb.\n\n` +
-      `Jetzt die Projektnummern lückenlos nachrücken lassen? ` +
-      `Der nächste Schritt zeigt erst eine Vorschau, bevor etwas umbenannt wird.`
-    )) {
+    if (weg.size > 0 && await frage({
+      titel: "Nummern nachrücken lassen?",
+      text: `${weg.size} ${weg.size === 1 ? "Ordner ist" : "Ordner sind"} im Papierkorb.\n\n` +
+            `Der nächste Schritt zeigt erst eine Vorschau, bevor etwas umbenannt wird.`,
+      bestaetigen: "Vorschau zeigen",
+      abbrechen: "Später",
+    })) {
       setShowMerge(true);
     }
   };
@@ -324,35 +353,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   // damit ihre Zahlen zu dem passen, was ein Klick tatsächlich zeigt — vorher
   // zählten sie global weiter und widersprachen der Liste darunter.
   const q = search.trim().toLowerCase();
-  const preStatus = projects.filter(p => {
-    if (onlyPriority && !p.priority) return false;
-    if (rootFilter && p.root !== rootFilter) return false;
-    if (q) {
-      // Songtitel zuerst — danach sucht man, nicht nach "project_187".
-      // Notizen zählen mit: „für Artist X" ist genau das, was man später sucht.
-      const hay = `${p.song_name ?? ""} ${p.parsed_name} ${p.name} ${p.key ?? ""} ${p.bpm ?? ""} ${p.notes ?? ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-
-  const counts = {
-    all: preStatus.length,
-    idea: preStatus.filter(p => p.status === "idea").length,
-    wip: preStatus.filter(p => p.status === "wip").length,
-    exported: preStatus.filter(p => p.status === "exported").length,
-    ready: preStatus.filter(p => p.status === "ready").length,
-    discard: preStatus.filter(p => p.status === "discard").length,
-  };
-
-  // Alle vorgemerkten Projekte — unabhängig von Suche und Filtern, sonst räumt
-  // die Leiste unten je nach Sucheingabe mal mehr und mal weniger weg.
-  const discardable = projects.filter(p => p.status === "discard");
-
-  const visible = statusFilter
-    ? preStatus.filter(p => p.status === statusFilter)
-    : preStatus;
-
   // Jedes Projekt gehört in genau eine Sektion. Der Stern schlägt alles: er ist
   // die Merkliste, und die gehört nach oben — "Idee" und "Lange inaktiv" sind
   // beide standardmäßig zugeklappt, ein markiertes Projekt wäre dort weg.
@@ -364,6 +364,41 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
     if (p.status === "idea" && daysSince(p.modified_secs) > STALE_DAYS) return "stale";
     return p.status;
   };
+
+  // Arbeiten und Aufräumen sind zwei Listen: ~30 Projekte, an denen du sitzt,
+  // gegen ~800, die entschieden werden wollen. Vorher hing beides untereinander.
+  const inView = (p: StudioProject) =>
+    CLEANUP_SECTIONS.includes(sectionOf(p)) === (view === "cleanup");
+
+  const preStatus = projects.filter(p => {
+    if (!inView(p)) return false;
+    if (rootFilter && p.root !== rootFilter) return false;
+    if (q) {
+      // Songtitel zuerst — danach sucht man, nicht nach "project_187".
+      // Notizen zählen mit: „für Artist X" ist genau das, was man später sucht.
+      const hay = `${p.song_name ?? ""} ${p.parsed_name} ${p.name} ${p.key ?? ""} ${p.bpm ?? ""} ${p.notes ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Eine Zählweise: Chip und Sektionskopf zählen dieselbe Menge. Vorher
+  // zählten die Chips nach Status („Idee (25)") und die Sektionen nach
+  // Einteilung („Idee 18" — die 7 mit Stern stehen unter Priorität).
+  const chips = VIEW_SECTIONS[view].map(key => ({
+    key,
+    label: SECTION_META[key].label,
+    color: SECTION_META[key].color,
+    count: preStatus.filter(p => sectionOf(p) === key).length,
+  }));
+
+  // Alle vorgemerkten Projekte — unabhängig von Suche und Filtern, sonst räumt
+  // die Leiste unten je nach Sucheingabe mal mehr und mal weniger weg.
+  const discardable = projects.filter(p => p.status === "discard");
+
+  const visible = sectionFilter
+    ? preStatus.filter(p => sectionOf(p) === sectionFilter)
+    : preStatus;
 
   // B4: „Priorität zuerst" ist raus. Der Modus sortierte nur INNERHALB einer
   // Sektion, die Sektionsreihenfolge liegt aber fest — er tat also sichtbar
@@ -386,7 +421,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
     .filter(s => s.items.length > 0);
 
   // Suche und Status-Filter klappen alles auf: was übrig bleibt, will man sehen.
-  const forcedOpen = statusFilter !== null || q.length > 0;
+  const forcedOpen = sectionFilter !== null || q.length > 0;
   const isSectionOpen = (key: SectionKey) => forcedOpen || !collapsed.has(key);
 
   // Eine Sektion zeigt erst SECTION_LIMIT Zeilen. Ohne die Grenze rendert ein
@@ -407,6 +442,33 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
       return next;
     });
   };
+
+  // ── Tastatur: dieselbe Belegung wie im Archiv ──────────────────────────────
+  // Die Zeilen waren nur mit der Maus erreichbar — anders als im Archiv, wo
+  // Pfeiltasten laengst durch die Liste gehen. Hier lief dieselbe Geste ins
+  // Leere, obwohl `rows` die sichtbare Liste ohnehin schon flach vorliegen hat.
+  //
+  // Ein <button> um die Zeile ging nicht: sie traegt selbst Knoepfe (Stern,
+  // Papierkorb, Archivieren), verschachtelte Buttons sind ungueltig.
+  useEffect(() => {
+    const aufTaste = (e: KeyboardEvent) => {
+      const ziel = e.target as HTMLElement | null;
+      if (ziel && (ziel.isContentEditable || /^(INPUT|TEXTAREA)$/.test(ziel.tagName))) return;
+      if (showMerge) return;                     // der Dialog hat eigene Tasten
+      if (rows.length === 0) return;
+
+      if (e.key === "Escape") { setInspectorPath(null); return; }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+
+      e.preventDefault();                        // sonst scrollt die Seite mit
+      const i = rows.findIndex(p => p.path === inspectorPath);
+      if (i < 0) { setInspectorPath(rows[0].path); return; }
+      const schritt = e.key === "ArrowDown" ? 1 : -1;
+      setInspectorPath(rows[Math.min(Math.max(i + schritt, 0), rows.length - 1)].path);
+    };
+    window.addEventListener("keydown", aufTaste);
+    return () => window.removeEventListener("keydown", aufTaste);
+  }, [rows, inspectorPath, showMerge]);
 
   // Audio preview: pseudo-beat over the project folder — get_beat_audio_path
   // scans the folder root and finds the exported MP3/WAV. Die ganze sichtbare
@@ -471,7 +533,12 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
       }
     }
     if (fehler.length > 0) {
-      alert(`${fehler.length} von ${targets.length} nicht gespeichert:\n\n${fehler.join("\n")}`);
+      await frage({
+        titel: `${fehler.length} von ${targets.length} nicht gespeichert`,
+        text: fehler.join("\n"),
+        bestaetigen: "Verstanden",
+        nurHinweis: true,
+      });
       scan();
     }
   };
@@ -479,12 +546,26 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
   const inspectorProject = inspectorPath
     ? projects.find(p => p.path === inspectorPath) ?? null
     : null;
+  const inspectorOpen = Boolean(inspectorProject);
+  // Das zuletzt gezeigte Projekt, für die 220 ms des Hinausgleitens.
+  const [leaving, setLeaving] = useState<StudioProject | null>(null);
+  useEffect(() => {
+    if (inspectorProject) { setLeaving(inspectorProject); return; }
+    const t = setTimeout(() => setLeaving(null), 220);
+    return () => clearTimeout(t);
+  }, [inspectorProject]);
+  const panelProject = inspectorProject ?? leaving;
+  // Ein Status-Chip, den die neue Ansicht nicht hat, darf die Liste nicht leeren.
+  useEffect(() => {
+    if (sectionFilter && !VIEW_SECTIONS[view].includes(sectionFilter)) setSectionFilter(null);
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onInspectorOpen?.(inspectorOpen); }, [inspectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{
       background: C.surfaceContainerLow,
       border: `1px solid ${C.border10}`,
-      borderRadius: 12,
+      borderRadius: radius.card,
       overflow: "hidden",
     }}>
       {/* Top bar */}
@@ -493,60 +574,71 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
         padding: "12px 16px",
         borderBottom: `1px solid ${C.border10}`,
       }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
-          {projects.length} Projekte
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
+          {/* Was dieser Tab zeigt, nicht alle 875 — sonst widerspricht die Zahl der Liste. */}
+          {projects.filter(inView).length} Projekte
         </span>
-        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-          aus {productionPaths.length} {productionPaths.length === 1 ? "Pfad" : "Pfaden"}
-        </span>
+        {/* Bei einem Pfad sagt „aus 1 Pfad" nichts. */}
+        {productionPaths.length > 1 && (
+          <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>
+            aus {productionPaths.length} Pfaden
+          </span>
+        )}
         <div style={{ flex: 1 }} />
-        <IconButton
-          icon={FolderInput}
-          size={28}
-          onClick={() => setShowMerge(true)}
-          disabled={productionPaths.length === 0}
-          title="Produktions-Ordner zusammenführen und nach Alter neu nummerieren"
-        />
+        {/* Alles beschriftet, in einer Reihe: rechts das Häufigste. Vorher
+            standen hier zwei Symbole ohne Text, und „Ordner archivieren"
+            sass allein oben in der Ecke. */}
+        <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Produktions-Ordner neu einlesen">
+          Scan
+        </Button>
+        {view === "cleanup" && (
+          <Button
+            size="sm" variant="ghost" icon={FolderInput}
+            onClick={() => setShowMerge(true)}
+            disabled={productionPaths.length === 0}
+            title="Produktions-Ordner zusammenführen und nach Alter neu nummerieren"
+          >
+            Zusammenführen
+          </Button>
+        )}
+        <Button
+          size="sm" variant="secondary" icon={FolderPlus}
+          onClick={() => navigate("/create")}
+          title="Einen Ordner von aussen archivieren (Übergabe-Ordner, anderer Rechner)"
+        >
+          Ordner archivieren
+        </Button>
+        <Button
+          size="sm" variant="secondary" icon={CopyPlus}
+          onClick={handleNewFromFlp}
+          disabled={productionPaths.length === 0 || isCreating}
+          title="Neues Projekt aus einer vorhandenen FLP — die Kopie bekommt die nächste freie Nummer"
+        >
+          Aus FLP
+        </Button>
         <Button
           size="sm"
           variant="primary"
           icon={FilePlus2}
-          onClick={handleNewProject}
+          onClick={() => handleNewProject()}
           loading={isCreating}
           disabled={productionPaths.length === 0}
-          title={`${nextName || "Nächstes Projekt"} in ${newProjectRoot} anlegen und in FL öffnen\nNummer läuft über alle Produktions-Ordner`}
+          title={`${nextName || "Nächstes Projekt"} in ${newProjectRoot} anlegen und in FL öffnen
+Nummer läuft über alle Produktions-Ordner`}
         >
           Neues Projekt
           {nextName && <span style={{ opacity: 0.65, fontWeight: 600 }}>{nextName}</span>}
         </Button>
-        <button
-          onClick={scan}
-          disabled={isLoading}
-          title="Neu scannen"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 6,
-            background: "transparent", border: `1px solid ${C.border15}`,
-            color: C.onSurfaceVariant, cursor: "pointer",
-            fontSize: 10, fontWeight: 600,
-          }}
-        >
-          {isLoading
-            ? <Loader2 size={11} style={{ animation: "spin 0.8s linear infinite" }} />
-            : <RefreshCw size={11} />}
-          Scan
-        </button>
       </div>
 
       {/* Search / filter / sort */}
       <ProjectsToolbar
         search={search}
         onSearch={setSearch}
-        statusFilter={statusFilter}
-        onStatusFilter={setStatusFilter}
-        counts={counts}
-        onlyPriority={onlyPriority}
-        onOnlyPriority={setOnlyPriority}
+        chips={chips}
+        total={preStatus.length}
+        active={sectionFilter}
+        onActive={k => setSectionFilter(k as SectionKey | null)}
         roots={productionPaths}
         rootFilter={rootFilter}
         onRootFilter={setRootFilter}
@@ -610,12 +702,12 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
                 : <span style={{ width: 7, height: 7, borderRadius: "50%", background: section.meta.color }} />
               }
               <span style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: C.onSurfaceVariant,
               }}>
                 {section.meta.label}
               </span>
-              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant }}>
                 {section.items.length}
               </span>
               <div style={{ flex: 1 }} />
@@ -636,12 +728,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
                 isSelected={selected.has(p.path)}
                 dimmed={section.key === "stale"}
                 onPatch={patch => patchProject(p, patch)}
-                onOpenDaw={() => handleOpenDaw(p)}
                 onPreview={() => handlePreview(p)}
                 onOpen={e => handleRowClick(p, e)}
-                onOpenFolder={() => revealItemInDir(p.path).catch(() => {})}
-                onArchive={() => handleArchive(p)}
-                onTrash={() => handleTrash(p)}
               />
             ))}
 
@@ -671,7 +759,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
           display: "flex", alignItems: "center", gap: 10,
           padding: "12px 16px",
           borderTop: `1px solid ${C.border20}`,
-          background: "rgba(253,161,36,0.06)",
+          background: alpha(C.primary, 0.06),
         }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>
             {selected.size} ausgewählt
@@ -697,7 +785,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
       {/* Aufräumen — der einzige laute Moment im Studio, und der einzige Weg,
           auf dem mehrere Ordner auf einmal verschwinden. Steht am Fuß der
           Liste, direkt unter dem, was er wegräumt. */}
-      {selected.size === 0 && discardable.length > 0 && (
+      {view === "cleanup" && selected.size === 0 && discardable.length > 0 && (
         <div style={{
           display: "flex", alignItems: "center", gap: 12,
           padding: "12px 16px",
@@ -735,13 +823,16 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects }: Projec
         />
       )}
 
-      {/* Inspector */}
-      {inspectorProject && (
+      {/* Inspector — schliesst auch, wenn man daneben klickt. Beim Schliessen
+          bleibt das letzte Projekt kurz stehen, damit es hinausgleiten kann. */}
+      {panelProject && (
         <ProjectInspector
-          project={inspectorProject}
-          onPatch={patch => patchProject(inspectorProject, patch)}
-          onRename={name => handleRename(inspectorProject, name)}
-          onArchive={() => handleArchive(inspectorProject)}
+          project={panelProject}
+          closing={!inspectorProject}
+          onPatch={patch => patchProject(panelProject, patch)}
+          onArchive={() => handleArchive(panelProject)}
+          onOpenDaw={() => handleOpenDaw(panelProject)}
+          onTrash={() => handleTrash(panelProject)}
           onClose={() => setInspectorPath(null)}
           onAssetsChanged={scan}
         />

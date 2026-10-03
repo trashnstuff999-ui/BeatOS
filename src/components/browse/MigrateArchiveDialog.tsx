@@ -20,7 +20,7 @@
 import { useState, useEffect } from "react";
 import { FolderSymlink, Type, AlertTriangle, Check } from "lucide-react";
 import { api } from "../../lib/api";
-import { C, radius } from "../../lib/theme";
+import { C, radius, alpha } from "../../lib/theme";
 import { Modal, Button } from "../ui";
 import type { StructureMigration, FolderSync } from "../../types/upload";
 
@@ -292,8 +292,8 @@ function Uebersprungen({ anzahl, grund, zeilen }: {
 
 const TON = {
   info:    { farbe: C.onSurfaceVariant, rand: C.border15,              grund: C.surfaceContainerLow },
-  warnung: { farbe: "#fda124",          rand: "rgba(253,161,36,0.35)",  grund: "rgba(253,161,36,0.10)" },
-  fehler:  { farbe: C.error,            rand: "rgba(255,115,81,0.35)",  grund: "rgba(255,115,81,0.10)" },
+  warnung: { farbe: C.primary,          rand: alpha(C.primary, 0.35),  grund: alpha(C.primary, 0.10) },
+  fehler:  { farbe: C.error,            rand: alpha(C.error, 0.35),  grund: alpha(C.error, 0.10) },
 } as const;
 
 function Hinweis({ ton, children }: { ton: keyof typeof TON; children: React.ReactNode }) {

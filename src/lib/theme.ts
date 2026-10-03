@@ -29,6 +29,8 @@ export const colors = {
   // ── Secondary/Tertiary ─────────────────────────────────────────────────────
   tertiary:   "#9492ff",  // Lila — für Idea Status, Akzente
   mint:       "#34d399",  // Mint/Grün — für Tags, Success
+  /** Schrift auf einer Mint-Vollflaeche — das Gegenstueck zu onPrimary. */
+  onMint:     "#064e3b",
   error:      "#ff7351",  // Rot/Orange — für Errors, Sold Status
 
   // ── Text Hierarchy ─────────────────────────────────────────────────────────
@@ -64,8 +66,8 @@ export const PLATFORM_CONFIG: Record<PlatformKey, { label: string; short: string
 
 export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   draft:     { label: "Entwurf",     color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  scheduled: { label: "Geplant", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
-  uploaded:  { label: "Hochgeladen",  color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  scheduled: { label: "Geplant", color: colors.primary, bg: alpha(colors.primary, 0.12) },
+  uploaded:  { label: "Hochgeladen",  color: colors.mint, bg: alpha(colors.mint, 0.12) },
 };
 
 /**
@@ -78,9 +80,9 @@ export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string
  */
 export const STUDIO_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   idea:     { label: "Idee",         color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  wip:      { label: "Überarbeiten", color: "#fda124", bg: "rgba(253,161,36,0.12)" },
-  exported: { label: "Exportiert",   color: "#9492ff", bg: "rgba(148,146,255,0.12)" },
-  ready:    { label: "Bereit",       color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  wip:      { label: "Überarbeiten", color: colors.primary, bg: alpha(colors.primary, 0.12) },
+  exported: { label: "Exportiert",   color: colors.tertiary, bg: alpha(colors.tertiary, 0.12) },
+  ready:    { label: "Bereit",       color: colors.mint, bg: alpha(colors.mint, 0.12) },
   discard:  { label: "Kann weg",     color: "#6b6a72", bg: "rgba(255,255,255,0.03)" },
 };
 
@@ -100,30 +102,30 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
   idea: {
     key: "idea",
     label: "Idee",
-    color: "#9492ff",
-    bg: "rgba(148,146,255,0.10)",
-    border: "rgba(148,146,255,0.20)",
+    color: colors.tertiary,
+    bg: alpha(colors.tertiary, 0.10),
+    border: alpha(colors.tertiary, 0.20),
   },
   wip: {
     key: "wip",
     label: "In Arbeit",
-    color: "#fda124",
-    bg: "rgba(253,161,36,0.10)",
-    border: "rgba(253,161,36,0.20)",
+    color: colors.primary,
+    bg: alpha(colors.primary, 0.10),
+    border: alpha(colors.primary, 0.20),
   },
   finished: {
     key: "finished",
     label: "Fertig",
     color: "#22c55e",
-    bg: "rgba(34,197,94,0.10)",
-    border: "rgba(34,197,94,0.20)",
+    bg: alpha(colors.mint, 0.10),
+    border: alpha(colors.mint, 0.20),
   },
   sold: {
     key: "sold",
     label: "Verkauft",
-    color: "#ff7351",
-    bg: "rgba(255,115,81,0.10)",
-    border: "rgba(255,115,81,0.20)",
+    color: colors.error,
+    bg: alpha(colors.error, 0.10),
+    border: alpha(colors.error, 0.20),
   },
 } as const;
 
@@ -136,6 +138,37 @@ export function normalizeStatus(status: string | null | undefined): keyof typeof
   const lower = status.toLowerCase().trim();
   if (lower in STATUS_CONFIG) return lower as keyof typeof STATUS_CONFIG;
   return "idea";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// Akzent als weiche Flaeche
+//
+// Das haeufigste Muster der App: eine Akzentfarbe als getoenter Kasten mit
+// farbigem Rand und farbigem Text. Es stand rund neunzig Mal als ausgeschriebenes
+// `rgba(253,161,36,0.12)` im Code — die Grundfarbe war damit an neunzig Stellen
+// dupliziert, und `C.primary` zu aendern haette nichts davon erreicht.
+//
+// Zwei Rollen, an die sich neue Stellen halten sollen:
+//   Flaeche  0.10 – 0.12   der getoente Hintergrund
+//   Rand     0.30 – 0.35   die Kante darum
+// Alles darueber (Hover, Vollton) ausdruecklich hinschreiben.
+// ─────────────────────────────────────────────────────────────────────────────────
+
+/** `alpha(C.primary, 0.12)` → `rgba(253,161,36,0.12)`. Nimmt #rgb und #rrggbb. */
+export function alpha(farbe: string, a: number): string {
+  const h = farbe.replace("#", "");
+  const voll = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+  const n = parseInt(voll, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** Die zwei Standardrollen auf einmal — deckt den Normalfall ohne Zahlen ab. */
+export function akzent(farbe: string) {
+  return {
+    flaeche: alpha(farbe, 0.12),
+    rand:    alpha(farbe, 0.32),
+    text:    farbe,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -158,18 +191,38 @@ export const radius = {
 // Typography
 // ─────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Die Groessen, die die App wirklich benutzt.
+ *
+ * Der Block stand hier vorher mit einer erfundenen Skala (10/12/14/16/18/24/30)
+ * und wurde von keiner einzigen Stelle importiert — waehrend im Code 18
+ * verschiedene Groessen standen, darunter 8 px und 9 px. Ausgerechnet 11, die
+ * haeufigste Groesse der App, fehlte in der Liste.
+ *
+ * Jetzt steht hier, was gilt. Geschrieben wird weiter als Zahl (`fontSize: 11`)
+ * — 470 Stellen auf `typography.klein` umzuhaengen kostet Aufwand und aendert
+ * kein Pixel. Der Wert dieser Liste ist die Regel, nicht die Umleitung:
+ *
+ *   10   Beschriftungen in Grossbuchstaben, Zaehler
+ *   11   Bedienelemente, Tabellenzellen — der Standardfall
+ *   12   Fliesstext, Eingabefelder
+ *   13   Dialogtext
+ *   14   Kartenueberschriften
+ *   20   Zahlen, die fuer sich stehen (Kennzahlen, Beat-Titel)
+ *   30+  nur das Dashboard, fuer die eine grosse Zahl
+ *
+ * Alles darunter ist auf einem dunklen Hintergrund nicht mehr lesbar.
+ */
 export const typography = {
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
   fontMono:   "Consolas, Monaco, 'Courier New', monospace",
-  
-  // Font Sizes
-  xs:   10,
-  sm:   12,
-  base: 14,
-  lg:   16,
-  xl:   18,
-  xxl:  24,
-  hero: 30,
+
+  label:   10,
+  control: 11,
+  body:    12,
+  dialog:  13,
+  heading: 14,
+  display: 20,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -226,7 +279,7 @@ export const commonStyles = {
 
   // Label Base
   label: {
-    fontSize: typography.xs,
+    fontSize: typography.label,
     fontWeight: 700,
     textTransform: "uppercase" as const,
     letterSpacing: "0.15em",

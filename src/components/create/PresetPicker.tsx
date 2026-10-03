@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Bookmark, ChevronDown, X, Youtube, Music2 } from "lucide-react";
-import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
@@ -51,7 +51,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
           padding: "9px 12px",
           background: C.primary + "10",
           border: `1px solid ${C.primary}40`,
-          borderRadius: 8,
+          borderRadius: radius.control,
         }}>
           <Bookmark size={12} color={C.primary} strokeWidth={2} />
           <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -76,7 +76,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
             padding: "9px 12px",
             background: C.surfaceContainerLowest,
             border: `1px solid ${open ? C.primary + "50" : C.border20}`,
-            borderRadius: 8,
+            borderRadius: radius.control,
             cursor: "pointer",
             fontSize: 12, color: C.onSurfaceVariant,
           }}
@@ -96,7 +96,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
           marginTop: 4,
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
           zIndex: 15,
           maxHeight: 260,

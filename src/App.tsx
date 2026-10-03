@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import { SIDEBAR_WIDTH } from "./lib/constants";
+import { C } from "./lib/theme";
 import { api } from "./lib/api";
 import { useFocusRefresh } from "./hooks/useFocusRefresh";
 import type { StudioStatusCounts } from "./types/studio";
@@ -20,6 +21,7 @@ import { AudioPlayerProvider } from "./contexts/AudioPlayerContext";
 import { GlobalAudioPlayer, PLAYER_HEIGHT } from "./components/GlobalAudioPlayer";
 import { useAudioPlayerContext } from "./contexts/AudioPlayerContext";
 import { TagManagerProvider, useTagManager } from "./contexts/TagManagerContext";
+import { DialogProvider } from "./contexts/DialogContext";
 import { AllTagsModal } from "./components/create/dialogs/AllTagsModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -98,7 +100,7 @@ function AppContent() {
   const playerVisible = !!currentBeat;
 
   return (
-    <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "#0e0e0e" }}>
+    <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: C.background }}>
       <Sidebar beatCount={beatCount} studioCounts={studioCounts} />
       <main style={{
         marginLeft: SIDEBAR_WIDTH,
@@ -118,13 +120,18 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <SettingsProvider>
-        <AudioPlayerProvider>
-          <TagManagerProvider>
-            <AppContent />
-          </TagManagerProvider>
-        </AudioPlayerProvider>
-      </SettingsProvider>
+      {/* DialogProvider ganz aussen: auch der SettingsProvider muss melden
+          koennen, wenn ein Wert nicht in die Datenbank kam. Er selbst haengt
+          an nichts weiter als Modal und Button. */}
+      <DialogProvider>
+        <SettingsProvider>
+          <AudioPlayerProvider>
+            <TagManagerProvider>
+              <AppContent />
+            </TagManagerProvider>
+          </AudioPlayerProvider>
+        </SettingsProvider>
+      </DialogProvider>
     </BrowserRouter>
   );
 }

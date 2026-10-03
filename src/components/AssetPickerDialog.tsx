@@ -9,10 +9,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, Search, Loader2, Image as ImageIcon, Film,
+  Search, Loader2, Image as ImageIcon, Film,
 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { C } from "../lib/theme";
+import { C, radius, alpha } from "../lib/theme";
+import { Modal, Button } from "./ui";
 import { api } from "../lib/api";
 import type { AssetFile } from "../types/studio";
 
@@ -62,7 +63,7 @@ export function AssetPickerDialog({
 
   const scan = useCallback(async () => {
     if (!assetRoot.trim()) {
-      setError("Kein Asset-Pfad gesetzt — in den Settings unter 'Asset Path' den Export-Ordner wählen.");
+      setError("Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner wählen.");
       return;
     }
     setIsLoading(true);
@@ -77,13 +78,6 @@ export function AssetPickerDialog({
   }, [assetRoot]);
 
   useEffect(() => { scan(); }, [scan]);
-
-  // Escape schließt
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const visible = assets.filter(a => {
     if (!matchesSlot(a, slot)) return false;
@@ -108,104 +102,70 @@ export function AssetPickerDialog({
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 110,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: C.surfaceContainerHigh,
-          borderRadius: 16,
-          width: 720, maxWidth: "92vw",
-          maxHeight: "86vh",
-          display: "flex", flexDirection: "column",
-          border: `1px solid ${C.border20}`,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-        }}
-      >
-        {/* Header */}
+    <Modal
+      icon={slot === "video" ? Film : ImageIcon}
+      title={title}
+      subtitle={`→ ${targetDir.split(/[/\\]/).filter(Boolean).pop()}`}
+      onClose={onClose}
+      width={720}
+      footerLeft={
         <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "16px 20px",
-          borderBottom: `1px solid ${C.border10}`,
+          display: "flex", alignItems: "center", gap: 8,
+          background: C.surfaceContainer,
+          border: `1px solid ${C.border15}`,
+          borderRadius: radius.control, padding: "6px 10px", width: 220,
         }}>
-          {slot === "video"
-            ? <Film size={15} color={C.primary} strokeWidth={2} />
-            : <ImageIcon size={15} color={C.primary} strokeWidth={2} />}
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.onSurface }}>{title}</span>
-          <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
-            → {targetDir.split(/[/\\]/).filter(Boolean).pop()}
-          </span>
-          <div style={{ flex: 1 }} />
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            background: C.surfaceContainerLowest,
-            border: `1px solid ${C.border15}`,
-            borderRadius: 8, padding: "6px 10px", width: 200,
-          }}>
-            <Search size={12} color={C.onSecondaryFixedVar} />
-            <input
-              autoFocus
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Datei suchen …"
-              style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.onSurface, fontSize: 12 }}
-            />
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: C.onSurfaceVariant, display: "flex", padding: 4 }}
-          >
-            <X size={16} />
-          </button>
+          <Search size={12} color={C.onSecondaryFixedVar} />
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Datei suchen …"
+            style={{
+              flex: 1, background: "transparent", border: "none", outline: "none",
+              color: C.onSurface, fontSize: 12, fontFamily: "inherit",
+            }}
+          />
         </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-          {error && (
-            <div style={{
-              padding: "12px 14px", borderRadius: 8, marginBottom: 14,
-              background: "rgba(229,72,77,0.10)", border: "1px solid rgba(229,72,77,0.35)",
-              fontSize: 12, color: "#e5484d",
-            }}>
-              {error}
-            </div>
-          )}
-
-          {isLoading && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 40, fontSize: 12, color: C.onSurfaceVariant }}>
-              <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Inbox wird gelesen…
-            </div>
-          )}
-
-          {!isLoading && !error && visible.length === 0 && (
-            <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6 }}>
-              {query.trim() ? "Keine Datei passt zur Suche." : meta.empty}
-            </div>
-          )}
-
-          {visible.length > 0 && (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: slot === "cover"
-                ? "repeat(auto-fill, minmax(150px, 1fr))"
-                : "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: 12,
-            }}>
-              {visible.map(a => (
-                <FileCard key={a.path} asset={a} aspect={meta.aspect} busy={busy} onAssign={() => assign(a)} />
-              ))}
-            </div>
-          )}
+      }
+      footer={<Button variant="secondary" onClick={onClose}>Schließen</Button>}
+    >
+      {error && (
+        <div style={{
+          padding: "12px 14px", borderRadius: radius.control,
+          background: alpha(C.error, 0.10), border: `1px solid ${alpha(C.error, 0.35)}`,
+          fontSize: 12, color: C.error,
+        }}>
+          {error}
         </div>
-      </div>
-    </div>
+      )}
+
+      {isLoading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 40, fontSize: 12, color: C.onSurfaceVariant }}>
+          <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Inbox wird gelesen…
+        </div>
+      )}
+
+      {!isLoading && !error && visible.length === 0 && (
+        <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6 }}>
+          {query.trim() ? "Keine Datei passt zur Suche." : meta.empty}
+        </div>
+      )}
+
+      {visible.length > 0 && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: slot === "cover"
+            ? "repeat(auto-fill, minmax(150px, 1fr))"
+            : "repeat(auto-fill, minmax(220px, 1fr))",
+          gap: 12,
+        }}>
+          {visible.map(a => (
+            <FileCard key={a.path} asset={a} aspect={meta.aspect} busy={busy} onAssign={() => assign(a)} />
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -223,9 +183,9 @@ function FileCard({ asset, aspect, busy, onAssign }: {
       disabled={busy}
       title={asset.name}
       style={{
-        background: C.surfaceContainerLowest,
+        background: C.surfaceContainerHighest,
         border: `1px solid ${C.border15}`,
-        borderRadius: 10,
+        borderRadius: radius.card,
         overflow: "hidden",
         cursor: busy ? "wait" : "pointer",
         padding: 0, textAlign: "left",
@@ -242,7 +202,7 @@ function FileCard({ asset, aspect, busy, onAssign }: {
       }}>
         {asset.kind === "image"
           ? <AssetImage path={asset.path} />
-          : <Film size={26} color={C.onSecondaryFixedVar} strokeWidth={1.25} />
+          : <AssetVideo path={asset.path} />
         }
       </div>
       <div style={{
@@ -256,9 +216,10 @@ function FileCard({ asset, aspect, busy, onAssign }: {
   );
 }
 
-/** Image via asset protocol, base64 fallback; whole image visible (contain).
+/** Image via asset protocol, base64 fallback. Standard: ganz sichtbar
+ *  (contain) — zum Aussuchen. Die Slots füllen randlos (cover).
  *  Auch von der Studio-Inbox genutzt. */
-export function AssetImage({ path }: { path: string }) {
+export function AssetImage({ path, fit = "contain" }: { path: string; fit?: "contain" | "cover" }) {
   const [src, setSrc] = useState<string>(() => convertFileSrc(path.replace(/\\/g, "/")));
   const [failed, setFailed] = useState(false);
   const triedBase64 = useRef(false);
@@ -283,7 +244,27 @@ export function AssetImage({ path }: { path: string }) {
       alt=""
       loading="lazy"
       decoding="async"
-      style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+      style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+    />
+  );
+}
+
+/** Erstes Bild eines Videos statt eines Film-Symbols. Lädt nur die Metadaten;
+ *  `#t=1` springt hinter das Schwarzbild, mit dem viele Videos anfangen. Kann der
+ *  WebView das Format nicht (manche .mov), bleibt das Symbol. */
+export function AssetVideo({ path, fit = "contain" }: { path: string; fit?: "contain" | "cover" }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <Film size={26} color={C.onSecondaryFixedVar} strokeWidth={1.25} />;
+  }
+  return (
+    <video
+      src={`${convertFileSrc(path.replace(/\\/g, "/"))}#t=1`}
+      preload="metadata"
+      muted
+      playsInline
+      onError={() => setFailed(true)}
+      style={{ width: "100%", height: "100%", objectFit: fit, display: "block", pointerEvents: "none" }}
     />
   );
 }

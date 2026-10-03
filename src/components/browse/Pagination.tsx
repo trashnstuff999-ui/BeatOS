@@ -4,8 +4,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
+import { Select } from "../ui";
 import type { PaginationState } from "../../types/browse";
+
+const PAGE_SIZES = [
+  { value: 25, label: "25" },
+  { value: 50, label: "50" },
+  { value: 100, label: "100" },
+];
 
 interface PaginationProps {
   pagination: PaginationState;
@@ -26,7 +33,7 @@ export function Pagination({ pagination, totalPages, onPageChange, onPageSizeCha
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 4,
+    borderRadius: radius.control,
     border: "none",
     cursor: "pointer",
     transition: "all 0.15s",
@@ -35,7 +42,7 @@ export function Pagination({ pagination, totalPages, onPageChange, onPageSizeCha
   const activeStyle: React.CSSProperties = {
     ...buttonStyle,
     background: C.primary,
-    color: "#4e2d00",
+    color: C.onPrimary,
   };
 
   const inactiveStyle: React.CSSProperties = {
@@ -152,25 +159,16 @@ export function Pagination({ pagination, totalPages, onPageChange, onPageSizeCha
 
       {/* Right: Page Size */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: C.onSurfaceVariant }}>Per page:</span>
-        <select
+        <span style={{ fontSize: 11, color: C.onSurfaceVariant }}>Pro Seite:</span>
+        <Select
           value={pageSize}
-          onChange={e => onPageSizeChange(Number(e.target.value))}
-          style={{
-            background: C.surfaceContainerHigh,
-            border: `1px solid ${C.border10}`,
-            borderRadius: 4,
-            padding: "4px 8px",
-            fontSize: 11,
-            color: C.onSurface,
-            cursor: "pointer",
-            outline: "none",
-          }}
-        >
-          <option value={25}>25</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
+          options={PAGE_SIZES}
+          onChange={onPageSizeChange}
+          title="Beats pro Seite"
+          drop="up"
+          align="right"
+          triggerStyle={{ padding: "5px 9px" }}
+        />
       </div>
     </div>
   );

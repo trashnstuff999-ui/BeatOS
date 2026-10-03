@@ -3,13 +3,14 @@
 // Chip-based list editor for the Type-Beat fields.
 // Renders values as removable chips with a visible separator badge between
 // them ("x" for artists, "|" for genres) so the serialized output format is
-// obvious. Enter/comma commits the draft, Backspace on an empty input pops
-// the last chip, "+" gives a clickable affordance.
+// obvious. Enter commits the draft, Backspace on an empty input pops the last
+// chip, "+" gives a clickable affordance. Das Komma schliesst NICHT ab — es
+// gehoert mitten in Namen wie "nothing,nowhere".
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { verschiebe } from "../../lib/typeBeat";
 
 interface ChipListEditorProps {
@@ -119,7 +120,7 @@ export function ChipListEditor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter") {
       e.preventDefault();
       commitDraft();
     } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
@@ -166,7 +167,7 @@ export function ChipListEditor({
           // Gruppen nicht wieder als Kaesten lesen.
           background: focused ? C.surfaceContainer : "transparent",
           border: `1px solid ${focused ? C.primary + "60" : "transparent"}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           cursor: "text",
           transition: "border-color 0.15s, background 0.15s",
           boxSizing: "border-box",
@@ -201,7 +202,7 @@ export function ChipListEditor({
                 display: "inline-flex", alignItems: "center", gap: 5,
                 padding: "4px 8px 4px 10px",
                 background: gezogen === i ? C.surfaceContainerHighest : C.surfaceContainerHigh,
-                borderRadius: 9999,
+                borderRadius: radius.full,
                 fontSize: 12, fontWeight: 600,
                 color: C.onSurface,
                 lineHeight: 1.2,
@@ -254,7 +255,7 @@ export function ChipListEditor({
           title="Hinzufügen (oder Enter)"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+            width: 24, height: 24, borderRadius: radius.control, flexShrink: 0,
             background: draft.trim() ? C.primary + "20" : "transparent",
             border: `1px solid ${draft.trim() ? C.primary + "50" : C.border20}`,
             color: draft.trim() ? C.primary : C.onSecondaryFixedVar,

@@ -36,6 +36,14 @@ export function projectDisplayName(p: StudioProject): string {
   return p.song_name?.trim() || p.parsed_name || p.name;
 }
 
+/** Der Name, unter dem der Export gespeichert gehört: „TITEL [Am 140]" — genau
+ *  die Schreibweise, die parse_audio_filename später wieder auseinandernimmt. */
+export function projectExportName(p: StudioProject): string {
+  const keyBpm = [p.key, p.bpm].filter(x => x != null && x !== "").join(" ");
+  const title = projectDisplayName(p);
+  return keyBpm ? `${title} [${keyBpm}]` : title;
+}
+
 /** Ordnername als Sekundär-Info — null, wenn er nichts Neues sagt. */
 export function projectFolderLabel(p: StudioProject): string | null {
   const song = p.song_name?.trim();

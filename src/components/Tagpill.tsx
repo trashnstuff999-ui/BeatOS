@@ -5,7 +5,7 @@
 
 import { X, Music, Sparkles, Piano, Star } from "lucide-react";
 import { getTagColors, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
-import { C } from "../lib/theme";
+import { C, radius } from "../lib/theme";
 
 // ─────────────────────────────────────────────────────────────────────────────────
 // Category Icons
@@ -53,14 +53,23 @@ export function TagPill({
 
   const s = sizeStyles[size];
 
+  // Anklickbare Pillen sind echte Knoepfe — sonst filtert man nur mit der Maus.
+  // Eine Pille mit Entfernen-Kreuz traegt selbst schon einen Knopf und bleibt
+  // deshalb ein <span>: verschachtelte Buttons sind ungueltig, und dort ist die
+  // Pille ohnehin nicht zum Anklicken gedacht.
+  const klickbar = interactive && !!onClick && !(removable && onRemove);
+  const Element = klickbar ? "button" : "span";
+
   return (
-    <span
-      onClick={interactive && onClick ? () => onClick(tag) : undefined}
+    <Element
+      type={klickbar ? "button" : undefined}
+      onClick={klickbar ? () => onClick!(tag) : undefined}
       style={{
+        font: "inherit",
         padding: s.padding,
         background: colors.bg,
         border: `1px solid ${colors.border}`,
-        borderRadius: 9999,
+        borderRadius: radius.full,
         fontSize: s.fontSize,
         fontWeight: 600,
         color: colors.text,
@@ -116,7 +125,7 @@ export function TagPill({
           <X size={s.iconSize} />
         </button>
       )}
-    </span>
+    </Element>
   );
 }
 
@@ -140,7 +149,7 @@ export function QuickAddButton({ tag, category, onAdd }: QuickAddButtonProps) {
         padding: "7px 14px",
         background: "transparent",
         border: `1px solid ${colors.border}`,
-        borderRadius: 9999,
+        borderRadius: radius.full,
         fontSize: 12,
         fontWeight: 600,
         color: colors.text,
@@ -286,14 +295,18 @@ import { STATUS_CONFIG, normalizeStatus } from "../lib/theme";
 export interface StatusPillProps {
   status: string;
   size?: "sm" | "md";
+  /** Auf einem Cover statt auf einer Flaeche: der Untergrund ist ein Foto,
+   *  die halbtransparente Statusfarbe traegt dort nicht. Dunkle Scheibe
+   *  statt Farbflaeche — Schrift und Rand bleiben, wie sie sind. */
+  aufBild?: boolean;
 }
 
-export function StatusPill({ status, size = "md" }: StatusPillProps) {
+export function StatusPill({ status, size = "md", aufBild = false }: StatusPillProps) {
   const key = normalizeStatus(status);
   const cfg = STATUS_CONFIG[key];
 
   const sizeStyles = {
-    sm: { padding: "2px 8px", fontSize: 8 },
+    sm: { padding: "2px 8px", fontSize: 10 },
     md: { padding: "3px 10px", fontSize: 10 },
   };
 
@@ -303,12 +316,13 @@ export function StatusPill({ status, size = "md" }: StatusPillProps) {
     <span
       style={{
         padding: s.padding,
-        borderRadius: 4,
+        borderRadius: radius.control,
         fontSize: s.fontSize,
         fontWeight: 800,
         textTransform: "uppercase",
         letterSpacing: "0.05em",
-        background: cfg.bg,
+        background: aufBild ? "rgba(0,0,0,0.62)" : cfg.bg,
+        backdropFilter: aufBild ? "blur(4px)" : undefined,
         color: cfg.color,
         border: `1px solid ${cfg.border}`,
       }}

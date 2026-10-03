@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, LibraryBig, PlusSquare, Music, Upload as UploadIcon, Settings, HelpCircle, Pin, PinOff } from "lucide-react";
+import { LayoutGrid, LibraryBig, Music, Upload as UploadIcon, Settings, HelpCircle, Pin, PinOff } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { C, STUDIO_STATUS_CONFIG } from "../lib/theme";
+import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 import type { StudioStatusCounts } from "../types/studio";
 
@@ -15,7 +15,6 @@ import type { StudioStatusCounts } from "../types/studio";
 const NAV = [
   { to: "/",       icon: LayoutGrid,  label: "Übersicht"  },
   { to: "/browse", icon: LibraryBig,  label: "Archiv"     },
-  { to: "/create", icon: PlusSquare,  label: "Neuer Beat" },
   { to: "/upload", icon: UploadIcon,  label: "Upload"     },
   { to: "/studio", icon: Music,       label: "Studio"     },
 ];
@@ -48,7 +47,9 @@ export default function Sidebar({ beatCount, studioCounts }: {
   };
 
   return (
-    <aside style={{
+    // data-app-flaeche: ein Klick hierhin heisst „ich bin woanders" — offene
+    // Detailpanels schliessen sich daraufhin (siehe Browse.tsx).
+    <aside data-app-flaeche style={{
       position: "fixed", left: 0, top: 0,
       height: "100vh", width: SIDEBAR_WIDTH,
       // Eine Stufe ueber dem Inhalt (#1a1919 statt #131313 auf #0e0e0e). Vorher
@@ -64,12 +65,12 @@ export default function Sidebar({ beatCount, studioCounts }: {
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 8px", marginBottom: 24 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 8,
+          width: 40, height: 40, borderRadius: radius.control,
           background: C.surfaceContainerHigh,
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "inset 0 0 10px rgba(253,161,36,0.1)",
+          boxShadow: `inset 0 0 10px ${alpha(C.primary, 0.1)}`,
         }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fda124">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill={C.primary}>
             <rect x="2" y="10" width="3" height="10" rx="1"/>
             <rect x="7" y="6" width="3" height="14" rx="1"/>
             <rect x="12" y="3" width="3" height="17" rx="1"/>
@@ -84,24 +85,32 @@ export default function Sidebar({ beatCount, studioCounts }: {
       {/* Main nav */}
       <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
         {NAV.map(({ to, icon: Icon, label }) => {
-          const isActive = to === "/" ? location.pathname === "/" : location.pathname === to;
+          // „Neuer Beat“ ist ein Schritt im Studio, kein eigener Tab — dort bleibt
+          // das Studio markiert, damit man weiss, wo man ist.
+          const isActive = location.pathname === to
+            || (to === "/studio" && location.pathname === "/create");
           return (
-            <div
+            <button
               key={to}
               onClick={() => handleNavClick(to)}
+              // aria-current: Vorlesehilfen sagen damit „aktuelle Seite" —
+              // die Amber-Faerbung allein sagt das nur, wer sie sieht.
+              aria-current={isActive ? "page" : undefined}
               style={{
                 display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 16px", borderRadius: 6,
+                padding: "12px 16px", borderRadius: radius.control,
                 fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em",
+                fontFamily: "inherit", textAlign: "left", width: "100%",
+                border: "none",
                 color: isActive ? C.primary : C.onSurfaceVariant,
                 background: isActive ? C.surfaceContainerHigh : "transparent",
-                boxShadow: isActive ? "0 0 8px rgba(248,157,31,0.2)" : "none",
+                boxShadow: isActive ? `0 0 8px ${alpha(C.primary, 0.2)}` : "none",
                 cursor: "pointer", transition: "all 0.15s",
                 userSelect: "none",
               }}
               onMouseEnter={e => {
                 if (!isActive) {
-                  e.currentTarget.style.color = "#ffffff";
+                  e.currentTarget.style.color = C.onSurface;
                   e.currentTarget.style.background = C.surfaceContainerHigh;
                 }
               }}
@@ -123,7 +132,7 @@ export default function Sidebar({ beatCount, studioCounts }: {
                   <CountPill status="wip" value={studioCounts.wip} />
                 </span>
               )}
-            </div>
+            </button>
           );
         })}
       </nav>
@@ -167,12 +176,15 @@ function BottomRow({ icon: Icon, label, active = false, onClick }: {
 }) {
   const idle = active ? C.primary : C.onSurfaceVariant;
   return (
-    <div
+    <button
       onClick={onClick}
+      aria-pressed={active || undefined}
       style={{
         display: "flex", alignItems: "center", gap: 12,
-        padding: "12px 16px", borderRadius: 6,
+        padding: "12px 16px", borderRadius: radius.control,
         fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em",
+        fontFamily: "inherit", textAlign: "left", width: "100%",
+        border: "none",
         color: idle,
         background: active ? C.surfaceContainerHigh : "transparent",
         cursor: "pointer", transition: "all 0.15s",
@@ -189,7 +201,7 @@ function BottomRow({ icon: Icon, label, active = false, onClick }: {
     >
       <Icon size={18} strokeWidth={1.5} />
       {label}
-    </div>
+    </button>
   );
 }
 
@@ -204,7 +216,7 @@ function CountPill({ status, value }: { status: "ready" | "wip"; value: number }
     <span
       title={`${value} ${value === 1 ? "Projekt" : "Projekte"} auf „${m.label}“`}
       style={{
-        padding: "1px 7px", borderRadius: 9999,
+        padding: "1px 7px", borderRadius: radius.full,
         background: m.bg, color: m.color,
         fontSize: 10, fontWeight: 700,
       }}

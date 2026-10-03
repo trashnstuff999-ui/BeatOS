@@ -32,6 +32,8 @@ export interface AssetCheck {
   mp3: string | null;
   wav: string | null;
   flp: string | null;
+  /** Voller Pfad zur FLP (master vor neuester) — für „In FL öffnen". */
+  flp_path: string | null;
   cover: string | null;
   thumbnail: string | null;
   video: string | null;

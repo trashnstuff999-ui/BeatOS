@@ -21,8 +21,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Users } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { Select } from "../ui";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
 import type { BeatSampleCredit, SampleProducer } from "../../types/sampleCredits";
@@ -112,7 +113,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
   const feld: React.CSSProperties = {
     width: "100%",
     padding: "8px 10px",
-    borderRadius: 7,
+    borderRadius: radius.control,
     background: C.surfaceContainerHighest,
     border: `1px solid ${C.border20}`,
     color: C.onSurface,
@@ -162,18 +163,15 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
           {/* „No Samples Used" statt „— niemand —": das Feld zeigt damit
               direkt, was in der Beschreibung stehen wird, und der Erklärsatz
               darunter wird überflüssig. */}
-          <select
+          <Select
             value={credit ? String(credit.producer_id) : KEINER}
-            onChange={e => waehle(e.target.value)}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; }}
-            style={{ ...feld, cursor: "pointer", transition: "border-color 0.15s" }}
-          >
-            <option value={KEINER}>No Samples Used</option>
-            {producers.map(p => (
-              <option key={p.id} value={String(p.id)}>{p.name}</option>
-            ))}
-          </select>
+            onChange={waehle}
+            options={[
+              { value: KEINER, label: "No Samples Used" },
+              ...producers.map(p => ({ value: String(p.id), label: p.name })),
+            ]}
+            triggerStyle={{ ...feld, display: "flex" }}
+          />
         </div>
 
         {credit && (

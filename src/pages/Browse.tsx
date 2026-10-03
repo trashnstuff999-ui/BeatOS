@@ -6,7 +6,7 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Loader2, AlertCircle, LayoutGrid, List, Shuffle, RotateCcw, LibraryBig } from "lucide-react";
-import { C } from "../lib/theme";
+import { C, alpha, radius } from "../lib/theme";
 import { BROWSE_PANEL_WIDTH } from "../lib/constants";
 import { useBeats } from "../hooks/useBeats";
 import { DEFAULT_FILTERS, type FilterState } from "../types/browse";
@@ -15,22 +15,40 @@ import {
   FilterBar,
   BeatTable,
   DetailPanel,
-  EditBeatModal,
   Pagination,
   MigrateArchiveDialog,
   type AngleichModus,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
-import { PageBody, EmptyState, Button } from "../components/ui";
-import type { Beat, UpdateBeatParams, SortColumn } from "../types/browse";
+import { PageBody, EmptyState, Button, Select } from "../components/ui";
+import type { Beat, SortColumn } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { useSettings } from "../contexts/SettingsContext";
+import { useKlickDaneben } from "../hooks/useKlickDaneben";
 import { useTagManager } from "../contexts/TagManagerContext";
+
+
+const SORT_OPTIONS = [
+  { value: "created_date:desc", label: "Datum — neueste zuerst" },
+  { value: "created_date:asc", label: "Datum — älteste zuerst" },
+  { value: "id:desc", label: "Zuletzt archiviert" },
+  { value: "id:asc", label: "Zuerst archiviert" },
+  { value: "name:asc", label: "Titel A–Z" },
+  { value: "bpm:asc", label: "Tempo aufsteigend" },
+  { value: "bpm:desc", label: "Tempo absteigend" },
+  { value: "key:asc", label: "Tonart" },
+  { value: "status:asc", label: "Status" },
+];
 
 export default function Browse() {
   const location = useLocation();
   const navigate = useNavigate();
-  const initialFilters = (location.state as { initialFilters?: Partial<FilterState> } | null)?.initialFilters;
+  const navState = location.state as {
+    initialFilters?: Partial<FilterState>;
+    /** Beat, der nach dem Laden gleich ausgewaehlt sein soll (Deep-Link). */
+    initialBeatId?: string;
+  } | null;
+  const initialFilters = navState?.initialFilters;
 
   // ─── Data & Actions from Hook ──────────────────────────────────────────────
   const {
@@ -65,8 +83,6 @@ export default function Browse() {
   const { settings } = useSettings();
   const { isOpen: tagManagerOpen } = useTagManager();
 
-  // ─── Edit Modal State ──────────────────────────────────────────────────────
-  const [editModalBeat, setEditModalBeat] = useState<Beat | null>(null);
   const [angleich, setAngleich] = useState<AngleichModus | null>(null);
 
   // ─── View Mode: Tabelle ⇄ Cover-Grid (persistiert) ─────────────────────────
@@ -99,6 +115,22 @@ export default function Browse() {
     selectBeat(beat);
   }, [selectBeat]);
 
+  // Klick daneben — ins Archiv oder in die Seitenleiste — schliesst das Panel.
+  // Die Regel steht im Hook.
+  useKlickDaneben(!!selectedBeat, () => selectBeat(null));
+
+  // Deep-Link mit Beat: aus der Uebersicht heisst der Knopf „Im Archiv oeffnen"
+  // — er filterte aber nur nach dem Namen und liess das Detailpanel zu. Jetzt
+  // ist der Beat auch wirklich ausgewaehlt, sobald die Liste da ist.
+  const beatGewaehlt = useRef(false);
+  useEffect(() => {
+    if (beatGewaehlt.current || !navState?.initialBeatId) return;
+    const treffer = beats.find(b => b.id === navState.initialBeatId);
+    if (!treffer) return;
+    beatGewaehlt.current = true;
+    selectBeat(treffer);
+  }, [beats, navState?.initialBeatId, selectBeat]);
+
   const handlePlayBeat = useCallback((beat: Beat) => {
     // Sofort starten, Queue kommt gleich nach — sonst wartet der Klick auf die
     // Abfrage der vollen Trefferliste.
@@ -116,19 +148,6 @@ export default function Browse() {
     selectBeat(random);
   }, [getFilteredBeats, setQueue, playBeat, getCoverUrl, selectBeat]);
 
-  const handleOpenEditModal = useCallback((beat: Beat) => {
-    setEditModalBeat(beat);
-  }, []);
-
-  const handleCloseEditModal = useCallback(() => {
-    setEditModalBeat(null);
-  }, []);
-
-  const handleSaveFromModal = useCallback(async (params: UpdateBeatParams) => {
-    await updateBeat(params);
-    setEditModalBeat(null);
-  }, [updateBeat]);
-
   // ─── Tastatur: Escape schliesst, Pfeile waehlen, Leertaste spielt ─────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -136,7 +155,7 @@ export default function Browse() {
       // — die haben eigene Tastenbelegungen.
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (editModalBeat || tagManagerOpen) return;
+      if (tagManagerOpen) return;
 
       if (e.key === "Escape") {
         selectBeat(null);
@@ -144,6 +163,9 @@ export default function Browse() {
       }
 
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        // Mit Shift regelt der Player die Lautstaerke — dann nicht auch noch
+        // die Auswahl verschieben.
+        if (e.shiftKey) return;
         if (beats.length === 0) return;
         e.preventDefault(); // sonst scrollt die Liste zusaetzlich
         const idx = beats.findIndex(b => b.id === selectedBeat?.id);
@@ -157,14 +179,19 @@ export default function Browse() {
       }
 
       if (e.key === " ") {
+        // Laeuft schon etwas, gehoert die Leertaste dem Player (er horcht
+        // selbst mit) — hier bliebe sonst ein zweites Umschalten, und beides
+        // zusammen hebt sich auf. Hier bleibt nur der Fall „noch nichts
+        // laeuft": dann startet die Auswahl.
+        if (currentBeat) return;
+        if (!selectedBeat) return;
         e.preventDefault(); // sonst springt die Seite eine Bildhoehe weiter
-        if (currentBeat) togglePlay();
-        else if (selectedBeat) handlePlayBeat(selectedBeat);
+        handlePlayBeat(selectedBeat);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [beats, selectedBeat, editModalBeat, tagManagerOpen, selectBeat, currentBeat, togglePlay, handlePlayBeat]);
+  }, [beats, selectedBeat, tagManagerOpen, selectBeat, currentBeat, togglePlay, handlePlayBeat]);
 
   // ─── Der Streifen unter dem Detailpanel zaehlt nicht als sichtbar ─────────
   // Das Panel liegt fix ueber der rechten Seite; scrollIntoView kennt es nicht
@@ -214,7 +241,7 @@ export default function Browse() {
   // Render
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{
+    <div data-app-flaeche style={{
       height: "100%",
       display: "flex",
       flexDirection: "column",
@@ -245,101 +272,87 @@ export default function Browse() {
           derselben Quelle wie auf allen anderen Seiten. */}
       <PageBody ref={scrollRef} width="full">
           {/* Eine Bedienreihe statt zwei. Filter, Ansicht, Sortierung und
-              Zufall standen untereinander und kosteten zwei Reihen Hoehe —
-              also eine Cover-Reihe weniger auf dem Schirm. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <FilterBar
-                filters={filters}
-                onChange={setFilters}
-                onReset={resetFilters}
-                resultCount={pagination.totalCount}
-              />
-            </div>
-
-            {!isInitialLoad && !error && (
-              <>
-                {/* Sortierung — es gab sie bisher nur in der Tabelle. Im
-                    Cover-Raster musste man die Ansicht wechseln, also genau
-                    die verlassen, in der man visuell sucht. */}
-                <select
-                  value={`${sort.column}:${sort.direction}`}
-                  onChange={e => {
-                    const [column, direction] = e.target.value.split(":");
-                    setSort(column as SortColumn, direction as "asc" | "desc");
-                  }}
-                  title="Sortierung"
-                  style={{
-                    padding: "6px 10px", borderRadius: 7,
-                    background: C.surfaceContainer,
-                    border: `1px solid ${C.border15}`,
-                    color: C.onSurfaceVariant,
-                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-                    cursor: "pointer", outline: "none", flexShrink: 0,
-                  }}
-                >
+              Zufall stehen in derselben Kopfzeile fester Hoehe; das
+              Filter-Raster klappt darunter ueber die volle Breite auf. */}
+          {/* Klicks bleiben in der Bedienreihe: hier wird eingestellt, nicht
+              „ins Leere" geklickt — ein Griff daneben soll nicht das Panel
+              zumachen. */}
+          <div onClick={e => e.stopPropagation()}>
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              onReset={resetFilters}
+              resultCount={pagination.totalCount}
+              actions={!isInitialLoad && !error && (
+                <>
+                  {/* Sortierung — es gab sie bisher nur in der Tabelle. Im
+                      Cover-Raster musste man die Ansicht wechseln, also genau
+                      die verlassen, in der man visuell sucht. */}
                   {/* Zwei verschiedene Zeitachsen, und sie laufen auseinander:
                       die Nummer sagt, wann archiviert wurde, das Datum kommt
                       aus der FLP und sagt, wann produziert wurde. Nur die
                       Datums-Sortierung passt zu den Monatsueberschriften. */}
-                  <option value="created_date:desc">Datum — neueste zuerst</option>
-                  <option value="created_date:asc">Datum — älteste zuerst</option>
-                  <option value="id:desc">Zuletzt archiviert</option>
-                  <option value="id:asc">Zuerst archiviert</option>
-                  <option value="name:asc">Titel A–Z</option>
-                  <option value="bpm:asc">Tempo aufsteigend</option>
-                  <option value="bpm:desc">Tempo absteigend</option>
-                  <option value="key:asc">Tonart</option>
-                  <option value="status:asc">Status</option>
-                </select>
+                  <Select
+                    value={`${sort.column}:${sort.direction}`}
+                    options={SORT_OPTIONS}
+                    onChange={v => {
+                      const [column, direction] = v.split(":");
+                      setSort(column as SortColumn, direction as "asc" | "desc");
+                    }}
+                    title="Sortierung"
+                    align="right"
+                    panelWidth={220}
+                    triggerStyle={{ padding: "6px 10px", color: C.onSurfaceVariant }}
+                  />
 
-                <div style={{
-                  display: "flex", gap: 2, flexShrink: 0,
-                  background: "rgba(255,255,255,0.03)",
-                  border: `1px solid ${C.border15}`,
-                  borderRadius: 7, padding: 2,
-                }}>
-                  {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
-                    <button
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
-                      title={label}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 5,
-                        padding: "5px 11px",
-                        background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
-                        border: "none", borderRadius: 5,
-                        cursor: "pointer",
-                        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-                        color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
-                      }}
-                    >
-                      <Icon size={12} strokeWidth={2} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleRandomBeat}
-                  disabled={pagination.totalCount === 0}
-                  title="Zufälligen Beat aus allen Treffern abspielen"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                    padding: "6px 12px", borderRadius: 7,
-                    background: "transparent",
+                  <div style={{
+                    display: "flex", gap: 2, flexShrink: 0,
+                    background: "rgba(255,255,255,0.03)",
                     border: `1px solid ${C.border15}`,
-                    color: C.onSurfaceVariant,
-                    cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
-                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-                    opacity: pagination.totalCount === 0 ? 0.5 : 1,
-                  }}
-                >
-                  <Shuffle size={12} strokeWidth={2} />
-                  Zufall
-                </button>
-              </>
-            )}
+                    borderRadius: radius.control, padding: 2,
+                  }}>
+                    {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
+                      <button
+                        key={mode}
+                        onClick={() => setViewMode(mode)}
+                        title={label}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 5,
+                          padding: "5px 11px",
+                          background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
+                          border: "none", borderRadius: radius.control,
+                          cursor: "pointer",
+                          fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                          color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
+                        }}
+                      >
+                        <Icon size={12} strokeWidth={2} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleRandomBeat}
+                    disabled={pagination.totalCount === 0}
+                    title="Zufälligen Beat aus allen Treffern abspielen"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+                      padding: "6px 12px", borderRadius: radius.control,
+                      background: "transparent",
+                      border: `1px solid ${C.border15}`,
+                      color: C.onSurfaceVariant,
+                      cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
+                      fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                      opacity: pagination.totalCount === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    <Shuffle size={12} strokeWidth={2} />
+                    Zufall
+                  </button>
+                </>
+              )}
+            />
           </div>
 
           {/* Erster Ladevorgang: hier gibt es noch nichts zu zeigen.
@@ -367,15 +380,15 @@ export default function Browse() {
           {error && !isLoading && (
             <div style={{
               padding: 16,
-              borderRadius: 8,
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: radius.control,
+              background: alpha(C.error, 0.1),
+              border: `1px solid ${alpha(C.error, 0.3)}`,
               display: "flex",
               alignItems: "center",
               gap: 12,
             }}>
-              <AlertCircle size={20} color="#ef4444" />
-              <span style={{ color: "#ef4444", fontSize: 13 }}>{error}</span>
+              <AlertCircle size={20} color={C.error} />
+              <span style={{ color: C.error, fontSize: 13 }}>{error}</span>
             </div>
           )}
 
@@ -438,7 +451,7 @@ export default function Browse() {
       </PageBody>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          Detail Panel (Read-Only + Status Toggles)
+          Detailpanel — hier wird der Beat auch bearbeitet
       ═══════════════════════════════════════════════════════════════════════ */}
       {displayBeat && (
         <DetailPanel
@@ -447,7 +460,7 @@ export default function Browse() {
           onClose={() => selectBeat(null)}
           onToggleFavorite={toggleFavorite}
           onUpdateStatus={updateStatus}
-          onOpenEditModal={handleOpenEditModal}
+          onSaveBeat={updateBeat}
           preloadedCoverUrl={selectedBeat ? getCoverUrl(selectedBeat.id) : null}
           onUpdateTags={async (beatId, tags) => {
             await updateBeat({ id: beatId, tags: tags.join(", ") });
@@ -461,18 +474,6 @@ export default function Browse() {
             }
             await deleteBeat(b.id, settings.archivePath);
           }}
-        />
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Edit Modal
-      ═══════════════════════════════════════════════════════════════════════ */}
-      {editModalBeat && (
-        <EditBeatModal
-          beat={editModalBeat}
-          isOpen={true}
-          onClose={handleCloseEditModal}
-          onSave={handleSaveFromModal}
         />
       )}
 
@@ -497,7 +498,7 @@ function BrowseEmptyState({ hasFilters, onReset }: { hasFilters: boolean; onRese
     <EmptyState
       icon={LibraryBig}
       title={hasFilters ? "Keine Beats passen zu diesen Filtern." : "Noch keine Beats im Archiv."}
-      description={hasFilters ? undefined : "Lege unter „Neuer Beat“ deinen ersten Beat an."}
+      description={hasFilters ? undefined : "Archiviere im Studio deinen ersten Beat."}
       action={hasFilters && (
         <Button variant="secondary" size="sm" icon={RotateCcw} onClick={onReset}>
           Filter zurücksetzen

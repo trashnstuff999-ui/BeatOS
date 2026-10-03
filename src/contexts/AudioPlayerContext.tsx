@@ -15,6 +15,28 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
+/** Welcher Eintrag der Warteschlange ist der naechste?
+ *
+ *  Zwei Aufrufer mit einem Unterschied: der Skip-Knopf laeuft am Listenende
+ *  vorn weiter (umbruch), der Uebergang am Ende eines Beats nicht — von
+ *  selbst endlos durchs Archiv zu laufen will niemand.
+ *
+ *  Steht der laufende Beat gar nicht mehr in der Liste (Filter gewechselt),
+ *  faengt der Skip-Knopf vorn an; automatisch passiert dann nichts. */
+export function naechsterEintrag<T extends { path: string | null }>(
+  queue: T[],
+  aktuellerPfad: string | null,
+  versatz: number,
+  umbruch: boolean,
+): T | null {
+  if (queue.length === 0) return null;
+  const idx = queue.findIndex(b => b.path === aktuellerPfad);
+  if (idx < 0) return umbruch ? queue[0] ?? null : null;
+  const ziel = idx + versatz;
+  if (!umbruch) return queue[ziel] ?? null;
+  return queue[((ziel % queue.length) + queue.length) % queue.length] ?? null;
+}
+
 function pathToAssetUrl(filePath: string): string {
   return convertFileSrc(filePath.replace(/\\/g, "/"));
 }
@@ -58,6 +80,8 @@ const AudioProgressContext = createContext<AudioProgressContextValue | null>(nul
 
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /** „Spiel den naechsten" — gesetzt, sobald die Warteschlange steht. */
+  const weiterRef = useRef<() => void>(() => {});
   const currentBeatPathRef = useRef<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoopedRef = useRef(false);
@@ -69,7 +93,15 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(0.7);
+  // Die Lautstaerke ueberlebt den Neustart. Sie jedes Mal auf 70% zu stellen
+  // ist bei einer App, die neben FL Studio laeuft, jedes Mal ein Schreck.
+  const [volume, setVolumeState] = useState(() => {
+    try {
+      const gespeichert = Number(localStorage.getItem("beatos_lautstaerke"));
+      if (Number.isFinite(gespeichert) && gespeichert >= 0 && gespeichert <= 1) return gespeichert;
+    } catch { /* privater Modus, gesperrter Speicher — dann eben der Standard */ }
+    return 0.7;
+  });
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,12 +164,36 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     audio.loop = isLoopedRef.current;
     audio.muted = isMuted;
 
-    const onMeta = () => { setDuration(audio.duration); setIsLoading(false); setError(null); };
-    const onEnded = () => { if (!isLoopedRef.current) { setIsPlaying(false); setCurrentTime(0); } };
-    const onError = () => { setError("Wiedergabe fehlgeschlagen"); setIsLoading(false); };
+    // Notbremse: kommt weder `loadedmetadata` noch `error`, blieb der Spinner
+    // ewig stehen. Das passiert nicht bei einer kaputten Datei — die meldet
+    // `error` — sondern wenn das Lesen haengt: Netzlaufwerk weg, OneDrive holt
+    // eine ausgelagerte Datei zurueck, Platte schlafend. Nach 15 Sekunden
+    // sagen wir es, statt weiterzudrehen.
+    let notbremse: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      notbremse = null;
+      setIsLoading(false);
+      setError("Die Datei antwortet nicht — liegt sie noch da, wo sie war?");
+    }, 15_000);
+    /** Irgendein Ladeereignis kam durch — dann war es kein Haenger. */
+    const bremseLoesen = () => {
+      if (notbremse === null) return;
+      clearTimeout(notbremse);
+      notbremse = null;
+    };
+
+    const onMeta = () => { bremseLoesen(); setDuration(audio.duration); setIsLoading(false); setError(null); };
+    const onEnded = () => {
+      if (isLoopedRef.current) return;   // Wiederholung laeuft ohne Ende weiter
+      setIsPlaying(false);
+      setCurrentTime(0);
+      // Und weiter mit dem naechsten aus der Liste — dafuer ist sie da. Der
+      // Rueckruf steckt in einer Ref, weil er erst weiter unten entsteht.
+      weiterRef.current();
+    };
+    const onError = () => { bremseLoesen(); setError("Wiedergabe fehlgeschlagen"); setIsLoading(false); };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onCanPlay = () => setIsLoading(false);
+    const onCanPlay = () => { bremseLoesen(); setIsLoading(false); };
 
     audio.addEventListener("loadedmetadata", onMeta);
     audio.addEventListener("ended", onEnded);
@@ -151,6 +207,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     const onReady = () => { audio.play().catch(() => {}); };
     audio.addEventListener("canplaythrough", onReady, { once: true });
 
+
     intervalRef.current = setInterval(() => {
       if (audioRef.current && !audioRef.current.paused) {
         setCurrentTime(audioRef.current.currentTime);
@@ -158,6 +215,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     }, 100);
 
     return () => {
+      bremseLoesen();
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       audio.removeEventListener("canplaythrough", onReady);
       audio.removeEventListener("loadedmetadata", onMeta);
@@ -199,9 +257,14 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const toggleLoop = useCallback(() => setIsLooped(p => !p), []);
   const toggleMute = useCallback(() => setIsMuted(p => !p), []);
 
+  // setCurrentTime nicht vergessen: der 100ms-Takt laeuft nur waehrend der
+  // Wiedergabe. Ohne das steht die Anzeige beim Ziehen im Pausenzustand still,
+  // obwohl die Stelle laengst gewechselt hat.
   const seekPercent = useCallback((percent: number) => {
     if (audioRef.current && duration > 0) {
-      audioRef.current.currentTime = (percent / 100) * duration;
+      const zeit = (percent / 100) * duration;
+      audioRef.current.currentTime = zeit;
+      setCurrentTime(zeit);
     }
   }, [duration]);
 
@@ -217,10 +280,16 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const seekSeconds = useCallback((secs: number) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(audio.duration)) return;
-    audio.currentTime = Math.max(0, Math.min(secs, audio.duration));
+    const zeit = Math.max(0, Math.min(secs, audio.duration));
+    audio.currentTime = zeit;
+    setCurrentTime(zeit);
   }, []);
 
-  const setVolume = useCallback((vol: number) => setVolumeState(Math.max(0, Math.min(1, vol))), []);
+  const setVolume = useCallback((vol: number) => {
+    const wert = Math.max(0, Math.min(1, vol));
+    setVolumeState(wert);
+    try { localStorage.setItem("beatos_lautstaerke", String(wert)); } catch {}
+  }, []);
 
   // ── Listen queue (skip buttons navigate the list that started playback) ────
   const queueRef = useRef<Beat[] | null>(null);
@@ -232,17 +301,33 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const playOffset = useCallback((offset: number) => {
-    const queue = queueRef.current;
-    const currentId = currentBeatPathRef.current;
-    if (!queue || queue.length === 0) return;
-    const idx = queue.findIndex(b => b.path === currentId);
-    // Not in queue anymore (filter changed): start at the beginning
-    const nextIdx = idx < 0 ? 0 : (idx + offset + queue.length) % queue.length;
-    playBeat(queue[nextIdx]);
+    const ziel = naechsterEintrag(queueRef.current ?? [], currentBeatPathRef.current, offset, true);
+    if (ziel) playBeat(ziel);
   }, [playBeat]);
 
   const playNext = useCallback(() => playOffset(1), [playOffset]);
-  const playPrev = useCallback(() => playOffset(-1), [playOffset]);
+
+  /** Zurueck heisst zuerst „an den Anfang": nach drei Sekunden meint man den
+   *  laufenden Beat, nicht den davor. So macht es jeder Player. */
+  const playPrev = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0;
+      setCurrentTime(0);
+      return;
+    }
+    playOffset(-1);
+  }, [playOffset]);
+
+  /** Der Uebergang am Ende eines Beats — anders als der Skip-Knopf:
+   *  am Listenende ist Schluss, statt vorn wieder anzufangen. Von selbst
+   *  endlos durchs ganze Archiv zu laufen will niemand. */
+  const weiterOhneUmbruch = useCallback(() => {
+    const ziel = naechsterEintrag(queueRef.current ?? [], currentBeatPathRef.current, 1, false);
+    if (ziel) playBeat(ziel);
+  }, [playBeat]);
+
+  useEffect(() => { weiterRef.current = weiterOhneUmbruch; }, [weiterOhneUmbruch]);
 
   const playerValue = useMemo<AudioPlayerContextValue>(() => ({
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,

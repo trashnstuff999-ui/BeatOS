@@ -9,8 +9,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
-import { AlertCircle, ArrowRightLeft, Check, X, FolderOpen, Folder, File, Loader2 } from "lucide-react";
-import { C } from "../../lib/theme";
+import { AlertCircle, ArrowRightLeft, Check, FolderOpen, Folder, File } from "lucide-react";
+import { C, radius, alpha } from "../../lib/theme";
+import { Modal, Button } from "../ui";
 import { api } from "../../lib/api";
 import type { LegacyStructure } from "../../types/upload";
 
@@ -80,18 +81,18 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
       <div style={{
         display: "flex", alignItems: "center", gap: 14,
         padding: "12px 16px",
-        background: blocked ? "rgba(229,72,77,0.08)" : "rgba(253,161,36,0.08)",
-        border: `1px solid ${blocked ? "rgba(229,72,77,0.30)" : "rgba(253,161,36,0.30)"}`,
-        borderRadius: 10,
+        background: blocked ? alpha(C.error, 0.08) : alpha(C.primary, 0.08),
+        border: `1px solid ${blocked ? alpha(C.error, 0.30) : alpha(C.primary, 0.30)}`,
+        borderRadius: radius.card,
       }}>
         <AlertCircle
           size={18}
-          color={blocked ? "#e5484d" : "#fda124"}
+          color={blocked ? C.error : C.primary}
           strokeWidth={1.75}
           style={{ flexShrink: 0 }}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: blocked ? "#e5484d" : "#fda124", marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: blocked ? C.error : C.primary, marginBottom: 2 }}>
             Alte Ordnerstruktur erkannt
           </div>
           <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4 }}>
@@ -103,12 +104,12 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "8px 14px",
-            background: blocked ? C.surfaceContainerHigh : "#fda124",
+            background: blocked ? C.surfaceContainerHigh : C.primary,
             border: blocked ? `1px solid ${C.border20}` : "none",
-            borderRadius: 6,
+            borderRadius: radius.control,
             cursor: "pointer",
             fontSize: 11, fontWeight: 700,
-            color: blocked ? C.onSurfaceVariant : "#4e2d00",
+            color: blocked ? C.onSurfaceVariant : C.onPrimary,
             letterSpacing: "0.05em", textTransform: "uppercase",
             whiteSpace: "nowrap",
             flexShrink: 0,
@@ -169,66 +170,32 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
   const movesBySubdir = groupBy(plan.planned_moves, m => m.from_subdir);
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, zIndex: 60,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: "100%", maxWidth: 580, maxHeight: "85vh",
-          background: C.surfaceContainer,
-          borderRadius: 12,
-          border: `1px solid ${C.border20}`,
-          display: "flex", flexDirection: "column",
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: "16px 20px",
-          borderBottom: `1px solid ${C.border15}`,
-          display: "flex", alignItems: "center", gap: 12,
-        }}>
-          <div style={{
-            width: 36, height: 36, flexShrink: 0,
-            borderRadius: 8,
-            background: blocked ? "rgba(229,72,77,0.15)" : "rgba(253,161,36,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <ArrowRightLeft size={18} color={blocked ? "#e5484d" : "#fda124"} strokeWidth={2} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface, marginBottom: 2 }}>
-              Ordnerstruktur migrieren
-            </div>
-            <div style={{ fontSize: 11, color: C.onSurfaceVariant }}>
-              Dateien werden verschoben (umbenannt), nie kopiert und gelöscht. Nichts wird überschrieben.
-            </div>
-          </div>
-          <button
-            onClick={onCancel}
-            disabled={isMigrating}
-            style={{
-              background: "transparent", border: "none",
-              cursor: isMigrating ? "not-allowed" : "pointer",
-              color: C.onSurfaceVariant,
-              display: "flex", padding: 4,
-            }}
+    <Modal
+      icon={ArrowRightLeft}
+      title="Ordnerstruktur migrieren"
+      subtitle="Dateien werden verschoben (umbenannt), nie kopiert und gelöscht. Nichts wird überschrieben."
+      onClose={onCancel}
+      width={580}
+      // Laeuft die Migration, darf ein Klick daneben nicht schliessen.
+      closeOnBackdrop={!isMigrating}
+      footer={
+        <>
+          <Button variant="secondary" disabled={isMigrating} onClick={onCancel}>Abbrechen</Button>
+          <Button
+            variant="primary"
+            icon={ArrowRightLeft}
+            loading={isMigrating}
+            disabled={blocked}
+            onClick={onConfirm}
           >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Blockers first */}
+            {isMigrating ? "Wird migriert …" : "Migration anwenden"}
+          </Button>
+        </>
+      }
+    >
+      {/* Blockers first */}
           {plan.savefiles_conflict && (
-            <BlockBox color="#e5484d" title="03_PROJECTS/ und 01_SAVEFILES/ existieren beide">
+            <BlockBox color={C.error} title="03_PROJECTS/ und 01_SAVEFILES/ existieren beide">
               Beide Ordner können nach der Migration nicht nebeneinander bestehen. Führe sie von Hand im
               Explorer zusammen (alles aus 03_PROJECTS nach 01_SAVEFILES verschieben, dann den leeren
               03_PROJECTS-Ordner löschen) und öffne diesen Dialog danach erneut.
@@ -236,7 +203,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
           )}
 
           {plan.collisions.length > 0 && (
-            <BlockBox color="#e5484d" title={`${plan.collisions.length} Namenskonflikt(e)`}>
+            <BlockBox color={C.error} title={`${plan.collisions.length} Namenskonflikt(e)`}>
               Diese Dateien liegen sowohl in einem alten Unterordner als auch im Hauptordner des Beats.
               Die Migration bricht ab, weil das Verschieben die Datei im Hauptordner stillschweigend
               überschreiben würde. Bitte zuerst von Hand auflösen:
@@ -265,7 +232,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
               <div style={{
                 background: C.surfaceContainerLowest,
                 border: `1px solid ${C.border15}`,
-                borderRadius: 6,
+                borderRadius: radius.control,
                 padding: "8px 12px",
                 maxHeight: 140, overflowY: "auto",
                 fontSize: 11, fontFamily: "monospace", color: C.onSurface,
@@ -277,7 +244,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {m.is_dir
-                      ? <Folder size={11} color="#fda124" strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                      ? <Folder size={11} color={C.primary} strokeWidth={1.75} style={{ flexShrink: 0 }} />
                       : <File size={11} color={C.onSecondaryFixedVar} strokeWidth={1.5} style={{ flexShrink: 0 }} />
                     }
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -304,7 +271,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
                 padding: "10px 12px",
                 background: C.surfaceContainerLowest,
                 border: `1px solid ${C.border15}`,
-                borderRadius: 6,
+                borderRadius: radius.control,
                 fontSize: 12, fontFamily: "monospace", color: C.onSurface,
               }}>
                 03_PROJECTS/ → 01_SAVEFILES/
@@ -319,64 +286,19 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
             Audio-Dateien wandern mit ihrem Originalnamen nach 02_OLD/.
           </div>
 
-          {error && (
-            <div style={{
-              padding: "10px 12px",
-              background: "rgba(229,72,77,0.10)",
-              border: "1px solid rgba(229,72,77,0.35)",
-              borderRadius: 6,
-              fontSize: 11, color: "#e5484d", lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-            }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
+      {error && (
         <div style={{
-          padding: "12px 20px",
-          borderTop: `1px solid ${C.border15}`,
-          display: "flex", gap: 8, justifyContent: "flex-end",
+          padding: "10px 12px",
+          background: alpha(C.error, 0.10),
+          border: `1px solid ${alpha(C.error, 0.35)}`,
+          borderRadius: radius.control,
+          fontSize: 11, color: C.error, lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
         }}>
-          <button
-            onClick={onCancel}
-            disabled={isMigrating}
-            style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              background: C.surfaceContainerHigh,
-              border: `1px solid ${C.border20}`,
-              cursor: isMigrating ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 700, color: C.onSurface,
-              opacity: isMigrating ? 0.5 : 1,
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={blocked || isMigrating}
-            style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              background: blocked ? C.surfaceContainerHigh : "#fda124",
-              border: blocked ? `1px solid ${C.border20}` : "none",
-              cursor: (blocked || isMigrating) ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 700,
-              color: blocked ? C.onSecondaryFixedVar : "#4e2d00",
-              opacity: blocked ? 0.5 : 1,
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            {isMigrating
-              ? <><Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} /> Migrating…</>
-              : <><ArrowRightLeft size={13} strokeWidth={2} /> Apply Migration</>
-            }
-          </button>
+          {error}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }
 
@@ -388,7 +310,7 @@ function BlockBox({ color, title, children }: { color: string; title: string; ch
       padding: "12px 14px",
       background: `${color}14`,
       border: `1px solid ${color}59`,
-      borderRadius: 8,
+      borderRadius: radius.control,
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
@@ -409,10 +331,10 @@ function SuccessToast({ text }: { text: string }) {
     <div style={{
       display: "flex", alignItems: "center", gap: 10,
       padding: "10px 14px",
-      background: "rgba(52,211,153,0.10)",
-      border: "1px solid rgba(52,211,153,0.35)",
-      borderRadius: 10,
-      fontSize: 12, color: "#34d399",
+      background: alpha(C.mint, 0.10),
+      border: `1px solid ${alpha(C.mint, 0.35)}`,
+      borderRadius: radius.card,
+      fontSize: 12, color: C.mint,
     }}>
       <Check size={14} strokeWidth={2.5} />
       Migration erfolgreich — {text}

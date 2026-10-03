@@ -9,9 +9,10 @@
 import { useState, useEffect, useRef } from "react";
 import { FileCode2, FolderOpen, Save, RotateCcw, ShoppingBag, Music2, Youtube } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Modal, Button } from "../ui";
+import { Modal, Button, Dropdown } from "../ui";
+import { useDialog } from "../../contexts/DialogContext";
 import type { UploadPlatform } from "../../types/upload";
 
 // Ein Akzent statt drei Markenfarben — wie in DescriptionFilesCard.
@@ -99,6 +100,7 @@ interface TemplateEditorDialogProps {
 }
 
 export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEditorDialogProps) {
+  const { frage } = useDialog();
   const [active, setActive] = useState<UploadPlatform>("beatstars");
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState("");        // Stand auf der Platte
@@ -151,8 +153,13 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
 
   // Esc und das X gehen ebenfalls hier durch — ein halb geschriebenes Template
   // soll nicht an einem Tastendruck hängen.
-  const requestClose = () => {
-    if (isDirty && !window.confirm("Ungespeicherte Änderungen an der Vorlage verwerfen?")) return;
+  const requestClose = async () => {
+    if (isDirty && !await frage({
+      titel: "Ungespeicherte Änderungen verwerfen?",
+      text: "Die Vorlage wurde geändert, aber nicht gespeichert.",
+      bestaetigen: "Verwerfen",
+      gefahr: true,
+    })) return;
     onClose();
   };
 
@@ -220,17 +227,22 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
           return (
             <button
               key={t.key}
-              onClick={() => {
-                if (isDirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
+              onClick={async () => {
+                if (isDirty && !await frage({
+                  titel: "Ungespeicherte Änderungen verwerfen?",
+                  text: `Die Vorlage „${tab.label}“ wurde geändert, aber nicht gespeichert.`,
+                  bestaetigen: "Verwerfen",
+                  gefahr: true,
+                })) return;
                 setActive(t.key);
               }}
               style={{
                 flex: 1,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 padding: "9px 12px",
-                background: isActive ? C.surfaceContainer : C.surfaceContainerLowest,
+                background: isActive ? C.surfaceContainerHighest : "transparent",
                 border: `1px solid ${isActive ? t.color + "60" : C.border15}`,
-                borderRadius: 8, cursor: "pointer",
+                borderRadius: radius.control, cursor: "pointer",
                 fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: isActive ? t.color : C.onSurfaceVariant,
                 letterSpacing: "0.05em", textTransform: "uppercase",
@@ -244,34 +256,47 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
       </div>
 
       {/* Einsetzen — ein Menü statt zwanzig Knöpfe.
-          Die Gruppierung übernimmt <optgroup>, das Aufklappen der Browser.
-          Nebeneffekt: unterschiedlich lange Gruppen fallen nicht mehr auf.
-          Der Wert bleibt fest "", damit die Auswahl nach dem Einsetzen
-          zurückspringt und wieder „Einfügen …" dasteht. */}
+          Gruppiert wie vorher, nur nicht mehr über <optgroup>: die aufgeklappte
+          Liste zeichnete Windows selbst und sah aus wie ein Systemmenü.
+          Nach dem Einsetzen macht das Feld zu und zeigt wieder „Einfügen …". */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <select
-          value=""
-          onChange={e => { if (e.target.value) insert(e.target.value); }}
-          style={{
-            padding: "7px 12px", borderRadius: 8,
-            background: C.surfaceContainerLowest,
-            border: `1px solid ${C.border20}`,
-            color: C.onSurface, cursor: "pointer",
-            fontFamily: "inherit", fontSize: 11, fontWeight: 600,
-            outline: "none",
-          }}
-        >
-          <option value="">Einfügen …</option>
-          {GRUPPEN.map(gruppe => (
-            <optgroup key={gruppe.titel} label={gruppe.titel}>
-              {gruppe.eintraege.map(p => (
-                <option key={p.name} value={p.name} title={tooltip(p)}>
-                  {p.label}
-                </option>
+        <Dropdown label="Einfügen …" panelWidth={280}>
+          {close => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {GRUPPEN.map(gruppe => (
+                <div key={gruppe.titel}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
+                    textTransform: "uppercase", letterSpacing: "0.1em",
+                    padding: "8px 10px 4px",
+                  }}>
+                    {gruppe.titel}
+                  </div>
+                  {gruppe.eintraege.map(p => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      title={tooltip(p)}
+                      onClick={() => { insert(p.name); close(); }}
+                      style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "7px 10px", borderRadius: radius.control - 1,
+                        background: "transparent", border: "none",
+                        color: C.onSurfaceVariant,
+                        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHighest; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               ))}
-            </optgroup>
-          ))}
-        </select>
+            </div>
+          )}
+        </Dropdown>
         <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
           schreibt an die Cursorposition in der Vorlage
         </span>
@@ -289,7 +314,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
             disabled={isLoading}
             style={{
               ...paneBox,
-              background: C.surfaceContainerLowest,
+              background: C.surfaceContainerHighest,
               border: `1px solid ${C.border20}`,
               resize: "vertical",
               outline: "none",
@@ -318,7 +343,7 @@ const paneBox: React.CSSProperties = {
   // Das Einfüge-Menü ersetzt vier Reihen Knöpfe — der Platz geht an die Felder.
   height: 430,
   padding: "11px 13px",
-  borderRadius: 8,
+  borderRadius: radius.control,
   color: C.onSurface,
   fontFamily: "monospace",
   fontSize: 11,

@@ -618,8 +618,11 @@ fn rename_matching_flps(dir: &Path, old_name: &str, new_name: &str) {
     }
 }
 
-/// Neues Projekt anlegen: Ordner im gewählten Produktions-Root, darin
-/// `01_SAVEFILES` mit einer Kopie der Template-FLP unter dem Projektnamen.
+/// Neues Projekt anlegen: Ordner im gewählten Produktions-Root, darin direkt
+/// eine Kopie der Template-FLP unter dem Projektnamen. Kein `01_SAVEFILES` —
+/// das ist das Archiv-Layout; Studio-Projekte haben die FLP im Root, `Backup/`
+/// legt FL selbst daneben an. Die Vorlage darf auch eine archivierte FLP sein
+/// („Neue Version" im Archiv) — kopiert wird nur diese eine Datei.
 /// Gibt den Pfad der neuen FLP zurück — das Frontend öffnet sie direkt in FL.
 #[tauri::command]
 pub fn create_project_folder(
@@ -649,11 +652,10 @@ pub fn create_project_folder(
     if dir.exists() {
         return Err(format!("„{}\" gibt es in diesem Ordner schon", folder));
     }
-    let saves = dir.join("01_SAVEFILES");
-    std::fs::create_dir_all(&saves)
+    std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Ordner konnte nicht angelegt werden: {}", e))?;
 
-    let dest = saves.join(format!("{}.flp", folder));
+    let dest = dir.join(format!("{}.flp", folder));
     if let Err(e) = crate::utils::copy_and_verify(template, &dest) {
         // Halbfertigen Ordner nicht liegen lassen
         let _ = std::fs::remove_dir_all(&dir);
@@ -1604,7 +1606,46 @@ pub fn assign_asset_to_project(
         crate::utils::copy_and_verify(src, &dest)?;
     }
 
+    // Ersetzen heisst ersetzen: was den Slot vorher belegt hat, geht zurück in
+    // den Asset-Ordner. Vorher blieb es liegen — beide Dateien im Projekt, und
+    // die Erkennung (erstes passendes Bild) blieb bei der alten.
+    // Erst nach dem Einsetzen der neuen: scheitert etwas, ist nie beides weg.
+    if let Some(slot) = slot.as_deref() {
+        if root.is_dir() {
+            for alt in slot_occupants(target_dir, slot) {
+                if alt == dest { continue; }
+                let name = alt.file_name().and_then(|n| n.to_str()).unwrap_or("asset");
+                let ziel = crate::utils::unique_dest(root, name);
+                if std::fs::rename(&alt, &ziel).is_err() {
+                    copy_and_verify_move(&alt, &ziel)?;
+                }
+            }
+        }
+    }
+
     Ok(dest.to_string_lossy().to_string())
+}
+
+/// Dateien im Ordner-Root, die ein Slot als seine liest — dieselbe Regel wie
+/// `scan_project_dir` und `find_asset_slots`: Bild mit "thumb" = Thumbnail,
+/// jedes andere Bild = Cover, jede Videodatei = Video.
+fn slot_occupants(dir: &Path, slot: &str) -> Vec<std::path::PathBuf> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    rd.filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| {
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+            let thumb = p.file_name().and_then(|n| n.to_str())
+                .map(|n| n.to_lowercase().contains("thumb")).unwrap_or(false);
+            match slot {
+                "cover" => crate::utils::is_image_extension(ext) && !thumb,
+                "thumbnail" => crate::utils::is_image_extension(ext) && thumb,
+                "video" => crate::utils::is_video_extension(ext),
+                _ => false,
+            }
+        })
+        .collect()
 }
 
 /// Cover und Thumbnail unterscheiden sich im Zielordner nur am Dateinamen:
@@ -1613,19 +1654,24 @@ pub fn assign_asset_to_project(
 /// landet damit im Cover-Slot — auch wenn er als Thumbnail gewählt wurde. Also
 /// den Marker beim Verschieben ergänzen.
 ///
-/// Cover braucht keinen: es ist der Standardfall derselben Leseregel.
+/// Der Upload-Tab (`scan_dir_into`, upload/read.rs) ist strenger: er nimmt nur
+/// Bilder mit "cover" bzw. "thumbnail" im Namen. Seit dort auch zugewiesen
+/// werden kann, bekommen beide Slots den vollen Marker — dann passt der Name
+/// zu allen drei Leseregeln.
 fn ensure_slot_marker(file_name: &str, slot: Option<&str>) -> String {
-    if slot != Some("thumbnail") {
-        return file_name.to_string();
-    }
+    let marker = match slot {
+        Some("thumbnail") => "thumbnail",
+        Some("cover") => "cover",
+        _ => return file_name.to_string(),
+    };
     let path = Path::new(file_name);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(file_name);
-    if stem.to_lowercase().contains("thumb") {
+    if stem.to_lowercase().contains(marker) {
         return file_name.to_string();
     }
     match path.extension().and_then(|e| e.to_str()) {
-        Some(ext) => format!("{}_thumbnail.{}", stem, ext),
-        None => format!("{}_thumbnail", stem),
+        Some(ext) => format!("{}_{}.{}", stem, marker, ext),
+        None => format!("{}_{}", stem, marker),
     }
 }
 
@@ -2105,10 +2151,12 @@ mod tests {
     fn thumbnail_bekommt_seinen_marker() {
         assert_eq!(ensure_slot_marker("MEMORIES.png", Some("thumbnail")), "MEMORIES_thumbnail.png");
         // Marker schon da (in jeder Schreibweise) → Name bleibt unangetastet
-        assert_eq!(ensure_slot_marker("art_thumb.jpg", Some("thumbnail")), "art_thumb.jpg");
         assert_eq!(ensure_slot_marker("Art_Thumbnail.jpg", Some("thumbnail")), "Art_Thumbnail.jpg");
-        // Cover und Video sind der Standardfall der Leseregel — nichts anfassen
-        assert_eq!(ensure_slot_marker("MEMORIES.png", Some("cover")), "MEMORIES.png");
+        // "thumb" reicht dem Upload-Tab nicht — er sucht "thumbnail"
+        assert_eq!(ensure_slot_marker("art_thumb.jpg", Some("thumbnail")), "art_thumb_thumbnail.jpg");
+        // Cover bekommt seinen Marker genauso, sonst sieht der Upload-Tab es nicht
+        assert_eq!(ensure_slot_marker("MEMORIES.png", Some("cover")), "MEMORIES_cover.png");
+        assert_eq!(ensure_slot_marker("X_Cover_2000x2000.png", Some("cover")), "X_Cover_2000x2000.png");
         assert_eq!(ensure_slot_marker("clip.mp4", Some("video")), "clip.mp4");
         assert_eq!(ensure_slot_marker("MEMORIES.png", None), "MEMORIES.png");
         // Datei ohne Endung
@@ -2352,6 +2400,35 @@ mod tests {
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 
+    /// Ersetzen: die alte Datei geht zurück in die Inbox, der andere Slot bleibt.
+    #[test]
+    fn assign_asset_ersetzt_und_bringt_alte_zurueck() {
+        let tmp = std::env::temp_dir().join(format!("beatos_replace_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let inbox = tmp.join("inbox");
+        let proj = tmp.join("proj");
+        std::fs::create_dir_all(&inbox).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("A_cover.png"), b"alt").unwrap();
+        std::fs::write(proj.join("A_thumbnail.png"), b"thumb").unwrap();
+        std::fs::write(proj.join("song.mp3"), b"audio").unwrap();
+        std::fs::write(inbox.join("B.png"), b"neu").unwrap();
+
+        let dest = super::assign_asset_to_project(
+            inbox.join("B.png").to_string_lossy().to_string(),
+            inbox.to_string_lossy().to_string(),
+            proj.to_string_lossy().to_string(),
+            Some("cover".into()),
+        ).unwrap();
+
+        assert!(dest.ends_with("B_cover.png"), "got: {}", dest);
+        assert!(!proj.join("A_cover.png").exists(), "alte Datei muss raus");
+        assert_eq!(std::fs::read(inbox.join("A_cover.png")).unwrap(), b"alt", "…und zurück in die Inbox");
+        assert!(proj.join("A_thumbnail.png").exists(), "Thumbnail bleibt unberührt");
+        assert!(proj.join("song.mp3").exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn create_project_copies_template_and_refuses_duplicates() {
         let tmp = std::env::temp_dir().join(format!("beatos_create_proj_{}", std::process::id()));
@@ -2368,7 +2445,9 @@ mod tests {
         .unwrap();
 
         let dir = root.join("MEIN SONG Teil 1");
-        assert_eq!(flp, dir.join("01_SAVEFILES").join("MEIN SONG Teil 1.flp").to_string_lossy());
+        // FLP im Root wie bei jedem Studio-Projekt — kein 01_SAVEFILES
+        assert_eq!(flp, dir.join("MEIN SONG Teil 1.flp").to_string_lossy());
+        assert!(!dir.join("01_SAVEFILES").exists());
         assert_eq!(std::fs::read(&flp).unwrap(), b"flp-bytes");
         // Der Scan muss das neue Projekt sofort sehen
         assert!(scan_project_dir(&dir, "root").is_some());

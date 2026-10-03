@@ -1,11 +1,16 @@
 // src/components/browse/BeatTable.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Beat Table — Card-style rows with spacing
+// Beat Table — eine Flaeche, Zeilen durch Haarlinien getrennt.
+//
+// Vorher war jede Zeile eine eigene Karte: eigene Flaeche, eigener Rahmen,
+// eigener Radius, 6px Luft dazwischen. Bei 50 Zeilen pro Seite sind das 50
+// Kaesten, wo eine Liste hingehoert — dieselbe Kur wie bei der Dateiliste im
+// Upload-Tab.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
 import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
-import { C, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, type PlatformKey, radius } from "../../lib/theme";
 import type { Beat, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
 import { StatusPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
@@ -25,14 +30,38 @@ interface BeatTableProps {
 // Kein memo: sitzt nur in BeatRow/GridCard, die selbst memo sind — es rendert
 // also ohnehin nur, wenn die Zeile rendert.
 
-export function PlatformDots({ badges }: { badges: UploadBadge[] | undefined }) {
-  if (!badges || badges.length === 0) {
+/** Ist an diesem Beat noch etwas offen?
+ *
+ *  Im Raster sind die Punkte kein Statusfeld, sondern eine Meldung: „hier
+ *  fehlt noch was". Sie erscheinen deshalb nur in diesen zwei Faellen —
+ *
+ *    irgendwo angefangen, aber nicht ueberall hochgeladen  → Luecke
+ *    nirgends angefangen, aber der Beat ist fertig         → Luecke (vergessen)
+ *
+ *  — und bleiben weg, wenn alle drei Plattformen hochgeladen sind oder der
+ *  Beat schlicht noch in Arbeit ist. Sonst stuenden auf fast jeder Karte
+ *  Punkte, und dann sagen sie nichts mehr. */
+export function hatUploadLuecke(badges: UploadBadge[] | undefined, status: string | null): boolean {
+  const hochgeladen = badges?.filter(b => b.status === "uploaded").length ?? 0;
+  if (hochgeladen === 3) return false;          // ueberall draussen
+  if (badges && badges.length > 0) return true; // angefangen, nicht fertig
+  return status === "finished";                 // fertig, aber nirgends
+}
+
+export function PlatformDots({ badges, leer = "strich" }: {
+  badges: UploadBadge[] | undefined;
+  /** Was bei null Eintraegen steht: ein Strich (Tabelle — die Spalte braucht
+   *  einen Wert) oder drei leere Ringe (Raster — dort ist die Luecke selbst
+   *  die Nachricht). */
+  leer?: "strich" | "ringe";
+}) {
+  if ((!badges || badges.length === 0) && leer === "strich") {
     return <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
   }
-  const byPlatform = new Map(badges.map(b => [b.platform, b.status]));
+  const byPlatform = new Map((badges ?? []).map(b => [b.platform, b.status]));
   return (
     <span
-      title={badges.map(b => `${PLATFORM_CONFIG[b.platform as PlatformKey]?.label ?? b.platform}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}`).join("\n")}
+      title={(badges ?? []).map(b => `${PLATFORM_CONFIG[b.platform as PlatformKey]?.label ?? b.platform}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}`).join("\n")}
       style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
     >
       {(["beatstars", "soundcloud", "youtube"] as PlatformKey[]).map(p => {
@@ -66,12 +95,19 @@ interface ColHeaderProps {
 function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left" }: ColHeaderProps) {
   const isActive = currentSort.column === column;
   return (
-    <div
+    // Ein echter Knopf statt role="button": damit ist der Spaltenkopf auch mit
+    // Tab erreichbar und reagiert auf Enter — der Klick ins Leere in Browse
+    // haelt ihn ohnehin schon nicht fuer Hintergrund (NICHT_DANEBEN kennt
+    // „button").
+    <button
       onClick={() => onSort(column)}
+      title={`Nach ${label} sortieren`}
+      aria-sort={isActive ? (currentSort.direction === "asc" ? "ascending" : "descending") : "none"}
       style={{
         flex,
         fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-        letterSpacing: "0.15em",
+        letterSpacing: "0.15em", fontFamily: "inherit",
+        background: "transparent", border: "none", padding: 0,
         color: isActive ? C.primary : C.onSecondaryFixedVar,
         cursor: "pointer", userSelect: "none",
         display: "flex", alignItems: "center", gap: 4,
@@ -82,7 +118,7 @@ function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left
     >
       {label}
       {isActive && (currentSort.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
-    </div>
+    </button>
   );
 }
 
@@ -130,24 +166,25 @@ const BeatRow = memo(function BeatRow({
         if ((e.target as HTMLElement).closest("button")) return;
         onPlayBeat(beat);
       }}
+      className="beatos-zeile"
       style={{
         display: "flex",
         alignItems: "center",
-        padding: "14px 20px",
-        borderRadius: 10,
-        background: isSelected ? C.surfaceContainerHigh : C.surfaceContainerLow,
-        border: isSelected ? `1px solid ${C.border30}` : "1px solid transparent",
+        padding: "13px 20px",
+        // Zeile in einer gemeinsamen Flaeche: die Trennung macht die Haarlinie
+        // (siehe ZEILEN_CSS), die Auswahl eine Stufe mehr Helligkeit.
+        background: isSelected ? C.surfaceContainerHigh : "transparent",
         // Laufender Beat: Akzentbalken links, ohne das Layout zu verschieben.
         boxShadow: isCurrentBeat ? `inset 3px 0 0 ${C.primary}` : "none",
         cursor: "pointer",
-        transition: "background 0.12s, border-color 0.12s",
+        transition: "background 0.12s",
         gap: 0,
       }}
       onMouseEnter={e => {
         if (!isSelected) (e.currentTarget as HTMLElement).style.background = C.surfaceContainer;
       }}
       onMouseLeave={e => {
-        if (!isSelected) (e.currentTarget as HTMLElement).style.background = C.surfaceContainerLow;
+        if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
       }}
     >
       {/* Play Button */}
@@ -223,12 +260,18 @@ const BeatRow = memo(function BeatRow({
 
 // ─── Beat Table ──────────────────────────────────────────────────────────────
 
+/** Die Trennung zwischen zwei Zeilen — als CSS, weil ein Inline-Stil den
+ *  „ausser der ersten"-Fall nicht ausdruecken kann. */
+const ZEILEN_CSS = `
+  .beatos-zeile + .beatos-zeile { border-top: 1px solid ${C.border10}; }
+`;
+
 export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorite, onPlayBeat, sort, onSort, uploadBadges }: BeatTableProps) {
   // Einmal abonnieren, nicht pro Zeile.
   const { currentBeat, isPlaying, isLoading, togglePlay } = useAudioPlayerContext();
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <section style={{ display: "flex", flexDirection: "column" }}>
       {/* Header Row */}
       <div style={{
         display: "flex", alignItems: "center",
@@ -270,7 +313,13 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
       </div>
 
       {/* Rows */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <style>{ZEILEN_CSS}</style>
+      <div style={{
+        background: C.surfaceContainerLow,
+        border: `1px solid ${C.border15}`,
+        borderRadius: radius.card,
+        overflow: "hidden",
+      }}>
         {beats.map(beat => {
           const isCurrentBeat = currentBeat?.id === beat.id;
           return (

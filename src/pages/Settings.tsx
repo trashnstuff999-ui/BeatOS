@@ -11,7 +11,7 @@ import {
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
   Settings as SettingsIcon, FolderTree, Users, Trash2, Plus,
 } from "lucide-react";
-import { C, commonStyles } from "../lib/theme";
+import { C, commonStyles, alpha, radius } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
 import { useSettings, parseProductionPaths, DEFAULTS } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
@@ -20,6 +20,7 @@ import { formatRelativeTime } from "../lib/time";
 import { ChipListEditor } from "../components/upload/ChipListEditor";
 import type { FolderSync } from "../types/upload";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
+import { useDialog } from "../contexts/DialogContext";
 import { LEERER_PRODUZENT } from "../types/sampleCredits";
 import type { SampleProducer } from "../types/sampleCredits";
 
@@ -60,7 +61,7 @@ function Section({ title, description, children }: {
     <div style={{
       background: C.surfaceContainerLowest,
       border: `1px solid ${C.border10}`,
-      borderRadius: 12,
+      borderRadius: radius.card,
       padding: 28,
     }}>
       <div style={{ marginBottom: 20 }}>
@@ -100,7 +101,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
           gap: 10,
           background: C.surfaceContainerHighest,
           border: `1px solid ${hasValue ? C.primary + "40" : C.border20}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           padding: "0 14px",
           transition: "border-color 0.15s",
         }}>
@@ -127,7 +128,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
           onClick={onBrowse}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            padding: "0 16px", borderRadius: 8,
+            padding: "0 16px", borderRadius: radius.control,
             fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,
@@ -184,7 +185,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
             display: "flex", alignItems: "center", gap: 10,
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,
-            borderRadius: 8,
+            borderRadius: radius.control,
             padding: "10px 14px",
           }}>
             <Icon size={14} color={C.primary} strokeWidth={1.5} />
@@ -207,7 +208,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
           onClick={addPath}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            padding: "10px 14px", borderRadius: 8,
+            padding: "10px 14px", borderRadius: radius.control,
             fontSize: 11, fontWeight: 600,
             background: "transparent",
             border: `1px dashed ${C.border30}`,
@@ -246,7 +247,7 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
         gap: 10,
         background: C.surfaceContainerHighest,
         border: `1px solid ${hasValue ? C.primary + "40" : C.border20}`,
-        borderRadius: 8,
+        borderRadius: radius.control,
         padding: multiline ? "10px 14px" : "0 14px",
         transition: "border-color 0.15s",
       }}>
@@ -308,7 +309,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
       padding: "14px 16px",
       background: C.surfaceContainerHighest,
       border: `1px solid ${C.border15}`,
-      borderRadius: 8,
+      borderRadius: radius.control,
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
@@ -340,6 +341,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
 // Name und Links in die Beschreibungen.
 
 function SampleProducersCard() {
+  const { frage } = useDialog();
   const [producers, setProducers] = useState<SampleProducer[]>([]);
   const [draft, setDraft] = useState<SampleProducer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +367,13 @@ function SampleProducersCard() {
     const zusatz = p.use_count > 0
       ? `\n\nEr ist bei ${p.use_count} ${p.use_count === 1 ? "Beat" : "Beats"} genannt. Diese Nennungen verschwinden mit.`
       : "";
-    if (!confirm(`„${p.name}" löschen?${zusatz}`)) return;
+    const ok = await frage({
+      titel: `„${p.name}" löschen?`,
+      text: zusatz.trim() || "Der Producer verschwindet aus dem Adressbuch.",
+      bestaetigen: "Löschen",
+      gefahr: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       if (p.id !== null) await api.sampleCredits.deleteProducer(p.id);
@@ -383,7 +391,7 @@ function SampleProducersCard() {
       padding: "16px 18px",
       background: C.surfaceContainerHighest,
       border: `1px solid ${C.border15}`,
-      borderRadius: 8,
+      borderRadius: radius.control,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <Users size={14} color={C.mint} strokeWidth={1.75} />
@@ -402,7 +410,7 @@ function SampleProducersCard() {
           {producers.map(p => (
             <div key={p.id} style={{
               display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 10px", borderRadius: 6,
+              padding: "8px 10px", borderRadius: radius.control,
               background: C.surfaceContainer, border: `1px solid ${C.border15}`,
             }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>{p.name}</span>
@@ -413,7 +421,7 @@ function SampleProducersCard() {
               <button
                 onClick={() => { setDraft(p); setError(null); }}
                 style={{
-                  marginLeft: "auto", padding: "4px 10px", borderRadius: 5,
+                  marginLeft: "auto", padding: "4px 10px", borderRadius: radius.control,
                   background: "transparent", border: `1px solid ${C.border15}`,
                   color: C.onSurfaceVariant, cursor: "pointer", fontSize: 10, fontWeight: 600,
                 }}
@@ -424,7 +432,7 @@ function SampleProducersCard() {
                 onClick={() => loeschen(p)}
                 title="Löschen"
                 style={{
-                  padding: "4px 6px", borderRadius: 5, display: "flex",
+                  padding: "4px 6px", borderRadius: radius.control, display: "flex",
                   background: "transparent", border: `1px solid ${C.border15}`,
                   color: C.error, cursor: "pointer",
                 }}
@@ -439,11 +447,11 @@ function SampleProducersCard() {
       {draft && (
         <div style={{
           padding: "14px 16px", marginBottom: 12,
-          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: 7,
+          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: radius.control,
           display: "flex", flexDirection: "column", gap: 14,
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface }}>
-            {draft.id === null ? "Neuer Sample-Produzent" : `„${draft.name}" bearbeiten`}
+            {draft.id === null ? "Neuer Sample-Produzent" : `„${draft.name}“ bearbeiten`}
           </div>
           <TextSetting label="Name" icon={User} value={draft.name}
             placeholder="z.B. prodzeux" onChange={feld("name")} />
@@ -462,8 +470,8 @@ function SampleProducersCard() {
             <button
               onClick={speichern}
               style={{
-                padding: "8px 16px", borderRadius: 7, background: C.mint,
-                border: "none", color: "#064e3b", cursor: "pointer",
+                padding: "8px 16px", borderRadius: radius.control, background: C.mint,
+                border: "none", color: C.onMint, cursor: "pointer",
                 fontSize: 11, fontWeight: 700,
               }}
             >
@@ -472,7 +480,7 @@ function SampleProducersCard() {
             <button
               onClick={() => { setDraft(null); setError(null); }}
               style={{
-                padding: "8px 16px", borderRadius: 7, background: "transparent",
+                padding: "8px 16px", borderRadius: radius.control, background: "transparent",
                 border: `1px solid ${C.border15}`, color: C.onSurfaceVariant,
                 cursor: "pointer", fontSize: 11, fontWeight: 600,
               }}
@@ -492,7 +500,7 @@ function SampleProducersCard() {
           onClick={() => { setDraft({ ...LEERER_PRODUZENT }); setError(null); }}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: 7,
+            padding: "8px 16px", borderRadius: radius.control,
             background: C.surfaceContainer, border: `1px solid ${C.border15}`,
             color: C.onSurface, cursor: "pointer", fontSize: 11, fontWeight: 700,
           }}
@@ -516,6 +524,7 @@ function SampleProducersCard() {
 // „umgezogen" — deshalb löst die Erkennung nie selbst etwas aus.
 
 function RelocateCard() {
+  const { frage } = useDialog();
   const [status, setStatus] = useState<RelocateStatus | null>(null);
   const [plan, setPlan] = useState<RelocatePlan | null>(null);
   const [done, setDone] = useState<RelocateResult | null>(null);
@@ -543,14 +552,16 @@ function RelocateCard() {
 
   const handleApply = async () => {
     if (!plan) return;
-    if (!confirm(
-      `${plan.total} Pfade werden umgeschrieben:\n\n` +
-      `von:  ${plan.old_anchor}\n` +
-      `nach: ${plan.new_anchor}\n\n` +
-      `Vorher wird eine Sicherung der Datenbank angelegt. Der Vorgang fasst ` +
-      `ausschließlich die Datenbank an, keine Dateien, und ist umkehrbar — ` +
-      `derselbe Weg zurück stellt den Ausgangszustand her.\n\nFortfahren?`
-    )) return;
+    const ok = await frage({
+      titel: `${plan.total} Pfade umschreiben?`,
+      text: `von:  ${plan.old_anchor}\n` +
+            `nach: ${plan.new_anchor}\n\n` +
+            `Vorher wird eine Sicherung der Datenbank angelegt. Der Vorgang fasst ` +
+            `ausschließlich die Datenbank an, keine Dateien, und ist umkehrbar — ` +
+            `derselbe Weg zurück stellt den Ausgangszustand her.`,
+      bestaetigen: "Umschreiben",
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {
@@ -579,7 +590,7 @@ function RelocateCard() {
       padding: "16px 18px",
       background: C.surfaceContainerHighest,
       border: `1px solid ${vermisst ? C.error : C.border15}`,
-      borderRadius: 8,
+      borderRadius: radius.control,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <FolderTree size={14} color={vermisst ? C.error : C.mint} strokeWidth={1.75} />
@@ -605,7 +616,7 @@ function RelocateCard() {
       {plan && (
         <div style={{
           padding: "12px 14px", marginBottom: 12,
-          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: 7,
+          background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: radius.control,
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, marginBottom: 8 }}>
             Vorschau — es ist noch nichts geschrieben
@@ -643,7 +654,7 @@ function RelocateCard() {
       {done && (
         <div style={{
           padding: "12px 14px", marginBottom: 12,
-          background: C.surfaceContainer, border: `1px solid ${C.mint}`, borderRadius: 7,
+          background: C.surfaceContainer, border: `1px solid ${C.mint}`, borderRadius: radius.control,
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.mint, marginBottom: 6 }}>
             {done.changed} Pfade umgeschrieben ✓
@@ -667,7 +678,7 @@ function RelocateCard() {
           disabled={busy}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: 7,
+            padding: "8px 16px", borderRadius: radius.control,
             background: C.surfaceContainer, border: `1px solid ${C.border15}`,
             color: C.onSurface, cursor: busy ? "wait" : "pointer",
             fontSize: 11, fontWeight: 700,
@@ -683,9 +694,9 @@ function RelocateCard() {
             disabled={busy}
             style={{
               display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", borderRadius: 7,
+              padding: "8px 16px", borderRadius: radius.control,
               background: C.mint, border: "none",
-              color: "#064e3b", cursor: busy ? "wait" : "pointer",
+              color: C.onMint, cursor: busy ? "wait" : "pointer",
               fontSize: 11, fontWeight: 700,
             }}
           >
@@ -698,9 +709,9 @@ function RelocateCard() {
           <button
             onClick={() => location.reload()}
             style={{
-              padding: "8px 16px", borderRadius: 7,
+              padding: "8px 16px", borderRadius: radius.control,
               background: C.mint, border: "none",
-              color: "#064e3b", cursor: "pointer", fontSize: 11, fontWeight: 700,
+              color: C.onMint, cursor: "pointer", fontSize: 11, fontWeight: 700,
             }}
           >
             App neu laden
@@ -720,6 +731,7 @@ function RelocateCard() {
 // ─── Wartung: Backup, System Repair, Templates ───────────────────────────────
 
 function MaintenancePane({ archivePath }: { archivePath: string }) {
+  const { frage, melde } = useDialog();
   const [info, setInfo] = useState<{ db_path: string; backup_path: string; last_backup_secs: number | null } | null>(null);
   const [busy, setBusy] = useState<"backup" | "repair" | "sync" | null>(null);
   const [syncPlan, setSyncPlan] = useState<FolderSync[] | null>(null);
@@ -744,19 +756,28 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
   };
 
   const handleRepair = async () => {
-    if (!confirm("System Repair wird:\n1. Fehlende Beats aus dem Archiv importieren\n2. Alle create_dates aus FLP-Dateien neu lesen\n3. has_artwork/has_video auffrischen\n\nFortfahren?")) return;
+    const ok = await frage({
+      titel: "System Repair starten?",
+      text: "1. Fehlende Beats aus dem Archiv importieren\n" +
+            "2. Alle create_dates aus FLP-Dateien neu lesen\n" +
+            "3. has_artwork/has_video auffrischen",
+      bestaetigen: "Starten",
+    });
+    if (!ok) return;
     setBusy("repair");
     try {
       const scan = await api.archive.scan(archivePath);
       const fix = await api.archive.fixDates(archivePath);
-      alert(
-        `System Repair abgeschlossen\n\n` +
-        `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
-        `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
-        `Fehler: ${[...scan.errors, ...fix.errors].length}`
-      );
+      await frage({
+        titel: "System Repair abgeschlossen",
+        text: `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
+              `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
+              `Fehler: ${[...scan.errors, ...fix.errors].length}`,
+        bestaetigen: "Schließen",
+        nurHinweis: true,
+      });
     } catch (e) {
-      alert(`System Repair fehlgeschlagen:\n${String(e)}`);
+      melde(`System Repair fehlgeschlagen:\n${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -771,7 +792,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
       const all = await api.archive.syncFolders([], true);
       setSyncPlan(all.filter(s => s.to !== s.from || s.files_renamed > 0 || s.error));
     } catch (e) {
-      alert(`Abgleich fehlgeschlagen:\n${String(e)}`);
+      melde(`Abgleich fehlgeschlagen:\n${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -780,20 +801,28 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
   const handleSyncApply = async () => {
     const ids = (syncPlan ?? []).filter(s => !s.error).map(s => s.beat_id);
     if (ids.length === 0) return;
-    if (!confirm(`${ids.length} Beat${ids.length === 1 ? " wird" : "s werden"} auf der Platte umbenannt (Ordner + Dateien).\n\nFortfahren?`)) return;
+    const ok = await frage({
+      titel: "Auf der Platte umbenennen?",
+      text: `${ids.length} Beat${ids.length === 1 ? " wird" : "s werden"} umbenannt — Ordner und Dateien.`,
+      bestaetigen: "Umbenennen",
+      gefahr: true,
+    });
+    if (!ok) return;
     setBusy("sync");
     try {
       const done = await api.archive.syncFolders(ids, false);
       const folders = done.filter(s => s.to !== s.from && !s.error).length;
       const files = done.reduce((n, s) => n + s.files_renamed, 0);
       const errors = done.filter(s => s.error);
-      alert(
-        `Ordner-Abgleich abgeschlossen\n\n` +
-        `Ordner umbenannt: ${folders}\nDateien umbenannt: ${files}\nFehler: ${errors.length}` +
-        (errors.length > 0 ? `\n\n${errors.slice(0, 10).map(s => `${s.beat_id}: ${s.error}`).join("\n")}` : "")
-      );
+      await frage({
+        titel: "Ordner-Abgleich abgeschlossen",
+        text: `Ordner umbenannt: ${folders}\nDateien umbenannt: ${files}\nFehler: ${errors.length}` +
+              (errors.length > 0 ? `\n\n${errors.slice(0, 10).map(s => `${s.beat_id}: ${s.error}`).join("\n")}` : ""),
+        bestaetigen: "Schließen",
+        nurHinweis: true,
+      });
     } catch (e) {
-      alert(`Abgleich fehlgeschlagen:\n${String(e)}`);
+      melde(`Abgleich fehlgeschlagen:\n${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -806,7 +835,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
       const dir = await api.upload.getTemplatesDir();
       await revealItemInDir(dir);
     } catch (e) {
-      alert(`Template-Ordner konnte nicht geöffnet werden: ${String(e)}`);
+      melde(`Template-Ordner konnte nicht geöffnet werden: ${String(e)}`);
     }
   };
 
@@ -824,7 +853,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           padding: "16px 18px",
           background: C.surfaceContainerHighest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <DatabaseBackup size={14} color={C.mint} strokeWidth={1.75} />
@@ -849,9 +878,9 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               disabled={busy !== null}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 16px", borderRadius: 7,
+                padding: "8px 16px", borderRadius: radius.control,
                 background: C.mint, border: "none",
-                color: "#064e3b", cursor: busy ? "wait" : "pointer",
+                color: C.onMint, cursor: busy ? "wait" : "pointer",
                 fontSize: 11, fontWeight: 700,
               }}
             >
@@ -873,10 +902,10 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           padding: "16px 18px",
           background: C.surfaceContainerHighest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <Wrench size={14} color="#ff7351" strokeWidth={1.75} />
+            <Wrench size={14} color={C.error} strokeWidth={1.75} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>System-Reparatur</span>
           </div>
           <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
@@ -888,10 +917,10 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             disabled={busy !== null || !archivePath}
             style={{
               display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", borderRadius: 7,
-              background: "rgba(255,115,81,0.12)",
-              border: "1px solid rgba(255,115,81,0.35)",
-              color: "#ff7351", cursor: busy ? "wait" : "pointer",
+              padding: "8px 16px", borderRadius: radius.control,
+              background: alpha(C.error, 0.12),
+              border: `1px solid ${alpha(C.error, 0.35)}`,
+              color: C.error, cursor: busy ? "wait" : "pointer",
               fontSize: 11, fontWeight: 700,
             }}
           >
@@ -905,7 +934,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           padding: "16px 18px",
           background: C.surfaceContainerHighest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <FolderTree size={14} color={C.mint} strokeWidth={1.75} />
@@ -924,7 +953,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               display: "flex", flexDirection: "column", gap: 4,
               padding: syncPlan.length > 0 ? "10px 12px" : 0,
               background: syncPlan.length > 0 ? C.surfaceContainer : "transparent",
-              borderRadius: 6, marginBottom: 12,
+              borderRadius: radius.control, marginBottom: 12,
               fontSize: 11, fontFamily: "monospace",
             }}>
               {syncPlan.length === 0 ? (
@@ -972,10 +1001,10 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           padding: "16px 18px",
           background: C.surfaceContainerHighest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           display: "flex", alignItems: "center", gap: 12,
         }}>
-          <FileText size={14} color={C.tertiary ?? "#9492ff"} strokeWidth={1.75} />
+          <FileText size={14} color={C.tertiary ?? C.tertiary} strokeWidth={1.75} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Templates</div>
             <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2 }}>
@@ -986,7 +1015,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             onClick={handleOpenTemplates}
             style={{
               display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", borderRadius: 7,
+              padding: "8px 14px", borderRadius: radius.control,
               background: "transparent", border: `1px solid ${C.border20}`,
               color: C.onSurfaceVariant, cursor: "pointer",
               fontSize: 11, fontWeight: 600,
@@ -1079,7 +1108,7 @@ export function Settings() {
               onClick={() => setSection(key)}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 12px", borderRadius: 8,
+                padding: "9px 12px", borderRadius: radius.control,
                 background: section === key ? C.surfaceContainerHigh : "transparent",
                 border: "none",
                 cursor: "pointer", textAlign: "left",
@@ -1101,13 +1130,13 @@ export function Settings() {
           {section === "paths" && !settings.archivePath && (
             <div style={{
               display: "flex", alignItems: "center", gap: 12,
-              padding: "14px 18px", borderRadius: 8,
-              background: "rgba(253,161,36,0.08)",
-              border: `1px solid rgba(253,161,36,0.25)`,
+              padding: "14px 18px", borderRadius: radius.control,
+              background: alpha(C.primary, 0.08),
+              border: `1px solid ${alpha(C.primary, 0.25)}`,
             }}>
               <AlertCircle size={16} color={C.primary} />
               <span style={{ fontSize: 12, color: C.primary }}>
-                Es ist kein Archiv-Ordner gesetzt. Ohne ihn kann unter „Neuer Beat“ nichts archiviert werden.
+                Es ist kein Archiv-Ordner gesetzt. Ohne ihn kann nichts archiviert werden.
               </span>
             </div>
           )}
@@ -1282,8 +1311,8 @@ export function Settings() {
           flexShrink: 0,
           display: "flex", alignItems: "center", gap: 16,
           padding: "14px 32px",
-          background: "rgba(253,161,36,0.10)",
-          borderTop: `1px solid rgba(253,161,36,0.45)`,
+          background: alpha(C.primary, 0.10),
+          borderTop: `1px solid ${alpha(C.primary, 0.45)}`,
           backdropFilter: "blur(12px)",
         }}>
           <AlertCircle size={18} color={C.primary} />

@@ -3,13 +3,17 @@
 // Cover-grid view for Browse — visual library browsing. Uses the same
 // cover cache (getCoverUrl) and platform badges as the table; click selects
 // (opens the detail panel), the overlay button plays.
+//
+// Das Cover ist die Karte. Kein Rahmen, keine Flaeche, kein Radius um das
+// Ganze: das Bild ist schon ein Objekt mit Kante, ein Kasten darum ist ein
+// zweiter. Darunter stehen nur zwei Zeilen Text auf dem Seitenhintergrund.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, memo } from "react";
 import { Heart, Play, Pause, Loader2, Music } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { StatusPill } from "../Tagpill";
-import { PlatformDots } from "./BeatTable";
+import { PlatformDots, hatUploadLuecke } from "./BeatTable";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, UploadBadgeMap } from "../../types/browse";
 
@@ -61,7 +65,17 @@ export function BeatGrid({
       gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
       gap: 14,
     }}>
-      <style>{`.beatos-karte:hover .beatos-fav { opacity: 1 !important; }`}</style>
+      {/* Beim Ueberfahren zoomt das Cover in seinem festen Rahmen, statt dass
+          die Karte springt: 200 Karten, die sich beim Durchfahren heben,
+          machen das Raster unruhig. */}
+      <style>{`
+        .beatos-karte:hover .beatos-fav { opacity: 1 !important; }
+        .beatos-cover { transition: transform 0.28s ease; }
+        .beatos-karte:hover .beatos-cover { transform: scale(1.05); }
+        @media (prefers-reduced-motion: reduce) {
+          .beatos-cover, .beatos-karte:hover .beatos-cover { transition: none; transform: none; }
+        }
+      `}</style>
       {beats.map((beat, i) => {
         const isCurrentBeat = currentBeat?.id === beat.id;
         const monat = gruppiereNachMonat ? istMonatswechsel(beats, i) : null;
@@ -126,6 +140,18 @@ const GridCard = memo(function GridCard({
   onTogglePlay: () => void;
 }) {
   const isFav = beat.favorite === 1;
+  // Die Pille zeigt nur die AUSNAHME. „Fertig" steht auf fast jedem Beat — bei
+  // 212 Stueck ist das keine Auskunft mehr, sondern Textur, und die seltenen
+  // Zustaende gehen darin unter. Fehlt die Pille, ist der Beat fertig.
+  const status = beat.status ?? "idea";
+  const zeigeStatus = status !== "finished";
+  // Auswahl und Wiedergabe brauchen getrennte Sprachen, seit die Kartenflaeche
+  // weg ist: Weiss heisst „ausgewaehlt", Amber heisst „laeuft gerade".
+  const ring = isCurrentBeat ? C.primary : isSelected ? "rgba(255,255,255,0.55)" : null;
+  // Die Punkte sind der Blick fuer „da fehlt noch was": auf SoundCloud, aber
+  // nicht auf YouTube; fertig, aber nirgends hochgeladen. Ist alles draussen
+  // oder noch gar nichts angefangen, bleiben sie weg.
+  const luecke = hatUploadLuecke(badges, beat.status);
 
   const handlePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -142,33 +168,20 @@ const GridCard = memo(function GridCard({
         onPlayBeat(beat);
       }}
       className="beatos-karte"
-      style={{
-        background: isSelected ? C.surfaceContainerHigh : C.surfaceContainerLow,
-        border: `1px solid ${isCurrentBeat ? C.primary : isSelected ? C.border30 : C.border10}`,
-        borderRadius: 10,
-        overflow: "hidden",
-        cursor: "pointer",
-        transition: "border-color 0.15s, transform 0.12s",
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = "translateY(-2px)";
-        if (!isCurrentBeat) e.currentTarget.style.borderColor = C.border30;
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = "translateY(0)";
-        // Der laufende Beat behaelt seinen Rahmen, sonst geht die Markierung
-        // nach dem ersten Hover verloren.
-        e.currentTarget.style.borderColor =
-          isCurrentBeat ? C.primary : isSelected ? C.border30 : C.border10;
-      }}
+      style={{ cursor: "pointer" }}
     >
       {/* Cover */}
       <div style={{
         position: "relative",
         aspectRatio: "1 / 1",
+        borderRadius: radius.card,
+        overflow: "hidden",
         background: C.surfaceContainerHigh,
         display: "flex", alignItems: "center", justifyContent: "center",
-        overflow: "hidden",
+        // outline statt border: liegt ausserhalb der Kante, verschiebt also
+        // nichts und wird vom overflow des Covers nicht abgeschnitten.
+        outline: ring ? `2px solid ${ring}` : "none",
+        outlineOffset: 2,
       }}>
         {coverUrl
           ? <img
@@ -176,10 +189,20 @@ const GridCard = memo(function GridCard({
               alt=""
               loading="lazy"
               decoding="async"
+              className="beatos-cover"
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
             />
           : <Music size={32} color={C.onSecondaryFixedVar} strokeWidth={1.25} />
         }
+
+        {/* Status oben links — eine Ausnahme gehoert auf das Objekt, nicht in
+            eine Zeile darunter, die sonst leer bleibt. */}
+        {zeigeStatus && (
+          <div style={{ position: "absolute", left: 8, top: 8 }}>
+            <StatusPill status={status} aufBild />
+          </div>
+        )}
+
         {/* Play overlay */}
         <button
           onClick={handlePlay}
@@ -200,6 +223,7 @@ const GridCard = memo(function GridCard({
               : <Play size={14} fill={isCurrentBeat ? C.onPrimary : "#fff"} color={isCurrentBeat ? C.onPrimary : "#fff"} style={{ marginLeft: 2 }} />
           }
         </button>
+
         {/* Favorit: sichtbar nur, wenn er einer IST — sonst erst beim
             Ueberfahren. Zweihundert leere Herzen auf zweihundert Karten sagen
             nichts; ein gefuelltes unter zweihundert sagt alles. */}
@@ -210,7 +234,7 @@ const GridCard = memo(function GridCard({
           style={{
             position: "absolute", right: 8, top: 8,
             background: "rgba(0,0,0,0.5)", border: "none",
-            borderRadius: 6, padding: 5,
+            borderRadius: radius.control, padding: 5,
             cursor: "pointer", display: "flex",
             backdropFilter: "blur(4px)",
             opacity: isFav ? 1 : 0,
@@ -221,8 +245,9 @@ const GridCard = memo(function GridCard({
         </button>
       </div>
 
-      {/* Info */}
-      <div style={{ padding: "10px 12px" }}>
+      {/* Zwei Zeilen, kein Kasten. Vorher standen hier drei — die dritte war
+          eine reservierte Leerzeile fuer eine Pille, die meistens fehlte. */}
+      <div style={{ padding: "8px 2px 0" }}>
         <div style={{
           fontSize: 12, fontWeight: 700,
           color: isCurrentBeat ? C.primary : C.onSurface,
@@ -230,26 +255,25 @@ const GridCard = memo(function GridCard({
         }}>
           {beat.name}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontSize: 10, color: C.onSecondaryFixedVar }}>
-          <span style={{ fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>#{beat.id}</span>
-          {beat.key && <span>{beat.key}</span>}
-          {beat.bpm != null && <span>{beat.bpm}</span>}
-        </div>
-        {/* Die Pille zeigt nur die AUSNAHME. „Fertig" steht auf fast jedem
-            Beat — bei 212 Stueck ist das keine Auskunft mehr, sondern
-            Textur, und die seltenen Zustaende gehen darin unter. Fehlt die
-            Pille, ist der Beat fertig; das lernt man in einer Sekunde. */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginTop: 8, minHeight: 18,
+          display: "flex", alignItems: "center", gap: 5,
+          marginTop: 3, minWidth: 0,
+          // onSurfaceVariant statt onSecondaryFixedVar: 10px in #5c5b5b auf
+          // dem Seitengrund sind 2,8:1 Kontrast — lesbar ist das nicht.
+          fontSize: 10, color: C.onSurfaceVariant,
         }}>
-          {(beat.status ?? "idea") !== "finished"
-            ? <StatusPill status={beat.status ?? "idea"} size="sm" />
-            : <span />
-          }
-          <PlatformDots badges={badges} />
+          <span style={{ fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>#{beat.id}</span>
+          {beat.key && <><Trenner />{beat.key}</>}
+          {beat.bpm != null && <><Trenner />{beat.bpm}</>}
+          <span style={{ flex: 1, minWidth: 8 }} />
+          {luecke && <PlatformDots badges={badges} leer="ringe" />}
         </div>
       </div>
     </div>
   );
 });
+
+/** Der Punkt zwischen den Angaben — leiser als die Angaben selbst. */
+function Trenner() {
+  return <span style={{ color: C.onSecondaryFixedVar, flexShrink: 0 }}>·</span>;
+}

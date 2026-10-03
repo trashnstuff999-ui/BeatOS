@@ -9,15 +9,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Images, Film, RefreshCw, Loader2, FolderOpen, Settings } from "lucide-react";
+import { Images, RefreshCw, Loader2, FolderOpen, Settings } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useNavigate } from "react-router-dom";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { EmptyState, Button, IconButton } from "../ui";
-import { AssetImage } from "../AssetPickerDialog";
+import { AssetImage, AssetVideo } from "../AssetPickerDialog";
 import { AssignToProjectDialog } from "./AssignToProjectDialog";
 import type { AssetFile, StudioProject } from "../../types/studio";
 
@@ -86,7 +86,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
     <div style={{
       background: C.surfaceContainerLow,
       border: `1px solid ${C.border10}`,
-      borderRadius: 12,
+      borderRadius: radius.card,
       overflow: "hidden",
     }}>
       {/* Kopf */}
@@ -115,7 +115,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
           display: "flex", gap: 2,
           background: "rgba(255,255,255,0.03)",
           border: `1px solid ${C.border15}`,
-          borderRadius: 7, padding: 2,
+          borderRadius: radius.control, padding: 2,
         }}>
           {(["all", "image", "video"] as const).map(k => (
             <button
@@ -124,7 +124,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
               style={{
                 padding: "4px 11px",
                 background: kind === k ? C.surfaceContainerHigh : "transparent",
-                border: "none", borderRadius: 5, cursor: "pointer",
+                border: "none", borderRadius: radius.control, cursor: "pointer",
                 fontSize: 10, fontWeight: 700,
                 color: kind === k ? C.onSurface : C.onSecondaryFixedVar,
               }}
@@ -176,7 +176,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
       {!error && visible.length > 0 && (
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
           gap: 12,
           padding: 16,
         }}>
@@ -217,7 +217,7 @@ function AssetCard({ asset, onClick }: { asset: AssetFile; onClick: () => void }
       style={{
         background: C.surfaceContainerLowest,
         border: `1px solid ${hovered ? `${C.primary}60` : C.border15}`,
-        borderRadius: 10,
+        borderRadius: radius.card,
         overflow: "hidden",
         cursor: "pointer",
         padding: 0, textAlign: "left",
@@ -225,36 +225,39 @@ function AssetCard({ asset, onClick }: { asset: AssetFile; onClick: () => void }
         transition: "border-color 0.15s, transform 0.12s",
       }}
     >
+      {/* 16:9: so liegen die meisten Dateien (Thumbnails, Videos) — vorher
+          quadratisch, mit grauem Streifen über und unter jedem Bild. Ein Cover
+          bekommt seitliche Balken, bleibt aber ganz sichtbar. */}
       <div style={{
-        aspectRatio: "1 / 1",
+        aspectRatio: "16 / 9",
         background: C.surfaceContainerHigh,
         display: "flex", alignItems: "center", justifyContent: "center",
         overflow: "hidden", position: "relative",
       }}>
         {asset.kind === "image"
           ? <AssetImage path={asset.path} />
-          : <Film size={28} color={C.onSecondaryFixedVar} strokeWidth={1.25} />}
+          : <AssetVideo path={asset.path} />}
 
         {hovered && (
           <div style={{
             position: "absolute", inset: 0,
             background: "rgba(0,0,0,0.55)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: "#fff",
+            fontSize: 12, fontWeight: 700, color: "#fff",
             letterSpacing: "0.05em", textTransform: "uppercase",
           }}>
             Zuweisen
           </div>
         )}
       </div>
-      <div style={{ padding: "8px 10px 9px" }}>
+      <div style={{ padding: "9px 12px 10px" }}>
         <div style={{
-          fontSize: 10, fontFamily: "monospace", color: C.onSurface,
+          fontSize: 12, fontFamily: "monospace", color: C.onSurface,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {asset.name}
         </div>
-        <div style={{ fontSize: 9.5, color: C.onSecondaryFixedVar, marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 3 }}>
           {formatRelativeTime(asset.modified_secs)}
         </div>
       </div>

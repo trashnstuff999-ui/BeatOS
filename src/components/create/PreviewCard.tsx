@@ -8,7 +8,7 @@
 
 import { memo } from "react";
 import { FolderOpen, Image as ImageIcon, Eye, Check, X, AlertTriangle } from "lucide-react";
-import { C, STATUS_CONFIG, normalizeStatus } from "../../lib/theme";
+import { C, STATUS_CONFIG, normalizeStatus, alpha, radius } from "../../lib/theme";
 import { TagPill } from "../Tagpill";
 
 interface PreviewCardProps {
@@ -70,7 +70,7 @@ export const PreviewCard = memo(function PreviewCard({
 
       <div style={{
         background: C.surfaceContainer,
-        borderRadius: 12,
+        borderRadius: radius.card,
         overflow: "hidden",
         boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
         border: `1px solid ${C.border10}`
@@ -103,11 +103,11 @@ export const PreviewCard = memo(function PreviewCard({
           ) : (
             <div style={{
               position: "absolute", inset: 0,
-              background: "linear-gradient(135deg, #1a1919 0%, #262626 50%, #1a1919 100%)",
+              background: `linear-gradient(135deg, ${C.surfaceContainer} 0%, ${C.surfaceContainerHighest} 50%, ${C.surfaceContainer} 100%)`,
               display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 1
             }}>
-              <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="rgba(253,161,36,0.15)" strokeWidth="0.5">
+              <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke={alpha(C.primary, 0.15)} strokeWidth="0.5">
                 <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
                 <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
               </svg>
@@ -133,7 +133,7 @@ export const PreviewCard = memo(function PreviewCard({
             display: "flex", alignItems: "center", gap: 6,
             background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
             border: `1px solid ${statusMeta.border}`,
-            padding: "4px 9px", borderRadius: 999,
+            padding: "4px 9px", borderRadius: radius.full,
           }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusMeta.color }} />
             <span style={{
@@ -149,7 +149,7 @@ export const PreviewCard = memo(function PreviewCard({
             position: "absolute", top: 16, right: 16, zIndex: 4,
             background: C.primary, color: C.onPrimary,
             fontSize: 10, fontWeight: 900,
-            padding: "4px 8px", borderRadius: 4
+            padding: "4px 8px", borderRadius: radius.control
           }}>
             {previewId}
           </div>
@@ -157,7 +157,7 @@ export const PreviewCard = memo(function PreviewCard({
           {/* Title & Meta */}
           <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, zIndex: 4 }}>
             <h3 style={{
-              fontSize: 24, fontWeight: 900,
+              fontSize: 20, fontWeight: 900,
               textTransform: "uppercase", letterSpacing: "-0.02em",
               color: "#fff", marginBottom: 6, lineHeight: 1.05,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
@@ -215,14 +215,14 @@ export const PreviewCard = memo(function PreviewCard({
 
 function ReadinessChip({ label, ok, important }: { label: string; ok: boolean; important?: boolean }) {
   // vorhanden = grün, fehlt+wichtig = orange Warnung, fehlt = dezent grau
-  const color = ok ? "#22c55e" : important ? C.primary : C.onSecondaryFixedVar;
-  const bg = ok ? "rgba(34,197,94,0.10)" : important ? "rgba(253,161,36,0.10)" : "rgba(255,255,255,0.03)";
+  const color = ok ? C.mint : important ? C.primary : C.onSecondaryFixedVar;
+  const bg = ok ? "rgba(34,197,94,0.10)" : important ? alpha(C.primary, 0.10) : "rgba(255,255,255,0.03)";
   const Icon = ok ? Check : important ? AlertTriangle : X;
 
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
-      padding: "3px 8px", borderRadius: 999,
+      padding: "3px 8px", borderRadius: radius.full,
       background: bg,
       border: `1px solid ${color}30`,
       fontSize: 10, fontWeight: 700, letterSpacing: "0.02em",

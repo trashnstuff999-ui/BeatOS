@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Plus, Check } from "lucide-react";
-import { C, PLATFORM_CONFIG, type PlatformKey } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, type PlatformKey, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import type { ScheduleEntry, UploadPlatformRow } from "../../types/upload";
 
@@ -138,7 +138,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   width: "100%",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
                   padding: "14px 2px",
-                  borderRadius: 8,
+                  borderRadius: radius.control,
                   background: busy
                     ? C.surfaceContainerHigh
                     : day.isWeekend ? "rgba(255,255,255,0.02)" : "transparent",
@@ -159,7 +159,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   if (!busy) e.currentTarget.style.background = day.isWeekend ? "rgba(255,255,255,0.02)" : "transparent";
                 }}
               >
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", color: day.isToday ? C.primary : C.onSecondaryFixedVar, textTransform: "uppercase" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: day.isToday ? C.primary : C.onSecondaryFixedVar, textTransform: "uppercase" }}>
                   {day.isToday ? "Heute" : day.weekday}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: day.isToday ? C.primary : busy ? C.onSurface : C.onSurfaceVariant }}>
@@ -198,7 +198,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   minWidth: 190,
                   background: C.surfaceContainer,
                   border: `1px solid ${C.border20}`,
-                  borderRadius: 8,
+                  borderRadius: radius.control,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
                   zIndex: 20,
                   padding: 10,
@@ -222,9 +222,9 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             padding: "6px 9px",
-                            background: alreadyHere ? "rgba(52,211,153,0.08)" : C.surfaceContainerLowest,
-                            border: `1px solid ${alreadyHere ? "rgba(52,211,153,0.30)" : C.border15}`,
-                            borderRadius: 6,
+                            background: alreadyHere ? alpha(C.mint, 0.08) : C.surfaceContainerLowest,
+                            border: `1px solid ${alreadyHere ? alpha(C.mint, 0.30) : C.border15}`,
+                            borderRadius: radius.control,
                             cursor: isScheduling || alreadyHere ? "default" : "pointer",
                             fontSize: 11, fontWeight: 600,
                             color: C.onSurface,

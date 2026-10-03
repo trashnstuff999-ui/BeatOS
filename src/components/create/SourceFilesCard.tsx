@@ -4,8 +4,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { FileAudio, FileCode, Timer, CheckCircle, Star, FolderOpen } from "lucide-react";
-import { C, commonStyles } from "../../lib/theme";
+import { C, commonStyles, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { Select } from "../ui";
+import { formatFileSize } from "../../lib/archive";
 import type { AudioFileInfo, FlpFileInfo } from "../../types/create";
 
 interface SourceFilesCardProps {
@@ -25,12 +27,6 @@ export function SourceFilesCard({
   selectedFlp,
   setSelectedFlp,
 }: SourceFilesCardProps) {
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   const hasFiles = audioFiles.length > 0 || flpFiles.length > 0;
 
   return (
@@ -44,22 +40,20 @@ export function SourceFilesCard({
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileAudio size={14} color={C.mint} />
               <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                Source Audio {audioFiles.length > 0 && `(${audioFiles.length})`}
+                Quell-Audio {audioFiles.length > 0 && `(${audioFiles.length})`}
               </span>
             </div>
             {audioFiles.length > 0 ? (
               <>
-                <select
+                <Select
                   value={selectedFile}
-                  onChange={e => setSelectedFile(e.target.value)}
-                  style={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" }}
-                >
-                  {audioFiles.map(f => (
-                    <option key={f.path} value={f.path}>
-                      {f.name} {f.is_untagged && "★"}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedFile}
+                  options={audioFiles.map(f => ({
+                    value: f.path,
+                    label: f.is_untagged ? `★ ${f.name}` : f.name,
+                  }))}
+                  triggerStyle={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 12, display: "flex" }}
+                />
                 {selectedFile && (() => {
                   const file = audioFiles.find(f => f.path === selectedFile);
                   if (!file) return null;
@@ -68,7 +62,7 @@ export function SourceFilesCard({
                       <Badge icon={<FileAudio size={10} />} text={file.extension.toUpperCase()} />
                       <Badge icon={<Timer size={10} />} text={formatFileSize(file.size)} />
                       {file.is_untagged && (
-                        <Badge icon={<CheckCircle size={10} />} text="UNTAGGED" highlight />
+                        <Badge icon={<CheckCircle size={10} />} text="OHNE TAG" highlight />
                       )}
                     </div>
                   );
@@ -84,22 +78,21 @@ export function SourceFilesCard({
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileCode size={14} color={C.primary} />
               <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                Source FLP {flpFiles.length > 0 && `(${flpFiles.length})`}
+                Quell-FLP {flpFiles.length > 0 && `(${flpFiles.length})`}
               </span>
             </div>
             {flpFiles.length > 0 ? (
               <>
-                <select
+                <Select
                   value={selectedFlp}
-                  onChange={e => setSelectedFlp(e.target.value)}
-                  style={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 13, appearance: "none" }}
-                >
-                  {flpFiles.map(f => (
-                    <option key={f.path} value={f.path}>
-                      {f.name} {f.is_newest && "● NEWEST"} {f.is_master && "◆ MASTER"}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedFlp}
+                  options={flpFiles.map(f => ({
+                    value: f.path,
+                    label: [f.name, f.is_newest && "● neueste", f.is_master && "◆ Master"]
+                      .filter(Boolean).join("  "),
+                  }))}
+                  triggerStyle={{ ...commonStyles.input, width: "100%", padding: 12, fontSize: 12, display: "flex" }}
+                />
                 {selectedFlp && (() => {
                   const file = flpFiles.find(f => f.path === selectedFlp);
                   if (!file) return null;
@@ -107,20 +100,20 @@ export function SourceFilesCard({
                     <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <Badge icon={<FileCode size={10} />} text="FLP" />
                       {file.size > 0 && <Badge icon={<Timer size={10} />} text={formatFileSize(file.size)} />}
-                      {file.is_newest && <Badge icon={<CheckCircle size={10} />} text="NEWEST" highlight />}
+                      {file.is_newest && <Badge icon={<CheckCircle size={10} />} text="NEUESTE" highlight />}
                       {file.is_master && <Badge icon={<Star size={10} />} text="MASTER" />}
                     </div>
                   );
                 })()}
               </>
             ) : (
-              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>No FLP files found in root</span>
+              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine FLP im Hauptordner gefunden</span>
             )}
           </div>
         </div>
       ) : (
         <div style={{
-          padding: 24, borderRadius: 8,
+          padding: 24, borderRadius: radius.control,
           background: C.surfaceContainerLowest,
           border: `1px dashed ${C.border30}`,
           textAlign: "center",
@@ -141,8 +134,8 @@ function Badge({ icon, text, highlight }: { icon: React.ReactNode; text: string;
   return (
     <span style={{
       padding: "4px 8px",
-      background: highlight ? "rgba(52,211,153,0.15)" : C.surfaceContainerHighest,
-      borderRadius: 4,
+      background: highlight ? alpha(C.mint, 0.15) : C.surfaceContainerHighest,
+      borderRadius: radius.control,
       fontSize: 10, fontWeight: 700,
       color: highlight ? C.mint : C.onSurfaceVariant,
       display: "flex", alignItems: "center", gap: 4,

@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { CheckCircle, Music } from "lucide-react";
-import { C, commonStyles } from "../../lib/theme";
+import { C, commonStyles, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 
 interface BeatInfoCardProps {
@@ -44,7 +44,7 @@ export function BeatInfoCard({
       <div style={{
         display: "flex", alignItems: "center",
         background: C.surfaceContainerLowest,
-        borderRadius: 8,
+        borderRadius: radius.control,
         border: `1px solid ${C.border20}`,
         paddingRight: 16,
       }}>
@@ -95,7 +95,7 @@ function SmallInput({ label, value, onChange, placeholder, width, mono }: {
         placeholder={placeholder}
         style={{
           width, background: C.surfaceContainerLowest,
-          border: `1px solid ${C.border20}`, borderRadius: 6,
+          border: `1px solid ${C.border20}`, borderRadius: radius.control,
           padding: "8px 8px", fontSize: 14,
           textAlign: "center", textTransform: "uppercase",
           letterSpacing: "0.15em", outline: "none",

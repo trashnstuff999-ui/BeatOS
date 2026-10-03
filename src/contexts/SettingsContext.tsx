@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { api } from "../lib/api";
+import { useDialog } from "./DialogContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ function saveToLocalStorage(s: AppSettings) {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const { melde } = useDialog();
   const [settings, setSettings] = useState<AppSettings>(loadFromLocalStorage);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -150,18 +152,32 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       })
       .catch(e => {
         console.error("[SettingsContext] Failed to load settings from DB:", e);
+        melde(
+          `Einstellungen konnten nicht aus der Datenbank gelesen werden: ${String(e)}\n` +
+          `Für diese Sitzung gilt der zuletzt lokal gemerkte Stand.`,
+        );
         // DB unreachable — localStorage stays authoritative for this session.
         setIsLoaded(true);
       });
   }, []);
 
+  // Schlug das Schreiben in die Datenbank fehl, stand der Wert weiter im Feld
+  // und lag im localStorage — beim naechsten Start war er weg, ohne dass je
+  // etwas gemeldet wurde. Bei Pfaden, an denen der ganze Rest haengt, ist das
+  // die falsche Stelle zum Schweigen.
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     const next = { ...settingsRef.current, ...partial };
     setSettings(next);
     saveToLocalStorage(next);
     api.settings.save(settingsToDbMap(next))
-      .catch(e => console.error("[SettingsContext] Failed to save settings to DB:", e));
-  }, []);
+      .catch(e => {
+        console.error("[SettingsContext] Failed to save settings to DB:", e);
+        melde(
+          `Einstellung nicht gespeichert: ${String(e)}\n` +
+          `Sie gilt für diese Sitzung, ist nach einem Neustart aber wieder weg.`,
+        );
+      });
+  }, [melde]);
 
   return (
     <SettingsContext.Provider value={{ settings, isLoaded, updateSettings }}>

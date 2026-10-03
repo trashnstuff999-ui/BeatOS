@@ -1,7 +1,7 @@
 // src/components/ErrorBoundary.tsx
 
 import { Component, ReactNode } from "react";
-import { colors } from "../lib/theme";
+import { colors, radius } from "../lib/theme";
 
 interface Props {
   children: ReactNode;
@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
           fontFamily: "monospace",
           background: colors.surfaceContainer,
           padding: "8px 12px",
-          borderRadius: 6,
+          borderRadius: radius.control,
           wordBreak: "break-word",
         }}>
           {this.state.error?.message ?? "Unbekannter Fehler"}
@@ -62,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
           style={{
             marginTop: 8,
             padding: "6px 18px",
-            borderRadius: 6,
+            borderRadius: radius.control,
             border: `1px solid ${colors.outlineVariant}`,
             background: colors.surfaceContainerLow,
             color: colors.onSurface,

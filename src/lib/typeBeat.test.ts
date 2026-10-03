@@ -12,6 +12,12 @@ describe("parseArtists", () => {
     expect(parseArtists("Xavier Wulf")).toEqual(["Xavier Wulf"]);
   });
 
+  it("haelt ein Komma mitten im Namen zusammen", () => {
+    expect(parseArtists("nothing,nowhere")).toEqual(["nothing,nowhere"]);
+    expect(parseArtists(joinAlsoFits(["nothing,nowhere", "Scorey"])))
+      .toEqual(["nothing,nowhere", "Scorey"]);
+  });
+
   it("handles empty/null", () => {
     expect(parseArtists("")).toEqual([]);
     expect(parseArtists(null)).toEqual([]);

@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React from "react";
-import { C } from "../../lib/theme";
+import { C, radius } from "../../lib/theme";
 
 interface SectionCardProps {
   icon?: React.ElementType;
@@ -23,7 +23,7 @@ export function SectionCard({ icon: Icon, title, actions, children, style }: Sec
     <section style={{
       background: C.surfaceContainerLow,
       border: `1px solid ${C.border10}`,
-      borderRadius: 12,
+      borderRadius: radius.card,
       padding: 20,
       boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
       ...style,
@@ -65,7 +65,7 @@ export function SectionIconBtn({ icon: Icon, title, onClick, disabled }: {
       title={title}
       disabled={disabled}
       style={{
-        width: 26, height: 26, borderRadius: 6,
+        width: 26, height: 26, borderRadius: radius.control,
         background: "transparent",
         border: `1px solid ${C.border15}`,
         cursor: disabled ? "not-allowed" : "pointer",

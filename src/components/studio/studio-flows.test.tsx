@@ -16,8 +16,10 @@ import { render, screen, within, waitFor, fireEvent } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { SettingsProvider } from "../../contexts/SettingsContext";
 import { AudioPlayerProvider } from "../../contexts/AudioPlayerContext";
+import { DialogProvider } from "../../contexts/DialogContext";
 import { ProjectsPane } from "./ProjectsPane";
 import { AssetsPane } from "./AssetsPane";
 import type { AssetFile, StudioProject } from "../../types/studio";
@@ -89,14 +91,18 @@ beforeEach(() => {
 });
 
 /** ProjectsPane hängt an Router, Player und Settings — der Inspector braucht alle drei. */
-function renderProjects() {
+function renderProjects(view: "work" | "cleanup" = "work") {
   return render(
+    // Reihenfolge wie in App.tsx: DialogProvider aussen, damit auch der
+    // SettingsProvider melden kann.
     <MemoryRouter>
-      <SettingsProvider>
-        <AudioPlayerProvider>
-          <ProjectsPane productionPaths={["C:\\PROD"]} refreshKey={0} />
-        </AudioPlayerProvider>
-      </SettingsProvider>
+      <DialogProvider>
+        <SettingsProvider>
+          <AudioPlayerProvider>
+            <ProjectsPane productionPaths={["C:\\PROD"]} refreshKey={0} view={view} />
+          </AudioPlayerProvider>
+        </SettingsProvider>
+      </DialogProvider>
     </MemoryRouter>,
   );
 }
@@ -105,11 +111,13 @@ function renderProjects() {
 function renderAssets(props: { assetPath: string; onAssigned?: () => void; projects?: StudioProject[] }) {
   return render(
     <MemoryRouter>
-      <AssetsPane
-        assetPath={props.assetPath}
-        projects={props.projects ?? PROJECTS}
-        onAssigned={props.onAssigned ?? vi.fn()}
-      />
+      <DialogProvider>
+        <AssetsPane
+          assetPath={props.assetPath}
+          projects={props.projects ?? PROJECTS}
+          onAssigned={props.onAssigned ?? vi.fn()}
+        />
+      </DialogProvider>
     </MemoryRouter>,
   );
 }
@@ -137,84 +145,6 @@ function rowOf(name: string): HTMLElement {
   throw new Error(`Keine Zeile für „${name}" gefunden`);
 }
 
-describe("Q1 — die Zeile bietet nur an, was von Hand geht", () => {
-  it("zeigt in Ruhe eine Pille, bei Hover die zwei Handstatus", async () => {
-    stubInvoke();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    // Project_102 ist eine Idee in der Sektion "Priorität" — die anderen
-    // Statuswörter haben in der Zeile nichts verloren.
-    const zeile = rowOf("Project_102");
-    expect(within(zeile).getByText("Idee")).toBeInTheDocument();
-    expect(within(zeile).queryByText("Überarbeiten")).not.toBeInTheDocument();
-    expect(within(zeile).queryByText("Kann weg")).not.toBeInTheDocument();
-
-    // fireEvent statt user.hover/user.click: user-event bewegt zwischen den
-    // beiden Aufrufen den Zeiger, der Hover fällt kurz weg und der gerade
-    // geholte Knopf hängt nicht mehr im DOM. Im Browser bleibt der Zeiger
-    // in der Zeile — hier muss der Hover von Hand stehenbleiben.
-    fireEvent.mouseEnter(zeile);
-
-    // Die automatischen Stufen bekommen KEINEN Knopf — die entstehen aus
-    // Dateien im Ordner, nicht aus einem Klick.
-    expect(within(zeile).queryByText("Exportiert")).not.toBeInTheDocument();
-    expect(within(zeile).queryByText("Bereit")).not.toBeInTheDocument();
-
-    fireEvent.click(within(zeile).getByText("Kann weg"));
-
-    await waitFor(() => {
-      const calls = vi.mocked(invoke).mock.calls.filter(c => c[0] === "update_studio_project");
-      expect(calls).toHaveLength(1);
-      expect(calls[0][1]).toMatchObject({ status: "discard" });
-    });
-
-    // Der Klick auf den Knopf darf nicht zusätzlich den Inspector aufreißen
-    expect(screen.queryByText("FLP-Versionen (1)")).not.toBeInTheDocument();
-  });
-
-  it("gibt ein markiertes Projekt beim zweiten Klick an die Automatik zurück", async () => {
-    stubInvoke();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    // Project_102 hat keine Exportdateien — die automatische Stufe ist "Idee".
-    // Es steht wegen des Sterns in "Priorität" und bleibt dort auch als
-    // "Überarbeiten", die Zeile wandert also zwischen den Klicks nicht weg.
-    const zeile = rowOf("Project_102");
-    fireEvent.mouseEnter(zeile);
-    fireEvent.click(within(zeile).getByText("Überarbeiten"));
-
-    await waitFor(() => {
-      const calls = vi.mocked(invoke).mock.calls.filter(c => c[0] === "update_studio_project");
-      expect(calls[0][1]).toMatchObject({ status: "wip" });
-    });
-
-    // Jetzt heißt auch die Pille „Überarbeiten" — gemeint ist der Knopf.
-    const markiert = rowOf("Project_102");
-    fireEvent.mouseEnter(markiert);
-    fireEvent.click(within(markiert).getByRole("button", { name: "Überarbeiten" }));
-
-    await waitFor(() => {
-      const calls = vi.mocked(invoke).mock.calls.filter(c => c[0] === "update_studio_project");
-      expect(calls).toHaveLength(2);
-      expect(calls[1][1]).toMatchObject({ status: "idea" });
-    });
-  });
-
-  it("zeigt die Schalter auch, solange der Inspector auf der Zeile steht", async () => {
-    stubInvoke();
-    const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    // Ohne Hover-Pfad erreichbar: Zeile öffnen genügt.
-    await user.click(rowOf("Project_102"));
-    await screen.findByText("FLP-Versionen (1)");
-    expect(within(rowOf("Project_102")).getByText("Kann weg")).toBeInTheDocument();
-  });
-});
-
 describe("Aufräumen — die eine Stelle, an der gelöscht wird", () => {
   const RAUS_1 = project({ name: "Project_300", status: "discard" });
   const RAUS_2 = project({ name: "Project_301", status: "discard" });
@@ -228,13 +158,18 @@ describe("Aufräumen — die eine Stelle, an der gelöscht wird", () => {
 
   it("räumt genau die markierten Ordner weg und fragt vorher", async () => {
     stubInvoke([], [READY, RAUS_1, RAUS_2]);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
+    renderProjects("cleanup");
+    await screen.findByText("2 Projekte können weg");
 
     expect(screen.getByText("2 Projekte können weg")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /In den Papierkorb/ }));
+
+    // Nicht ungefragt: erst die Rückfrage, dann erst wird angefasst.
+    const rueckfrage = await screen.findByRole("dialog");
+    expect(rueckfrage).toHaveAccessibleName("2 Projekte in den Papierkorb?");
+    expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "trash_source_folder")).toHaveLength(0);
+    await user.click(within(rueckfrage).getByRole("button", { name: /In den Papierkorb/ }));
 
     await waitFor(() => {
       const calls = vi.mocked(invoke).mock.calls.filter(c => c[0] === "trash_source_folder");
@@ -243,26 +178,29 @@ describe("Aufräumen — die eine Stelle, an der gelöscht wird", () => {
       ]);
     });
 
-    // Nicht ungefragt: einmal fürs Löschen, einmal fürs Nachrücken der Nummern
-    expect(confirm).toHaveBeenCalledTimes(2);
-    // READY ist nicht markiert und bleibt stehen
-    expect(screen.getByText("ARE YOU HERE")).toBeInTheDocument();
+    // Danach die zweite Rückfrage: sollen die Nummern nachrücken?
+    const nachruecken = await screen.findByRole("dialog");
+    expect(nachruecken).toHaveAccessibleName("Nummern nachrücken lassen?");
+    await user.click(within(nachruecken).getByRole("button", { name: "Später" }));
+
+    // READY ist nicht markiert: es steht auch nicht in der Aufräumen-Liste
+    expect(screen.queryByText("ARE YOU HERE")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /In den Papierkorb/ })).not.toBeInTheDocument()
     );
-    confirm.mockRestore();
   });
 
   it("löscht nichts, wenn die Rückfrage verneint wird", async () => {
     stubInvoke([], [READY, RAUS_1]);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
+    renderProjects("cleanup");
+    await screen.findByText("1 Projekt kann weg");
 
     await user.click(screen.getByRole("button", { name: /In den Papierkorb/ }));
+    const rueckfrage = await screen.findByRole("dialog");
+    await user.click(within(rueckfrage).getByRole("button", { name: "Abbrechen" }));
+
     expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "trash_source_folder")).toHaveLength(0);
-    confirm.mockRestore();
   });
 });
 
@@ -304,39 +242,51 @@ describe("Q2 + Q3 — was aus der Zeile verschwunden ist", () => {
   });
 });
 
-describe("B7 — die Status-Zähler passen zu dem, was die Liste zeigt", () => {
+describe("Scheibe 7 — namenlose Projekte zeigen ihre Notiz", () => {
+  it("zeigt die erste Notizzeile nur, wenn es keinen Songtitel gibt", async () => {
+    stubInvoke([], [
+      project({ name: "Project_0861", status: "wip", notes: "\nfür JarnoGm — Hook neu\nzweite Zeile" }),
+      project({ name: "0857", song_name: "ARE YOU HERE", status: "wip", notes: "steht nicht in der Zeile" }),
+    ]);
+    renderProjects();
+    await screen.findByText("ARE YOU HERE");
+
+    expect(within(rowOf("Project_0861")).getByText("für JarnoGm — Hook neu")).toBeInTheDocument();
+    expect(screen.queryByText("zweite Zeile")).not.toBeInTheDocument();
+    expect(screen.queryByText("steht nicht in der Zeile")).not.toBeInTheDocument();
+  });
+});
+
+describe("B7 — Chips und Sektionen zählen dasselbe", () => {
   it("zählt über die gesuchte Menge, nicht über alle Projekte", async () => {
     stubInvoke();
     const user = userEvent.setup();
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    // Ungefiltert: 3 Projekte, davon 2 Ideen
-    expect(screen.getByText("Alle (3)")).toBeInTheDocument();
-    expect(screen.getByText("Idee (2)")).toBeInTheDocument();
+    // Arbeitsliste: READY und die alte Idee mit Stern. Die steht unter
+    // „Priorität" — also zählt auch der Chip sie dort und nicht unter „Idee".
+    expect(screen.getByText("Alle (2)")).toBeInTheDocument();
+    expect(screen.getByText("Priorität (1)")).toBeInTheDocument();
+    expect(screen.getByText("Idee (0)")).toBeInTheDocument();
 
-    // Suche nach dem fertigen Track → die Zahlen müssen mitgehen, sonst
-    // widersprechen die Chips der Liste darunter.
+    // Suche nach dem fertigen Track → die Zahlen müssen mitgehen
     await user.type(screen.getByPlaceholderText("Projekt, Tonart, BPM …"), "ARE YOU");
 
     await waitFor(() => expect(screen.getByText("Alle (1)")).toBeInTheDocument());
-    expect(screen.getByText("Idee (0)")).toBeInTheDocument();
+    expect(screen.getByText("Priorität (0)")).toBeInTheDocument();
     expect(screen.getByText("Bereit (1)")).toBeInTheDocument();
   });
 
-  it("zählt den Prioritäts-Filter mit", async () => {
+  it("zeigt nach Klick auf einen Chip genau seine Sektion", async () => {
     stubInvoke();
     const user = userEvent.setup();
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    // Der Filter-Chip heißt genau "Priorität"; der Sektionskopf trägt zusätzlich
-    // seine Anzahl ("Priorität1") und ist damit unterscheidbar.
-    const chip = screen.getAllByRole("button").find(b => b.textContent === "Priorität");
-    expect(chip).toBeDefined();
-    await user.click(chip!);
-
-    await waitFor(() => expect(screen.getByText("Alle (1)")).toBeInTheDocument());
+    await user.click(screen.getByText("Priorität (1)"));
+    await waitFor(() => expect(screen.queryByText("ARE YOU HERE")).not.toBeInTheDocument());
+    expect(screen.getByText("Project_102")).toBeInTheDocument();
   });
 });
 
@@ -361,28 +311,6 @@ describe("B4 — „Priorität zuerst“ ist raus", () => {
   });
 });
 
-describe("B5 — Umbenennen sagt, was es umbenennt", () => {
-  it("stellt den Stift an den Ordner und weist den Titel als Export aus", async () => {
-    stubInvoke();
-    const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    await user.click(rowOf("ARE YOU HERE"));
-    await screen.findByText("FLP-Versionen (1)");
-
-    // Der Titel kommt aus der MP3 — als Tooltip am Titel, nicht als Dauerzeile
-    expect(screen.getByTitle(/Titel kommt aus dem Export/)).toBeInTheDocument();
-    // Und der Ordnername steht als eigener, bearbeitbarer Knopf da
-    const ordnerKnopf = screen.getByTitle(/Ordner umbenennen/);
-    expect(within(ordnerKnopf).getByText("0857")).toBeInTheDocument();
-
-    await user.click(ordnerKnopf);
-    expect(screen.getByText("Ordnername")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("0857")).toBeInTheDocument();
-  });
-});
-
 describe("F1 — Zeilenklick öffnet das Projekt", () => {
   it("öffnet den Inspector statt still ein Asset-Ziel zu wählen", async () => {
     stubInvoke();
@@ -397,11 +325,9 @@ describe("F1 — Zeilenklick öffnet das Projekt", () => {
 
     // Der Inspector ist da — mit den Sachen, die man am Projekt tun will
     expect(await screen.findByText("FLP-Versionen (1)")).toBeInTheDocument();
-    // Notizen liegen zugeklappt da, solange keine da sind — ein leeres Feld
-    // war das zweitgrößte Element im Panel und meistens ungenutzt.
-    expect(screen.queryByPlaceholderText(/Hook neu einspielen/)).not.toBeInTheDocument();
-    await user.click(screen.getByText("Notiz hinzufügen"));
+    // Das Notizfeld steht immer da — ohne Umweg über „Notiz hinzufügen"
     expect(screen.getByPlaceholderText(/Hook neu einspielen/)).toBeInTheDocument();
+    expect(screen.queryByText("Notiz hinzufügen")).not.toBeInTheDocument();
     // …inklusive der Asset-Slots: der Projekt-zuerst-Weg endet nicht mehr
     // in einem anderen Tab.
     expect(screen.getByText("Cover")).toBeInTheDocument();
@@ -421,8 +347,8 @@ describe("B3 — der Stern schlägt das Alter", () => {
 
     await screen.findByText("ARE YOU HERE");
 
-    // Ohne Stern: alte Idee, landet in der zugeklappten Sektion "Lange inaktiv"
-    expect(screen.getByText("Lange inaktiv")).toBeInTheDocument();
+    // Ohne Stern: alte Idee, gehört zum Aufräumen und steht nicht in der Arbeitsliste
+    expect(screen.queryByText("Lange inaktiv")).not.toBeInTheDocument();
     expect(screen.queryByText("Project_12")).not.toBeInTheDocument();
 
     // Mit Stern: sichtbar in "Priorität". "Idee" ist genauso zugeklappt wie
@@ -561,9 +487,11 @@ describe("Q1 — Mehrfachauswahl für die Triage", () => {
       expect(geschrieben.every(g => g.status === "discard")).toBe(true);
     });
 
-    // Danach ist die Auswahl weg und die Aufräum-Leiste übernimmt wieder
+    // Danach ist die Auswahl weg, und die drei sind aus der Arbeitsliste
+    // ins Aufräumen gewandert
     await waitFor(() => expect(screen.queryByText(/ausgewählt/)).not.toBeInTheDocument());
-    expect(screen.getByText("3 Projekte können weg")).toBeInTheDocument();
+    // (das Panel mit DREI gleitet noch kurz hinaus — darum warten)
+    await waitFor(() => expect(screen.queryByText("DREI")).not.toBeInTheDocument());
   });
 
   it("nimmt mit Strg einzeln dazu und wieder heraus", async () => {
@@ -626,7 +554,6 @@ describe("S5 — die Auswahl bleibt ehrlich", () => {
 
   it("zählt ein weggeräumtes Projekt nicht weiter mit", async () => {
     stubInvoke([], [A, B, C]);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     renderProjects();
     await screen.findByText("DREI");
@@ -635,13 +562,11 @@ describe("S5 — die Auswahl bleibt ehrlich", () => {
     fireEvent.click(rowOf("ZWEI"), { ctrlKey: true });
     expect(screen.getByText("2 ausgewählt")).toBeInTheDocument();
 
-    // Eines davon wandert über den Zeilen-Knopf in den Papierkorb
-    const zeile = rowOf("ZWEI");
-    fireEvent.mouseEnter(zeile);
-    await user.click(within(zeile).getByTitle("Projektordner in den Papierkorb"));
+    // Eines davon ist beim nächsten Scan weg (z.B. im Explorer gelöscht)
+    stubInvoke([], [A, C]);
+    await user.click(screen.getByRole("button", { name: /^Scan/ }));
 
     await waitFor(() => expect(screen.getByText("1 ausgewählt")).toBeInTheDocument());
-    confirm.mockRestore();
   });
 
   it("beginnt eine neue Spanne, statt die Auswahl wegzuwerfen", async () => {
@@ -677,8 +602,7 @@ describe("Notiz-Debounce gegen gleichzeitige Änderungen", () => {
     renderProjects();
 
     await user.click(await screen.findByText("Project_500"));
-    await user.click(await screen.findByText("Notiz hinzufügen"));
-    await user.type(screen.getByPlaceholderText(/Hook neu/), "abc");
+    await user.type(await screen.findByPlaceholderText(/Hook neu/), "abc");
 
     // Innerhalb der 600 ms: der Stern im Inspector (der letzte im Dokument)
     const sterne = screen.getAllByTitle("Als Priorität markieren");
@@ -690,5 +614,36 @@ describe("Notiz-Debounce gegen gleichzeitige Änderungen", () => {
       // Die Notiz kommt zuletzt — und muss den Stern mitnehmen, nicht löschen
       expect(calls[1][1]).toMatchObject({ priority: 1, notes: "abc" });
     });
+  });
+});
+
+describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
+  it("kopiert die gewaehlte FLP unter die naechste freie Nummer", async () => {
+    const calls = stubInvoke();
+    const alt = "C:\\ARCHIV\\0123 - ALT\\01_SAVEFILES\\alt.flp";
+    vi.mocked(open).mockResolvedValue(alt as never);
+    renderProjects();
+    await screen.findByText("ARE YOU HERE");
+
+    await userEvent.click(screen.getByTitle(/aus einer vorhandenen FLP/i));
+
+    // Keine Template-FLP in den Einstellungen — die Vorlage aus dem Dialog
+    // muss trotzdem durchgehen, und der Name kommt weiter aus der Nummernvergabe.
+    await waitFor(() => expect(calls["create_project_folder"]).toBeTruthy());
+    expect(calls["create_project_folder"][0]).toMatchObject({
+      root: "C:\\PROD",
+      name: "Project_0858",
+      templateFlp: alt,
+    });
+  });
+
+  it("legt nichts an, wenn der Dialog abgebrochen wird", async () => {
+    const calls = stubInvoke();
+    vi.mocked(open).mockResolvedValue(null as never);
+    renderProjects();
+    await screen.findByText("ARE YOU HERE");
+
+    await userEvent.click(screen.getByTitle(/aus einer vorhandenen FLP/i));
+    expect(calls["create_project_folder"]).toBeUndefined();
   });
 });

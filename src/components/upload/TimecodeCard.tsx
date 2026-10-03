@@ -349,7 +349,7 @@ export function TimecodeCard({ beat, onSaved }: {
               key={v}
               onClick={() => hinzufuegen(naechsterName(v, vorhandeneNamen))}
               style={{
-                padding: "4px 10px", borderRadius: 9999,
+                padding: "4px 10px", borderRadius: radius.full,
                 background: C.surfaceContainerHigh, border: `1px solid ${C.border15}`,
                 fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
                 textTransform: "uppercase", color: C.onSurfaceVariant, cursor: "pointer",
@@ -361,7 +361,7 @@ export function TimecodeCard({ beat, onSaved }: {
         </div>
 
         {hinweis && (
-          <div style={{ fontSize: 11, color: "#fda124", lineHeight: 1.5 }}>{hinweis}</div>
+          <div style={{ fontSize: 11, color: C.primary, lineHeight: 1.5 }}>{hinweis}</div>
         )}
 
         <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>

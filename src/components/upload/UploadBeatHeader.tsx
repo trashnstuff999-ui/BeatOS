@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Music, CheckCircle2, Search, ChevronDown, X } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { C } from "../../lib/theme";
+import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { computeReadySteps } from "../../lib/uploadReady";
 import type { UploadData } from "../../types/upload";
@@ -109,7 +109,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
       <div style={{
         background: C.surfaceContainerLow,
         border: `1px solid ${open ? C.primary + "50" : C.border10}`,
-        borderRadius: 12,
+        borderRadius: radius.card,
         boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         transition: "border-color 0.15s",
       }}>
@@ -119,7 +119,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
       }}>
         {/* Cover */}
         <div style={{
-          width: 56, height: 56, borderRadius: 8, flexShrink: 0,
+          width: 56, height: 56, borderRadius: radius.control, flexShrink: 0,
           background: C.surfaceContainerHigh,
           border: `1px solid ${C.border15}`,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -186,7 +186,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
             onClick={() => onSelect(null)}
             title="Auswahl aufheben"
             style={{
-              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+              width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
               background: "transparent", border: `1px solid ${C.border15}`,
               cursor: "pointer", color: C.onSurfaceVariant,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -208,8 +208,8 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
               // nicht schreien.
               <span style={{
                 display: "flex", alignItems: "center", gap: 8,
-                padding: "8px 14px", borderRadius: 8,
-                background: "rgba(52,211,153,0.10)",
+                padding: "8px 14px", borderRadius: radius.control,
+                background: alpha(C.mint, 0.10),
                 border: `1px solid ${C.mint}55`,
                 fontSize: 13, fontWeight: 700, color: C.mint,
                 whiteSpace: "nowrap",
@@ -252,7 +252,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
           width: "min(640px, 100%)",
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
-          borderRadius: 10,
+          borderRadius: radius.card,
           boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
           zIndex: 30,
           maxHeight: 380,
@@ -293,17 +293,21 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
               </div>
             )}
             {!isSearching && results.map(b => (
-              <div
+              <button
                 key={b.id}
                 onClick={() => handlePick(b)}
+                title={`#${b.id} ${b.name} auswählen`}
                 style={{
                   padding: "10px 14px",
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
                   cursor: "pointer",
+                  width: "100%", textAlign: "left",
+                  background: "none",
+                  border: "none",
                   borderBottom: `1px solid ${C.border10}`,
-                  fontSize: 13,
+                  fontSize: 13, fontFamily: "inherit",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
@@ -327,7 +331,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
                 }}>
                   {b.key || "—"} · {b.bpm ?? "—"}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -340,7 +344,7 @@ function MetaPill({ children, mono, title }: { children: React.ReactNode; mono?:
   return (
     <span title={title} style={{
       padding: "2px 9px",
-      borderRadius: 9999,
+      borderRadius: radius.full,
       fontSize: 10, fontWeight: 600,
       fontFamily: mono ? "monospace" : undefined,
       background: "rgba(255,255,255,0.04)",

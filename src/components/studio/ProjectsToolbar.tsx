@@ -6,9 +6,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { Search, Star, ArrowUpDown, ChevronDown, X } from "lucide-react";
-import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
-import type { StudioStatus } from "../../types/studio";
+import { Search, ArrowUpDown, ChevronDown, X } from "lucide-react";
+import { C, radius } from "../../lib/theme";
 
 export type SortMode = "modified" | "name" | "oldest";
 
@@ -21,17 +20,22 @@ export const SORT_LABELS: Record<SortMode, string> = {
   oldest: "Älteste zuerst",
 };
 
-// „Kann weg" steht am Ende, hinter allem, was noch Arbeit werden kann.
-const STATUS_ORDER: StudioStatus[] = ["idea", "wip", "exported", "ready", "discard"];
+/** Ein Filter-Chip = eine Sektion der Liste, mit derselben Zahl wie ihr Kopf. */
+export interface SectionChip {
+  key: string;
+  label: string;
+  color: string;
+  count: number;
+}
 
 interface ProjectsToolbarProps {
   search: string;
   onSearch: (v: string) => void;
-  statusFilter: StudioStatus | null;
-  onStatusFilter: (s: StudioStatus | null) => void;
-  counts: Record<StudioStatus, number> & { all: number };
-  onlyPriority: boolean;
-  onOnlyPriority: (v: boolean) => void;
+  /** Die Sektionen dieser Ansicht — Chips und Sektionsköpfe zählen dasselbe. */
+  chips: SectionChip[];
+  total: number;
+  active: string | null;
+  onActive: (key: string | null) => void;
   roots: string[];
   rootFilter: string | null;
   onRootFilter: (r: string | null) => void;
@@ -41,9 +45,7 @@ interface ProjectsToolbarProps {
 
 export function ProjectsToolbar({
   search, onSearch,
-  statusFilter, onStatusFilter,
-  counts,
-  onlyPriority, onOnlyPriority,
+  chips, total, active, onActive,
   roots, rootFilter, onRootFilter,
   sortMode, onSortMode,
 }: ProjectsToolbarProps) {
@@ -60,7 +62,7 @@ export function ProjectsToolbar({
           display: "flex", alignItems: "center", gap: 8,
           background: C.surfaceContainerLowest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           padding: "7px 11px",
         }}>
           <Search size={12} color={C.onSecondaryFixedVar} />
@@ -70,7 +72,7 @@ export function ProjectsToolbar({
             placeholder="Projekt, Tonart, BPM …"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
-              color: C.onSurface, fontSize: 12,
+              color: C.onSurface, fontSize: 13,
             }}
           />
           {search && (
@@ -89,33 +91,20 @@ export function ProjectsToolbar({
       {/* Row 2: status chips + priority + roots */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <FilterChip
-          label={`Alle (${counts.all})`}
-          active={statusFilter === null}
-          onClick={() => onStatusFilter(null)}
+          label={`Alle (${total})`}
+          active={active === null}
+          onClick={() => onActive(null)}
         />
-        {STATUS_ORDER.map(s => {
-          const m = STUDIO_STATUS_CONFIG[s];
-          return (
-            <FilterChip
-              key={s}
-              label={`${m.label} (${counts[s]})`}
-              active={statusFilter === s}
-              color={m.color}
-              dot
-              onClick={() => onStatusFilter(statusFilter === s ? null : s)}
-            />
-          );
-        })}
-
-        <span style={{ width: 1, height: 16, background: C.border15, margin: "0 4px" }} />
-
-        <FilterChip
-          label="Priorität"
-          icon={<Star size={10} fill={onlyPriority ? C.primary : "none"} strokeWidth={2} />}
-          active={onlyPriority}
-          color={C.primary}
-          onClick={() => onOnlyPriority(!onlyPriority)}
-        />
+        {chips.map(c => (
+          <FilterChip
+            key={c.key}
+            label={`${c.label} (${c.count})`}
+            active={active === c.key}
+            color={c.color}
+            dot
+            onClick={() => onActive(active === c.key ? null : c.key)}
+          />
+        ))}
 
         {roots.length > 1 && (
           <>
@@ -140,13 +129,12 @@ export function ProjectsToolbar({
 
 // ─── Chip ────────────────────────────────────────────────────────────────────
 
-function FilterChip({ label, active, onClick, color, dot, icon }: {
+function FilterChip({ label, active, onClick, color, dot }: {
   label: string;
   active: boolean;
   onClick: () => void;
   color?: string;
   dot?: boolean;
-  icon?: React.ReactNode;
 }) {
   const accent = color ?? C.onSurface;
   return (
@@ -154,18 +142,17 @@ function FilterChip({ label, active, onClick, color, dot, icon }: {
       onClick={onClick}
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,
-        padding: "4px 10px",
-        borderRadius: 9999,
+        padding: "5px 12px",
+        borderRadius: radius.full,
         background: active ? `${accent}18` : "transparent",
         border: `1px solid ${active ? `${accent}55` : C.border15}`,
         color: active ? accent : C.onSurfaceVariant,
         cursor: "pointer",
-        fontSize: 10, fontWeight: 600,
+        fontSize: 12, fontWeight: 600,
         transition: "all 0.15s",
       }}
     >
-      {icon}
-      {dot && <span style={{ width: 5, height: 5, borderRadius: "50%", background: color }} />}
+      {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />}
       {label}
     </button>
   );
@@ -192,11 +179,11 @@ function SortDropdown({ value, onChange }: { value: SortMode; onChange: (m: Sort
         onClick={() => setOpen(o => !o)}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          padding: "6px 11px", borderRadius: 7,
+          padding: "6px 11px", borderRadius: radius.control,
           background: "transparent",
           border: `1px solid ${open ? C.border30 : C.border15}`,
           color: C.onSurfaceVariant, cursor: "pointer",
-          fontSize: 10, fontWeight: 600,
+          fontSize: 12, fontWeight: 600,
         }}
       >
         <ArrowUpDown size={11} strokeWidth={2} />
@@ -209,7 +196,7 @@ function SortDropdown({ value, onChange }: { value: SortMode; onChange: (m: Sort
           minWidth: 170,
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
           zIndex: 15,
           overflow: "hidden",

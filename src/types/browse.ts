@@ -129,11 +129,6 @@ export function parseTags(tagsString: string | null): string[] {
   return tagsString.split(",").map(t => t.trim()).filter(t => t.length > 0);
 }
 
-/** Convert tags array to comma-separated string */
-export function stringifyTags(tags: string[]): string {
-  return tags.join(", ");
-}
-
 /** Check if beat is favorited */
 export function isFavorite(beat: Beat): boolean {
   return beat.favorite === 1;
@@ -149,17 +144,4 @@ export function beatToEditForm(beat: Beat): EditFormState {
     notes: beat.notes || "",
     sold_to: beat.sold_to || "",
   };
-}
-
-/** Check if form has changed from original beat */
-export function isFormDirty(form: EditFormState, originalBeat: Beat): boolean {
-  const original = beatToEditForm(originalBeat);
-  return (
-    form.name !== original.name ||
-    form.bpm !== original.bpm ||
-    form.key !== original.key ||
-    form.notes !== original.notes ||
-    form.sold_to !== original.sold_to ||
-    JSON.stringify(form.tags) !== JSON.stringify(original.tags)
-  );
 }

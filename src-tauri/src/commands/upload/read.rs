@@ -100,6 +100,8 @@ pub struct AssetCheck {
     pub mp3: Option<String>,
     pub wav: Option<String>,
     pub flp: Option<String>,
+    /// Voller Pfad zu `flp` — das Archiv öffnet ihn direkt in FL Studio.
+    pub flp_path: Option<String>,
     pub cover: Option<String>,
     pub thumbnail: Option<String>,
     pub video: Option<String>,
@@ -216,7 +218,7 @@ pub fn get_upload_data(beat_id: String) -> Result<UploadData, String> {
 /// Root wins on collisions — `scan_dir_into` only fills slots that are still None.
 fn scan_beat_assets(beat_root: &Path) -> AssetCheck {
     let mut out = AssetCheck {
-        mp3: None, wav: None, flp: None,
+        mp3: None, wav: None, flp: None, flp_path: None,
         cover: None, thumbnail: None, video: None,
         upload_files: UploadFilesState {
             beatstars_txt: false,
@@ -251,20 +253,10 @@ fn scan_beat_assets(beat_root: &Path) -> AssetCheck {
     // FLP lives in 01_SAVEFILES/ (new) or 03_PROJECTS/ (legacy).
     // Try new layout first, fall back to legacy.
     for subdir_name in ["01_SAVEFILES", "03_PROJECTS"] {
-        if out.flp.is_some() { break; }
-        let dir = beat_root.join(subdir_name);
-        if !dir.is_dir() { continue; }
-        if let Ok(rd) = fs::read_dir(&dir) {
-            for entry in rd.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if !path.is_file() { continue; }
-                if path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) == Some("flp".into()) {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        out.flp = Some(name.to_string());
-                        break;
-                    }
-                }
-            }
+        if let Some(path) = pick_flp(&beat_root.join(subdir_name)) {
+            out.flp = path.file_name().and_then(|n| n.to_str()).map(String::from);
+            out.flp_path = Some(path.to_string_lossy().to_string());
+            break;
         }
     }
 
@@ -280,6 +272,23 @@ fn scan_beat_assets(beat_root: &Path) -> AssetCheck {
     out.upload_files.youtube_txt    = exists_any("youtube.txt");
 
     out
+}
+
+/// Welche FLP eines Ordners „die" FLP ist — dieselbe Regel wie beim Umbenennen
+/// (rename.rs): "master" im Namen gewinnt, sonst die neueste. Vorher war es die
+/// erste, die das Dateisystem lieferte — mit _old daneben also Glückssache.
+fn pick_flp(dir: &Path) -> Option<std::path::PathBuf> {
+    let flps: Vec<_> = fs::read_dir(dir).ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_file()
+            && p.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("flp")) == Some(true))
+        .collect();
+    let ist_master = |p: &std::path::PathBuf| p.file_name()
+        .and_then(|n| n.to_str()).map(|n| n.to_lowercase().contains("master")).unwrap_or(false);
+    flps.iter().find(|p| ist_master(p)).cloned().or_else(|| {
+        flps.into_iter().max_by_key(|p| fs::metadata(p).and_then(|m| m.modified()).ok())
+    })
 }
 
 /// Scan a single directory and fill any still-empty audio / video / image
@@ -340,6 +349,25 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
 #[cfg(test)]
 mod tests {
     use super::promote_past_scheduled;
+
+    #[test]
+    fn pick_flp_master_vor_neuester() {
+        let dir = std::env::temp_dir().join(format!("beatos_pick_flp_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SONG_master.flp"), b"").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(dir.join("SONG_old.flp"), b"").unwrap();
+        std::fs::write(dir.join("notiz.txt"), b"").unwrap();
+        assert!(super::pick_flp(&dir).unwrap().ends_with("SONG_master.flp"));
+        // Ohne master: die neueste
+        std::fs::remove_file(dir.join("SONG_master.flp")).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(dir.join("SONG.flp"), b"").unwrap();
+        assert!(super::pick_flp(&dir).unwrap().ends_with("SONG.flp"));
+        assert!(super::pick_flp(&dir.join("gibtsnicht")).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     use rusqlite::Connection;
 
     fn test_conn() -> Connection {

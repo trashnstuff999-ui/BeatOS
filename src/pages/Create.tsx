@@ -29,7 +29,7 @@ import { useTagManager } from "../contexts/TagManagerContext";
 
 // ─── Lib Imports ────────────────────────────────────────────────────────────
 import { FolderPlus, Info, FolderOpen, RefreshCw } from "lucide-react";
-import { C } from "../lib/theme";
+import { C, alpha, radius } from "../lib/theme";
 import { EmptyState, Button } from "../components/ui";
 import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 
@@ -427,14 +427,14 @@ export default function Create() {
 
             {/* Hinweis: Unterordner werden beim Archivieren automatisch angelegt */}
             <div style={{
-              padding: 16, borderRadius: 8,
-              background: "rgba(148,146,255,0.05)",
-              border: "1px solid rgba(148,146,255,0.10)",
+              padding: 16, borderRadius: radius.control,
+              background: alpha(C.tertiary, 0.05),
+              border: `1px solid ${alpha(C.tertiary, 0.10)}`,
               display: "flex", gap: 16, alignItems: "flex-start",
             }}>
               <Info size={18} color={C.tertiary} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} />
               <p style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0 }}>
-                BeatOS will automatically generate standardized subfolders for Stems, MIDI, and Masters once structured.
+                Beim Archivieren legt BeatOS die Unterordner selbst an — 01_SAVEFILES für die FLPs, 02_OLD für ältere Exporte. Du musst nichts vorbereiten.
               </p>
             </div>
           </div>
@@ -530,7 +530,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
           onClick={laden}
           title="Neu einlesen"
           style={{
-            display: "flex", padding: 4, borderRadius: 5,
+            display: "flex", padding: 4, borderRadius: radius.control,
             background: "transparent", border: `1px solid ${C.border15}`,
             color: C.onSurfaceVariant, cursor: "pointer",
           }}
@@ -557,7 +557,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
             title={o.path}
             style={{
               display: "flex", alignItems: "center", gap: 10,
-              padding: "9px 12px", borderRadius: 7,
+              padding: "9px 12px", borderRadius: radius.control,
               background: "transparent",
               border: `1px solid ${C.border10}`,
               cursor: "pointer", textAlign: "left",

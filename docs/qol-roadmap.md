@@ -51,15 +51,15 @@ Die Kette ist eine Einbahnstraße: `DetailPanel.tsx` kennt nur `revealItemInDir`
 
 ## 8 — „In FL öffnen" im Archiv · ~25 Zeilen, wenig Rust
 
-- [ ] Command `get_beat_flp_path(beatPath)`: neueste `.flp` in `01_SAVEFILES` — Muster in `get_beat_audio_path`
-- [ ] `openPath(flp)` im `DetailPanel`, neben „Ordner öffnen"
-- [ ] Knopf ausgrauen, wenn keine FLP mitarchiviert wurde
+- [x] Erledigt 03.10.2026 — statt eigenem Command liefert `get_upload_data` jetzt `flp_path` (`pick_flp`: „master" vor neuester, wie beim Umbenennen)
+- [x] `openPath(flp)` im `DetailPanel`, Knopf „In FL öffnen"
+- [x] Knopf ausgegraut, wenn keine FLP mitarchiviert wurde
 
 ## 9 — „Neue Version starten" · ~30 Zeilen, kein neues Backend
 
-- [ ] `create_project_folder(root, name, templateFlp)` nimmt jede FLP als Vorlage — auch die archivierte
-- [ ] Nummer über `next_project_name`, dann `openPath`
-- [ ] Knopf im `DetailPanel` direkt unter 8
+- [x] Erledigt 03.10.2026 — Knopf „Neue Version" neben „In FL öffnen"
+- [x] Name neutral (`Project_XXXX`, auch zum Flippen alter Samples), Herkunft nur als Notiz
+- [x] Dabei behoben: `create_project_folder` legte die FLP in `01_SAVEFILES/` — Studio-Projekte haben sie im Root
 
 Decke: kopiert nur die FLP, keine Samples. FL findet Samples über seine Bibliothek.
 

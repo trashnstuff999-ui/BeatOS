@@ -7,6 +7,8 @@
 // Types
 // ─────────────────────────────────────────────────────────────────────────────────
 
+import { C, alpha } from "./theme";
+
 export type TagCategory = "genre" | "vibe" | "instrument" | "custom" | "other";
 
 export interface TagColors {
@@ -35,9 +37,9 @@ export interface CustomTag {
 
 export const TAG_COLORS: Record<TagCategory, TagColors> = {
   genre: {
-    text: "#fda124",
-    bg: "rgba(253,161,36,0.10)",
-    border: "rgba(253,161,36,0.30)",
+    text: C.primary,
+    bg: alpha(C.primary, 0.10),
+    border: alpha(C.primary, 0.30),
   },
   vibe: {
     text: "#60a5fa",
@@ -45,9 +47,9 @@ export const TAG_COLORS: Record<TagCategory, TagColors> = {
     border: "rgba(96,165,250,0.30)",
   },
   instrument: {
-    text: "#34d399",
-    bg: "rgba(52,211,153,0.10)",
-    border: "rgba(52,211,153,0.30)",
+    text: C.mint,
+    bg: alpha(C.mint, 0.10),
+    border: alpha(C.mint, 0.30),
   },
   custom: {
     text: "#c084fc",

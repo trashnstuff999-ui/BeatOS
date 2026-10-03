@@ -5,7 +5,7 @@
 
 import { useState, useMemo } from "react";
 import { Grid3X3, Search, Tag } from "lucide-react";
-import { C, commonStyles } from "../../lib/theme";
+import { C, commonStyles, radius } from "../../lib/theme";
 import { sortTagsByCategory, type CustomTag } from "../../lib/tags";
 import { SectionCard } from "../ui/SectionCard";
 import { TagPill, TagCategoryRow } from "../Tagpill";
@@ -69,7 +69,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
           onClick={onShowAllTags}
           style={{
             display: "flex", alignItems: "center", gap: 4,
-            padding: "4px 10px", borderRadius: 4,
+            padding: "4px 10px", borderRadius: radius.control,
             fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,

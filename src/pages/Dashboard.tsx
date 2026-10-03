@@ -10,10 +10,38 @@ import type { Stats, DashboardActions } from "../types/stats";
 import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
 import type { Beat } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
-import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS } from "../lib/theme";
+import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS, alpha, radius } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
 import { StatusPill } from "../components/Tagpill";
 import { Select, Button, PageHeader, PageBody, EmptyState } from "../components/ui";
+
+/**
+ * Anklickbarer Text und anklickbare Balken auf der Uebersicht.
+ *
+ * Es waren zehn `<span onClick>` und `<div onClick>` — mit der Maus bedienbar,
+ * mit der Tastatur gar nicht: kein Tab, kein Enter, kein Fokusring. Die
+ * Uebersicht ist aber der Startpunkt, von dem aus man in jeden anderen Tab
+ * abbiegt.
+ *
+ * Ein `<button>`, dem die Knopf-Optik ausgetrieben ist: er erbt Schrift und
+ * Farbe vom Text drumherum und bringt Tab, Enter und Leertaste mit.
+ */
+function Klickbar({ style, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      {...rest}
+      style={{
+        background: "none", border: "none", padding: 0, margin: 0,
+        font: "inherit", color: "inherit", textAlign: "inherit",
+        cursor: "pointer",
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 // ── Upload-Rhythmus: 8-Wochen-Balken + Serie ─────────────────────────────────
 /** Der naechste Schritt — eine Karte statt vier.
@@ -69,30 +97,30 @@ function NaechsterSchritt({ actions, onNavigate, onFilter }: {
           <span style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, color: C.primary, letterSpacing: "-0.02em" }}>
             {schritt.zahl}
           </span>
-          <span style={{ fontSize: 15, color: C.onSurface, fontWeight: 600 }}>{schritt.titel}</span>
+          <span style={{ fontSize: 14, color: C.onSurface, fontWeight: 600 }}>{schritt.titel}</span>
           <span style={{ flex: 1 }} />
           <Button variant="primary" size="sm" onClick={schritt.tun}>{schritt.knopf}</Button>
         </div>
       ) : (
-        <div style={{ fontSize: 15, color: C.onSurfaceVariant }}>
+        <div style={{ fontSize: 14, color: C.onSurfaceVariant }}>
           Nichts offen — alles geplant oder schon draußen.
         </div>
       )}
 
       {/* Die uebrigen Zahlen als Nebensatz, nicht als eigene Kacheln. */}
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11, color: C.onSecondaryFixedVar }}>
-        <span
+        <Klickbar
           onClick={() => onFilter({ status: "finished", unpublishedOnly: true })}
-          style={{ cursor: "pointer" }}
+          title="Im Archiv zeigen"
         >
           <strong style={{ color: C.onSurfaceVariant }}>{actions.finished_unscheduled}</strong> fertig ohne Termin
-        </span>
-        <span onClick={() => onNavigate("/upload")} style={{ cursor: "pointer" }}>
+        </Klickbar>
+        <Klickbar onClick={() => onNavigate("/upload")} title="Zum Upload-Tab">
           <strong style={{ color: C.onSurfaceVariant }}>{actions.scheduled_next_7}</strong> diese Woche geplant
-        </span>
-        <span onClick={() => onNavigate("/studio")} style={{ cursor: "pointer" }}>
+        </Klickbar>
+        <Klickbar onClick={() => onNavigate("/studio")} title="Zum Studio">
           <strong style={{ color: C.onSurfaceVariant }}>{actions.studio_ready}</strong> Studio-Projekte bereit
-        </span>
+        </Klickbar>
       </div>
     </div>
   );
@@ -136,7 +164,7 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
                 flex: 1, height: h, borderRadius: 3,
                 background: w.count === 0
                   ? "rgba(255,255,255,0.06)"
-                  : isCurrent ? C.primary : "rgba(253,161,36,0.45)",
+                  : isCurrent ? C.primary : alpha(C.primary, 0.45),
                 transition: "height 0.2s",
               }}
             />
@@ -188,29 +216,30 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
             );
           })}
           {discardCount > 0 && (
-            <span
+            <Klickbar
               onClick={e => { e.stopPropagation(); onNavigate("/studio"); }}
               title="Im Studio ansehen"
-              style={{ color: STUDIO_STATUS_CONFIG.discard.color, cursor: "pointer" }}
+              style={{ color: STUDIO_STATUS_CONFIG.discard.color }}
             >
               {" · "}{discardCount} kann weg
-            </span>
+            </Klickbar>
           )}
         </>
       ),
-      icon: <Disc3 size={15} />, color: "#9492ff", path: "/studio",
+      icon: <Disc3 size={15} />, color: C.tertiary, path: "/studio",
     },
     {
       label: "Archiv", value: stats.total,
       detail: (
         <>
           {stats.this_month} neu diesen Monat ·{" "}
-          <span
+          <Klickbar
             onClick={e => { e.stopPropagation(); onFilter({ onlyFavs: true }); }}
-            style={{ color: C.error, fontWeight: 700, cursor: "pointer" }}
+            title="Nur Favoriten zeigen"
+            style={{ color: C.error, fontWeight: 700 }}
           >
             {stats.favorites} Favoriten
-          </span>
+          </Klickbar>
         </>
       ),
       icon: <Archive size={15} />, color: C.primary, path: "/browse",
@@ -218,7 +247,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
     {
       label: "Geplant", value: actions.scheduled_total,
       detail: `${actions.scheduled_next_7} in den nächsten 7 Tagen`,
-      icon: <CalendarClock size={15} />, color: "#fda124", path: "/upload",
+      icon: <CalendarClock size={15} />, color: C.primary, path: "/upload",
     },
     {
       label: "Veröffentlicht", value: actions.published_beats,
@@ -242,7 +271,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
             style={{
               flex: 1, textAlign: "left",
               background: "transparent", border: "none",
-              cursor: "pointer", padding: "6px 10px", borderRadius: 8,
+              cursor: "pointer", padding: "6px 10px", borderRadius: radius.control,
               transition: "background 0.15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
@@ -254,7 +283,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
                 {stage.label}
               </span>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
             <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
           </button>
         </div>
@@ -267,7 +296,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
 function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
   // Labels und Farben aus STATUS_CONFIG — dieselbe Quelle wie die Status-Pillen
   // in Browse und in "Zuletzt hinzugefuegt". Vorher stand "Sold" hier auf
-  // #ef4444, die Pille daneben auf #ff7351.
+  // #ff7351, die Pille daneben auf #ff7351.
   const bars = STATUS_ITEMS.map(s => ({
     ...s,
     count: stats.by_status[s.key as keyof Stats["by_status"]] ?? 0,
@@ -284,20 +313,19 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
           sieht man zusaetzlich die Verhaeltnisse zueinander, was bei einer
           Verteilung ohnehin die interessantere Frage ist. */}
       <div style={{
-        display: "flex", height: 14, borderRadius: 999, overflow: "hidden",
+        display: "flex", height: 14, borderRadius: radius.full, overflow: "hidden",
         background: C.surfaceContainerHighest, marginBottom: 16, flexShrink: 0,
       }}>
         {bars.filter(b => b.count > 0).map(({ key, label, color, count }) => (
-          <div
+          <Klickbar
             key={key}
-            title={`${label}: ${count}`}
+            title={`${label}: ${count} — im Archiv zeigen`}
             onClick={() => onNavigate({ status: key })}
             style={{
               // Mindestbreite, sonst verschwindet „Verkauft" mit 2 von 212 zu
               // einem unsichtbaren Splitter.
               width: `${Math.max((count / total) * 100, 1.5)}%`,
               background: color,
-              cursor: "pointer",
               transition: "width 0.6s ease, filter 0.15s",
             }}
             onMouseEnter={e => (e.currentTarget.style.filter = "brightness(1.25)")}
@@ -310,19 +338,20 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
           eigenen Balken. */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
         {bars.map(({ key, label, color, count }) => (
-          <span
+          <Klickbar
             key={key}
             onClick={() => onNavigate({ status: key })}
+            title={`${label} im Archiv zeigen`}
             style={{
               display: "flex", alignItems: "center", gap: 7,
-              fontSize: 11, color: C.onSurfaceVariant, cursor: "pointer",
+              fontSize: 11, color: C.onSurfaceVariant,
               opacity: count === 0 ? 0.45 : 1,
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
             {label}
             <strong style={{ color: C.onSurface, fontVariantNumeric: "tabular-nums" }}>{count}</strong>
-          </span>
+          </Klickbar>
         ))}
       </div>
     </div>
@@ -351,7 +380,7 @@ const CANONICAL_KEYS = new Set<string>([...MAJOR_KEYS, ...MINOR_KEYS]);
 function keyShade(ratio: number): string {
   const t = 0.35 + 0.65 * ratio;                       // nie bis zur Unsichtbarkeit
   const mix = (fg: number) => Math.round(38 + (fg - 38) * t);   // 38 = Kartenraster
-  return `rgb(${mix(253)}, ${mix(161)}, ${mix(36)})`;  // Ziel: C.primary #fda124
+  return `rgb(${mix(253)}, ${mix(161)}, ${mix(36)})`;  // Ziel: C.primary ${C.primary}
 }
 
 // ── Balkendiagramm ────────────────────────────────────────────────────────────
@@ -390,8 +419,9 @@ function BarChart({ data, color, onBarClick }: {
           const isHov     = hov === i;
           const clickable = !!onBarClick && !isEmpty;
           return (
-            <div key={bar.key}
+            <Klickbar key={bar.key}
               title={`${bar.label}: ${bar.count}`}
+              disabled={!clickable}
               style={{ flex: 1, maxWidth: BAR_MAX_WIDTH, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, padding: "0 2px", cursor: clickable ? "pointer" : "default" }}
               onMouseEnter={() => !isEmpty && setHov(i)}
               onMouseLeave={() => setHov(null)}
@@ -409,7 +439,7 @@ function BarChart({ data, color, onBarClick }: {
                 transition: "opacity 0.15s, box-shadow 0.15s",
                 boxShadow: isHov ? `0 0 12px ${c}70` : "none",
               }} />
-            </div>
+            </Klickbar>
           );
         })}
       </div>
@@ -556,9 +586,10 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
               {/* Tag pills — nowrap, overflow hidden, # prefix, uppercase */}
               <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
                 {row.map(({ tag }) => (
-                  <span
+                  <Klickbar
                     key={tag}
                     onClick={() => onNavigate({ search: tag })}
+                    title={`Nach „${tag}“ suchen`}
                     style={{
                       padding: "4px 12px",
                       // Neutral statt vier Kategoriefarben. Welche Kategorie es
@@ -566,7 +597,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
                       // wiederholte nur das Wort und brachte dafuer Orange,
                       // Blau, Gruen und Lila gleichzeitig auf die Seite.
                       background: C.surfaceContainerHigh,
-                      borderRadius: 9999,
+                      borderRadius: radius.full,
                       fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: "0.05em",
@@ -582,7 +613,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
                     onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; e.currentTarget.style.transform = "translateY(0)"; }}
                   >
                     #{tag}
-                  </span>
+                  </Klickbar>
                 ))}
               </div>
             </div>
@@ -620,7 +651,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
           Alle anzeigen ›
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: "rgba(19,19,19,0.5)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
         <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
       </div>
       {beats.map((beat, i) => {
@@ -628,9 +659,13 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
         const active = hoveredRow === i || isCurrent;
         return (
           <div key={beat.id}
-            onClick={() => onOpen(beat)}
-            title="Im Archiv öffnen"
-            style={{ display: "grid", gridTemplateColumns: grid, padding: "14px 24px", alignItems: "center", borderTop: i > 0 ? `1px solid rgba(72,72,71,0.05)` : undefined, cursor: "pointer", background: hoveredRow === i ? C.surfaceContainerHigh : "transparent", transition: "background 0.15s" }}
+            style={{
+              display: "grid", gridTemplateColumns: grid, padding: "14px 24px",
+              alignItems: "center",
+              borderTop: i > 0 ? `1px solid ${alpha(C.outlineVariant, 0.05)}` : undefined,
+              background: hoveredRow === i ? C.surfaceContainerHigh : "transparent",
+              transition: "background 0.15s",
+            }}
             onMouseEnter={() => setHoveredRow(i)} onMouseLeave={() => setHoveredRow(null)}>
             <button
               onClick={e => { e.stopPropagation(); play(beat); }}
@@ -647,7 +682,16 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
                 fill={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant}
                 color={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant} />
             </button>
-            <span style={{ fontSize: 13, fontWeight: 600, color: isCurrent ? C.primary : C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{beat.name}</span>
+            {/* Der Name traegt den Klick, nicht die ganze Zeile: die Zeile hat
+                schon den Play-Knopf, und ein <button> um einen <button> ist
+                ungueltig. So sind Abspielen und Oeffnen beide mit Tab erreichbar. */}
+            <Klickbar
+              onClick={() => onOpen(beat)}
+              title="Im Archiv öffnen"
+              style={{ fontSize: 13, fontWeight: 600, color: isCurrent ? C.primary : C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
+            >
+              {beat.name}
+            </Klickbar>
             <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.key ?? "–"}</span>
             <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
             {/* Nur die AUSNAHME zeigen — dieselbe Regel wie im Archiv-Raster.
@@ -717,8 +761,8 @@ export default function Dashboard() {
     <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: C.background }}>
       <div style={{ textAlign: "center", maxWidth: 400 }}>
         <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Datenbankfehler</p>
-        <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: 8 }}>{error}</p>
-        <button onClick={() => load(null)} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>Erneut versuchen</button>
+        <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: radius.control }}>{error}</p>
+        <button onClick={() => load(null)} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: radius.control, fontWeight: 700, cursor: "pointer" }}>Erneut versuchen</button>
       </div>
     </div>
   );
@@ -739,9 +783,9 @@ export default function Dashboard() {
                 title={error}
                 style={{
                   fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                  color: C.error, background: "rgba(255,115,81,0.12)",
-                  border: "1px solid rgba(255,115,81,0.35)",
-                  padding: "4px 10px", borderRadius: 6,
+                  color: C.error, background: alpha(C.error, 0.12),
+                  border: `1px solid ${alpha(C.error, 0.35)}`,
+                  padding: "4px 10px", borderRadius: radius.control,
                   maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
@@ -802,7 +846,13 @@ export default function Dashboard() {
           {/* Zuletzt hinzugefügt */}
           <LatestBeats
             stats={stats}
-            onOpen={(beat) => beat ? handleNavigate({ search: beat.name }) : navigate("/browse")}
+            // Der Beat wird im Archiv ausgewaehlt, nicht bloss gesucht: der
+            // Knopf heisst „Im Archiv oeffnen", und Suchen ist nicht Oeffnen.
+            // Die Namenssuche bleibt als Filter dabei — sonst muesste die
+            // Liste erst auf die Seite blaettern, auf der der Beat steht.
+            onOpen={(beat) => beat
+              ? navigate("/browse", { state: { initialFilters: { search: beat.name }, initialBeatId: beat.id } })
+              : navigate("/browse")}
           />
       </PageBody>
     </div>

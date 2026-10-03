@@ -11,8 +11,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Star, FolderOpen, Play, Archive, Disc3, Folder, Trash2, Copy, Check } from "lucide-react";
-import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
+import { Star, Play, Folder, StickyNote } from "lucide-react";
+import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { deriveStage, projectDisplayName, projectFolderLabel, MANUAL_STATUSES } from "../../types/studio";
 import type { StudioProject } from "../../types/studio";
@@ -25,14 +25,15 @@ const ASSET_GROUPS: Array<Array<[keyof StudioProject, string]>> = [
   [["has_cover", "Cover"], ["has_thumbnail", "Thumbnail"]],
   [["has_video", "Video"]],
 ];
-const SLOT = 26;       // Breite einer Zelle — die Kopfzeile benutzt dieselbe
+const SLOT = 40;       // Breite einer Zelle — die Kopfzeile benutzt dieselbe
 const GROUP_GAP = 14;  // Luft zwischen den Gruppen — doppelt so viel wie innerhalb,
                        // sonst liest man die Gruppierung nicht mehr
 
 // Fixed column widths — keep the right half aligned across all rows
 const COL_PIPELINE = 5 * SLOT + 2 * GROUP_GAP;
-const COL_STATUS = 272;
-const COL_ACTIONS = 250;
+// Nur noch die Pille: die Handschalter und Aktionen stehen beschriftet im
+// Panel. Doppelt in der Zeile machten sie die Liste unruhig.
+const COL_STATUS = 130;
 
 interface ProjectRowProps {
   project: StudioProject;
@@ -42,44 +43,33 @@ interface ProjectRowProps {
   isSelected?: boolean;
   dimmed?: boolean;
   onPatch: (patch: Partial<Pick<StudioProject, "status" | "priority" | "notes">>) => void;
-  onOpenDaw: () => void;
   onPreview: () => void;
   /** Zeilenklick — öffnet Details; mit Strg/Shift wählt er stattdessen aus */
   onOpen: (e: React.MouseEvent) => void;
-  onOpenFolder: () => void;
-  onArchive: () => void;
-  onTrash: () => void;
 }
 
 export function ProjectRow({
   project: p, isOpen, isSelected, dimmed,
-  onPatch, onOpenDaw, onPreview, onOpen, onOpenFolder, onArchive, onTrash,
+  onPatch, onPreview, onOpen,
 }: ProjectRowProps) {
   const [hovered, setHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
   const canPreview = p.has_mp3 || p.has_wav;
   const title = projectDisplayName(p);
-
-  // Der Name, unter dem der Export gespeichert gehört: „TITEL [Am 140]" — genau
-  // die Schreibweise, die parse_audio_filename später wieder auseinandernimmt.
-  const keyBpm = [p.key, p.bpm].filter(x => x != null && x !== "").join(" ");
-  const exportName = keyBpm ? `${title} [${keyBpm}]` : title;
-  const copyExportName = async () => {
-    try {
-      await navigator.clipboard.writeText(exportName);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch (e) {
-      alert(`Kopieren fehlgeschlagen: ${String(e)}`);
-    }
-  };
   const folderLabel = projectFolderLabel(p);
-  const isReady = p.status === "ready";
+  // „Project_0861" sagt nichts. Ohne Export-Titel steht die erste Zeile der
+  // Notiz darunter — damit erkennt man das Projekt wieder. Mit Titel nicht:
+  // da reicht der Titel, und die Zeile bleibt ruhig.
+  const noteLine = p.song_name?.trim()
+    ? null
+    : p.notes?.split("\n").map(l => l.trim()).find(Boolean) ?? null;
   const isDiscard = p.status === "discard";
   const status = STUDIO_STATUS_CONFIG[p.status] ?? STUDIO_STATUS_CONFIG.idea;
 
   return (
     <div
+      // data-auswahl: ein Klick auf eine Zeile waehlt das naechste Projekt,
+      // er schliesst den Inspector nicht (useKlickDaneben).
+      data-auswahl
       onClick={onOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -89,9 +79,9 @@ export function ProjectRow({
         padding: "13px 16px",
         borderTop: `1px solid ${C.border10}`,
         background: isSelected
-          ? "rgba(253,161,36,0.12)"
+          ? alpha(C.primary, 0.12)
           : isOpen
-          ? "rgba(253,161,36,0.06)"
+          ? alpha(C.primary, 0.06)
           : hovered ? "rgba(255,255,255,0.02)" : "transparent",
         boxShadow: isSelected || isOpen ? `inset 3px 0 0 ${C.primary}` : "none",
         cursor: "pointer",
@@ -124,8 +114,8 @@ export function ProjectRow({
         title={canPreview ? "Export anhören" : "Kein Audio-Export im Ordner"}
         style={{
           width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
-          background: canPreview ? "rgba(52,211,153,0.10)" : "transparent",
-          border: `1px solid ${canPreview ? "rgba(52,211,153,0.40)" : C.border10}`,
+          background: canPreview ? alpha(C.mint, 0.10) : "transparent",
+          border: `1px solid ${canPreview ? alpha(C.mint, 0.40) : C.border10}`,
           color: canPreview ? C.mint : C.onSecondaryFixedVar,
           cursor: canPreview ? "pointer" : "default",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -141,7 +131,7 @@ export function ProjectRow({
           <span
             title={title}
             style={{
-              fontSize: 14, fontWeight: 700, color: C.onSurface,
+              fontSize: 15, fontWeight: 700, color: C.onSurface,
               letterSpacing: "-0.01em",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}
@@ -157,10 +147,22 @@ export function ProjectRow({
         <div style={{
           display: "flex", alignItems: "center", gap: 7,
           marginTop: 4,
-          fontSize: 10, color: C.onSecondaryFixedVar,
+          fontSize: 12, color: C.onSurfaceVariant,
           overflow: "hidden", whiteSpace: "nowrap",
         }}>
           {joinWithDots([
+            noteLine && (
+              <span
+                title={p.notes ?? undefined}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  color: C.onSurface, minWidth: 0, maxWidth: 360,
+                }}
+              >
+                <StickyNote size={11} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{noteLine}</span>
+              </span>
+            ),
             folderLabel && (
               <span
                 title={`Ordner: ${folderLabel}`}
@@ -199,10 +201,10 @@ export function ProjectRow({
       }}>
         <span style={{
           display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0,
-          padding: "3px 10px", borderRadius: 9999,
+          padding: "4px 11px", borderRadius: radius.full,
           background: status.bg,
           color: status.color,
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           letterSpacing: "0.04em", textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}>
@@ -210,59 +212,8 @@ export function ProjectRow({
           {status.label}
         </span>
 
-        {/* Echtes Ein- und Ausblenden, nicht nur opacity: unsichtbare Knöpfe
-            blieben sonst mit Tab erreichbar. Die Spalte hat feste Breite, es
-            springt also trotzdem nichts. */}
-        {(hovered || isOpen) && (
-          <ManualStatusToggles project={p} onPatch={onPatch} variant="row" />
-        )}
       </div>
 
-      {/* Actions — fixed column, fade in on hover */}
-      <div style={{
-        width: COL_ACTIONS, flexShrink: 0,
-        display: "flex", gap: 6, justifyContent: "flex-end",
-      }}>
-        <div style={{
-          display: "flex", gap: 6,
-          opacity: hovered ? 1 : 0,
-          pointerEvents: hovered ? "auto" : "none",
-          transition: "opacity 0.15s",
-        }}>
-          <RowBtn icon={Disc3} title="In FL Studio öffnen (neueste FLP)" onClick={onOpenDaw} accent />
-          <RowBtn
-            icon={copied ? Check : Copy}
-            title={copied ? "Kopiert" : `Exportnamen kopieren: ${exportName}`}
-            onClick={copyExportName}
-          />
-          <RowBtn icon={FolderOpen} title="Ordner im Explorer öffnen" onClick={onOpenFolder} />
-          <RowBtn icon={Trash2} title="Projektordner in den Papierkorb" onClick={onTrash} danger />
-        </div>
-        {/* Ready projects keep their call to action visible */}
-        <div style={{
-          opacity: isReady || hovered ? 1 : 0,
-          pointerEvents: isReady || hovered ? "auto" : "none",
-          transition: "opacity 0.15s",
-        }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onArchive(); }}
-            title="In den Create-Flow übernehmen und archivieren"
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "6px 10px", borderRadius: 6,
-              background: isReady ? C.primary : "transparent",
-              border: `1px solid ${isReady ? C.primary : C.border15}`,
-              color: isReady ? C.onPrimary : C.onSurfaceVariant,
-              cursor: "pointer",
-              fontSize: 10, fontWeight: 700,
-              whiteSpace: "nowrap",
-            }}
-          >
-            <Archive size={11} strokeWidth={2} />
-            Archivieren
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -301,11 +252,15 @@ export function AssetPipeline({ project: p }: { project: StudioProject }) {
             const has = !!p[key];
             return (
               <div key={label} style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
+                {/* Vorhanden: grüne Plakette. Fehlt: lesbar, aber leise —
+                    vorher 10px bei 22 % Deckkraft, praktisch unsichtbar. */}
                 <span style={{
-                  fontSize: 9, letterSpacing: "0.02em",
-                  fontWeight: has ? 700 : 500,
+                  fontSize: 11, letterSpacing: "0.02em",
+                  fontWeight: 700,
+                  padding: "2px 5px", borderRadius: radius.control,
+                  background: has ? alpha(C.mint, 0.14) : "transparent",
                   color: has ? C.mint : C.onSecondaryFixedVar,
-                  opacity: has ? 1 : 0.22,
+                  opacity: has ? 1 : 0.45,
                 }}>
                   {label.slice(0, 3).toUpperCase()}
                 </span>
@@ -354,7 +309,7 @@ export function ManualStatusToggles({ project: p, onPatch, variant }: {
                 ? "Merken: da will ich nochmal ran"
                 : "Zum Löschen vormerken — weg ist der Ordner erst mit dem Papierkorb-Lauf"}
             style={{
-              padding: gross ? "5px 11px" : "3px 9px", borderRadius: 9999,
+              padding: gross ? "5px 11px" : "3px 9px", borderRadius: radius.full,
               background: active ? m.bg : "transparent",
               border: `1px solid ${active ? m.color : C.border20}`,
               color: active ? m.color : C.onSecondaryFixedVar,
@@ -371,32 +326,4 @@ export function ManualStatusToggles({ project: p, onPatch, variant }: {
   );
 }
 
-function RowBtn({ icon: Icon, title, onClick, accent, danger }: {
-  icon: React.ElementType;
-  title: string;
-  onClick: () => void;
-  accent?: boolean;
-  danger?: boolean;
-}) {
-  const [h, setH] = useState(false);
-  const color = danger ? C.error : accent ? C.primary : C.onSurfaceVariant;
-  const border = danger ? C.error + (h ? "" : "40") : accent ? C.primary + "50" : C.border15;
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
-      title={title}
-      style={{
-        width: 28, height: 28, borderRadius: 6,
-        background: danger && h ? "rgba(229,72,77,0.12)" : "transparent",
-        border: `1px solid ${border}`,
-        cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color,
-      }}
-    >
-      <Icon size={13} strokeWidth={1.75} />
-    </button>
-  );
-}
+

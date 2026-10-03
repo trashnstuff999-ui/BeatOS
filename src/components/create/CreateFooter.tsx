@@ -1,7 +1,7 @@
 // src/components/create/CreateFooter.tsx
 
 import { FolderOpen, Network, Loader2 } from "lucide-react";
-import { C } from "../../lib/theme";
+import { C, alpha } from "../../lib/theme";
 import { Button } from "../ui";
 
 interface CreateFooterProps {
@@ -34,7 +34,7 @@ export function CreateFooter({
   return (
     <footer style={{
       height: 80, flexShrink: 0,
-      background: "rgba(19,19,19,0.8)",
+      background: alpha(C.surfaceContainerLow, 0.8),
       backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
       borderTop: `1px solid ${C.border15}`,
       padding: "0 32px",

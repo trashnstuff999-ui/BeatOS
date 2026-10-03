@@ -1,10 +1,11 @@
 // src/components/create/dialogs/DuplicateDialog.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Duplicate Beat Found Dialog
+// „Den gibt es schon" — beim Archivieren, bevor etwas geschrieben wird.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { AlertCircle, Plus } from "lucide-react";
-import { C } from "../../../lib/theme";
+import { AlertTriangle, Plus } from "lucide-react";
+import { C, radius } from "../../../lib/theme";
+import { Modal, Button } from "../../ui";
 
 interface DuplicateDialogProps {
   duplicateType: "id" | "name_key_bpm";
@@ -21,96 +22,42 @@ export function DuplicateDialog({
   onCreateV2,
   onCancel,
 }: DuplicateDialogProps) {
-  const isDuplicateId = duplicateType === "id";
+  const istIdTreffer = duplicateType === "id";
 
   return (
-    <div style={{
-      position: "fixed", inset: 0,
-      background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100,
-    }}>
+    <Modal
+      icon={AlertTriangle}
+      title={istIdTreffer ? "Katalognummer ist vergeben" : "Ähnlicher Beat gefunden"}
+      onClose={onCancel}
+      width={440}
+      // Hier wird archiviert oder nicht — ein Klick daneben ist keine Antwort.
+      closeOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onCancel}>Abbrechen</Button>
+          <Button variant="primary" icon={Plus} onClick={onCreateV2}>Als V2 anlegen</Button>
+        </>
+      }
+    >
+      <p style={{ margin: 0, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.65 }}>
+        {istIdTreffer
+          ? <>Unter <strong style={{ color: C.primary }}>#{existingId}</strong> liegt bereits ein Beat im Archiv:</>
+          : <>Ein Beat mit ähnlichem Titel, gleicher Tonart und gleichem Tempo liegt schon im Archiv:</>}
+      </p>
+
       <div style={{
-        background: C.surfaceContainerHigh,
-        borderRadius: 16, padding: 28,
-        width: 420, maxWidth: "90vw",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-        border: `1px solid ${C.border20}`,
+        background: C.surfaceContainer,
+        borderRadius: radius.control,
+        padding: 12,
+        border: `1px solid ${C.border15}`,
+        fontSize: 12, color: C.onSurfaceVariant,
       }}>
-        {/* Icon */}
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: "rgba(251,191,36,0.15)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          marginBottom: 20,
-        }}>
-          <AlertCircle size={24} color="#fbbf24" />
-        </div>
-
-        {/* Title */}
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.onSurface, margin: 0, marginBottom: 12 }}>
-          {isDuplicateId ? "Catalog ID Already Exists" : "Similar Beat Found"}
-        </h3>
-
-        {/* Message */}
-        <p style={{ fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0, marginBottom: 8 }}>
-          {isDuplicateId ? (
-            <>
-              A beat with ID <strong style={{ color: C.primary }}>#{existingId}</strong> already exists in your archive:
-            </>
-          ) : (
-            <>
-              A beat with similar title, key, and BPM already exists:
-            </>
-          )}
-        </p>
-
-        {/* Existing Beat Info */}
-        <div style={{
-          background: C.surfaceContainer, borderRadius: 8, padding: 12,
-          marginBottom: 20, border: `1px solid ${C.border15}`,
-        }}>
-          <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>
-            <strong style={{ color: C.onSurface }}>#{existingId}</strong> — {existingName}
-          </span>
-        </div>
-
-        <p style={{ fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0, marginBottom: 24 }}>
-          Would you like to create this as a <strong style={{ color: C.mint }}>V2 version</strong> with a new ID?
-        </p>
-
-        {/* Buttons */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "10px 20px", borderRadius: 6,
-              fontSize: 12, fontWeight: 600,
-              background: "transparent",
-              border: `1px solid ${C.border30}`,
-              color: C.onSurfaceVariant,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onCreateV2}
-            style={{
-              padding: "10px 20px", borderRadius: 6,
-              fontSize: 12, fontWeight: 600,
-              background: C.primary,
-              border: "none",
-              color: "#4e2d00",
-              cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            <Plus size={14} />
-            Als V2 anlegen
-          </button>
-        </div>
+        <strong style={{ color: C.onSurface }}>#{existingId}</strong> — {existingName}
       </div>
-    </div>
+
+      <p style={{ margin: 0, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.65 }}>
+        Als <strong style={{ color: C.mint }}>V2</strong> mit der nächsten freien Nummer anlegen?
+      </p>
+    </Modal>
   );
 }

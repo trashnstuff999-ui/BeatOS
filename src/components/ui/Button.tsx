@@ -13,7 +13,7 @@
 
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { C, radius } from "../../lib/theme";
+import { C, radius, alpha } from "../../lib/theme";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md";
@@ -51,8 +51,8 @@ const VARIANTS: Record<ButtonVariant, { rest: React.CSSProperties; hover: React.
     weight: 600,
   },
   danger: {
-    rest:  { background: "rgba(255,115,81,0.10)", color: C.error, border: "1px solid rgba(255,115,81,0.30)" },
-    hover: { background: "rgba(255,115,81,0.18)", borderColor: "rgba(255,115,81,0.50)" },
+    rest:  { background: alpha(C.error, 0.10), color: C.error, border: `1px solid ${alpha(C.error, 0.30)}` },
+    hover: { background: alpha(C.error, 0.18), borderColor: alpha(C.error, 0.50) },
     weight: 600,
   },
 };

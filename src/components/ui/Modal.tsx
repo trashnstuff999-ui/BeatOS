@@ -11,6 +11,43 @@ import { X } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { IconButton } from "./Button";
 
+/** Offene Dialoge in Oeffnungsreihenfolge — nur der oberste hoert auf Esc. */
+const STAPEL: object[] = [];
+
+/**
+ * Esc schliesst — aber nur den obersten Dialog.
+ *
+ * In der Capture-Phase plus stopPropagation: die Seiten darunter (Browse etwa)
+ * horchen selbst auf Esc am window. Ohne das Abfangen wuerde ein Druck den
+ * Dialog schliessen UND die Auswahl dahinter aufheben.
+ *
+ * Der Stapel daneben: seit Rueckfragen (useDialog) selbst Dialoge sind, kann
+ * einer auf dem anderen liegen. Beide horchen am window — ohne den Stapel
+ * raeumte ein Esc beide auf einmal weg.
+ *
+ * Auch fuer Dialoge, die ihre Huelle selbst bauen (Tag-Verwaltung, Bild-Lupe):
+ * die Esc-Behandlung ist dieselbe, egal wie der Kasten drumherum aussieht.
+ */
+export function useEscapeStack(onClose: () => void) {
+  useEffect(() => {
+    const ich = {};
+    STAPEL.push(ich);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (STAPEL[STAPEL.length - 1] !== ich) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      const i = STAPEL.indexOf(ich);
+      if (i >= 0) STAPEL.splice(i, 1);
+    };
+  }, [onClose]);
+}
+
 interface ModalProps {
   title: string;
   /** Zweite Zeile unter dem Titel, z.B. die Beat-ID. */
@@ -39,23 +76,14 @@ export function Modal({
   footerLeft,
   closeOnBackdrop = true,
 }: ModalProps) {
-  // Esc in der Capture-Phase plus stopPropagation: die Seiten darunter (Browse
-  // etwa) horchen selbst auf Esc am window. Ohne das Abfangen wuerde ein Druck
-  // den Dialog schliessen UND die Auswahl dahinter aufheben.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [onClose]);
+  useEscapeStack(onClose);
 
   return (
     <div
       onClick={closeOnBackdrop ? e => { if (e.target === e.currentTarget) onClose(); } : undefined}
+      // data-modal: was in einem Dialog passiert, geht die Seite darunter
+      // nichts an — sonst schliesst ein Klick im Dialog das Panel dahinter.
+      data-modal
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         background: "rgba(0,0,0,0.75)",
@@ -65,7 +93,11 @@ export function Modal({
         padding: 24,
       }}
     >
-      <div style={{
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{
         width, maxWidth: "100%", maxHeight: "85vh",
         display: "flex", flexDirection: "column",
         background: C.surfaceContainerHigh,
@@ -82,7 +114,7 @@ export function Modal({
           {Icon && <Icon size={16} color={C.primary} strokeWidth={1.75} style={{ flexShrink: 0 }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{
-              margin: 0, fontSize: 16, fontWeight: 700,
+              margin: 0, fontSize: 14, fontWeight: 700,
               color: C.onSurface, letterSpacing: "-0.01em",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>

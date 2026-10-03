@@ -8,9 +8,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ChevronDown, Youtube, Music2, Bookmark } from "lucide-react";
-import { C, PLATFORM_CONFIG } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, radius } from "../../lib/theme";
 import { Button } from "../ui";
 import { api } from "../../lib/api";
+import { useDialog } from "../../contexts/DialogContext";
 import type { TypeBeatPreset } from "../../types/upload";
 
 interface PresetBarProps {
@@ -30,6 +31,7 @@ export function PresetBar({
   currentSoundcloudTags,
   onApply,
 }: PresetBarProps) {
+  const { frage, melde }          = useDialog();
   const [presets, setPresets]     = useState<TypeBeatPreset[]>([]);
   const [open, setOpen]           = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
@@ -68,11 +70,17 @@ export function PresetBar({
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    if (!confirm("Preset löschen?")) return;
+    const ok = await frage({
+      titel: "Preset löschen?",
+      text: "Das Preset verschwindet aus der Leiste. Bereits gesetzte Angaben an Beats bleiben.",
+      bestaetigen: "Löschen",
+      gefahr: true,
+    });
+    if (!ok) return;
     try {
       await api.upload.deletePreset(id);
       load();
-    } catch (err) { alert(`Preset konnte nicht gelöscht werden: ${String(err)}`); }
+    } catch (err) { melde(`Preset konnte nicht gelöscht werden: ${String(err)}`); }
   };
 
   const handleSave = async () => {
@@ -114,7 +122,7 @@ export function PresetBar({
           padding: "5px 10px",
           background: "transparent",
           border: `1px solid ${open ? C.primary + "60" : C.border15}`,
-          borderRadius: 7,
+          borderRadius: radius.control,
           cursor: "pointer",
           fontSize: 11, fontWeight: 600, fontFamily: "inherit",
           color: open ? C.primary : C.onSurfaceVariant,
@@ -142,7 +150,7 @@ export function PresetBar({
           position: "absolute", top: "calc(100% + 4px)", right: 0, width: 340,
           background: C.surfaceContainer,
           border: `1px solid ${C.border20}`,
-          borderRadius: 8,
+          borderRadius: radius.control,
           boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           zIndex: 15,
           maxHeight: 320,
@@ -155,20 +163,30 @@ export function PresetBar({
               </div>
             )}
             {presets.map(p => (
+              // Die Zeile traegt selbst einen Loeschen-Knopf, kann also nicht
+              // als Ganzes ein <button> sein. Stattdessen ist der Textteil der
+              // Knopf — damit sind Auswaehlen und Loeschen beide mit Tab
+              // erreichbar, statt beides nur mit der Maus.
               <div
                 key={p.id}
-                onClick={() => handleApply(p)}
                 style={{
                   display: "flex", alignItems: "flex-start", gap: 10,
                   padding: "10px 12px",
-                  cursor: "pointer",
                   borderBottom: `1px solid ${C.border10}`,
                   fontSize: 12,
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <button
+                  onClick={() => handleApply(p)}
+                  title={`Preset „${p.label}“ übernehmen`}
+                  style={{
+                    flex: 1, minWidth: 0, textAlign: "left",
+                    background: "none", border: "none", padding: 0,
+                    font: "inherit", color: "inherit", cursor: "pointer",
+                  }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                     <span style={{ fontWeight: 700, color: C.onSurface }}>{p.label}</span>
                     {p.soundcloud_tags && (
@@ -192,18 +210,18 @@ export function PresetBar({
                       {p.genre_tags}
                     </div>
                   )}
-                </div>
+                </button>
                 <button
                   onClick={(e) => handleDelete(e, p.id)}
                   title="Preset löschen"
                   style={{
                     flexShrink: 0,
-                    width: 22, height: 22, borderRadius: 4,
+                    width: 22, height: 22, borderRadius: radius.control,
                     background: "transparent", border: "none",
                     cursor: "pointer", color: C.onSecondaryFixedVar,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "#e5484d"; }}
+                  onMouseEnter={e => { e.currentTarget.style.color = C.error; }}
                   onMouseLeave={e => { e.currentTarget.style.color = C.onSecondaryFixedVar; }}
                 >
                   <Trash2 size={12} />
@@ -223,7 +241,7 @@ export function PresetBar({
                   padding: "8px 10px",
                   background: "transparent",
                   border: `1px dashed ${C.border30}`,
-                  borderRadius: 6,
+                  borderRadius: radius.control,
                   cursor: "pointer",
                   fontSize: 10, fontWeight: 600,
                   color: C.onSurfaceVariant,
@@ -247,7 +265,7 @@ export function PresetBar({
                       fontSize: 12,
                       background: C.surfaceContainerLowest,
                       border: `1px solid ${C.border20}`,
-                      borderRadius: 6,
+                      borderRadius: radius.control,
                       outline: "none",
                       color: C.onSurface,
                     }}
@@ -257,7 +275,7 @@ export function PresetBar({
                   </Button>
                 </div>
                 {error && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: "#e5484d" }}>{error}</div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: C.error }}>{error}</div>
                 )}
               </div>
             )}

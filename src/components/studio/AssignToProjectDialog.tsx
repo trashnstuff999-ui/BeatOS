@@ -10,7 +10,7 @@
 
 import { useState, useMemo } from "react";
 import { Search, Loader2, Film, Image as ImageIcon } from "lucide-react";
-import { C, STUDIO_STATUS_CONFIG } from "../../lib/theme";
+import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { Modal } from "../ui";
 import { AssetImage, type AssetSlotKind } from "../AssetPickerDialog";
@@ -111,8 +111,8 @@ export function AssignToProjectDialog({
     >
       {error && (
         <div style={{
-          padding: "10px 12px", borderRadius: 8, marginBottom: 14,
-          background: "rgba(255,115,81,0.10)", border: `1px solid ${C.error}55`,
+          padding: "10px 12px", borderRadius: radius.control, marginBottom: 14,
+          background: alpha(C.error, 0.10), border: `1px solid ${C.error}55`,
           fontSize: 12, color: C.error,
         }}>
           {error}
@@ -123,9 +123,9 @@ export function AssignToProjectDialog({
       <div style={{ display: "flex", gap: 14, marginBottom: 16 }}>
         <div style={{
           width: 108, height: 108, flexShrink: 0,
-          background: C.surfaceContainerLowest,
+          background: C.surfaceContainerHighest,
           border: `1px solid ${C.border15}`,
-          borderRadius: 10, overflow: "hidden",
+          borderRadius: radius.card, overflow: "hidden",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           {isVideo
@@ -150,7 +150,7 @@ export function AssignToProjectDialog({
               display: "flex", gap: 2,
               background: "rgba(255,255,255,0.03)",
               border: `1px solid ${C.border15}`,
-              borderRadius: 7, padding: 2,
+              borderRadius: radius.control, padding: 2,
             }}>
               {(["cover", "thumbnail"] as const).map(s => (
                 <button
@@ -159,7 +159,7 @@ export function AssignToProjectDialog({
                   style={{
                     flex: 1, padding: "6px 4px",
                     background: slot === s ? `${C.primary}20` : "transparent",
-                    border: "none", borderRadius: 5, cursor: "pointer",
+                    border: "none", borderRadius: radius.control, cursor: "pointer",
                     fontSize: 11, fontWeight: 700,
                     color: slot === s ? C.primary : C.onSecondaryFixedVar,
                   }}
@@ -172,7 +172,8 @@ export function AssignToProjectDialog({
 
           <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
             Die Datei wird aus dem Asset-Ordner in den Projektordner verschoben.
-            {slot === "thumbnail" && " Fehlt „thumbnail\" im Namen, wird es ergänzt."}
+            {slot !== "video" && ` Fehlt „${slot === "thumbnail" ? "thumbnail" : "cover"}" im Namen, wird es ergänzt.`}
+            {" Ein vorhandenes " + SLOT_LABEL[slot] + " geht zurück in den Asset-Ordner."}
           </div>
         </div>
       </div>
@@ -180,9 +181,9 @@ export function AssignToProjectDialog({
       {/* Projektsuche */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        background: C.surfaceContainerLowest,
+        background: C.surfaceContainerHighest,
         border: `1px solid ${C.border15}`,
-        borderRadius: 8, padding: "8px 11px", marginBottom: 10,
+        borderRadius: radius.control, padding: "8px 11px", marginBottom: 10,
       }}>
         <Search size={12} color={C.onSecondaryFixedVar} />
         <input
@@ -244,9 +245,9 @@ function ProjectChoice({ project: p, matches, busy, disabled, onClick }: {
       style={{
         display: "flex", alignItems: "center", gap: 10,
         width: "100%", padding: "9px 12px",
-        background: hovered && !disabled ? "rgba(253,161,36,0.07)" : "transparent",
+        background: hovered && !disabled ? alpha(C.primary, 0.07) : "transparent",
         border: `1px solid ${hovered && !disabled ? `${C.primary}45` : "transparent"}`,
-        borderRadius: 7,
+        borderRadius: radius.control,
         cursor: disabled ? "default" : "pointer",
         textAlign: "left",
         opacity: disabled && !busy ? 0.45 : 1,
