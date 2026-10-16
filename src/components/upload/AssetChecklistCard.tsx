@@ -1,25 +1,28 @@
 // src/components/upload/AssetChecklistCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Read-only view of what's present in the beat folder.
-// Source of truth = filesystem (scanned in get_upload_data).
-// Collapsed to a single status line when everything is present; auto-expands
-// (missing items first) when something is wrong. The description-files block
-// moved out — the DescriptionFilesCard tabs and the header "Files" step
-// already cover it.
+// Was im Beat-Ordner liegt — eine Kachel je Datei, in der Kopfkarte des
+// Upload-Tabs. Quelle ist das Dateisystem (gescannt in get_upload_data).
+//
+// Früher eine aufklappbare Liste mit Haken und Dateinamen: ein Register.
+// Jetzt Kacheln: Cover und Thumbnail zeigen ihr Bild, was fehlt, ist
+// gestrichelt — das übliche Zeichen für „hier kann etwas hin". Dateien aus
+// dem Explorer lassen sich aufs Fenster ziehen; die Kachel, in der eine Datei
+// landen würde, leuchtet schon beim Ziehen auf.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
 import {
-  CheckCircle2, XCircle, FileAudio, FileImage, FileVideo,
-  FolderOpen, FolderTree, RefreshCw, Wand2, ChevronDown, ListChecks, X, Plus,
+  FileAudio, FileVideo, FolderOpen, FolderTree, RefreshCw, Wand2, X, Plus, Archive,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { C, alpha, radius } from "../../lib/theme";
-import { SectionCard, SectionIconBtn } from "../ui/SectionCard";
+import { SectionIconBtn } from "../ui/SectionCard";
 import { useEscapeStack } from "../ui";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
+import { useDialog } from "../../contexts/DialogContext";
 import { AssetPickerDialog, type AssetSlotKind } from "../AssetPickerDialog";
 import type { AssetCheck } from "../../types/upload";
 
@@ -28,20 +31,23 @@ interface AssetChecklistCardProps {
   beatPath: string;
   onRefresh: () => void;
   onConvert: () => void;
-  /** Ohne eigene Karte rendern — haengt im Upload-Tab unter der Kopfzeile. */
-  bare?: boolean;
 }
 
-/** Fehlt eine dieser Dateien, lässt sie sich hier direkt aus dem
- *  Asset-Ordner zuweisen — vorher hiess „fehlt" nur: woanders suchen gehen. */
-const SLOT_FUER: Record<string, AssetSlotKind> = {
-  Cover: "cover", Thumbnail: "thumbnail", "Video MP4": "video",
-};
+type Kachel = "mp3" | "wav" | "flp" | "cover" | "thumbnail" | "video";
 
-type Row = {
-  label: string;
-  filename: string | null;
-  icon: React.ElementType;
+const KACHELN: { id: Kachel; label: string }[] = [
+  { id: "mp3", label: "MP3" },
+  { id: "wav", label: "WAV" },
+  { id: "flp", label: "FLP" },
+  { id: "cover", label: "Cover" },
+  { id: "thumbnail", label: "Thumbnail" },
+  { id: "video", label: "Video" },
+];
+
+/** Fehlt eine dieser Dateien, lässt sie sich direkt aus dem Asset-Ordner
+ *  zuweisen. */
+const ZUWEISBAR: Partial<Record<Kachel, AssetSlotKind>> = {
+  cover: "cover", thumbnail: "thumbnail", video: "video",
 };
 
 /** Was Cover und Thumbnail an Maßen mitbringen sollen.
@@ -52,9 +58,9 @@ type Row = {
  *
  *  Geprüft wird das Seitenverhältnis und eine Mindestbreite, nicht die exakte
  *  Pixelzahl: ein Cover in 3000×3000 ist richtig, nur größer. */
-const MASSE: Record<string, { verhaeltnis: number; minBreite: number; soll: string }> = {
-  Cover:     { verhaeltnis: 1,      minBreite: 1400, soll: "quadratisch, ab 1400 px" },
-  Thumbnail: { verhaeltnis: 16 / 9, minBreite: 1280, soll: "16:9, ab 1280 px" },
+const MASSE: Record<"cover" | "thumbnail", { verhaeltnis: number; minBreite: number; soll: string }> = {
+  cover:     { verhaeltnis: 1,      minBreite: 1400, soll: "quadratisch, ab 1400 px" },
+  thumbnail: { verhaeltnis: 16 / 9, minBreite: 1280, soll: "16:9, ab 1280 px" },
 };
 
 type Mass = { breite: number; hoehe: number; ok: boolean };
@@ -84,212 +90,160 @@ function useImageSize(pfad: string | null, regel?: { verhaeltnis: number; minBre
   return mass;
 }
 
-export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bare = false }: AssetChecklistCardProps) {
+export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: AssetChecklistCardProps) {
   const { settings } = useSettings();
+  const { melde } = useDialog();
   const [picker, setPicker] = useState<AssetSlotKind | null>(null);
-  const allRows: Row[] = [
-    { label: "MP3",       filename: assets.mp3,       icon: FileAudio },
-    { label: "WAV",       filename: assets.wav,       icon: FileAudio },
-    { label: "FLP",       filename: assets.flp,       icon: FolderTree },
-    { label: "Cover",     filename: assets.cover,     icon: FileImage },
-    { label: "Thumbnail", filename: assets.thumbnail, icon: FileImage },
-    { label: "Video MP4", filename: assets.video,     icon: FileVideo },
-  ];
-
-  const missing = allRows.filter(r => r.filename === null);
-  const present = allRows.filter(r => r.filename !== null);
-  const allOk = missing.length === 0;
-
-  // Auto-expand when something is missing; collapse when complete.
-  const [open, setOpen] = useState(!allOk);
-  useEffect(() => { setOpen(!allOk); }, [allOk]);
-
-  // Image preview overlay (Cover / Thumbnail rows)
   const [preview, setPreview] = useState<{ label: string; path: string } | null>(null);
 
-  const handleRowClick = (row: Row) => {
-    if (!beatPath) return;
-    if (!row.filename) {
-      const slot = SLOT_FUER[row.label];
-      if (slot) setPicker(slot);
-      return;
-    }
-    // Trenner aus dem Pfad selbst ablesen statt fest annehmen: die Bibliothek
-    // kann unter Windows wie unter macOS liegen, und „/pfad\datei.wav" ist
-    // auf keinem von beiden ein Pfad.
-    const sep = beatPath.includes("\\") ? "\\" : "/";
-    const fullPath = `${beatPath}${sep}${row.filename}`;
-    if (row.label === "Cover" || row.label === "Thumbnail") {
-      setPreview({ label: row.label, path: fullPath });
-    } else if (row.label === "Video MP4") {
-      revealItemInDir(fullPath).catch(() => {});
-    }
-  };
-
-  const handleOpen = async () => {
-    if (!beatPath) return;
-    try { await revealItemInDir(beatPath); } catch {}
-  };
-
-  // Maße von Cover und Thumbnail. Die Regeln stehen in MASSE; fehlt die Datei,
-  // gibt der Haken null zurück und alles bleibt wie vorher.
+  // Trenner aus dem Pfad selbst ablesen statt fest annehmen: die Bibliothek
+  // kann unter Windows wie unter macOS liegen.
   const vollerPfad = (dateiname: string | null) => {
     if (!dateiname || !beatPath) return null;
     const sep = beatPath.includes("\\") ? "\\" : "/";
     return `${beatPath}${sep}${dateiname}`;
   };
-  const coverMass = useImageSize(vollerPfad(assets.cover), MASSE.Cover);
-  const thumbMass = useImageSize(vollerPfad(assets.thumbnail), MASSE.Thumbnail);
-  const massFuer = (label: string): Mass | null =>
-    label === "Cover" ? coverMass : label === "Thumbnail" ? thumbMass : null;
 
-  /** Vorhanden, aber mit falschen Maßen — das Segment bleibt dann bernstein. */
-  const massFalsch = (r: Row) => {
-    const m = massFuer(r.label);
-    return r.filename !== null && m !== null && !m.ok;
+  const datei: Record<Kachel, string | null> = {
+    mp3: assets.mp3, wav: assets.wav, flp: assets.flp,
+    cover: assets.cover, thumbnail: assets.thumbnail, video: assets.video,
   };
-  const schiefeMasse = allRows.filter(massFalsch).map(r => r.label);
+  const coverMass = useImageSize(vollerPfad(assets.cover), MASSE.cover);
+  const thumbMass = useImageSize(vollerPfad(assets.thumbnail), MASSE.thumbnail);
+  const mass: Partial<Record<Kachel, Mass | null>> = { cover: coverMass, thumbnail: thumbMass };
 
-  const body = (
+  const klick = (k: Kachel) => {
+    const name = datei[k];
+    if (!name) {
+      const slot = ZUWEISBAR[k];
+      if (slot) setPicker(slot);
+      return;
+    }
+    const pfad = vollerPfad(name);
+    if (!pfad) return;
+    if (k === "cover" || k === "thumbnail") setPreview({ label: k === "cover" ? "Cover" : "Thumbnail", path: pfad });
+    else revealItemInDir(pfad).catch(() => {});
+  };
+
+  const aufraeumen = async () => {
+    try { await api.upload.cleanOldExports(beatPath); }
+    catch (e) { console.error("[Assets] Aufräumen fehlgeschlagen:", e); }
+    onRefresh();
+  };
+
+  // ── Dateien reinziehen ─────────────────────────────────────────────────────
+  // Aus dem Explorer aufs Fenster ziehen: schon beim Hereinziehen leuchtet die
+  // Kachel auf, in der die Datei landen würde. Loslassen kopiert sie in den
+  // Beat-Ordner — mit demselben Befehl wie das Zuweisen und das Ziehen im Studio.
+  const [ziehen, setZiehen] = useState<Gezogen[] | null>(null);
+  useEffect(() => {
+    if (!beatPath || !("__TAURI_INTERNALS__" in window)) return;
+    let stop: (() => void) | undefined;
+    let entfernt = false;
+    let aktuell: Gezogen[] = [];
+    getCurrentWebview().onDragDropEvent(async event => {
+      const p = event.payload;
+      if (p.type === "enter") {
+        aktuell = p.paths.map(pfad => ({ pfad, ziel: zielVorlaeufig(pfad) }));
+        setZiehen(aktuell);
+        // Bilder ohne „thumb"/„cover" im Namen: erst die Maße entscheiden.
+        aktuell = await Promise.all(aktuell.map(async g =>
+          g.ziel === "bild" ? { ...g, ziel: await bildZiel(g.pfad) } : g));
+        setZiehen(aktuell);
+      } else if (p.type === "leave") {
+        setZiehen(null);
+      } else if (p.type === "drop") {
+        setZiehen(null);
+        const fehler: string[] = [];
+        for (const g of aktuell) {
+          // Schneller losgelassen, als die Maße gelesen waren: jetzt lesen.
+          const ziel = g.ziel === "bild" ? await bildZiel(g.pfad) : g.ziel;
+          if (ziel === null || ziel === "bild") continue;
+          try {
+            await api.studio.assignAsset(g.pfad, settings.assetPath, beatPath, SLOT_DER_ZIELE[ziel]);
+          } catch (e) {
+            fehler.push(`${dateiname(g.pfad)}: ${String(e)}`);
+          }
+        }
+        onRefresh();
+        if (fehler.length) melde(`Nicht übernommen:\n\n${fehler.join("\n")}`);
+      }
+    }).then(un => { if (entfernt) un(); else stop = un; })
+      .catch(e => console.error("[Assets] Drag & Drop nicht verfügbar:", e));
+    return () => { entfernt = true; stop?.(); };
+  }, [beatPath, settings.assetPath, onRefresh, melde]);
+
+  /** Welche gezogene Datei in welcher Kachel landen würde. */
+  const eingehend = (k: Kachel) => ziehen?.find(g => g.ziel === k);
+  const ignoriert = ziehen?.filter(g => g.ziel === null).length ?? 0;
+
+  return (
     <>
-      {/* Fortschritt statt Statuszeile: ein Segment je Datei, gefüllt was da
-          ist. Man sieht die Lücke, statt sie aus „4/6" zu erschließen — und
-          beim Ablegen der nächsten Datei füllt sich sichtbar eins mehr.
-          Daneben die Aktionen mit Beschriftung: „Namen konvertieren" lag
-          vorher im zugeklappten Teil und war praktisch unauffindbar. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          onClick={() => setOpen(o => !o)}
-          title={open ? "Liste zuklappen" : "Alle Dateien zeigen"}
-          style={{
-            flex: 1, minWidth: 0,
-            display: "flex", alignItems: "center", gap: 12,
-            padding: "9px 12px",
-            background: "transparent",
-            border: `1px solid ${C.border15}`,
-            borderRadius: radius.control,
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-            {allRows.map(r => {
-              const m = massFuer(r.label);
-              const falsch = massFalsch(r);
-              return (
-                <span
-                  key={r.label}
-                  title={
-                    !r.filename ? `${r.label} fehlt`
-                    : falsch && m ? `${r.label}: ${m.breite}×${m.hoehe} — erwartet ${MASSE[r.label].soll}`
-                    : m ? `${r.label}: ${r.filename} (${m.breite}×${m.hoehe})`
-                    : `${r.label}: ${r.filename}`
-                  }
-                  style={{
-                    width: 22, height: 5, borderRadius: 3,
-                    // Neutral statt grün: „Datei liegt da" ist eine Zählung,
-                    // keine Zustandsaussage. Grün bleibt den zwei Stellen, die
-                    // wirklich etwas melden — „Bereit zum Hochladen" oben und
-                    // „Hochgeladen" im Status. Sonst ist die Seite so grün,
-                    // dass nichts mehr heraussticht.
-                    background: !r.filename ? C.border20 : falsch ? C.primary : C.onSurfaceVariant,
-                  }}
-                />
-              );
-            })}
-          </span>
-
-          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.onSurface }}>
-            {!allOk
-              ? `${present.length} von ${allRows.length} — es fehlt ${missing.map(m => m.label).join(", ")}`
-              : schiefeMasse.length > 0
-                ? `Alle Dateien da — ${schiefeMasse.join(" und ")} ${schiefeMasse.length === 1 ? "hat" : "haben"} die falsche Größe`
-                : "Alle Dateien da"
-            }
-          </span>
-
-          <ChevronDown
-            size={13}
-            color={C.onSecondaryFixedVar}
-            style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0)" }}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 8, flexWrap: "wrap" }}>
+        {KACHELN.map(({ id, label }) => (
+          <AssetKachel
+            key={id}
+            label={label}
+            datei={datei[id]}
+            bild={id === "cover" || id === "thumbnail" ? vollerPfad(datei[id]) : null}
+            breit={id === "thumbnail"}
+            mass={mass[id] ?? null}
+            soll={id === "cover" || id === "thumbnail" ? MASSE[id].soll : undefined}
+            zuweisbar={id in ZUWEISBAR}
+            icon={id === "flp" ? FolderTree : id === "video" ? FileVideo : FileAudio}
+            eingehend={eingehend(id)?.pfad ?? null}
+            onClick={() => klick(id)}
           />
-        </button>
+        ))}
+        <span style={{ flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <SectionIconBtn icon={Wand2} title="Dateinamen auf das Namensschema bringen" onClick={onConvert} />
+          <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
+          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={() => revealItemInDir(beatPath).catch(() => {})} />
+        </div>
+      </div>
 
-        {/* Im rahmenlosen Modus tragen die Aktionen keine Kartenkopfzeile mehr
-            — sie stehen direkt neben dem Fortschritt. */}
-        {bare && (
+      {/* Eine leise Zeile: was man hier tun kann — oder beim Ziehen, was passiert. */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        marginTop: 10, fontSize: 11,
+        color: ziehen ? C.primary : C.onSecondaryFixedVar,
+      }}>
+        {ziehen ? (
           <>
-            <button
-              onClick={onConvert}
-              title="Dateinamen im Beat-Ordner auf das Namensschema bringen"
-              style={{
-                display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                padding: "8px 12px", borderRadius: radius.control,
-                background: "transparent",
-                border: `1px solid ${C.border20}`,
-                color: C.onSurfaceVariant, cursor: "pointer",
-                fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; e.currentTarget.style.color = C.onSurfaceVariant; }}
-            >
-              <Wand2 size={12} strokeWidth={2} />
-              Namen konvertieren
-            </button>
-            <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
-            <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
+            Loslassen — {ziehen.length - ignoriert === 1 ? "1 Datei" : `${ziehen.length - ignoriert} Dateien`} in den Beat-Ordner
+            {ignoriert > 0 && <span style={{ color: C.onSecondaryFixedVar }}>· {ignoriert} passt nirgends hin</span>}
+          </>
+        ) : (
+          <>
+            Dateien aus dem Explorer hierher ziehen
+            {/* Nach ein paar Exporten aus FL liegen mehrere MP3/WAV im Ordner.
+                Gezeigt wird die neueste; die übrigen lassen sich wegräumen. */}
+            {assets.alte_exporte > 0 && (
+              <>
+                <span>·</span>
+                <Archive size={11} strokeWidth={1.75} />
+                <span style={{ color: C.onSurfaceVariant }}>
+                  {assets.alte_exporte === 1 ? "1 älterer Export" : `${assets.alte_exporte} ältere Exporte`}
+                </span>
+                <button
+                  onClick={aufraeumen}
+                  title="Ältere MP3/WAV nach 02_OLD verschieben — die neueste bleibt"
+                  style={{
+                    padding: 0, background: "none", border: "none",
+                    color: C.primary, cursor: "pointer",
+                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                  }}
+                >
+                  nach 02_OLD verschieben
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
 
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {/* Eine Flaeche mit duennen Trennstrichen statt sechs einzelnen
-              Kaesten: die Liste ist eine Aufzaehlung, kein halbes Dutzend
-              Elemente. Fehlende zuerst — das ist, was Aufmerksamkeit braucht. */}
-          <div style={{
-            background: C.surfaceContainer,
-            border: `1px solid ${C.border15}`,
-            borderRadius: radius.control,
-            overflow: "hidden",
-          }}>
-            {[...missing, ...present].map((row, i) => (
-              <AssetRow key={row.label} {...row} first={i === 0} mass={massFuer(row.label)} onClick={() => handleRowClick(row)} />
-            ))}
-          </div>
-
-          {/* Nur in der Kartenansicht: rahmenlos steht der Knopf oben
-              neben dem Fortschritt, wo man ihn auch findet. */}
-          {!bare && (
-            <button
-              onClick={onConvert}
-              style={{
-                marginTop: 10,
-                // inline-flex: die Liste darueber ist kein Flex-Container mehr,
-                // ein Block-Knopf zoege sich sonst ueber die ganze Breite.
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "6px 10px",
-                background: "transparent",
-                border: `1px solid ${C.border20}`,
-                borderRadius: radius.control,
-                cursor: "pointer",
-                fontSize: 10, fontWeight: 600,
-                color: C.onSurfaceVariant,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border20; e.currentTarget.style.color = C.onSurfaceVariant; }}
-            >
-              <Wand2 size={11} strokeWidth={2} />
-              Dateinamen konventionieren
-            </button>
-            )}
-        </div>
-      )}
-
-      {/* Bild-Lupe */}
-      {preview && (
-        <Lupe label={preview.label} path={preview.path} onClose={() => setPreview(null)} />
-      )}
+      {preview && <Lupe label={preview.label} path={preview.path} onClose={() => setPreview(null)} />}
 
       {picker && (
         <AssetPickerDialog
@@ -302,57 +256,180 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert, bar
       )}
     </>
   );
+}
 
-  if (bare) return body;
+/** Eine Datei als Kachel. Da: ruhige Fläche (bei Bildern das Bild selbst).
+ *  Fehlt: gestrichelt mit „+". Beim Ziehen: leuchtet, wenn hier etwas landet. */
+function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: Icon, eingehend, onClick }: {
+  label: string;
+  datei: string | null;
+  bild: string | null;
+  breit: boolean;
+  mass: Mass | null;
+  soll?: string;
+  zuweisbar: boolean;
+  icon: React.ElementType;
+  eingehend: string | null;
+  onClick: () => void;
+}) {
+  const da = datei !== null;
+  const falsch = mass !== null && !mass.ok;
+  const klickbar = da || zuweisbar;
+  const [hover, setHover] = useState(false);
+
+  const titel =
+    eingehend ? `${dateiname(eingehend)} → ${label}`
+    : !da ? (zuweisbar ? `${label} fehlt — aus dem Asset-Ordner zuweisen oder hierher ziehen` : `${label} fehlt`)
+    : falsch && mass ? `${datei}\n${mass.breite}×${mass.hoehe} — erwartet ${soll}`
+    : mass ? `${datei}\n${mass.breite}×${mass.hoehe}`
+    : datei ?? label;
 
   return (
-    <SectionCard
-      icon={ListChecks}
-      title="Assets"
-      actions={
-        <div style={{ display: "flex", gap: 6 }}>
-          <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
-          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={handleOpen} />
-        </div>
-      }
+    <button
+      type="button"
+      onClick={klickbar ? onClick : undefined}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={titel}
+      style={{
+        position: "relative", overflow: "hidden",
+        width: breit ? 104 : 64, height: 58, flexShrink: 0,
+        padding: 0, borderRadius: radius.control,
+        cursor: klickbar ? "pointer" : "default",
+        fontFamily: "inherit",
+        background: eingehend ? alpha(C.primary, 0.14)
+          : da ? "rgba(255,255,255,0.04)" : "transparent",
+        border: eingehend ? `1px solid ${C.primary}`
+          : falsch ? `1px solid ${alpha(C.primary, 0.6)}`
+          : da ? `1px solid ${hover && klickbar ? C.border30 : C.border10}`
+          : `1px dashed ${hover && klickbar ? C.border30 : C.border20}`,
+        transition: "border-color 0.15s, background 0.15s",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 4,
+      }}
     >
-      {body}
-    </SectionCard>
+      {da && bild && !eingehend && <KachelBild pfad={bild} />}
+
+      {/* Über einem Bild sitzt die Beschriftung auf einem Verlauf, sonst ist
+          sie auf hellen Covern nicht zu lesen. */}
+      {!(da && bild) || eingehend ? (
+        eingehend
+          ? <Plus size={14} color={C.primary} strokeWidth={2.25} />
+          : da ? <Icon size={15} color={C.onSurfaceVariant} strokeWidth={1.5} />
+          : <Plus size={14} color={C.onSecondaryFixedVar} strokeWidth={2} />
+      ) : null}
+      <span style={{
+        position: da && bild && !eingehend ? "absolute" : "static",
+        left: 0, right: 0, bottom: 0,
+        padding: da && bild && !eingehend ? "10px 4px 3px" : 0,
+        background: da && bild && !eingehend ? "linear-gradient(transparent, rgba(0,0,0,0.75))" : "none",
+        fontSize: 10, fontWeight: 600, textAlign: "center",
+        color: eingehend ? C.primary : da ? C.onSurface : C.onSecondaryFixedVar,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        maxWidth: "100%",
+      }}>
+        {label}
+      </span>
+      {falsch && !eingehend && (
+        <span style={{
+          position: "absolute", top: 4, right: 4,
+          width: 6, height: 6, borderRadius: "50%", background: C.primary,
+        }} />
+      )}
+    </button>
   );
 }
+
+function KachelBild({ pfad }: { pfad: string }) {
+  return (
+    <img
+      src={convertFileSrc(pfad.replace(/\\/g, "/"))}
+      alt=""
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+    />
+  );
+}
+
+// ─── Dateien reinziehen ──────────────────────────────────────────────────────
+
+/** Wohin eine gezogene Datei geht. `bild` = Maße werden noch gelesen,
+ *  `null` = passt nirgends hin. */
+type Ziel = "mp3" | "wav" | "cover" | "thumbnail" | "video" | "bild" | null;
+type Gezogen = { pfad: string; ziel: Ziel };
+
+/** Audio bekommt keinen Slot — es behält seinen Namen, wie ein Export aus FL. */
+const SLOT_DER_ZIELE: Record<"mp3" | "wav" | "cover" | "thumbnail" | "video", string | undefined> = {
+  mp3: undefined, wav: undefined, cover: "cover", thumbnail: "thumbnail", video: "video",
+};
+
+// GENAU die Endungen, die der Ordner-Scan liest — sonst landet eine Datei im
+// Ordner und bleibt unsichtbar.
+const BILD_EXT = ["png", "jpg", "jpeg", "webp", "gif"];
+const dateiname = (p: string) => p.split(/[/\\]/).pop() ?? p;
+const endung = (p: string) => p.split(".").pop()?.toLowerCase() ?? "";
+
+export function zielVorlaeufig(pfad: string): Ziel {
+  const ext = endung(pfad);
+  if (ext === "mp3" || ext === "wav") return ext;
+  if (ext === "mp4") return "video";
+  if (!BILD_EXT.includes(ext)) return null;
+  const name = dateiname(pfad).toLowerCase();
+  if (name.includes("thumb")) return "thumbnail";
+  if (name.includes("cover")) return "cover";
+  return "bild";
+}
+
+/** Breit wie 16:9 → Thumbnail, sonst Cover. */
+async function bildZiel(pfad: string): Promise<Ziel> {
+  const laden = (src: string) => new Promise<HTMLImageElement>((ok, fehl) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = fehl;
+    img.src = src;
+  });
+  try {
+    // Außerhalb des Asset-Bereichs liefert das Protokoll nichts — dann über
+    // das Backend, wie die Vorschau es auch tut.
+    const img = await laden(convertFileSrc(pfad.replace(/\\/g, "/")))
+      .catch(async () => laden(await api.create.readImageFile(pfad)));
+    return img.naturalWidth / img.naturalHeight > 1.5 ? "thumbnail" : "cover";
+  } catch {
+    return "cover";
+  }
+}
+
+// ─── Lupe ────────────────────────────────────────────────────────────────────
 
 /** Das Bild gross, Klick daneben oder Esc schliesst. */
 function Lupe({ label, path, onClose }: { label: string; path: string; onClose: () => void }) {
   useEscapeStack(onClose);
   return (
-        <div
-          data-modal
-          onClick={onClose}
-          style={{
-            position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 100, cursor: "zoom-out",
-          }}
-        >
-          <div style={{ position: "relative", maxWidth: "80vw", maxHeight: "82vh" }}>
-            <PreviewImage path={path} />
-            <div style={{
-              position: "absolute", top: -34, left: 0, right: 0,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                {label}
-              </span>
-              <span style={{ flex: 1 }} />
-              <X size={16} color={C.onSurfaceVariant} />
-            </div>
-          </div>
+    <div
+      data-modal
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 100, cursor: "zoom-out",
+      }}
+    >
+      <div style={{ position: "relative", maxWidth: "80vw", maxHeight: "82vh" }}>
+        <PreviewImage path={path} />
+        <div style={{
+          position: "absolute", top: -34, left: 0, right: 0,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            {label}
+          </span>
+          <span style={{ flex: 1 }} />
+          <X size={16} color={C.onSurfaceVariant} />
+        </div>
+      </div>
     </div>
   );
 }
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Full-size preview via asset protocol, base64 fallback outside the scope. */
 function PreviewImage({ path }: { path: string }) {
@@ -377,78 +454,5 @@ function PreviewImage({ path }: { path: string }) {
         display: "block",
       }}
     />
-  );
-}
-
-function AssetRow({ label, filename, icon: Icon, onClick, mass, first }: Row & { onClick?: () => void; mass?: Mass | null; first?: boolean }) {
-  const ok = filename !== null;
-  // Vorhanden: Vorschau/Explorer. Fehlt: direkt zuweisen.
-  const zuweisbar = !ok && label in SLOT_FUER;
-  const clickable = zuweisbar || (ok && (label === "Cover" || label === "Thumbnail" || label === "Video MP4"));
-  // Anklickbare Zeilen sind echte Knoepfe — sonst kommt man nur mit der Maus an
-  // die Vorschau. Nicht anklickbare bleiben ein <div>, sie sind reine Anzeige.
-  const Element = clickable ? "button" : "div";
-  return (
-    <Element
-      type={clickable ? "button" : undefined}
-      onClick={clickable ? onClick : undefined}
-      title={zuweisbar ? "Aus dem Asset-Ordner zuweisen" : clickable ? (label === "Video MP4" ? "Im Explorer zeigen" : "Vorschau anzeigen") : undefined}
-      style={{
-      width: "100%", textAlign: "left", font: "inherit", border: "none",
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "8px 12px",
-      // Zeile in einer gemeinsamen Flaeche: kein eigener Kasten, nur ein
-      // Trennstrich nach oben. Fehlendes bleibt getoent, das ist die Meldung.
-      background: ok ? "transparent" : alpha(C.error, 0.06),
-      borderTop: first ? "none" : `1px solid ${C.border10}`,
-      cursor: clickable ? "pointer" : "default",
-    }}>
-      {ok
-        ? <CheckCircle2 size={14} color={C.mint} strokeWidth={2} />
-        : <XCircle size={14} color={C.error} strokeWidth={1.75} />
-      }
-      <Icon size={12} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-      <span style={{
-        fontSize: 10, fontWeight: 700, color: ok ? C.onSurfaceVariant : C.error,
-        letterSpacing: "0.05em", textTransform: "uppercase",
-        width: 72, flexShrink: 0,
-      }}>
-        {label}
-      </span>
-      <span style={{
-        flex: 1, minWidth: 0,
-        fontSize: 11,
-        fontFamily: "monospace",
-        color: ok ? C.onSurface : C.onSecondaryFixedVar,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        opacity: ok ? 0.9 : 0.6,
-      }}>
-        {filename ?? "fehlt"}
-      </span>
-      {zuweisbar && (
-        <span style={{
-          flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
-          fontSize: 10, fontWeight: 700, color: C.primary,
-        }}>
-          <Plus size={11} strokeWidth={2.25} />
-          Zuweisen
-        </span>
-      )}
-      {/* Maße nur bei Cover und Thumbnail, und nur wenn sie gelesen werden
-          konnten. Stimmen sie nicht, steht daneben, was erwartet wird. */}
-      {mass && (
-        <span
-          title={mass.ok ? undefined : `Erwartet: ${MASSE[label]?.soll}`}
-          style={{
-            flexShrink: 0, fontSize: 10, fontFamily: "monospace",
-            padding: "2px 7px", borderRadius: radius.full,
-            background: mass.ok ? "rgba(255,255,255,0.04)" : alpha(C.primary, 0.12),
-            color: mass.ok ? C.onSecondaryFixedVar : C.primary,
-          }}
-        >
-          {mass.breite}×{mass.hoehe}
-        </span>
-      )}
-    </Element>
   );
 }

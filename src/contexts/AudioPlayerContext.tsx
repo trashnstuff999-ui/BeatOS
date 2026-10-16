@@ -50,7 +50,10 @@ interface AudioPlayerContextValue {
   isMuted: boolean;
   volume: number;
   error: string | null;
-  playBeat: (beat: Beat, preloadedCoverUrl?: string | null) => void;
+  /** `startSeconds`: dort weiterspielen — fuers Neuladen nach einem Export. */
+  playBeat: (beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number) => void;
+  /** Welche Datei mit welchem Stand gerade geladen ist — fuer „neuer Export da?". */
+  getGeladeneDatei: () => { pfad: string; stand: number | null } | null;
   togglePlay: () => void;
   toggleLoop: () => void;
   toggleMute: () => void;
@@ -85,6 +88,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const currentBeatPathRef = useRef<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoopedRef = useRef(false);
+  const startRef = useRef<number | null>(null);
+  const geladenRef = useRef<{ pfad: string; stand: number | null } | null>(null);
 
   const [currentBeat, setCurrentBeat] = useState<Beat | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -106,9 +111,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const playBeat = useCallback((beat: Beat, preloadedCoverUrl?: string | null) => {
+  const playBeat = useCallback((beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number) => {
     const beatPath = beat.path;
     if (!beatPath) return;
+    startRef.current = startSeconds ?? null;
+    geladenRef.current = null;
 
     currentBeatPathRef.current = beatPath;
     setCurrentBeat(beat);
@@ -144,7 +151,13 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         const ap = await api.audio.getAudioPath(beatPath);
         if (currentBeatPathRef.current !== beatPath) return;
         if (!ap) { setError("Keine Audiodatei gefunden"); setIsLoading(false); return; }
-        setAudioUrl(pathToAssetUrl(ap));
+        const stand = await api.audio.getFileMtime(ap).catch(() => null);
+        if (currentBeatPathRef.current !== beatPath) return;
+        geladenRef.current = { pfad: ap, stand };
+        // ?v= bei jedem Laden: FL Studio ueberschreibt Exporte gern unter
+        // demselben Namen, und mit gleicher URL lieferte die WebView die alte
+        // Fassung aus ihrem Cache. Das Asset-Protokoll liest nur den Pfad.
+        setAudioUrl(`${pathToAssetUrl(ap)}?v=${Date.now()}`);
       } catch {
         if (currentBeatPathRef.current !== beatPath) return;
         setError("Audio konnte nicht geladen werden");
@@ -181,7 +194,14 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       notbremse = null;
     };
 
-    const onMeta = () => { bremseLoesen(); setDuration(audio.duration); setIsLoading(false); setError(null); };
+    const onMeta = () => {
+      bremseLoesen(); setDuration(audio.duration); setIsLoading(false); setError(null);
+      if (startRef.current !== null) {
+        audio.currentTime = Math.min(startRef.current, audio.duration || 0);
+        setCurrentTime(audio.currentTime);
+        startRef.current = null;
+      }
+    };
     const onEnded = () => {
       if (isLoopedRef.current) return;   // Wiederholung laeuft ohne Ende weiter
       setIsPlaying(false);
@@ -275,6 +295,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // Zeit nur im Moment des Klicks wissen — also lesen, nicht abonnieren.
   const getCurrentSeconds = useCallback(() => audioRef.current?.currentTime ?? 0, []);
   const getDurationSeconds = useCallback(() => audioRef.current?.duration ?? 0, []);
+  const getGeladeneDatei = useCallback(() => geladenRef.current, []);
 
   /** Direkt auf eine Sekunde springen — ohne den Umweg ueber Prozent. */
   const seekSeconds = useCallback((secs: number) => {
@@ -333,13 +354,13 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
-    getCurrentSeconds, getDurationSeconds, seekSeconds,
+    getCurrentSeconds, getDurationSeconds, seekSeconds, getGeladeneDatei,
     setQueue, playNext, playPrev, hasQueue: queueLength > 1,
   }), [
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     playBeat, togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
-    getCurrentSeconds, getDurationSeconds, seekSeconds,
+    getCurrentSeconds, getDurationSeconds, seekSeconds, getGeladeneDatei,
     setQueue, playNext, playPrev, queueLength,
   ]);
 

@@ -76,6 +76,15 @@ pub fn plan_filename_convention(beat_id: String) -> Result<RenamePlan, String> {
     Ok(build_rename_plan(&beat_root, &naming))
 }
 
+/// Ältere MP3/WAV des Beat-Roots nach `02_OLD/` — die neueste bleibt.
+/// Gibt die Zahl der verschobenen Dateien zurück.
+#[tauri::command]
+pub fn clean_old_exports(beat_path: String) -> Result<usize, String> {
+    let root = Path::new(&beat_path);
+    if !root.is_dir() { return Err(format!("Beat-Ordner nicht gefunden: {beat_path}")); }
+    Ok(sweep_old_exports(root))
+}
+
 #[tauri::command]
 pub fn apply_filename_convention(beat_id: String) -> Result<RenameResult, String> {
     let (beat_root, naming) = load_naming_context(&beat_id)?;
@@ -171,6 +180,26 @@ fn waehle_behalten<'a>(
 /// Auto-Rename. Gibt die Zahl der verschobenen Dateien zurück; ein
 /// fehlgeschlagener Umzug lässt die Datei liegen und bricht nichts ab.
 pub fn sweep_old_audio(beat_root: &Path) -> usize {
+    sweep(beat_root, false)
+}
+
+/// Dasselbe Aufräumen, aber die NEUESTE Datei bleibt — für den Upload-Tab
+/// nach einem frischen Export. `waehle_behalten` zöge dort die alte
+/// `_untagged.wav` einem neuen Export ohne Etikett vor; wer gerade neu
+/// exportiert hat, will aber genau den behalten.
+pub fn sweep_old_exports(beat_root: &Path) -> usize {
+    sweep(beat_root, true)
+}
+
+/// Wie viele MP3/WAV im Root ein Aufräumen verschieben würde.
+pub fn count_old_audio(beat_root: &Path) -> usize {
+    let files = list_files(beat_root);
+    ["mp3", "wav"].iter()
+        .map(|ext| files.iter().filter(|(n, _)| ext_lower(n) == *ext).count().saturating_sub(1))
+        .sum()
+}
+
+fn sweep(beat_root: &Path, neueste: bool) -> usize {
     let files = list_files(beat_root);
     let mut moved = 0usize;
 
@@ -186,7 +215,11 @@ pub fn sweep_old_audio(beat_root: &Path) -> usize {
             return moved;
         }
 
-        let behalten = waehle_behalten(&matching, ext);
+        let behalten = if neueste {
+            *matching.iter().max_by_key(|(_, t)| *t).expect("mindestens zwei")
+        } else {
+            waehle_behalten(&matching, ext)
+        };
         for (n, _) in matching.iter().filter(|(n, _)| n != &behalten.0) {
             let dest = unique_dest(&old_dir, n);
             match fs::rename(beat_root.join(n), &dest) {
@@ -904,6 +937,26 @@ mod tests {
         assert!(super::rename_beat_dir(&new, "0871 - ANDERER").is_err());
         assert!(new.exists());
 
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Nach einem frischen Export bleibt der neue — auch wenn die alte WAV
+    /// „untagged" heißt und der neue Export kein Etikett trägt.
+    #[test]
+    fn upload_aufraeumen_behaelt_den_neuesten_export() {
+        let tmp = std::env::temp_dir().join(format!("beatos_exporte_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        write_at(&tmp.join("X_untagged.wav"), 1_000_000);
+        write_at(&tmp.join("X v2.wav"), 2_000_000);
+        write_at(&tmp.join("X_tagged.mp3"), 1_000_000);
+
+        assert_eq!(super::count_old_audio(&tmp), 1);
+        assert_eq!(super::sweep_old_exports(&tmp), 1);
+        assert!(tmp.join("X v2.wav").is_file());
+        assert!(tmp.join("02_OLD/X_untagged.wav").is_file());
+        assert!(tmp.join("X_tagged.mp3").is_file(), "einzige MP3 bleibt");
+        assert_eq!(super::count_old_audio(&tmp), 0);
         let _ = fs::remove_dir_all(&tmp);
     }
 }

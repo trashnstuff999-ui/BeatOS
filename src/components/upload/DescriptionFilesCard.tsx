@@ -1,285 +1,206 @@
 // src/components/upload/DescriptionFilesCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// 3-tab editor for the Beatstars / SoundCloud / YouTube description files.
-// Loads rendered templates from backend, lets user edit per-tab, then saves
-// each tab (or all) into {beat_folder}/{platform}.txt at the beat root.
+// Beschreibungen für BeatStars, SoundCloud und YouTube.
+//
+// Der Text kommt aus den Vorlagen. Wer ihn von Hand ändert, bekommt eine
+// eigene Fassung, die sich selbst speichert (Datenbank) und die überall gilt
+// — hier und im Release-Assistenten. Vorher gab es einen Speichern-Knopf, der
+// .txt-Dateien schrieb, die nichts zurücklas: nach einem Beat-Wechsel stand
+// wieder die Vorlage da, und der Assistent kopierte sie auch.
+//
+// Dazu prüft die Karte, was vor dem Upload auffallen sollte, und zeigt die
+// Beschreibung so, wie die Plattform sie anklickbar macht — bei YouTube mit
+// der Linie, ab der „…mehr" zuklappt.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  ShoppingBag, Music2, Youtube, Copy, Save, FileCode2,
-  Check, AlertCircle, Loader2, FileText, Pencil,
+  ShoppingBag, Music2, Youtube, Copy, FileCode2,
+  Check, AlertCircle, Loader2, FileText, Pencil, CheckCircle2, Info,
 } from "lucide-react";
 import { C, PLATFORM_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Button, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
-import type { UploadPlatform, UploadDescriptions, UploadFilesState } from "../../types/upload";
-
-import { extractTitle, extractDescription, extractTags, countTags } from "../../lib/descriptions";
+import type { UploadPlatform, UploadDescriptions } from "../../types/upload";
+import {
+  extractTitle, extractDescription, extractTags, countTags,
+  effektiv, pruefeBeschreibung, zerlege, YT_SICHTBARE_ZEILEN,
+} from "../../lib/descriptions";
 
 interface DescriptionFilesCardProps {
   beatId: string;
-  uploadFiles: UploadFilesState;   // from AssetCheck — shows on-disk state per file
-  onSaved: () => void;             // parent re-fetches data so the file-status indicators update
   // Re-render trigger: bump this number whenever something that affects the
   // rendered output changes (type-beat fields, upload status URL, etc.) and
   // the card will auto re-render.
   rerenderKey: number;
-  /** Der Kauflink dieses Beats aus dem Status. Fehlt er, rendert
-   *  {{BEATSTARS_LINK}} das Profil statt des Beats — siehe Hinweis unten. */
+  /** Der Kauflink dieses Beats aus dem Status. */
   beatstarsUrl: string | null;
-  /** Vom Upload-Tab gesetzt, um die Karte in ihrer Huelle zu verankern. */
+  /** Vom Upload-Tab gesetzt (Höchsthöhe = linke Spalte). */
   style?: React.CSSProperties;
 }
 
 type TabKey = UploadPlatform;
-type Banner = { kind: "ok" | "err"; msg: string } | null;
+type Feld = "title" | "description" | "tags";
 
-/** Titellänge. YouTube schneidet bei 100 Zeichen hart ab, ohne zu fragen;
- *  SoundCloud und Beatstars liegen ebenfalls bei 100. Ein Wert reicht also —
- *  wird eine Plattform großzügiger, gehört hier eine Tabelle hin. */
+/** Titellänge. YouTube schneidet bei 100 Zeichen hart ab; SoundCloud und
+ *  Beatstars liegen ebenfalls bei 100. */
 const TITEL_MAX = 100;
 
-/** YouTube begrenzt die Tags nicht in der Anzahl, sondern auf 500 Zeichen in
- *  Summe. Was darüber liegt, verschwindet still. */
+/** YouTube begrenzt die Tags auf 500 Zeichen in Summe. */
 const YT_TAG_ZEICHEN = 500;
 
-// Die Markenfarbe traegt NUR der aktive Abschnitt.
-//
-// Alle drei dauerhaft einzufaerben waere dieselbe Falle wie zuvor beim Gruen:
-// SoundClouds Orange liegt dicht an der Akzentfarbe der App, YouTubes Rot
-// dicht an der Fehlerfarbe — drei bunte Knoepfe nebeneinander konkurrieren,
-// und keiner sagt mehr etwas. Aktiv gefaerbt sagt die Farbe dagegen genau
-// eines: wo du gerade bist.
+// Die Markenfarbe traegt NUR der aktive Abschnitt — drei bunte Knoepfe
+// nebeneinander konkurrieren, aktiv gefaerbt sagt die Farbe genau eines:
+// wo du gerade bist.
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
   { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
   { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
   { key: "youtube",    label: "YouTube",    icon: Youtube,     color: PLATFORM_CONFIG.youtube.color,    file: "youtube.txt"    },
 ];
 
-export function DescriptionFilesCard({
-  beatId, uploadFiles, onSaved, rerenderKey, beatstarsUrl, style,
-}: DescriptionFilesCardProps) {
+/** Für den Vergleich Datei ↔ Vorlage: Zeilenenden und Rand zählen nicht. */
+const norm = (t: string) => t.replace(/\r\n/g, "\n").trim();
+
+export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style }: DescriptionFilesCardProps) {
   const [active, setActive] = useState<TabKey>("beatstars");
+  const [gerendert, setGerendert] = useState<UploadDescriptions | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [dateien, setDateien] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<UploadDescriptions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving]   = useState(false);
-  const [banner, setBanner]       = useState<Banner>(null);
-  // Per-tab "user has edited this tab" flag — used to avoid clobbering manual
-  // edits when something else triggers a re-render upstream.
-  const [dirty, setDirty] = useState<Record<TabKey, boolean>>({
-    beatstars: false, soundcloud: false, youtube: false,
-  });
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [speichert, setSpeichert] = useState(false);
+  const [kopiert, setKopiert] = useState<Feld | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
-  const renderFromBackend = async (force = false) => {
+  const laden = async () => {
     setIsLoading(true);
-    setBanner(null);
+    setFehler(null);
     try {
-      const rendered = await api.upload.renderDescriptions(beatId);
-      setDrafts(prev => {
-        if (!prev || force) return rendered;
-        // Preserve fields the user has manually edited.
-        return {
-          beatstars:  dirty.beatstars  ? prev.beatstars  : rendered.beatstars,
-          soundcloud: dirty.soundcloud ? prev.soundcloud : rendered.soundcloud,
-          youtube:    dirty.youtube    ? prev.youtube    : rendered.youtube,
-        };
-      });
-      if (force) setDirty({ beatstars: false, soundcloud: false, youtube: false });
+      const [r, stand] = await Promise.all([
+        api.upload.renderDescriptions(beatId),
+        api.upload.getDescriptionState(beatId),
+      ]);
+      setGerendert(r);
+      setOverrides(stand.overrides);
+      setDateien(stand.dateien);
+      setDrafts(effektiv(r, stand.overrides));
     } catch (e) {
-      setBanner({ kind: "err", msg: String(e) });
+      setFehler(String(e));
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Load on beat change OR when upstream signals re-render needed.
+  // Bei Beat-Wechsel und wenn sich etwas ändert, das in den Text einfließt.
   useEffect(() => {
     if (!beatId) return;
-    renderFromBackend(false);
+    laden();
   }, [beatId, rerenderKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset drafts + dirty when beat changes (handled by reload but we also
-  // want dirty flags cleared)
-  useEffect(() => {
-    setDirty({ beatstars: false, soundcloud: false, youtube: false });
-    setBanner(null);
-  }, [beatId]);
+  // ── Eigene Fassung: speichert sich selbst ─────────────────────────────────
+  // Wie die anderen Karten: kurz nach der letzten Eingabe. Gleicht der Text
+  // wieder der Vorlage, wird die eigene Fassung gelöscht — dann folgt er
+  // der Vorlage wieder. Die .txt im Beat-Ordner wird mitgeschrieben.
+  const offenRef = useRef<{ beatId: string; p: TabKey; text: string; vorlage: string } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const setDraft = (key: TabKey, value: string) => {
-    setDrafts(prev => prev ? { ...prev, [key]: value } : prev);
-    setDirty(prev => ({ ...prev, [key]: true }));
-  };
-
-  const handleCopyTitle = async () => {
-    if (!drafts) return;
+  const schreiben = async () => {
+    const offen = offenRef.current;
+    offenRef.current = null;
+    if (!offen) return;
+    const eigen = norm(offen.text) === norm(offen.vorlage) ? null : offen.text;
+    setSpeichert(true);
     try {
-      await navigator.clipboard.writeText(extractTitle(drafts[active]));
-      setBanner({ kind: "ok", msg: "Titel kopiert" });
-      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
-    } catch (e) {
-      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
-    }
-  };
-
-  const handleCopyDescription = async () => {
-    if (!drafts) return;
-    try {
-      await navigator.clipboard.writeText(extractDescription(drafts[active]));
-      setBanner({ kind: "ok", msg: "Beschreibung kopiert" });
-      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
-    } catch (e) {
-      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
-    }
-  };
-
-  const handleCopyTags = async () => {
-    if (!drafts) return;
-    try {
-      await navigator.clipboard.writeText(extractTags(drafts[active]));
-      setBanner({ kind: "ok", msg: "Tags kopiert" });
-      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2200);
-    } catch (e) {
-      setBanner({ kind: "err", msg: `Clipboard failed: ${e}` });
-    }
-  };
-
-  /** Speichert immer alle drei Dateien. Ein Knopf pro Datei bedeutete drei
-   *  Knoepfe fuer eine Handlung, die man ohnehin nie einzeln macht. */
-  const persist = async () => {
-    if (!drafts) return;
-    setIsSaving(true);
-    setBanner(null);
-    try {
+      await api.upload.setDescriptionOverride(offen.beatId, offen.p, eigen);
       await api.upload.saveDescriptions({
-        beat_id:    beatId,
-        beatstars:  drafts.beatstars,
-        soundcloud: drafts.soundcloud,
-        youtube:    drafts.youtube,
-      });
-      setDirty({ beatstars: false, soundcloud: false, youtube: false });
-      setBanner({ kind: "ok", msg: "Alle drei Beschreibungen gespeichert" });
-      onSaved();
-      setTimeout(() => setBanner(b => (b?.kind === "ok" ? null : b)), 2500);
+        beat_id: offen.beatId, beatstars: null, soundcloud: null, youtube: null, [offen.p]: offen.text,
+      }).catch(() => { /* Ordner fehlt — die eigene Fassung steht trotzdem in der DB */ });
+      if (offen.beatId === beatId) {
+        setOverrides(prev => {
+          const neu = { ...prev };
+          if (eigen === null) delete neu[offen.p]; else neu[offen.p] = eigen;
+          return neu;
+        });
+        setDateien(prev => ({ ...prev, [offen.p]: offen.text }));
+      }
     } catch (e) {
-      setBanner({ kind: "err", msg: `Speichern fehlgeschlagen: ${e}` });
+      setFehler(`Speichern fehlgeschlagen: ${e}`);
     } finally {
-      setIsSaving(false);
+      setSpeichert(false);
     }
   };
 
-  const [showTemplates, setShowTemplates] = useState(false);
+  const setDraft = (p: TabKey, text: string, sofort = false) => {
+    setDrafts(prev => prev ? { ...prev, [p]: text } : prev);
+    if (!gerendert) return;
+    offenRef.current = { beatId, p, text, vorlage: gerendert[p] };
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(schreiben, sofort ? 0 : 600);
+  };
 
-  // Volltext-Dialog. Ungesicherte Aenderungen meldet der Punkt am Knopf —
-  // frueher klappte der Editor dafuer von selbst auf, was im Dialog nicht
-  // ginge, ohne einem beim Tippen ein Fenster vor die Nase zu setzen.
+  // Beat-Wechsel oder Karte weg: Ausstehendes trotzdem schreiben.
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (offenRef.current) schreiben();
+  }, [beatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [editorOpen, setEditorOpen] = useState(false);
+  const kopieren = async (feld: Feld, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setKopiert(feld);
+      setTimeout(() => setKopiert(k => (k === feld ? null : k)), 1400);
+    } catch (e) {
+      setFehler(`Kopieren fehlgeschlagen: ${e}`);
+    }
+  };
 
   const activeContent = drafts?.[active] ?? "";
   const activeTitle = extractTitle(activeContent);
   const activeDescription = extractDescription(activeContent);
   const activeTags = extractTags(activeContent);
   const activeTagCount = countTags(activeTags);
-  const fileExistsMap: Record<TabKey, boolean> = {
-    beatstars:  uploadFiles.beatstars_txt,
-    soundcloud: uploadFiles.soundcloud_txt,
-    youtube:    uploadFiles.youtube_txt,
-  };
+  const hinweise = drafts ? pruefeBeschreibung(active, activeContent, beatstarsUrl) : [];
+  const eigeneFassung = overrides[active] !== undefined;
+  // Eine .txt, die anders ist als die Vorlage, und keine eigene Fassung in der
+  // DB: vielleicht eine alte Änderung, die nur dort steht. Anbieten, nicht
+  // aufdrängen.
+  const dateiAnders = !eigeneFassung && gerendert && dateien[active] !== undefined
+    && norm(dateien[active]) !== norm(gerendert[active]);
+  const tabLabel = TABS.find(t => t.key === active)?.label ?? active;
 
   return (
     <SectionCard
       icon={FileText}
       title="Beschreibungen"
-      // Fuellt ihre Huelle (siehe Upload.tsx). Der Inhaltsbereich nimmt die
-      // ganze uebrige Hoehe und scrollt — dadurch steht alles Uebrige fest,
-      // egal wie lang der Text der gewaehlten Plattform ist und ob der
-      // Volltext aufgeklappt ist.
-      style={{ height: "100%", display: "flex", flexDirection: "column", ...style }}
+      style={{ display: "flex", flexDirection: "column", ...style }}
       actions={
-        // Speichern steht hier oben statt am Kartenfuss. Unten sprang es bei
-        // jedem Tabwechsel mit der Textlaenge mit; hier steht es fest, und die
-        // Karte braucht keine Fusszeile, die bei kurzen Vorlagen eine Luecke
-        // ueber sich laesst.
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Der Rohtext ist der Notausgang, nicht die Hauptsache — und ein
-              Notausgang braucht keine Klapptuer mitten in der Karte. Im
-              Dialog bekommt er ausserdem das ganze Fenster statt der halben
-              Spalte. Der Punkt daneben meldet Ungesichertes, das sonst hinter
-              einem geschlossenen Fenster verschwaende. */}
+          {speichert && <Loader2 size={12} color={C.onSecondaryFixedVar} style={{ animation: "spin 0.8s linear infinite" }} />}
           <Button
-            size="sm"
-            variant="secondary"
-            icon={Pencil}
+            size="sm" variant="secondary" icon={Pencil}
             onClick={() => setEditorOpen(true)}
             disabled={!drafts}
-            title="Volltext dieser Plattform bearbeiten"
+            title={`${tabLabel}-Text von Hand bearbeiten — speichert sich selbst`}
           >
-            Volltext
-            {dirty[active] && (
-              <span style={{
-                width: 6, height: 6, borderRadius: "50%",
-                background: C.primary, marginLeft: 6, flexShrink: 0,
-              }} />
-            )}
+            Bearbeiten
           </Button>
           <Button
-            size="sm"
-            variant="secondary"
-            icon={FileCode2}
+            size="sm" variant="secondary" icon={FileCode2}
             onClick={() => setShowTemplates(true)}
             title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
           >
             Vorlagen
           </Button>
-          <Button
-            size="sm"
-            variant="primary"
-            icon={Save}
-            onClick={persist}
-            loading={isSaving}
-            disabled={!drafts}
-            title="Beatstars, SoundCloud und YouTube in den Beat-Ordner schreiben"
-          >
-            Speichern
-          </Button>
         </div>
       }
     >
-
-      {/* Der Kauflink fehlt — dann steht in allen drei Beschreibungen das
-          Profil statt des Beats, und zwar stillschweigend: {{BEATSTARS_LINK}}
-          faellt im Renderer auf beatstars_url aus den Einstellungen zurueck.
-          Wer die Beschreibungen vorher speichert, paste hinterher den
-          falschen Link. Deshalb steht der Hinweis hier, wo der Text
-          entsteht — nicht beim Status, wo der Link eingetragen wird. */}
-      {!beatstarsUrl?.trim() && (
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 8,
-          padding: "9px 12px", borderRadius: radius.control,
-          background: alpha(C.primary, 0.10),
-          border: `1px solid ${alpha(C.primary, 0.35)}`,
-          fontSize: 11, lineHeight: 1.5, color: C.primary,
-        }}>
-          <AlertCircle size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            Kein Beatstars-Kauflink hinterlegt — in den Beschreibungen steht
-            gerade dein Profil statt dieses Beats. Link unten bei
-            <strong> Status → Beatstars</strong> eintragen, dann rendert es neu.
-          </span>
-        </div>
-      )}
-
-      {/* ─── Tab strip ───────────────────────────────────────────────────────
-          Eine zusammenhaengende Leiste mit Trennstrichen statt drei einzelner
-          Pillen: die drei Plattformen sind Abschnitte derselben Sache, keine
-          drei getrennten Knoepfe. Nur der aktive Abschnitt bekommt Flaeche. */}
+      {/* ─── Reiter ──────────────────────────────────────────────────────── */}
       <div style={{
-        display: "flex", marginBottom: 12,
-        // Eine Stufe UEBER der Karte, wie die Status-Kacheln: die Leiste lag
-        // vorher auf der dunkelsten Flaeche und las sich als Ausschnitt.
+        display: "flex", marginBottom: 10, flexShrink: 0,
         background: C.surfaceContainer,
         border: `1px solid ${C.border15}`,
         borderRadius: radius.control,
@@ -287,8 +208,6 @@ export function DescriptionFilesCard({
       }}>
         {TABS.map((tab, i) => {
           const isActive = active === tab.key;
-          const exists = fileExistsMap[tab.key];
-          const isDirty = dirty[tab.key];
           const Icon = tab.icon;
           return (
             <button
@@ -297,9 +216,7 @@ export function DescriptionFilesCard({
               style={{
                 flex: 1,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "10px 12px",
-                // Aktiv: getoente Flaeche plus Unterstrich in der Markenfarbe.
-                // Als Rahmen zerfiele die Leiste wieder in drei Knoepfe.
+                padding: "9px 12px",
                 background: isActive ? `${tab.color}14` : "transparent",
                 border: "none",
                 borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
@@ -308,7 +225,6 @@ export function DescriptionFilesCard({
                 fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: isActive ? tab.color : C.onSecondaryFixedVar,
                 letterSpacing: "0.05em", textTransform: "uppercase",
-                position: "relative",
                 transition: "background 0.15s, color 0.15s",
               }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = C.onSurface; }}
@@ -316,39 +232,80 @@ export function DescriptionFilesCard({
             >
               <Icon size={13} strokeWidth={1.75} />
               {tab.label}
-              {isDirty && (
-                <span title="Ungespeicherte Änderungen" style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: C.primary,
-                }} />
-              )}
-              {exists && !isDirty && (
-                <Check size={11} color={C.onSecondaryFixedVar} strokeWidth={2.5} />
+              {overrides[tab.key] !== undefined && (
+                <span title="Von Hand geändert" style={{ display: "flex" }}>
+                  <Pencil size={10} strokeWidth={2.25} />
+                </span>
               )}
             </button>
           );
         })}
       </div>
 
+      {/* ─── Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig ── */}
+      {drafts && !isLoading && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
+            {hinweise.length === 0 ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.mint }}>
+                <CheckCircle2 size={12} strokeWidth={2} /> Alles in Ordnung
+              </span>
+            ) : (
+              <span style={{ color: C.onSurfaceVariant }}>
+                {hinweise.length === 1 ? "1 Hinweis" : `${hinweise.length} Hinweise`}
+              </span>
+            )}
+            <span style={{ flex: 1 }} />
+            {eigeneFassung && (
+              <span style={{ color: C.onSecondaryFixedVar }}>
+                Von Hand geändert ·{" "}
+                <LinkKnopf
+                  onClick={() => gerendert && setDraft(active, gerendert[active], true)}
+                  title="Die eigene Fassung verwerfen — der Text folgt wieder der Vorlage"
+                >
+                  Vorlage wiederherstellen
+                </LinkKnopf>
+              </span>
+            )}
+            {dateiAnders && (
+              <span style={{ color: C.onSecondaryFixedVar }}>
+                {TABS.find(t => t.key === active)?.file} weicht ab ·{" "}
+                <LinkKnopf
+                  onClick={() => setDraft(active, dateien[active], true)}
+                  title="Den Text aus der Datei im Beat-Ordner als eigene Fassung übernehmen"
+                >
+                  übernehmen
+                </LinkKnopf>
+              </span>
+            )}
+          </div>
+          {hinweise.map(h => (
+            <div key={h.text} style={{
+              display: "flex", alignItems: "flex-start", gap: 6,
+              fontSize: 11, lineHeight: 1.45,
+              color: h.stufe === "fehler" ? C.error : C.primary,
+            }}>
+              {h.stufe === "fehler"
+                ? <AlertCircle size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+                : <Info size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />}
+              {h.text}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ─── Ausgabe: Titel / Beschreibung / Tags ────────────────────────────
-          Drei Zeilen einer Liste statt drei Kaesten. Vorher hatte jede Zeile
-          Rahmen, Icon, Label UND einen breiten Knopf, der ausschrieb, was das
-          Icon schon sagte („TITEL KOPIEREN" neben dem Titel). Jetzt trennen
-          duenne Linien, und Kopieren ist ein Icon rechts. */}
-      <div style={{
-        borderTop: `1px solid ${C.border10}`,
-        // Nimmt die Hoehe auf, die die Karte neben der Infos-Karte gewinnt:
-        // statt Luft steht dort mehr von der Beschreibung.
-        // Nimmt die ganze uebrige Hoehe und scrollt. Damit steht die Karte
-        // still: kurze und lange Vorlagen ergeben dieselbe Aussenform, und das
-        // Aufklappen des Volltexts schneidet nichts ab, sondern scrollt.
-        flex: 1, minHeight: 0, overflowY: "auto",
-      }}>
+          Die Karte ist so hoch wie ihr Inhalt, höchstens so hoch wie die
+          linke Spalte — darüber scrollt dieser Teil. Vorher füllte sie immer
+          die ganze Höhe, und eine kurze BeatStars-Beschreibung stand in einem
+          halbleeren Kasten. */}
+      <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
         <OutputRow
           label="Titel"
           badge={`${activeTitle.length}/${TITEL_MAX}`}
           badgeWarn={activeTitle.length > TITEL_MAX}
-          onCopy={handleCopyTitle}
+          kopiert={kopiert === "title"}
+          onCopy={() => kopieren("title", activeTitle)}
           disabled={!drafts || isLoading}
         >
           <div style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, lineHeight: 1.45, wordBreak: "break-word" }}>
@@ -363,31 +320,20 @@ export function DescriptionFilesCard({
 
         <OutputRow
           label="Beschreibung"
-          onCopy={handleCopyDescription}
+          kopiert={kopiert === "description"}
+          onCopy={() => kopieren("description", activeDescription)}
           disabled={!drafts || isLoading}
         >
-          <div style={{
-            fontSize: 11, color: C.onSurfaceVariant,
-            lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
-            // Kein Zeilenlimit mehr. Vorher stand hier eine Klammer auf 20
-            // Zeilen mit overflow:hidden — der Rest war nicht weggescrollt,
-            // sondern weggeschnitten und damit unerreichbar. Getroffen hat es
-            // ausgerechnet das Ende, wo Kapitelmarken und Tags stehen: man
-            // trug sie links ein und sah rechts nie, was daraus wurde.
-            // Der Inhaltsbereich der Karte scrollt ohnehin.
-          }}>
-            {isLoading
-              ? "Rendering…"
-              : (activeDescription || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
-            }
-          </div>
+          {isLoading || !activeDescription
+            ? <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
+            : <Vorschau text={activeDescription} youtube={active === "youtube"} />
+          }
         </OutputRow>
 
         {activeTags && (
           <OutputRow
             label="Tags"
-            // SoundCloud begrenzt die Anzahl, YouTube die Zeichensumme —
-            // deshalb zwei verschiedene Zähler statt eines.
+            // SoundCloud begrenzt die Anzahl, YouTube die Zeichensumme.
             badge={
               active === "soundcloud" ? `${activeTagCount}/9`
               : active === "youtube"  ? `${activeTags.length}/${YT_TAG_ZEICHEN} Zeichen`
@@ -397,73 +343,44 @@ export function DescriptionFilesCard({
               (active === "soundcloud" && activeTagCount > 9) ||
               (active === "youtube" && activeTags.length > YT_TAG_ZEICHEN)
             }
-            onCopy={handleCopyTags}
+            kopiert={kopiert === "tags"}
+            onCopy={() => kopieren("tags", activeTags)}
             disabled={!drafts || isLoading}
+            letzte
           >
             <div style={{
               fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
               lineHeight: 1.5, wordBreak: "break-word",
-              display: "-webkit-box",
-              WebkitLineClamp: 4,
-              WebkitBoxOrient: "vertical" as const,
-              overflow: "hidden",
             }}>
               {activeTags.split(/\r?\n/).join("  ")}
             </div>
           </OutputRow>
         )}
-
       </div>
 
-      {/* ─── Banner ──────────────────────────────────────────────────────── */}
-      {banner && (
+      {fehler && (
         <div style={{
-          marginTop: 10,
-          padding: "8px 12px",
-          background: banner.kind === "ok" ? alpha(C.mint, 0.10) : alpha(C.error, 0.10),
-          border: `1px solid ${banner.kind === "ok" ? alpha(C.mint, 0.35) : alpha(C.error, 0.35)}`,
-          borderRadius: radius.control,
-          display: "flex", alignItems: "center", gap: 8,
-          fontSize: 11,
-          color: banner.kind === "ok" ? C.mint : C.error,
+          marginTop: 10, display: "flex", alignItems: "center", gap: 8,
+          fontSize: 11, color: C.error, flexShrink: 0,
         }}>
-          {banner.kind === "ok"
-            ? <Check size={12} strokeWidth={2.5} />
-            : <AlertCircle size={12} strokeWidth={2} />
-          }
-          {banner.msg}
+          <AlertCircle size={12} strokeWidth={2} /> {fehler}
         </div>
       )}
 
-      {/* Volltext im Dialog statt aufgeklappt in der Karte: hier bekommt er
-          das ganze Fenster, und die Karte bleibt bei ihrer Hauptsache —
-          Titel, Beschreibung, Tags zum Kopieren. */}
+      {/* Volltext im Dialog: speichert sich selbst, wie die Karte. */}
       {editorOpen && (
         <Modal
-          title={`Volltext — ${TABS.find(t => t.key === active)?.label ?? active}`}
-          subtitle={TABS.find(t => t.key === active)?.file}
+          title={`Bearbeiten — ${tabLabel}`}
+          subtitle="Speichert sich selbst · gilt hier und im Release-Assistenten"
           icon={Pencil}
           width={900}
           onClose={() => setEditorOpen(false)}
-          footerLeft={dirty[active] ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.primary }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.primary }} />
-              ungespeicherte Änderungen
+          footerLeft={
+            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+              {speichert ? "Speichert …" : eigeneFassung ? "Eigene Fassung gespeichert" : "Folgt der Vorlage"}
             </span>
-          ) : undefined}
-          footer={
-            <>
-              <Button size="sm" variant="ghost" onClick={() => setEditorOpen(false)}>Schließen</Button>
-              <Button
-                size="sm" variant="primary" icon={Save}
-                onClick={async () => { await persist(); setEditorOpen(false); }}
-                loading={isSaving}
-                disabled={!drafts}
-              >
-                Speichern
-              </Button>
-            </>
           }
+          footer={<Button size="sm" variant="primary" onClick={() => setEditorOpen(false)}>Fertig</Button>}
         >
           <textarea
             value={activeContent}
@@ -474,9 +391,6 @@ export function DescriptionFilesCard({
               width: "100%",
               height: "60vh",
               padding: "12px 14px",
-              // NICHT surfaceContainerLowest — das ist reines Schwarz und
-              // liest sich als Loch. Ein Feld steht eine Stufe von seiner
-              // Flaeche ab, und der Schritt geht nach oben.
               background: C.surfaceContainer,
               border: `1px solid ${C.border20}`,
               borderRadius: radius.control,
@@ -497,9 +411,8 @@ export function DescriptionFilesCard({
         <TemplateEditorDialog
           beatId={beatId}
           onClose={() => setShowTemplates(false)}
-          // Gespeicherte Vorlage → alle Tabs frisch rendern, aber eigene
-          // Änderungen am Text nicht wegwerfen
-          onSaved={() => renderFromBackend(false)}
+          // Neue Vorlage → neu rendern; eigene Fassungen bleiben, wie sie sind.
+          onSaved={() => laden()}
         />
       )}
     </SectionCard>
@@ -508,20 +421,74 @@ export function DescriptionFilesCard({
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+/** Die Beschreibung, wie die Plattform sie anklickbar macht: Links,
+ *  Zeitmarken und Hashtags hervorgehoben. Bei YouTube zeigt eine Linie, wo
+ *  „…mehr" zuklappt — darüber steht, was man ohne Aufklappen sieht. */
+function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
+  const zeilen = text.split(/\r?\n/);
+  const farbe = { text: C.onSurfaceVariant, link: C.tertiary, zeit: C.tertiary, hashtag: C.tertiary };
+  return (
+    <div style={{ fontSize: 11, lineHeight: 1.55, wordBreak: "break-word" }}>
+      {zeilen.map((zeile, i) => (
+        <div key={i}>
+          {youtube && i === YT_SICHTBARE_ZEILEN && zeilen.length > YT_SICHTBARE_ZEILEN && (
+            <div
+              title="Bis hierhin sehen Zuschauer die Beschreibung, ohne sie aufzuklappen"
+              style={{
+                display: "flex", alignItems: "center", gap: 8, margin: "6px 0",
+                fontSize: 10, color: C.onSecondaryFixedVar,
+              }}
+            >
+              <span style={{ flex: 1, borderTop: `1px dashed ${C.border20}` }} />
+              …mehr
+              <span style={{ flex: 1, borderTop: `1px dashed ${C.border20}` }} />
+            </div>
+          )}
+          {zeile.trim() === ""
+            ? <span>&nbsp;</span>
+            : zerlege(zeile).map((s, k) => (
+                <span key={k} style={{ color: farbe[s.art] }}>{s.text}</span>
+              ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LinkKnopf({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        padding: 0, background: "none", border: "none",
+        color: C.primary, cursor: "pointer",
+        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Eine Ausgabe-Zeile: Label links, Inhalt darunter, Kopieren rechts. */
-function OutputRow({ label, badge, badgeWarn, onCopy, disabled, children }: {
+function OutputRow({ label, badge, badgeWarn, onCopy, kopiert, disabled, letzte, children }: {
   label: string;
   badge?: string;
   badgeWarn?: boolean;
   onCopy: () => void;
+  kopiert: boolean;
   disabled?: boolean;
+  /** Ohne Trennlinie darunter — die Karte endet hier. */
+  letzte?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 12,
-      padding: "12px 2px",
-      borderBottom: `1px solid ${C.border10}`,
+      padding: "10px 2px",
+      borderTop: `1px solid ${C.border10}`,
+      borderBottom: letzte ? "none" : undefined,
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -544,23 +511,25 @@ function OutputRow({ label, badge, badgeWarn, onCopy, disabled, children }: {
         </div>
         {children}
       </div>
+      {/* Kopieren: der Haken im Knopf selbst sagt „erledigt" — vorher sprang
+          dafür eine Meldung unter die Karte und schob alles nach unten. */}
       <button
         onClick={onCopy}
         disabled={disabled}
-        title={`${label} kopieren`}
+        title={kopiert ? "Kopiert" : `${label} kopieren`}
         style={{
           width: 28, height: 28, borderRadius: radius.control, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           background: "transparent",
-          border: `1px solid ${C.border20}`,
-          color: C.onSurfaceVariant,
+          border: `1px solid ${kopiert ? alpha(C.mint, 0.5) : C.border20}`,
+          color: kopiert ? C.mint : C.onSurfaceVariant,
           cursor: disabled ? "not-allowed" : "pointer",
           opacity: disabled ? 0.45 : 1,
+          transition: "border-color 0.15s, color 0.15s",
         }}
       >
-        <Copy size={12} strokeWidth={2} />
+        {kopiert ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
       </button>
     </div>
   );
 }
-

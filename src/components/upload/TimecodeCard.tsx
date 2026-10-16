@@ -15,9 +15,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ListOrdered, Play, Pause, Plus, X, CornerDownLeft, Lock } from "lucide-react";
+import {
+  ListOrdered, Play, Pause, Plus, X, CornerDownLeft, Lock, RotateCw,
+  Download, AudioWaveform, Loader2, Magnet, Undo2, type LucideIcon,
+} from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
-import { C, radius } from "../../lib/theme";
+import { C, alpha, radius } from "../../lib/theme";
+import { kapitelVorschlagen } from "../../lib/kapitelVorschlag";
 import { SectionCard } from "../ui/SectionCard";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { UploadBeatInfo, Timecode } from "../../types/upload";
@@ -100,11 +105,28 @@ export function normalisieren(zeilen: Zeile[]): Zeile[] {
   return sortiert.map((z, i) => (i === 0 && z.seconds !== 0 ? { ...z, seconds: 0 } : z));
 }
 
-export function TimecodeCard({ beat, onSaved }: {
+/** Eine importierte Liste braucht eine Marke bei 0:00. Fehlt sie, kommt ein
+ *  Intro davor — sonst schöbe `normalisieren` den ersten echten Abschnitt
+ *  (z. B. den Hook bei 0:30) auf 0:00. */
+export function mitStart(neu: Timecode[]): Timecode[] {
+  return neu.some(m => m.seconds === 0) ? neu : [{ seconds: 0, label: "Intro" }, ...neu];
+}
+
+const alsText = (l: Timecode[]) =>
+  [...l].sort((a, b) => a.seconds - b.seconds).map(m => `${m.seconds} ${m.label.trim()}`).join("|");
+
+/** Merkt sich, ob neue Marken auf den Takt einrasten. */
+const RASTER = "beatos.kapitel.raster";
+/** Merkt sich die gewählte Quelle: FL-Marker oder Audio. */
+const QUELLE = "beatos.kapitel.quelle";
+
+export function TimecodeCard({ beat, flpPath, onSaved }: {
   beat: UploadBeatInfo;
+  /** Die FLP des Beats — ihre Zeitmarker lassen sich als Kapitel übernehmen. */
+  flpPath: string | null;
   onSaved: () => void;
 }) {
-  const { playBeat, togglePlay, currentBeat, isPlaying, getCurrentSeconds, seekSeconds } =
+  const { playBeat, togglePlay, currentBeat, isPlaying, getCurrentSeconds, seekSeconds, getGeladeneDatei } =
     useAudioPlayerContext();
 
   const [marken, setMarken] = useState<Zeile[]>(() => alsZeilen(parseBlock(beat.timecodes)));
@@ -112,13 +134,63 @@ export function TimecodeCard({ beat, onSaved }: {
   // Die Zeit im Knopf soll mitlaufen, ohne den Fortschritts-Kontext zu
   // abonnieren — ein eigener, langsamer Takt nur für diese eine Zahl.
   const [jetzt, setJetzt] = useState(0);
+  /** Die Liste vor dem letzten Übernehmen — für „Rückgängig". */
+  const [vorher, setVorher] = useState<Zeile[] | null>(null);
+  const [flpMarken, setFlpMarken] = useState<Timecode[]>([]);
+  const [neuerExport, setNeuerExport] = useState(false);
+  const [analysiert, setAnalysiert] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  /** Woher „Übernehmen" die ganze Liste holt. Bleibt gemerkt. */
+  const [quelle, setQuelle] = useState<"fl" | "audio">(() => {
+    try { return localStorage.getItem(QUELLE) === "audio" ? "audio" : "fl"; } catch { return "fl"; }
+  });
+  const quelleWaehlen = (q: "fl" | "audio") => {
+    setQuelle(q);
+    try { localStorage.setItem(QUELLE, q); } catch { /* egal */ }
+  };
+  const [raster, setRaster] = useState(() => {
+    try { return localStorage.getItem(RASTER) !== "aus"; } catch { return true; }
+  });
 
   const laeuftHier = currentBeat?.id === beat.id;
+  /** Ein Takt in Sekunden (4/4). Ohne BPM gibt es kein Raster. */
+  const takt = beat.bpm ? 240 / beat.bpm : null;
 
   useEffect(() => {
     setMarken(alsZeilen(parseBlock(beat.timecodes)));
     setDreckig(false);
   }, [beat.id, beat.timecodes]);
+
+  useEffect(() => {
+    setVorher(null);
+    setNeuerExport(false);
+    setFehler(null);
+  }, [beat.id]);
+
+  const flpLesen = useCallback(() => {
+    if (!flpPath) { setFlpMarken([]); return; }
+    api.audio.getFlpMarkers(flpPath, beat.bpm)
+      .then(setFlpMarken)
+      .catch(() => setFlpMarken([]));
+  }, [flpPath, beat.bpm]);
+
+  useEffect(() => { flpLesen(); }, [flpLesen]);
+
+  // Zurück aus FL Studio: gespeicherte Marker neu lesen, und nachsehen, ob
+  // seit dem Laden ein neuer Export da ist — neuer Name oder überschrieben.
+  useEffect(() => {
+    const zurueck = async () => {
+      flpLesen();
+      const geladen = laeuftHier ? getGeladeneDatei() : null;
+      if (!geladen) return;
+      const pfad = await api.audio.getAudioPath(beat.path);
+      if (!pfad) return;
+      const stand = await api.audio.getFileMtime(pfad);
+      setNeuerExport(pfad !== geladen.pfad || stand !== geladen.stand);
+    };
+    window.addEventListener("focus", zurueck);
+    return () => window.removeEventListener("focus", zurueck);
+  }, [flpLesen, laeuftHier, beat.path, getGeladeneDatei]);
 
   useEffect(() => {
     if (!laeuftHier) return;
@@ -184,21 +256,101 @@ export function TimecodeCard({ beat, onSaved }: {
   };
 
   const hinzufuegen = (label = "") => {
-    const secs = laeuftHier ? Math.floor(getCurrentSeconds()) : 0;
+    let secs = laeuftHier ? getCurrentSeconds() : 0;
+    // Ein Klick kommt immer einen Tick zu spät; Abschnitte beginnen auf
+    // einem Taktanfang. Also auf den nächsten Takt — ab 0:00 gerechnet.
+    // ponytail: setzt voraus, dass der Export bei Takt 1 beginnt und das
+    // Tempo hält; sonst Raster ausschalten.
+    if (raster && takt) secs = Math.round(secs / takt) * takt;
+    secs = Math.floor(secs + 1e-6);
     setMarken(prev => normalisieren([...prev, { id: naechsteId++, seconds: secs, label }]));
     setDreckig(true);
   };
 
+  // „M" setzt beim Hören eine Marke. Über eine Ref, damit der Zuhörer nicht
+  // bei jeder Änderung der Liste neu angemeldet wird.
+  const hinzufuegenRef = useRef(hinzufuegen);
+  hinzufuegenRef.current = hinzufuegen;
+  useEffect(() => {
+    if (!laeuftHier) return;
+    const taste = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "m" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("[data-modal]")) return;
+      e.preventDefault();
+      hinzufuegenRef.current();
+    };
+    window.addEventListener("keydown", taste);
+    return () => window.removeEventListener("keydown", taste);
+  }, [laeuftHier]);
+
+  const rasterUmschalten = () => {
+    setRaster(r => {
+      try { localStorage.setItem(RASTER, r ? "aus" : "an"); } catch { /* egal */ }
+      return !r;
+    });
+  };
+
+  /** Ganze Liste ersetzen (aus FL Studio oder dem Audio-Vorschlag). Die alte
+   *  bleibt für „Rückgängig" — ein Klick soll keine Arbeit vernichten. */
+  const ersetzen = (neu: Timecode[]) => {
+    setVorher(marken);
+    setMarken(normalisieren(alsZeilen(mitStart(neu))));
+    setDreckig(true);
+  };
+
+  const rueckgaengig = () => {
+    if (!vorher) return;
+    setMarken(vorher);
+    setVorher(null);
+    setDreckig(true);
+  };
+
+  const analysieren = async () => {
+    if (!beat.bpm) return;
+    setAnalysiert(true);
+    setFehler(null);
+    try {
+      const pfad = await api.audio.getAudioPath(beat.path);
+      if (!pfad) throw new Error("Keine Audiodatei gefunden");
+      const antwort = await fetch(`${convertFileSrc(pfad.replace(/\\/g, "/"))}?v=${Date.now()}`);
+      const ctx = new AudioContext();
+      const audio = await ctx.decodeAudioData(await antwort.arrayBuffer());
+      void ctx.close();
+      const mono = new Float32Array(audio.getChannelData(0));
+      for (let k = 1; k < audio.numberOfChannels; k++) {
+        const kanal = audio.getChannelData(k);
+        for (let i = 0; i < mono.length; i++) mono[i] += kanal[i];
+      }
+      ersetzen(kapitelVorschlagen(mono, audio.sampleRate, beat.bpm));
+    } catch (e) {
+      console.error("[Timecodes] Analyse fehlgeschlagen:", e);
+      setFehler("Das Audio ließ sich nicht analysieren.");
+    } finally {
+      setAnalysiert(false);
+    }
+  };
+
   const abspielen = () => {
     if (laeuftHier) { togglePlay(); return; }
+    neuLaden();
+  };
+
+  /** Datei neu suchen und laden — nach einem neuen Export in FL Studio.
+   *  Läuft der Beat schon, geht es an derselben Stelle weiter. */
+  const neuLaden = () => {
+    setNeuerExport(false);
     // Der Player braucht eine Beat-Form; Pfad und Name reichen ihm.
     playBeat({
       id: beat.id, name: beat.name, path: beat.path,
       bpm: beat.bpm, key: beat.key, status: null, tags: null, favorite: null,
       created_date: null, modified_date: null, notes: null, sold_to: null,
       has_artwork: null, has_video: null,
-    } as Beat);
+    } as Beat, undefined, laeuftHier ? getCurrentSeconds() : undefined);
   };
+
+  const flpAnders = flpMarken.length > 0 && alsText(mitStart(flpMarken)) !== alsText(marken);
 
   // ── Hinweise, keine Blocker ──────────────────────────────────────────────
   const sortiert = [...marken].sort((a, b) => a.seconds - b.seconds);
@@ -212,7 +364,61 @@ export function TimecodeCard({ beat, onSaved }: {
   const vorhandeneNamen = marken.map(m => m.label);
 
   return (
-    <SectionCard icon={ListOrdered} title="Kapitel">
+    <SectionCard
+      icon={ListOrdered}
+      title="Kapitel"
+      // Was die ganze Liste füllt, steht im Kopf — es ist der erste Schritt:
+      // Liste holen, dann anhören und verfeinern.
+      actions={
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div role="radiogroup" style={{
+            display: "flex", padding: 2, gap: 2,
+            borderRadius: radius.control, background: C.surfaceContainer,
+          }}>
+            {([["fl", "FL-Marker"], ["audio", "Audio"]] as const).map(([wert, text]) => (
+              <button
+                key={wert}
+                role="radio"
+                aria-checked={quelle === wert}
+                onClick={() => quelleWaehlen(wert)}
+                style={{
+                  padding: "4px 10px", borderRadius: radius.control, border: "none",
+                  background: quelle === wert ? C.surfaceContainerHigh : "transparent",
+                  color: quelle === wert ? C.onSurface : C.onSecondaryFixedVar,
+                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          {quelle === "fl" ? (
+            <Knopf
+              icon={Download}
+              onClick={() => ersetzen(flpMarken)}
+              disabled={!flpAnders}
+              title={flpMarken.length === 0 ? "Keine Zeitmarker in der FLP"
+                : !flpAnders ? "Stimmt schon mit FL Studio überein"
+                : `${flpMarken.length} Zeitmarker aus dem Playlist-Fenster übernehmen`}
+            >
+              Übernehmen
+            </Knopf>
+          ) : (
+            <Knopf
+              icon={analysiert ? Loader2 : AudioWaveform}
+              onClick={analysieren}
+              disabled={!beat.bpm || analysiert}
+              title={beat.bpm
+                ? "Abschnitte aus dem Audio erkennen — die Namen sind geraten"
+                : "Braucht das BPM des Beats"}
+            >
+              Erkennen
+            </Knopf>
+          )}
+          {vorher && <Knopf icon={Undo2} onClick={rueckgaengig} title="Rückgängig" />}
+        </div>
+      }
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
         {/* Abspielen + laufende Zeit */}
@@ -238,9 +444,35 @@ export function TimecodeCard({ beat, onSaved }: {
           }}>
             {laeuftHier ? mmss(jetzt) : "—:—"}
           </span>
+          {laeuftHier && (
+            <button
+              onClick={neuLaden}
+              title="Neuesten Export laden"
+              style={{
+                width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
+                background: "transparent", border: "none",
+                color: C.onSurfaceVariant, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <RotateCw size={12} strokeWidth={2} />
+            </button>
+          )}
           <span style={{ flex: 1 }} />
+          {/* Direkt neben „+ Marke": Einrasten ändert nur, wo neue Marken landen. */}
+          {takt && (
+            <Knopf
+              icon={Magnet}
+              onClick={rasterUmschalten}
+              aktiv={raster}
+              title={`Neue Marken rasten auf den nächsten Takt ein (${takt.toFixed(1).replace(".", ",")} s bei ${beat.bpm} BPM)`}
+            >
+              Einrasten
+            </Knopf>
+          )}
           <button
             onClick={() => hinzufuegen()}
+            title="Marke setzen — beim Hören auch mit der Taste M"
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "6px 12px", borderRadius: radius.control,
@@ -254,6 +486,19 @@ export function TimecodeCard({ beat, onSaved }: {
               : laeuftHier ? `Marke bei ${mmss(jetzt)}` : "Marke"}
           </button>
         </div>
+
+        {neuerExport && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "6px 6px 6px 10px", borderRadius: radius.control,
+            background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
+            fontSize: 11, color: C.onSurface,
+          }}>
+            Neuer Export gefunden.
+            <span style={{ flex: 1 }} />
+            <Knopf icon={RotateCw} onClick={neuLaden}>Laden</Knopf>
+          </div>
+        )}
 
         {/* Zeilen */}
         {marken.map((m, i) => {
@@ -316,7 +561,7 @@ export function TimecodeCard({ beat, onSaved }: {
                 title="An diese Stelle springen"
                 style={{
                   width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-                  background: "transparent", border: `1px solid ${C.border15}`,
+                  background: "transparent", border: "none",
                   color: C.onSurfaceVariant,
                   cursor: laeuftHier ? "pointer" : "default",
                   opacity: laeuftHier ? 1 : 0.3,
@@ -349,10 +594,9 @@ export function TimecodeCard({ beat, onSaved }: {
               key={v}
               onClick={() => hinzufuegen(naechsterName(v, vorhandeneNamen))}
               style={{
-                padding: "4px 10px", borderRadius: radius.full,
-                background: C.surfaceContainerHigh, border: `1px solid ${C.border15}`,
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                textTransform: "uppercase", color: C.onSurfaceVariant, cursor: "pointer",
+                padding: "3px 10px", borderRadius: radius.full,
+                background: "transparent", border: `1px solid ${C.border15}`,
+                fontSize: 11, color: C.onSurfaceVariant, cursor: "pointer",
               }}
             >
               + {v}
@@ -360,15 +604,44 @@ export function TimecodeCard({ beat, onSaved }: {
           ))}
         </div>
 
-        {hinweis && (
-          <div style={{ fontSize: 11, color: C.primary, lineHeight: 1.5 }}>{hinweis}</div>
+        {(fehler || hinweis) && (
+          <div style={{ fontSize: 11, color: fehler ? C.error : C.onSurfaceVariant, lineHeight: 1.5 }}>
+            {fehler ?? hinweis}
+          </div>
         )}
-
-        <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
-          Landet als <code>{"{{TIMECODES}}"}</code> in der Beschreibung. Sortiert wird
-          beim Speichern — du musst nicht der Reihe nach arbeiten.
-        </div>
       </div>
     </SectionCard>
+  );
+}
+
+/** Leiser Knopf mit Icon: ohne Rand und Fläche, damit die Karte ruhig bleibt. */
+function Knopf({ icon: Icon, onClick, children, title, disabled, aktiv }: {
+  icon: LucideIcon;
+  onClick: () => void;
+  children?: React.ReactNode;
+  title?: string;
+  disabled?: boolean;
+  /** Für Schalter: eingeschaltet. */
+  aktiv?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={aktiv}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "4px 8px", borderRadius: radius.control,
+        background: "transparent", border: "none",
+        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
+        fontSize: 11, fontWeight: 600,
+        color: aktiv ? C.primary : C.onSurfaceVariant,
+      }}
+    >
+      <Icon size={12} strokeWidth={2}
+        style={Icon === Loader2 ? { animation: "spin 0.8s linear infinite" } : undefined} />
+      {children}
+    </button>
   );
 }

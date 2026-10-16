@@ -107,140 +107,158 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{
+        position: "relative", overflow: "hidden",
         background: C.surfaceContainerLow,
         border: `1px solid ${open ? C.primary + "50" : C.border10}`,
         borderRadius: radius.card,
         boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         transition: "border-color 0.15s",
       }}>
+      {/* Das Cover färbt die Karte: verschwommen, gedämpft, nach rechts
+          auslaufend. So hat jeder Beat seine eigene Stimmung — der Kopf soll
+          nach dem Beat aussehen, nicht nach einem Formular. */}
+      {coverUrl && (
+        <>
+          <div aria-hidden style={{
+            position: "absolute", inset: -60,
+            backgroundImage: `url("${coverUrl}")`,
+            backgroundSize: "cover", backgroundPosition: "center",
+            filter: "blur(60px) saturate(1.3)",
+            opacity: 0.28,
+            pointerEvents: "none",
+          }} />
+          <div aria-hidden style={{
+            position: "absolute", inset: 0,
+            background: `linear-gradient(90deg, transparent 0%, ${alpha(C.surfaceContainerLow, 0.85)} 75%)`,
+            pointerEvents: "none",
+          }} />
+        </>
+      )}
+
       <div style={{
-        display: "flex", alignItems: "center", gap: 20,
-        padding: "16px 20px",
+        position: "relative",
+        display: "flex", alignItems: beatId ? "stretch" : "center", gap: 24,
+        padding: 20,
       }}>
-        {/* Cover */}
+        {/* Cover — groß, sobald ein Beat gewählt ist */}
         <div style={{
-          width: 56, height: 56, borderRadius: radius.control, flexShrink: 0,
+          width: beatId ? 152 : 56, height: beatId ? 152 : 56,
+          borderRadius: beatId ? radius.card : radius.control, flexShrink: 0,
           background: C.surfaceContainerHigh,
           border: `1px solid ${C.border15}`,
+          boxShadow: coverUrl ? "0 14px 36px rgba(0,0,0,0.5)" : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
           overflow: "hidden",
         }}>
           {coverUrl
             ? <img src={coverUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <Music size={22} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
+            : <Music size={beatId ? 36 : 22} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
           }
         </div>
 
-        {/* Title + meta — click opens the picker */}
-        <button
-          onClick={() => setOpen(o => !o)}
-          title={title ? "Beat wechseln" : "Beat wählen"}
-          style={{
-            flex: 1, minWidth: 0,
-            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5,
-            background: "transparent", border: "none",
-            cursor: "pointer", textAlign: "left", padding: 0,
-          }}
-        >
-          <span style={{
-            display: "flex", alignItems: "center", gap: 8, maxWidth: "100%",
-          }}>
-            <span style={{
-              fontSize: 20, fontWeight: 700,
-              color: title ? C.onSurface : C.onSurfaceVariant,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              lineHeight: 1.25,
-            }}>
-              {title ?? "Beat wählen…"}
-            </span>
-            <ChevronDown
-              size={16}
-              color={C.onSurfaceVariant}
-              strokeWidth={2}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            {/* Title — click opens the picker */}
+            <button
+              onClick={() => setOpen(o => !o)}
+              title={title ? "Beat wechseln" : "Beat wählen"}
               style={{
-                flexShrink: 0,
-                transition: "transform 0.15s",
-                transform: open ? "rotate(180deg)" : "rotate(0)",
+                flex: 1, minWidth: 0,
+                display: "flex", alignItems: "center", gap: 8,
+                background: "transparent", border: "none",
+                cursor: "pointer", textAlign: "left", padding: 0,
               }}
-            />
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            >
+              <span style={{
+                fontSize: beatId ? 26 : 20, fontWeight: 700,
+                color: title ? C.onSurface : C.onSurfaceVariant,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                lineHeight: 1.2, letterSpacing: "-0.01em",
+              }}>
+                {title ?? "Beat wählen…"}
+              </span>
+              <ChevronDown
+                size={16}
+                color={C.onSurfaceVariant}
+                strokeWidth={2}
+                style={{
+                  flexShrink: 0,
+                  transition: "transform 0.15s",
+                  transform: open ? "rotate(180deg)" : "rotate(0)",
+                }}
+              />
+            </button>
+
+            {/* Clear selection */}
+            {selectedBeat && (
+              <button
+                onClick={() => onSelect(null)}
+                title="Auswahl aufheben"
+                style={{
+                  width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
+                  background: "transparent", border: "none",
+                  cursor: "pointer", color: C.onSurfaceVariant,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Eine Zeile statt fünf Pillen — dieselben Angaben, ruhiger. */}
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {beatId
-              ? <>
-                  <MetaPill mono>#{beatId}</MetaPill>
-                  {key && <MetaPill>{key}</MetaPill>}
-                  {bpm != null && <MetaPill>{bpm} BPM</MetaPill>}
-                  {laenge && <MetaPill mono>{laenge}</MetaPill>}
-                  {stimmung && <MetaPill>{stimmung}</MetaPill>}
-                </>
+              ? [
+                  <span key="id" style={{ fontFamily: "monospace" }}>#{beatId}</span>,
+                  key && <span key="key">{key}</span>,
+                  bpm != null && <span key="bpm">{bpm} BPM</span>,
+                  laenge && <span key="len" style={{ fontVariantNumeric: "tabular-nums" }}>{laenge}</span>,
+                  stimmung && <span key="mood">{stimmung}</span>,
+                ].filter(Boolean).flatMap((el, i) => i === 0 ? [el] : [
+                  <span key={`sep${i}`} style={{ color: C.onSecondaryFixedVar }}>·</span>, el,
+                ])
               : <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
                   Archivierten Beat suchen und für den Upload vorbereiten
                 </span>
             }
-          </span>
-        </button>
-
-        {/* Clear selection */}
-        {selectedBeat && (
-          <button
-            onClick={() => onSelect(null)}
-            title="Auswahl aufheben"
-            style={{
-              width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-              background: "transparent", border: `1px solid ${C.border15}`,
-              cursor: "pointer", color: C.onSurfaceVariant,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <X size={13} />
-          </button>
-        )}
-
-        {/* Fortschritt als Satz statt als vier Symbole: „bin ich fertig?" ist
-            die wichtigste Frage auf dieser Seite und war bisher nur durch
-            Abscannen von vier Haken zu beantworten. */}
-        {steps && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            {missingSteps.length === 0 ? (
-              // Als Plakette statt als Satz: „bin ich fertig" ist die
-              // wichtigste Antwort auf dieser Seite und darf man von weitem
-              // sehen. Flaeche und Rahmen, aber gedaempft — die Karte soll
-              // nicht schreien.
-              <span style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "8px 14px", borderRadius: radius.control,
-                background: alpha(C.mint, 0.10),
-                border: `1px solid ${C.mint}55`,
-                fontSize: 13, fontWeight: 700, color: C.mint,
-                whiteSpace: "nowrap",
-              }}>
-                <CheckCircle2 size={16} strokeWidth={2} />
-                Bereit zum Hochladen
-              </span>
-            ) : (
-              <>
-                <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>Es fehlt</span>
-                {missingSteps.map(step => (
-                  <MetaPill key={step.key} title={step.detail}>{step.label}</MetaPill>
-                ))}
-                <span style={{
-                  fontSize: 12, fontWeight: 700, color: C.onSecondaryFixedVar,
-                  fontVariantNumeric: "tabular-nums",
-                }}>
-                  {doneCount}/{steps.length}
-                </span>
-              </>
-            )}
           </div>
-        )}
-      </div>
 
-      {/* Asset-Ampel: gehoert zu „wie weit bin ich", nicht in eine eigene Karte */}
-      {children && (
-        <div style={{ padding: "0 20px 16px", borderTop: `1px solid ${C.border10}`, paddingTop: 14 }}>
-          {children}
+          {/* „Bin ich fertig?" — die wichtigste Frage auf dieser Seite, als
+              stille Zeile unter dem Titel. */}
+          {steps && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 2 }}>
+              {missingSteps.length === 0 ? (
+                <span style={{ display: "flex", alignItems: "center", gap: 6, color: C.mint, fontWeight: 600 }}>
+                  <CheckCircle2 size={14} strokeWidth={2} />
+                  Bereit zum Hochladen
+                </span>
+              ) : (
+                <>
+                  <span style={{ color: C.onSecondaryFixedVar }}>Es fehlt</span>
+                  {missingSteps.map((step, i) => (
+                    <span key={step.key} title={step.detail} style={{ color: C.onSurface, cursor: "help" }}>
+                      {step.label}{i < missingSteps.length - 1 ? "," : ""}
+                    </span>
+                  ))}
+                  <span style={{
+                    color: C.onSecondaryFixedVar, fontVariantNumeric: "tabular-nums", marginLeft: 4,
+                  }}>
+                    {doneCount}/{steps.length}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Asset-Kacheln: gehören zu „wie weit bin ich" — unten in der Spalte */}
+          {children && (
+            <div style={{ marginTop: "auto", paddingTop: 12 }}>
+              {children}
+            </div>
+          )}
         </div>
-      )}
+      </div>
       </div>
 
       {/* ── Picker dropdown ─────────────────────────────────────────────────── */}
@@ -337,22 +355,6 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
         </div>
       )}
     </div>
-  );
-}
-
-function MetaPill({ children, mono, title }: { children: React.ReactNode; mono?: boolean; title?: string }) {
-  return (
-    <span title={title} style={{
-      padding: "2px 9px",
-      borderRadius: radius.full,
-      fontSize: 10, fontWeight: 600,
-      fontFamily: mono ? "monospace" : undefined,
-      background: "rgba(255,255,255,0.04)",
-      border: `1px solid ${C.border15}`,
-      color: C.onSurfaceVariant,
-    }}>
-      {children}
-    </span>
   );
 }
 

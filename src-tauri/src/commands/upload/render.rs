@@ -227,6 +227,67 @@ pub fn save_upload_descriptions(params: SaveUploadDescriptionsParams) -> Result<
     Ok(())
 }
 
+// ─── Von Hand geänderte Beschreibungen ─────────────────────────────────────
+
+/// Was neben der Vorlage existiert: eigene Fassungen aus der Datenbank und
+/// die .txt-Dateien im Beat-Ordner (alte Speicherstände, die vielleicht
+/// Änderungen tragen, die nirgends sonst stehen).
+#[derive(Debug, Serialize)]
+pub struct DescriptionState {
+    pub overrides: std::collections::HashMap<String, String>,
+    pub dateien:   std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+pub fn get_description_state(beat_id: String) -> Result<DescriptionState, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT platform, text FROM beat_description_overrides WHERE beat_id = ?1"
+    ).map_err(|e| e.to_string())?;
+    let overrides = stmt
+        .query_map(rusqlite::params![beat_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let pfad: Option<String> = conn.query_row(
+        "SELECT path FROM beats WHERE id = ?1", rusqlite::params![beat_id], |r| r.get(0),
+    ).ok().flatten();
+    let mut dateien = std::collections::HashMap::new();
+    if let Some(pfad) = pfad {
+        let root = Path::new(&pfad);
+        for p in super::PLATFORMS {
+            let name = format!("{p}.txt");
+            // Neue Ablage im Root, alte in 04_UPLOAD/ — wie beim Asset-Scan.
+            let text = fs::read_to_string(root.join(&name))
+                .or_else(|_| fs::read_to_string(root.join("04_UPLOAD").join(&name)));
+            if let Ok(t) = text { dateien.insert(p.to_string(), t); }
+        }
+    }
+    Ok(DescriptionState { overrides, dateien })
+}
+
+/// Eigene Fassung speichern — `None` heißt: zurück zur Vorlage.
+#[tauri::command]
+pub fn set_description_override(beat_id: String, platform: String, text: Option<String>) -> Result<(), String> {
+    if !super::PLATFORMS.contains(&platform.as_str()) {
+        return Err(format!("Unbekannte Plattform: {platform}"));
+    }
+    let conn = open_db().map_err(|e| e.to_string())?;
+    match text {
+        Some(t) => conn.execute(
+            "INSERT INTO beat_description_overrides (beat_id, platform, text) VALUES (?1, ?2, ?3)
+             ON CONFLICT(beat_id, platform) DO UPDATE SET text = excluded.text",
+            rusqlite::params![beat_id, platform, t],
+        ),
+        None => conn.execute(
+            "DELETE FROM beat_description_overrides WHERE beat_id = ?1 AND platform = ?2",
+            rusqlite::params![beat_id, platform],
+        ),
+    }.map_err(|e| format!("Beschreibung speichern fehlgeschlagen: {e}"))?;
+    Ok(())
+}
+
 // ─── Renderer + Hashtag generator ──────────────────────────────────────────
 
 fn render_template(template: &str, vars: &[(&str, String)]) -> String {

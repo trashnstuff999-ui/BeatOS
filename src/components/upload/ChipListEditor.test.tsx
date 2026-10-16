@@ -81,3 +81,59 @@ describe("ChipListEditor — Umsortieren per Ziehen", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe("ChipListEditor — Ziehen fühlt sich richtig an", () => {
+  it("die Lücke zwischen zwei Chips zählt als Einfügestelle", () => {
+    const werte = ["A", "B", "C"];
+    stelleLayout(werte);
+    const onChange = vi.fn();
+    render(<ChipListEditor label="" values={werte} onChange={onChange} separatorLabel="x" placeholder="" />);
+
+    // Zeiger bei x 160: in der Box von B, aber rechts von seiner Mitte (150)
+    // → hinter B. Früher zählte nur ein Treffer genau auf einem Chip.
+    fireEvent.mouseDown(screen.getByText("A"), { button: 0, clientX: 50, clientY: 15 });
+    fireEvent.mouseMove(document, { clientX: 160, clientY: 15 });
+    fireEvent.mouseUp(document);
+    expect(onChange).toHaveBeenCalledWith(["B", "A", "C"]);
+  });
+
+  it("zeigt beim Ziehen ein Abbild am Zeiger, sortiert aber erst beim Loslassen", () => {
+    const werte = ["A", "B"];
+    stelleLayout(werte);
+    const onChange = vi.fn();
+    render(<ChipListEditor label="" values={werte} onChange={onChange} separatorLabel="x" placeholder="" />);
+
+    fireEvent.mouseDown(screen.getByText("A"), { button: 0, clientX: 50, clientY: 15 });
+    fireEvent.mouseMove(document, { clientX: 190, clientY: 15 });
+    expect(screen.getAllByText("A")).toHaveLength(2);   // Platzhalter + Abbild
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.mouseUp(document);
+    expect(onChange).toHaveBeenCalledWith(["B", "A"]);
+  });
+
+  it("Esc bricht ab", () => {
+    const werte = ["A", "B"];
+    stelleLayout(werte);
+    const onChange = vi.fn();
+    render(<ChipListEditor label="" values={werte} onChange={onChange} separatorLabel="x" placeholder="" />);
+
+    fireEvent.mouseDown(screen.getByText("A"), { button: 0, clientX: 50, clientY: 15 });
+    fireEvent.mouseMove(document, { clientX: 190, clientY: 15 });
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.mouseUp(document);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("der Klick nach dem Ziehen landet nicht im Textfeld", () => {
+    const werte = ["A", "B"];
+    stelleLayout(werte);
+    render(<ChipListEditor label="" values={werte} onChange={vi.fn()} separatorLabel="x" placeholder="" />);
+    const eingabe = screen.getByRole("textbox");
+
+    fireEvent.mouseDown(screen.getByText("A"), { button: 0, clientX: 50, clientY: 15 });
+    fireEvent.mouseMove(document, { clientX: 400, clientY: 90 });   // weit daneben
+    fireEvent.mouseUp(document);
+    fireEvent.click(eingabe.parentElement!);
+    expect(eingabe).not.toHaveFocus();
+  });
+});

@@ -35,7 +35,7 @@ function beat(id: string, timecodes: string | null): UploadBeatInfo {
 function zeigen(b: UploadBeatInfo) {
   return render(
     <AudioPlayerProvider>
-      <TimecodeCard beat={b} onSaved={vi.fn()} />
+      <TimecodeCard beat={b} flpPath={null} onSaved={vi.fn()} />
     </AudioPlayerProvider>,
   );
 }
@@ -75,7 +75,7 @@ describe("Kapitelmarken speichern und wiederfinden", () => {
     await act(async () => {
       rerender(
         <AudioPlayerProvider>
-          <TimecodeCard beat={beat("0921", null)} onSaved={vi.fn()} />
+          <TimecodeCard beat={beat("0921", null)} flpPath={null} onSaved={vi.fn()} />
         </AudioPlayerProvider>,
       );
     });
@@ -132,5 +132,31 @@ describe("Zeilen loeschen und sortieren", () => {
     // Hook ist jetzt die erste Zeile — gesperrt auf 0:00, kein Zeitfeld mehr.
     expect(zeitfelder()).toEqual([]);
     expect(screen.getByText("0:00")).toBeInTheDocument();
+  });
+
+  it("übernimmt die Marker aus FL Studio und kann es rückgängig machen", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) =>
+      cmd === "read_flp_markers"
+        ? [{ seconds: 30, label: "Hook" }, { seconds: 60, label: "Verse 1" }]
+        : undefined);
+    render(
+      <AudioPlayerProvider>
+        <TimecodeCard beat={beat("0858", "0:00 Alt")} flpPath="C:\x.flp" onSaved={vi.fn()} />
+      </AudioPlayerProvider>,
+    );
+
+    // Kein Marker bei 0:00 in der FLP → ein Intro kommt davor, statt den
+    // Hook auf 0:00 zu schieben.
+    const uebernehmen = screen.getByText("Übernehmen").closest("button")!;
+    await waitFor(() => expect(uebernehmen).toBeEnabled());
+    await userEvent.click(uebernehmen);
+    expect(screen.getByDisplayValue("Intro")).toBeInTheDocument();
+    expect(zeitfelder()).toEqual(["0:30", "1:00"]);
+    // Liste stimmt jetzt mit FL überein — Übernehmen hat nichts mehr zu tun.
+    expect(uebernehmen).toBeDisabled();
+
+    await userEvent.click(screen.getByTitle("Rückgängig"));
+    expect(screen.getByDisplayValue("Alt")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Hook")).not.toBeInTheDocument();
   });
 });

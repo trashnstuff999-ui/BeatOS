@@ -47,7 +47,7 @@ pub fn update_type_beat_info(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Eine Marke: Sekunden plus Beschriftung.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Timecode {
     pub seconds: i64,
     pub label:   String,

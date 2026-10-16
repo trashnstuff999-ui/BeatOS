@@ -359,6 +359,22 @@ pub fn init_db() -> Result<(), String> {
                     init_error = Some(format!("Failed to create beat_sample_credits table: {}", e));
                 }
 
+                // Von Hand geänderte Beschreibungen. Fehlt eine Zeile, gilt die
+                // Vorlage. Vorher lagen Änderungen nur in den .txt-Dateien im
+                // Beat-Ordner — und die las nichts zurück: Karte und
+                // Release-Assistent zeigten wieder die Vorlage.
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS beat_description_overrides (
+                        beat_id  TEXT NOT NULL,
+                        platform TEXT NOT NULL,
+                        text     TEXT NOT NULL,
+                        PRIMARY KEY (beat_id, platform)
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create beat_description_overrides table: {}", e));
+                }
+
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(
                     "CREATE TABLE IF NOT EXISTS studio_projects (

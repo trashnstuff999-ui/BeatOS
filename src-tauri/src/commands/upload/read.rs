@@ -106,6 +106,8 @@ pub struct AssetCheck {
     pub thumbnail: Option<String>,
     pub video: Option<String>,
     pub upload_files: UploadFilesState,
+    /// MP3/WAV im Root, die neben der neuesten liegen — „ältere Exporte".
+    pub alte_exporte: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -220,6 +222,7 @@ fn scan_beat_assets(beat_root: &Path) -> AssetCheck {
     let mut out = AssetCheck {
         mp3: None, wav: None, flp: None, flp_path: None,
         cover: None, thumbnail: None, video: None,
+        alte_exporte: 0,
         upload_files: UploadFilesState {
             beatstars_txt: false,
             soundcloud_txt: false,
@@ -233,6 +236,7 @@ fn scan_beat_assets(beat_root: &Path) -> AssetCheck {
 
     // Pass 1 — flat layout (beat root).
     scan_dir_into(beat_root, &mut out);
+    out.alte_exporte = super::rename::count_old_audio(beat_root);
 
     // Pass 2 — legacy 01_AUDIO/ if audio slots still empty.
     if out.mp3.is_none() || out.wav.is_none() {
@@ -300,6 +304,15 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
     };
 
     let mut images: Vec<(String, String)> = Vec::new(); // (filename, name_lowercase)
+    // Bei mehreren Exporten zählt der neueste — vorher war es der erste, den
+    // das Dateisystem lieferte, und die Ampel zeigte nach einem neuen Export
+    // weiter den alten Namen.
+    let mut mp3: Option<(String, std::time::SystemTime)> = None;
+    let mut wav: Option<(String, std::time::SystemTime)> = None;
+    let neuer = |slot: &mut Option<(String, std::time::SystemTime)>, name: String, path: &Path| {
+        let t = fs::metadata(path).and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
+        if slot.as_ref().map_or(true, |(_, alt)| t > *alt) { *slot = Some((name, t)); }
+    };
 
     for entry in rd.filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -314,8 +327,8 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
             .to_lowercase();
 
         match ext.as_str() {
-            "mp3" if out.mp3.is_none()   => out.mp3   = Some(file_name),
-            "wav" if out.wav.is_none()   => out.wav   = Some(file_name),
+            "mp3" if out.mp3.is_none()   => neuer(&mut mp3, file_name, &path),
+            "wav" if out.wav.is_none()   => neuer(&mut wav, file_name, &path),
             "mp4" if out.video.is_none() => out.video = Some(file_name),
             _ if is_image_extension(&ext) => {
                 let lower = file_name.to_lowercase();
@@ -324,6 +337,8 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
             _ => {}
         }
     }
+    if let Some((n, _)) = mp3 { out.mp3 = Some(n); }
+    if let Some((n, _)) = wav { out.wav = Some(n); }
 
     // Thumbnail wins over cover for the same file (e.g. "weightless_thumbnail.png"
     // shouldn't double-fill the cover slot).

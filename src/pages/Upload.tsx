@@ -100,6 +100,28 @@ export default function Upload() {
     else localStorage.removeItem(LETZTER_BEAT);
   }, [selectedBeat?.id]);
 
+  // Höhe der linken Spalte — die Beschreibungen werden höchstens so hoch.
+  const linkeSpalte = useRef<HTMLDivElement>(null);
+  const [linksHoehe, setLinksHoehe] = useState(0);
+  useEffect(() => {
+    const el = linkeSpalte.current;
+    if (!el) return;
+    const beobachter = new ResizeObserver(([e]) => setLinksHoehe(e.contentRect.height));
+    beobachter.observe(el);
+    return () => beobachter.disconnect();
+  }, [data?.beat.id, error]);
+
+  // Zurück aus FL Studio oder dem Explorer: den Ordner neu lesen. Vorher
+  // zeigte die Asset-Ampel einen neuen Export erst nach einem Klick auf ↻.
+  // Die Karten verlieren dabei nichts — sie setzen ihre Entwürfe nur beim
+  // Beat-Wechsel zurück, nicht bei jedem Neuladen.
+  useEffect(() => {
+    if (!selectedBeat?.id) return;
+    const zurueck = () => { refresh(); };
+    window.addEventListener("focus", zurueck);
+    return () => window.removeEventListener("focus", zurueck);
+  }, [selectedBeat?.id, refresh]);
+
   // Once data lands, mirror real beat name/key/bpm onto the selector pill.
   useEffect(() => {
     if (!data || !selectedBeat) return;
@@ -138,7 +160,6 @@ export default function Upload() {
           >
             {data && !error && (
               <AssetChecklistCard
-                bare
                 assets={data.assets}
                 beatPath={data.beat.path}
                 onRefresh={refresh}
@@ -182,42 +203,35 @@ export default function Upload() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
               gap: 24,
-              // stretch statt start: die rechte Spalte zieht auf die Hoehe der
-              // linken, damit unten kein halbes Fenster leer bleibt.
-              alignItems: "stretch",
+              alignItems: "start",
             }}>
               {/* Eingabe — Infos und Credits liegen auf einer Flaeche, durch
                   Haarlinien getrennt. Beides gehoert zum selben Beat und
                   fliesst in dieselbe Beschreibung; zwei Kaesten dafuer waren
                   eine Trennung ohne Bedeutung. */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <div ref={linkeSpalte} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <TypeBeatCard beat={data.beat} onSaved={refresh}>
                 <SampleCreditsCard bare beatId={data.beat.id} onSaved={refresh} />
               </TypeBeatCard>
 
               {/* Kapitelmarken — Eingabe, die rechts in der YouTube-Beschreibung
                   landet. Deshalb links, unter Type-Beat und Credits. */}
-              <TimecodeCard beat={data.beat} onSaved={refresh} />
+              <TimecodeCard beat={data.beat} flpPath={data.assets.flp_path} onSaved={refresh} />
               </div>
 
               {/* Ausgabe.
-                  Die Karte haengt absolut in dieser Huelle, damit ihr Inhalt
-                  die Zeilenhoehe nicht mitbestimmt: sonst zoege das Aufklappen
-                  des Volltexts die ganze Zeile nach unten. So gibt die linke
-                  Spalte die Hoehe vor, und die Beschreibungen scrollen, wenn
-                  nicht alles hineinpasst.
-                  minHeight faengt den einspaltigen Fall ab (schmales Fenster),
-                  wo es keine linke Spalte gibt, die eine Hoehe vorgibt. */}
-              <div style={{ position: "relative", minHeight: 560 }}>
-                <DescriptionFilesCard
-                  beatId={data.beat.id}
-                  uploadFiles={data.assets.upload_files}
-                  onSaved={refresh}
-                  rerenderKey={rerenderKey}
-                  beatstarsUrl={data.uploads.find(x => x.platform === "beatstars")?.url ?? null}
-                  style={{ position: "absolute", inset: 0 }}
-                />
-              </div>
+                  So hoch wie ihr Inhalt, höchstens so hoch wie die linke
+                  Spalte — darüber scrollt der Text in der Karte. Vorher füllte
+                  sie immer die ganze Höhe, und eine kurze BeatStars-
+                  Beschreibung stand in einem halbleeren Kasten.
+                  Mindestens 480: im einspaltigen Fall (schmales Fenster) gibt
+                  es keine linke Spalte daneben, die eine Höhe vorgibt. */}
+              <DescriptionFilesCard
+                beatId={data.beat.id}
+                rerenderKey={rerenderKey}
+                beatstarsUrl={data.uploads.find(x => x.platform === "beatstars")?.url ?? null}
+                style={{ maxHeight: Math.max(linksHoehe, 480) }}
+              />
             </div>
           )}
 

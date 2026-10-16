@@ -1,14 +1,14 @@
 // src/lib/uploadReady.ts
 // ═══════════════════════════════════════════════════════════════════════════════
 // Display-only derivation: how "upload ready" is a beat?
-// Four steps shown in the UploadBeatHeader — pure function over UploadData,
+// Drei Schritte; „Files" (drei .txt von Hand gespeichert) entfiel, seit Beschreibungen sich selbst speichern. Shown in the UploadBeatHeader — pure function over UploadData,
 // no persistence, no commands.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import type { UploadData } from "../types/upload";
 
 export interface ReadyStep {
-  key: "infos" | "assets" | "files" | "scheduled";
+  key: "infos" | "assets" | "scheduled";
   label: string;
   done: boolean;
   detail: string;
@@ -25,10 +25,6 @@ export function computeReadySteps(data: UploadData): ReadyStep[] {
   ];
   const presentCount = assetSlots.filter(([, v]) => v !== null).length;
   const hasCoreAssets = (assets.mp3 !== null || assets.wav !== null) && assets.cover !== null;
-
-  const files = assets.upload_files;
-  const filesCount = [files.beatstars_txt, files.soundcloud_txt, files.youtube_txt].filter(Boolean).length;
-  const hasFiles = filesCount === 3;
 
   const scheduledCount = uploads.filter(u => u.scheduled_at || u.status === "uploaded").length;
   const hasSchedule = scheduledCount > 0;
@@ -47,12 +43,6 @@ export function computeReadySteps(data: UploadData): ReadyStep[] {
       label: "Assets",
       done: hasCoreAssets,
       detail: `${presentCount}/6 Dateien im Ordner`,
-    },
-    {
-      key: "files",
-      label: "Files",
-      done: hasFiles,
-      detail: `${filesCount}/3 Description-Dateien gespeichert`,
     },
     {
       key: "scheduled",

@@ -38,6 +38,8 @@ export interface AssetCheck {
   thumbnail: string | null;
   video: string | null;
   upload_files: UploadFilesState;
+  /** MP3/WAV im Root neben der jeweils neuesten — ältere Exporte. */
+  alte_exporte: number;
 }
 
 export interface UploadPlatformRow {

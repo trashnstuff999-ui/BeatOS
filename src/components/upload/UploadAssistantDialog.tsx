@@ -1,23 +1,28 @@
 // src/components/upload/UploadAssistantDialog.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Guided 60-second upload flow for one platform:
-//   1. open the platform's upload page
-//   2. copy title  3. copy description  4. copy tags
-//   5. paste the final URL → mark as uploaded (one updateUploadStatus call)
-// Content comes from render_upload_descriptions once on open; the extractors
-// in lib/descriptions.ts split it into the copy-ready pieces.
+// Release-Assistent: ein Durchgang über alle noch offenen Plattformen, in der
+// Reihenfolge BeatStars → YouTube → SoundCloud. Pro Plattform:
+//   1. Upload-Seite öffnen   2.–4. Titel, Beschreibung, Tags kopieren
+//   5. Link einfügen → hochgeladen, weiter zur nächsten
+//
+// Früher gab es drei getrennte Assistenten, und die Reihenfolge war Sache des
+// Gedächtnisses. Sie ist aber nicht beliebig: der BeatStars-Link steht in den
+// Beschreibungen von YouTube und SoundCloud. Deshalb wird nach jedem Schritt
+// neu gerendert — die YouTube-Beschreibung enthält dann schon den Link, der
+// eben eingefügt wurde.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
 import {
   ExternalLink, Copy, Check, Loader2, Rocket, Link2,
-  ShoppingBag, Music2, Youtube,
+  ShoppingBag, Music2, Youtube, AlertTriangle,
 } from "lucide-react";
 import { C, radius, PLATFORM_CONFIG, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { extractTitle, extractDescription, extractTags } from "../../lib/descriptions";
+import { RELEASE_REIHENFOLGE, plattformAusLink, hochgeladenMelden } from "../../lib/uploadLinks";
 import { Modal } from "../ui";
-import type { UploadPlatform, UploadDescriptions } from "../../types/upload";
+import type { UploadPlatform, UploadDescriptions, UploadPlatformRow } from "../../types/upload";
 
 const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
   beatstars: ShoppingBag,
@@ -33,38 +38,66 @@ const UPLOAD_URLS: Record<UploadPlatform, string> = {
 
 interface UploadAssistantDialogProps {
   beatId: string;
-  platform: UploadPlatform;
+  uploads: UploadPlatformRow[];
   onClose: () => void;
-  /** persists status=uploaded (+ url, uploaded_at=heute) via UploadStatusCard */
-  onMarkUploaded: (url: string | null) => void;
+  /** Nach jedem gespeicherten Schritt — die Karte lädt neu. */
+  onChanged: () => void;
 }
 
 type CopyKey = "title" | "description" | "tags";
+const NICHTS_KOPIERT: Record<CopyKey, boolean> = { title: false, description: false, tags: false };
 
-export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploaded }: UploadAssistantDialogProps) {
-  const meta = PLATFORM_CONFIG[platform];
-  const PlatIcon = PLATFORM_ICON[platform];
+export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: UploadAssistantDialogProps) {
+  // Welche Plattformen dieser Durchgang abarbeitet — einmal beim Öffnen
+  // festgelegt, damit die Liste nicht schrumpft, während man sie abarbeitet.
+  const [reihe] = useState(() =>
+    RELEASE_REIHENFOLGE.filter(p => uploads.find(u => u.platform === p)?.status !== "uploaded"));
+  const [schritt, setSchritt] = useState(0);
+  const [erledigt, setErledigt] = useState<Partial<Record<UploadPlatform, boolean>>>({});
 
   const [drafts, setDrafts] = useState<UploadDescriptions | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [opened, setOpened] = useState(false);
-  const [copied, setCopied] = useState<Record<CopyKey, boolean>>({ title: false, description: false, tags: false });
+  const [copied, setCopied] = useState(NICHTS_KOPIERT);
   const [url, setUrl] = useState("");
+  const [speichert, setSpeichert] = useState(false);
 
+  const platform = reihe[schritt];
+
+  // Bei jedem Schritt neu rendern: der eben gespeicherte BeatStars-Link
+  // soll in der YouTube-Beschreibung schon drinstehen.
   useEffect(() => {
     let cancelled = false;
-    api.upload.renderDescriptions(beatId)
+    setDrafts(null);
+    api.upload.effectiveDescriptions(beatId)
       .then(d => { if (!cancelled) setDrafts(d); })
       .catch(e => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
-  }, [beatId]);
+  }, [beatId, schritt]);
 
+  if (!platform) {
+    return (
+      <Modal icon={Rocket} title="Release" onClose={onClose} width={520}>
+        <div style={{ padding: 12, fontSize: 12, color: C.onSurfaceVariant }}>
+          Alle Plattformen sind schon hochgeladen.
+        </div>
+      </Modal>
+    );
+  }
+
+  const meta = PLATFORM_CONFIG[platform];
+  const PlatIcon = PLATFORM_ICON[platform];
   const content = drafts?.[platform] ?? "";
   const pieces: Record<CopyKey, string> = {
     title: extractTitle(content),
     description: extractDescription(content),
     tags: extractTags(content),
   };
+
+  const linkPlattform = url.trim() ? plattformAusLink(url) : null;
+  const falscherLink = linkPlattform !== null && linkPlattform !== platform;
+  const ohneBeatstarsLink = platform !== "beatstars"
+    && !uploads.find(u => u.platform === "beatstars")?.url;
 
   const handleCopy = async (key: CopyKey) => {
     try {
@@ -80,18 +113,69 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
     setOpened(true);
   };
 
-  const handleFinish = () => {
-    onMarkUploaded(url.trim() || null);
-    onClose();
+  const weiter = () => {
+    setOpened(false);
+    setCopied(NICHTS_KOPIERT);
+    setUrl("");
+    setError(null);
+    if (schritt + 1 >= reihe.length) onClose();
+    else setSchritt(s => s + 1);
+  };
+
+  const hochgeladen = async () => {
+    const row = uploads.find(u => u.platform === platform);
+    if (!row) return;
+    setSpeichert(true);
+    try {
+      await hochgeladenMelden(beatId, row, url.trim() || null);
+      // Was hochgeladen wurde, landet als .txt im Beat-Ordner — als Ablage.
+      // Fehlt der Ordner, ist das kein Grund, den Upload nicht zu vermerken.
+      if (content) {
+        await api.upload.saveDescriptions({
+          beat_id: beatId, beatstars: null, soundcloud: null, youtube: null, [platform]: content,
+        })
+          .catch(e => console.error("[Release] .txt schreiben fehlgeschlagen:", e));
+      }
+      setErledigt(prev => ({ ...prev, [platform]: true }));
+      onChanged();
+      weiter();
+    } catch (e) {
+      setError(`Speichern fehlgeschlagen: ${String(e)}`);
+    } finally {
+      setSpeichert(false);
+    }
   };
 
   return (
     <Modal
       icon={Rocket}
-      title={`${meta.label}-Upload`}
+      title={`Release · ${meta.label}`}
       onClose={onClose}
       width={520}
     >
+        {/* Fortschritt über den ganzen Release */}
+        {reihe.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            {reihe.map((p, i) => {
+              const Icon = PLATFORM_ICON[p];
+              const jetzt = i === schritt;
+              const fertig = erledigt[p];
+              return (
+                <span key={p} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "4px 10px", borderRadius: radius.full,
+                  fontSize: 11, fontWeight: 600,
+                  border: `1px solid ${jetzt ? alpha(PLATFORM_CONFIG[p].color, 0.5) : C.border15}`,
+                  color: fertig ? C.mint : jetzt ? PLATFORM_CONFIG[p].color : C.onSecondaryFixedVar,
+                }}>
+                  {fertig ? <Check size={11} strokeWidth={2.5} /> : <Icon size={11} strokeWidth={2} />}
+                  {PLATFORM_CONFIG[p].label}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         {error && (
           <div style={{
             padding: "8px 12px", borderRadius: radius.control,
@@ -99,6 +183,18 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
             fontSize: 11, color: C.error,
           }}>
             {error}
+          </div>
+        )}
+
+        {ohneBeatstarsLink && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 12px", borderRadius: radius.control,
+            background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
+            fontSize: 11, color: C.onSurface,
+          }}>
+            <AlertTriangle size={13} color={C.primary} style={{ flexShrink: 0 }} />
+            Noch kein BeatStars-Link — die Beschreibung enthält keinen Link zum Beat.
           </div>
         )}
 
@@ -134,7 +230,7 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
                 done={copied[key]}
                 label={label}
                 detail={pieces[key]
-                  ? (key === "title" ? pieces[key] : `${pieces[key].split(/\r?\n/).filter(Boolean).length ? pieces[key].slice(0, 90) : ""}${pieces[key].length > 90 ? "…" : ""}`)
+                  ? (key === "title" ? pieces[key] : `${pieces[key].slice(0, 90)}${pieces[key].length > 90 ? "…" : ""}`)
                   : "— nicht vorhanden —"}
                 action={
                   <StepBtn
@@ -148,7 +244,7 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
               />
             ))}
 
-            {/* Step 5: URL + finish */}
+            {/* Step 5: Link + weiter */}
             <div style={{
               marginTop: 6,
               padding: "12px 14px",
@@ -157,9 +253,9 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
               borderRadius: radius.card,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <StepIndex index={5} done={false} />
+                <StepIndex index={5} done={linkPlattform === platform} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
-                  Fertig? URL einfügen & abschließen
+                  Hochgeladen? Link einfügen
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -167,37 +263,63 @@ export function UploadAssistantDialog({ beatId, platform, onClose, onMarkUploade
                 <input
                   value={url}
                   onChange={e => setUrl(e.target.value)}
-                  placeholder={`https://…${platform}… (optional)`}
+                  placeholder={`${meta.label}-Link (optional)`}
                   style={{
                     flex: 1,
                     padding: "7px 10px",
                     fontSize: 11, fontFamily: "monospace",
                     background: C.surfaceContainerHigh,
-                    border: `1px solid ${C.border20}`,
+                    border: `1px solid ${falscherLink ? alpha(C.error, 0.5) : C.border20}`,
                     borderRadius: radius.control,
                     outline: "none",
                     color: C.onSurface,
                   }}
                 />
               </div>
-              <button
-                onClick={handleFinish}
-                style={{
-                  marginTop: 10,
-                  width: "100%",
-                  padding: "10px 16px",
-                  borderRadius: radius.control,
-                  fontSize: 12, fontWeight: 700, fontFamily: "inherit",
-                  background: C.mint,
-                  border: "none",
-                  color: C.onMint,
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}
-              >
-                <Check size={14} strokeWidth={2.5} />
-                Als hochgeladen markieren
-              </button>
+              {falscherLink && linkPlattform && (
+                <div style={{ marginTop: 6, fontSize: 11, color: C.error }}>
+                  Das ist ein {PLATFORM_CONFIG[linkPlattform].label}-Link.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button
+                  onClick={weiter}
+                  disabled={speichert}
+                  title="Diese Plattform jetzt auslassen — sie bleibt, wie sie ist"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: radius.control,
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    background: "transparent",
+                    border: `1px solid ${C.border20}`,
+                    color: C.onSurfaceVariant,
+                    cursor: "pointer",
+                  }}
+                >
+                  Überspringen
+                </button>
+                <button
+                  onClick={hochgeladen}
+                  disabled={falscherLink || speichert}
+                  style={{
+                    flex: 1,
+                    padding: "10px 16px",
+                    borderRadius: radius.control,
+                    fontSize: 12, fontWeight: 700, fontFamily: "inherit",
+                    background: C.mint,
+                    border: "none",
+                    color: C.onMint,
+                    cursor: falscherLink || speichert ? "default" : "pointer",
+                    opacity: falscherLink ? 0.5 : 1,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  }}
+                >
+                  <Check size={14} strokeWidth={2.5} />
+                  {schritt + 1 < reihe.length
+                    ? `Hochgeladen — weiter zu ${PLATFORM_CONFIG[reihe[schritt + 1]].label}`
+                    : "Hochgeladen — fertig"}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -17,6 +17,7 @@ import type { CustomTag } from "./tags";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
 import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
 import type { Stats, DashboardActions } from "../types/stats";
+import { effektiv } from "./descriptions";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -38,6 +39,7 @@ import type {
   RenameResult,
   FolderSync,
   Timecode,
+  UploadPlatform,
 } from "../types/upload";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -233,6 +235,14 @@ export const api = {
 
     getAudioPath: (beatPath: string) =>
       invoke<string | null>("get_beat_audio_path", { beatPath }),
+
+    /** Aenderungszeit in ms — erkennt einen ueberschriebenen Export. */
+    getFileMtime: (path: string) =>
+      invoke<number | null>("get_file_mtime", { path }),
+
+    /** Zeitmarker aus der FLP als Kapitel. */
+    getFlpMarkers: (flpPath: string, bpm: number | null) =>
+      invoke<Timecode[]>("read_flp_markers", { flpPath, bpm }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────
@@ -374,6 +384,24 @@ export const api = {
     saveDescriptions: (params: SaveUploadDescriptionsParams) =>
       invoke<void>("save_upload_descriptions", { params }),
 
+    /** Eigene Fassungen (DB) und vorhandene .txt-Dateien eines Beats. */
+    getDescriptionState: (beatId: string) =>
+      invoke<{ overrides: Record<string, string>; dateien: Record<string, string> }>(
+        "get_description_state", { beatId }),
+
+    /** Eigene Fassung speichern; `null` = zurück zur Vorlage. */
+    setDescriptionOverride: (beatId: string, platform: UploadPlatform, text: string | null) =>
+      invoke<void>("set_description_override", { beatId, platform, text }),
+
+    /** Was wirklich hochgeladen wird: eigene Fassung vor Vorlage. */
+    effectiveDescriptions: async (beatId: string): Promise<UploadDescriptions> => {
+      const [gerendert, stand] = await Promise.all([
+        invoke<UploadDescriptions>("render_upload_descriptions", { beatId }),
+        invoke<{ overrides: Record<string, string> }>("get_description_state", { beatId }),
+      ]);
+      return { ...gerendert, ...effektiv(gerendert, stand.overrides) };
+    },
+
     checkLegacyStructure: (beatId: string) =>
       invoke<LegacyStructure>("check_legacy_structure", { beatId }),
 
@@ -390,5 +418,9 @@ export const api = {
 
     applyFilenameConvention: (beatId: string) =>
       invoke<RenameResult>("apply_filename_convention", { beatId }),
+
+    /** Ältere MP3/WAV nach 02_OLD/ — die neueste bleibt. */
+    cleanOldExports: (beatPath: string) =>
+      invoke<number>("clean_old_exports", { beatPath }),
   },
 };

@@ -53,57 +53,77 @@ export function ChipListEditor({
   //   an — weder am Element mit Zeigererfassung noch am Fenster.
   //
   // Maus-Ereignisse sind der aelteste Weg und werden zuverlaessig geliefert.
-  // Die Logik dahinter ist dieselbe und in ChipListEditor.test.tsx geprueft.
-  const [gezogen, setGezogen] = useState<number | null>(null);
-  const gezogenRef = useRef<number | null>(null);
+  //
+  // Waehrend des Ziehens bleibt die Liste stehen. Frueher sortierte sie sich
+  // schon unterwegs um, sobald der Zeiger genau auf einem anderen Chip lag —
+  // in den Luecken passierte nichts, und man sah weder, was man zieht, noch
+  // wo es landet. Jetzt haengt ein Abbild am Zeiger, eine Linie zeigt die
+  // Einfuegestelle, und erst das Loslassen sortiert um. Esc bricht ab.
+  const [zug, setZug] = useState<Zug | null>(null);
+  const feldRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
 
   const starteZiehen = (i: number) => (e: React.MouseEvent<HTMLSpanElement>) => {
     // Der Entfernen-Knopf im Chip darf kein Ziehen ausloesen.
     if ((e.target as HTMLElement).closest("button")) return;
     if (e.button !== 0) return;
+    e.preventDefault();
 
-    gezogenRef.current = i;
-    setGezogen(i);
+    const start = { x: e.clientX, y: e.clientY };
+    const chipBox = e.currentTarget.getBoundingClientRect();
+    const griff = { dx: e.clientX - chipBox.left, dy: e.clientY - chipBox.top };
+    let ziel: number | null = null;     // null = noch kein Ziehen, nur ein Klick
     // Waehrend des Ziehens nichts markieren — sonst zieht man Text mit.
     const vorherigeAuswahl = document.body.style.userSelect;
-    document.body.style.userSelect = "none";
-
-    // Der Zustand `values` steckt in dieser Closure fest. Das genuegt, weil
-    // wir bei jedem Schritt aus der ZULETZT gemeldeten Reihenfolge weiter
-    // rechnen statt aus der urspruenglichen.
-    let aktuell = values;
+    const vorherigerZeiger = document.body.style.cursor;
 
     const bewegen = (ev: MouseEvent) => {
-      const von = gezogenRef.current;
-      if (von === null) return;
-      // Welcher Chip liegt unter dem Zeiger? Die Liste bricht um, deshalb
-      // zaehlt beides — waagerecht und senkrecht.
-      const treffer = aktuell.findIndex(v => {
-        const el = chipRefs.current.get(v);
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        return ev.clientX >= r.left && ev.clientX <= r.right
-            && ev.clientY >= r.top  && ev.clientY <= r.bottom;
-      });
-      if (treffer < 0 || treffer === von) return;
-      aktuell = verschiebe(aktuell, von, treffer);
-      gezogenRef.current = treffer;
-      setGezogen(treffer);
-      onChange(aktuell);
+      // Erst ab ein paar Pixeln ist es ein Ziehen — sonst wird jeder
+      // unruhige Klick zum Umsortieren.
+      if (ziel === null && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      if (ziel === null) {
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+      const andere = values.filter((_, k) => k !== i);
+      const boxen = andere.map(v => chipRefs.current.get(v)?.getBoundingClientRect())
+        .filter((r): r is DOMRect => !!r);
+      ziel = einfuegeStelle(boxen, ev.clientX, ev.clientY);
+      setZug({ von: i, ziel, x: ev.clientX - griff.dx, y: ev.clientY - griff.dy, linie: linieFuer(boxen, ziel, ev.clientY) });
+    };
+
+    const aufraeumen = () => {
+      setZug(null);
+      document.body.style.userSelect = vorherigeAuswahl;
+      document.body.style.cursor = vorherigerZeiger;
+      document.removeEventListener("mousemove", bewegen);
+      document.removeEventListener("mouseup", loslassen);
+      document.removeEventListener("keydown", taste);
     };
 
     const loslassen = () => {
-      gezogenRef.current = null;
-      setGezogen(null);
-      document.body.style.userSelect = vorherigeAuswahl;
-      document.removeEventListener("mousemove", bewegen);
-      document.removeEventListener("mouseup", loslassen);
+      const war = ziel;
+      aufraeumen();
+      if (war === null) return;          // nur geklickt
+      if (war !== i) onChange(verschiebe(values, i, war));
+      // Der Browser schickt nach dem Loslassen einen Klick an das umgebende
+      // Feld — der setzte den Cursor ins Textfeld. Diesen einen schlucken.
+      const schlucken = (c: MouseEvent) => { c.stopPropagation(); c.preventDefault(); };
+      window.addEventListener("click", schlucken, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener("click", schlucken, { capture: true }), 0);
+    };
+
+    const taste = (k: KeyboardEvent) => {
+      if (k.key === "Escape") { ziel = null; aufraeumen(); }
     };
 
     document.addEventListener("mousemove", bewegen);
     document.addEventListener("mouseup", loslassen);
+    document.addEventListener("keydown", taste);
   };
+
+  /** Die Linie, relativ zum Feld — dort haengt sie absolut. */
+  const feldBox = zug ? feldRef.current?.getBoundingClientRect() : undefined;
 
   const commitDraft = () => {
     const v = draft.trim();
@@ -148,8 +168,10 @@ export function ChipListEditor({
       </label>
 
       <div
+        ref={feldRef}
         onClick={() => inputRef.current?.focus()}
         style={{
+          position: "relative",
           display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
           padding: "6px 8px",
           minHeight: 40,
@@ -195,23 +217,25 @@ export function ChipListEditor({
                 else chipRefs.current.delete(v);
               }}
               onMouseDown={starteZiehen(i)}
-              onMouseEnter={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHighest; }}
-              onMouseLeave={e => { if (gezogen === null) e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              onMouseEnter={e => { if (!zug) e.currentTarget.style.background = C.surfaceContainerHighest; }}
+              onMouseLeave={e => { if (!zug) e.currentTarget.style.background = C.surfaceContainerHigh; }}
               title="Ziehen zum Umsortieren"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
                 padding: "4px 8px 4px 10px",
-                background: gezogen === i ? C.surfaceContainerHighest : C.surfaceContainerHigh,
+                background: C.surfaceContainerHigh,
                 borderRadius: radius.full,
                 fontSize: 12, fontWeight: 600,
                 color: C.onSurface,
                 lineHeight: 1.2,
-                cursor: gezogen === null ? "grab" : "grabbing",
+                cursor: zug ? "grabbing" : "grab",
                 // Waehrend des Ziehens darf der Zeiger keinen Text markieren,
                 // und auf dem Touchpad kein Scrollen ausloesen.
                 userSelect: "none",
                 touchAction: "none",
-                opacity: gezogen === i ? 0.65 : 1,
+                // Der gegriffene Chip bleibt als blasser Platzhalter stehen —
+                // man sieht, wo er herkommt.
+                opacity: zug?.von === i ? 0.3 : 1,
                 transition: "background 0.12s, opacity 0.12s",
               }}
             >
@@ -265,7 +289,79 @@ export function ChipListEditor({
         >
           <Plus size={13} strokeWidth={2.5} />
         </button>
+
+        {/* Einfuegestelle */}
+        {zug?.linie && feldBox && (
+          <span style={{
+            position: "absolute",
+            left: zug.linie.x - feldBox.left - 1,
+            top: zug.linie.top - feldBox.top,
+            width: 2, height: zug.linie.hoehe,
+            borderRadius: 1,
+            background: C.primary,
+            pointerEvents: "none",
+          }} />
+        )}
       </div>
+
+      {/* Das Abbild am Zeiger */}
+      {zug && (
+        <span style={{
+          position: "fixed", left: zug.x, top: zug.y, zIndex: 1000,
+          padding: "4px 10px",
+          background: C.surfaceContainerHighest,
+          border: `1px solid ${C.primary}60`,
+          borderRadius: radius.full,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+          fontSize: 12, fontWeight: 600, lineHeight: 1.2,
+          color: C.onSurface,
+          pointerEvents: "none", userSelect: "none", whiteSpace: "nowrap",
+        }}>
+          {values[zug.von]}
+        </span>
+      )}
     </div>
   );
+}
+
+interface Zug {
+  von: number;
+  /** Stelle in der Liste OHNE den gezogenen Chip — so rechnet `verschiebe`. */
+  ziel: number;
+  /** Linke obere Ecke des Abbilds. */
+  x: number;
+  y: number;
+  linie: { x: number; top: number; hoehe: number } | null;
+}
+
+/** Wo landet der Chip? `boxen` sind die übrigen Chips in Reihenfolge.
+ *
+ *  Zuerst die Zeile — die Liste bricht um, und ein Zeiger zwischen zwei
+ *  Zeilen gehört zur nächstgelegenen. Darin: vor dem ersten Chip, dessen
+ *  Mitte rechts vom Zeiger liegt, sonst hinter den letzten der Zeile. So
+ *  zählen auch die Lücken und ein Zeiger weit neben dem Feld. */
+export function einfuegeStelle(boxen: DOMRect[], x: number, y: number): number {
+  if (boxen.length === 0) return 0;
+  const mitteY = (r: DOMRect) => (r.top + r.bottom) / 2;
+  const naechste = boxen.reduce((best, r) =>
+    Math.abs(mitteY(r) - y) < Math.abs(mitteY(best) - y) ? r : best);
+  const zeile = boxen
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => Math.abs(mitteY(r) - mitteY(naechste)) < r.height / 2);
+  const davor = zeile.find(({ r }) => (r.left + r.right) / 2 > x);
+  return davor ? davor.i : zeile[zeile.length - 1].i + 1;
+}
+
+/** Position der Linie für eine Einfügestelle: vor dem nächsten Chip oder
+ *  hinter dem vorigen — je nachdem, welcher in der Zeile des Zeigers liegt.
+ *  Sonst stünde die Linie am Ende einer Zeile am Anfang der nächsten. */
+function linieFuer(boxen: DOMRect[], ziel: number, y: number): Zug["linie"] {
+  const vor = boxen[ziel];
+  const nach = boxen[ziel - 1];
+  const abstand = (r: DOMRect) => Math.abs((r.top + r.bottom) / 2 - y);
+  if (vor && (!nach || abstand(vor) <= abstand(nach))) {
+    return { x: vor.left - 4, top: vor.top, hoehe: vor.height };
+  }
+  if (nach) return { x: nach.right + 4, top: nach.top, hoehe: nach.height };
+  return null;
 }

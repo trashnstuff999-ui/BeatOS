@@ -50,6 +50,8 @@ use commands::{
     // Audio commands
     get_beat_audio_path,
     get_beat_cover_path,
+    get_file_mtime,
+    read_flp_markers,
     // Settings commands
     get_settings,
     save_settings,
@@ -97,11 +99,14 @@ use commands::{
     bump_preset_use,
     render_upload_descriptions,
     save_upload_descriptions,
+    get_description_state,
+    set_description_override,
     check_legacy_structure,
     migrate_legacy_beat_structure,
     migrate_beat_structures,
     plan_filename_convention,
     apply_filename_convention,
+    clean_old_exports,
     sync_beat_folders,
 };
 // ══════════════════════════════════════════════════════════════════════════════
@@ -213,6 +218,8 @@ pub fn run() {
             // Audio
             get_beat_audio_path,
             get_beat_cover_path,
+            get_file_mtime,
+            read_flp_markers,
             // Settings
             get_settings,
             save_settings,
@@ -258,11 +265,14 @@ pub fn run() {
             bump_preset_use,
             render_upload_descriptions,
             save_upload_descriptions,
+            get_description_state,
+            set_description_override,
             check_legacy_structure,
             migrate_legacy_beat_structure,
             migrate_beat_structures,
             plan_filename_convention,
             apply_filename_convention,
+            clean_old_exports,
             sync_beat_folders,
         ])
         .run(tauri::generate_context!())

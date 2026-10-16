@@ -18,12 +18,13 @@
 // Colors come from PLATFORM_CONFIG / UPLOAD_STATUS_CONFIG (theme.ts).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
-import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check, Undo2 } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
+import { plattformAusLink, hochgeladenMelden, heuteISO } from "../../lib/uploadLinks";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";
 
 interface UploadStatusCardProps {
@@ -103,9 +104,109 @@ const ROW_CSS = `
 `;
 
 export function UploadStatusCard(props: UploadStatusCardProps) {
+  const { beatId, uploads, onChanged } = props;
+  const [releaseOffen, setReleaseOffen] = useState(false);
+  /** Zuletzt per Einfügen übernommen — mit dem Stand davor, für Rückgängig. */
+  const [eingefuegt, setEingefuegt] = useState<UploadPlatformRow | null>(null);
+  const offen = uploads.some(u => u.status !== "uploaded");
+
+  // Link einfügen genügt: Strg+V irgendwo auf der Seite (nicht in einem Feld)
+  // erkennt die Plattform am Link und trägt sie als hochgeladen ein.
+  // Über eine Ref, damit der Zuhörer nicht bei jedem Neuladen wechselt.
+  const uploadsRef = useRef(uploads);
+  uploadsRef.current = uploads;
+  useEffect(() => {
+    const einfuegen = async (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("[data-modal]")) return;
+      const text = e.clipboardData?.getData("text") ?? "";
+      const plattform = plattformAusLink(text);
+      const row = plattform && uploadsRef.current.find(u => u.platform === plattform);
+      if (!row) return;
+      e.preventDefault();
+      try {
+        await hochgeladenMelden(beatId, row, text.trim());
+        setEingefuegt(row);
+        onChanged();
+      } catch (err) {
+        console.error("[UploadStatus] Link übernehmen fehlgeschlagen:", err);
+      }
+    };
+    window.addEventListener("paste", einfuegen);
+    return () => window.removeEventListener("paste", einfuegen);
+  }, [beatId, onChanged]);
+
+  // Die Meldung verschwindet von selbst; Beat-Wechsel räumt sie sofort weg.
+  useEffect(() => {
+    if (!eingefuegt) return;
+    const t = setTimeout(() => setEingefuegt(null), 6000);
+    return () => clearTimeout(t);
+  }, [eingefuegt]);
+  useEffect(() => setEingefuegt(null), [beatId]);
+
+  const rueckgaengig = async () => {
+    if (!eingefuegt) return;
+    const { platform, status, scheduled_at, uploaded_at, url } = eingefuegt;
+    setEingefuegt(null);
+    await api.upload.updateUploadStatus({ beat_id: beatId, platform, status, scheduled_at, uploaded_at, url });
+    onChanged();
+  };
+
   return (
-    <SectionCard icon={Send} title="Status">
+    <SectionCard
+      icon={Send}
+      title="Status"
+      actions={
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {eingefuegt ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.onSurfaceVariant }}>
+              <Check size={12} color={C.mint} strokeWidth={2.5} />
+              {PLATFORM_CONFIG[eingefuegt.platform].label}-Link übernommen
+              <button
+                onClick={rueckgaengig}
+                title="Rückgängig"
+                style={{
+                  display: "flex", padding: 4, border: "none", background: "transparent",
+                  color: C.onSurfaceVariant, cursor: "pointer",
+                }}
+              >
+                <Undo2 size={12} strokeWidth={2} />
+              </button>
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+              Link mit Strg+V einfügen
+            </span>
+          )}
+          {offen && (
+            <button
+              onClick={() => setReleaseOffen(true)}
+              title="Alle offenen Plattformen nacheinander hochladen: BeatStars, YouTube, SoundCloud"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", borderRadius: radius.control,
+                background: "transparent", border: `1px solid ${C.border20}`,
+                color: C.onSurfaceVariant, cursor: "pointer",
+                fontSize: 11, fontWeight: 600,
+              }}
+            >
+              <Rocket size={12} strokeWidth={2} />
+              Release starten
+            </button>
+          )}
+        </div>
+      }
+    >
       <UploadPlatformGrid {...props} />
+      {releaseOffen && (
+        <UploadAssistantDialog
+          beatId={beatId}
+          uploads={uploads}
+          onClose={() => setReleaseOffen(false)}
+          onChanged={onChanged}
+        />
+      )}
     </SectionCard>
   );
 }
@@ -156,7 +257,6 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
   const PlatIcon = PLATFORM_ICON[row.platform];
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const persist = async (patch: Partial<UploadPlatformRow>) => {
@@ -188,7 +288,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
     //   `scheduled_at` ohne auf den Status zu schauen.
     const patch: Partial<UploadPlatformRow> = { status: next };
     if (next === "uploaded" && !row.uploaded_at) {
-      patch.uploaded_at = todayISO();
+      patch.uploaded_at = heuteISO();
     } else if (next !== "uploaded" && row.uploaded_at) {
       patch.uploaded_at = null;
     }
@@ -289,26 +389,6 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
           </span>
         </span>
 
-        {/* Die Rakete startet den gefuehrten Upload. Im Archiv traegst du nach,
-            was laengst passiert ist — dort waere sie das falsche Angebot, und
-            ihre 34px sind genau das, was der Zeile zum Einzeiler fehlt. */}
-        {!flach && row.status !== "uploaded" && (
-          <button
-            onClick={() => setAssistantOpen(true)}
-            title={`${meta.label}-Upload starten: Seite öffnen, Titel/Beschreibung/Tags kopieren, abhaken`}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 24, height: 24, borderRadius: radius.control, flexShrink: 0,
-              background: "transparent",
-              border: `1px solid ${meta.color}45`,
-              color: meta.color,
-              cursor: "pointer",
-            }}
-          >
-            <Rocket size={12} strokeWidth={2} />
-          </button>
-        )}
-
         <span style={{ flex: 1 }} />
 
         {/* Zustandsleiste in der Kopfzeile: „welche Plattform" und „wie weit"
@@ -352,23 +432,6 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
           })}
         </div>
       </div>
-
-      {/* Guided upload assistant */}
-      {assistantOpen && (
-        <UploadAssistantDialog
-          beatId={beatId}
-          platform={row.platform}
-          onClose={() => setAssistantOpen(false)}
-          onMarkUploaded={(url) => {
-            const patch: Partial<UploadPlatformRow> = {
-              status: "uploaded",
-              url: url ?? row.url,
-            };
-            if (!row.uploaded_at) patch.uploaded_at = todayISO();
-            persist(patch);
-          }}
-        />
-      )}
 
       {/* Alles ab "Geplant" in EINEM aufklappenden Block. Getrennt animiert
           klappten zwei Elemente nebeneinander auf, und der Abstand zwischen
@@ -485,14 +548,4 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
       )}
     </div>
   );
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
