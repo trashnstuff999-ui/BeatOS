@@ -16,10 +16,11 @@
 import { useState, useEffect, useRef } from "react";
 import {
   X, Star, StickyNote, Disc3, FolderOpen, Archive, Check, Loader2, FileMusic, Plus, AlertTriangle,
-  Copy, Trash2,
+  Copy, Trash2, Upload as UploadIcon,
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { useNavigate } from "react-router-dom";
 import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { Button, PAGE_HEADER_HEIGHT } from "../ui";
@@ -84,6 +85,26 @@ export const INSPECTOR_WIDTH = 500;
 export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, onTrash, onClose, onAssetsChanged, closing = false }: ProjectInspectorProps) {
   const { currentBeat } = useAudioPlayerContext();
   const { settings } = useSettings();
+  const navigate = useNavigate();
+
+  // Liegt das Projekt schon im Archiv? Dann führt der Hauptknopf in den
+  // Upload-Tab statt ein zweites Mal ins Archiv. Derselbe Abgleich wie beim
+  // Zusammenführen (match_projects_to_archive), ohne Datei-für-Datei-Vergleich.
+  // Nur eindeutige Treffer — bei mehreren Beats mit dem Titel bleibt es beim
+  // Archivieren-Knopf.
+  const [archivBeatId, setArchivBeatId] = useState<string | null>(null);
+  useEffect(() => {
+    setArchivBeatId(null);
+    if (!settings.archivePath) return;
+    let abgebrochen = false;
+    api.studio.matchArchive([p.path], settings.archivePath, false)
+      .then(([t]) => {
+        if (abgebrochen || !t || !t.archive_folder || t.catalog_id == null || t.matched_by === "ambiguous") return;
+        setArchivBeatId(String(t.catalog_id).padStart(4, "0"));
+      })
+      .catch(() => {});
+    return () => { abgebrochen = true; };
+  }, [p.path, settings.archivePath]);
   const playerVisible = !!currentBeat;
   const folderAssets = useFolderAssets(p.path);
 
@@ -323,6 +344,8 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
           nur „Ordner" und „Archivieren" ganz unten am Rand; In FL, Exportname
           und Papierkorb gab es nur beim Drüberfahren in der Zeile. */}
       <InspectorActions
+        archivBeatId={archivBeatId}
+        onUpload={() => archivBeatId && navigate("/upload", { state: { beatId: archivBeatId } })}
         canOpenDaw={Boolean(p.newest_flp)}
         exportName={projectExportName(p)}
         onOpenDaw={onOpenDaw}
@@ -507,7 +530,10 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 
 /** Die Aktionen des Projekts als beschriftete Knöpfe. Oben die zwei Wege
  *  weiter (zurück in FL, ab ins Archiv), darunter die drei kleinen. */
-function InspectorActions({ canOpenDaw, exportName, onOpenDaw, onArchive, onOpenFolder, onTrash }: {
+function InspectorActions({ archivBeatId, onUpload, canOpenDaw, exportName, onOpenDaw, onArchive, onOpenFolder, onTrash }: {
+  /** Schon archiviert als dieser Beat — dann „Im Upload-Tab öffnen" statt „Archivieren". */
+  archivBeatId: string | null;
+  onUpload: () => void;
   canOpenDaw: boolean;
   exportName: string;
   onOpenDaw: () => void;
@@ -537,9 +563,16 @@ function InspectorActions({ canOpenDaw, exportName, onOpenDaw, onArchive, onOpen
         <Button variant="secondary" size="sm" icon={Disc3} onClick={onOpenDaw} disabled={!canOpenDaw} style={{ flex: 1 }}>
           In FL öffnen
         </Button>
-        <Button variant="primary" size="sm" icon={Archive} onClick={onArchive} style={{ flex: 1 }}>
-          Archivieren
-        </Button>
+        {archivBeatId ? (
+          <Button variant="primary" size="sm" icon={UploadIcon} onClick={onUpload} style={{ flex: 1 }}
+            title={`Schon archiviert als #${archivBeatId} — im Upload-Tab weitermachen`}>
+            Im Upload-Tab öffnen
+          </Button>
+        ) : (
+          <Button variant="primary" size="sm" icon={Archive} onClick={onArchive} style={{ flex: 1 }}>
+            Archivieren
+          </Button>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <Button variant="ghost" size="sm" icon={copied ? Check : Copy} onClick={copy} title={exportName} style={{ flex: 1 }}>
