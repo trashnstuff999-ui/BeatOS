@@ -16,6 +16,8 @@ export { PageBody } from "./PageBody";
 export { EmptyState } from "./EmptyState";
 export { SectionCard, SectionIconBtn } from "./SectionCard";
 export { Dropdown, Select } from "./Dropdown";
+export { Segmented } from "./Segmented";
+export type { SegmentedOption } from "./Segmented";
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 

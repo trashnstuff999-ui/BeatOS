@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { C, PLATFORM_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { Segmented } from "../ui/Segmented";
 import { Button, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
@@ -199,47 +200,24 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
       }
     >
       {/* ─── Reiter ──────────────────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", marginBottom: 10, flexShrink: 0,
-        background: C.surfaceContainer,
-        border: `1px solid ${C.border15}`,
-        borderRadius: radius.control,
-        overflow: "hidden",
-      }}>
-        {TABS.map((tab, i) => {
-          const isActive = active === tab.key;
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActive(tab.key)}
-              style={{
-                flex: 1,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "9px 12px",
-                background: isActive ? `${tab.color}14` : "transparent",
-                border: "none",
-                borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
-                boxShadow: isActive ? `inset 0 -2px 0 ${tab.color}` : "none",
-                cursor: "pointer",
-                fontSize: 11, fontWeight: 700, fontFamily: "inherit",
-                color: isActive ? tab.color : C.onSecondaryFixedVar,
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                transition: "background 0.15s, color 0.15s",
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = C.onSurface; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
-            >
-              <Icon size={13} strokeWidth={1.75} />
-              {tab.label}
-              {overrides[tab.key] !== undefined && (
-                <span title="Von Hand geändert" style={{ display: "flex" }}>
-                  <Pencil size={10} strokeWidth={2.25} />
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div style={{ marginBottom: 10, flexShrink: 0 }}>
+        <Segmented
+          full
+          label="Plattform"
+          value={active}
+          onChange={setActive}
+          options={TABS.map(tab => ({
+            value: tab.key,
+            label: tab.label,
+            icon: tab.icon,
+            color: tab.color,
+            zusatz: overrides[tab.key] !== undefined && (
+              <span title="Von Hand geändert" style={{ display: "flex" }}>
+                <Pencil size={10} strokeWidth={2.25} />
+              </span>
+            ),
+          }))}
+        />
       </div>
 
       {/* ─── Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig ── */}

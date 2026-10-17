@@ -22,6 +22,7 @@ import { useState, useEffect, useRef } from "react";
 import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check, Undo2 } from "lucide-react";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { Segmented } from "../ui/Segmented";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
 import { plattformAusLink, hochgeladenMelden, heuteISO } from "../../lib/uploadLinks";
@@ -391,46 +392,21 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
 
         <span style={{ flex: 1 }} />
 
-        {/* Zustandsleiste in der Kopfzeile: „welche Plattform" und „wie weit"
-            gehoeren nebeneinander. Zusammenhaengend mit Trennstrichen wie die
-            Plattform-Tabs bei den Beschreibungen — so sieht man, dass es ein
-            Schalter ist. */}
-        <div style={{
-          display: "flex", flexShrink: 0,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
-          overflow: "hidden",
-        }}>
-          {STATUS_ORDER.map((s, i) => {
-            const active = row.status === s;
-            const m = UPLOAD_STATUS_CONFIG[s];
-            return (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                disabled={isSaving}
-                title={`Auf „${m.label}" setzen`}
-                style={{
-                  padding: "4px 8px",
-                  background: active ? m.bg : "transparent",
-                  border: "none",
-                  borderLeft: i === 0 ? "none" : `1px solid ${C.border15}`,
-                  cursor: isSaving ? "wait" : "pointer",
-                  fontSize: 10, fontWeight: active ? 700 : 500,
-                  fontFamily: "inherit",
-                  color: active ? m.color : C.onSecondaryFixedVar,
-                  letterSpacing: "0.08em", textTransform: "uppercase",
-                  opacity: isSaving ? 0.6 : 1,
-                  transition: "background 0.15s, color 0.15s",
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.color = C.onSurface; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.color = C.onSecondaryFixedVar; }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Zustand in der Kopfzeile: „welche Plattform" und „wie weit"
+            gehoeren nebeneinander. Derselbe Umschalter wie ueberall. Entwurf
+            bleibt neutral; Geplant und Hochgeladen tragen ihre Farbe. */}
+        <Segmented
+          label={`${meta.label}: Upload-Zustand`}
+          value={row.status}
+          onChange={setStatus}
+          disabled={isSaving}
+          options={STATUS_ORDER.map(s => ({
+            value: s,
+            label: UPLOAD_STATUS_CONFIG[s].label,
+            color: s === "draft" ? undefined : UPLOAD_STATUS_CONFIG[s].color,
+            title: `Auf „${UPLOAD_STATUS_CONFIG[s].label}" setzen`,
+          }))}
+        />
       </div>
 
       {/* Alles ab "Geplant" in EINEM aufklappenden Block. Getrennt animiert

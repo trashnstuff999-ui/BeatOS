@@ -24,6 +24,7 @@ import { api } from "../../lib/api";
 import { C, alpha, radius } from "../../lib/theme";
 import { kapitelVorschlagen } from "../../lib/kapitelVorschlag";
 import { SectionCard } from "../ui/SectionCard";
+import { Segmented } from "../ui/Segmented";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { UploadBeatInfo, Timecode } from "../../types/upload";
 import type { Beat } from "../../types/browse";
@@ -371,27 +372,15 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
       // Liste holen, dann anhören und verfeinern.
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div role="radiogroup" style={{
-            display: "flex", padding: 2, gap: 2,
-            borderRadius: radius.control, background: C.surfaceContainer,
-          }}>
-            {([["fl", "FL-Marker"], ["audio", "Audio"]] as const).map(([wert, text]) => (
-              <button
-                key={wert}
-                role="radio"
-                aria-checked={quelle === wert}
-                onClick={() => quelleWaehlen(wert)}
-                style={{
-                  padding: "4px 10px", borderRadius: radius.control, border: "none",
-                  background: quelle === wert ? C.surfaceContainerHigh : "transparent",
-                  color: quelle === wert ? C.onSurface : C.onSecondaryFixedVar,
-                  fontSize: 11, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                {text}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Quelle der Kapitel"
+            value={quelle}
+            onChange={quelleWaehlen}
+            options={[
+              { value: "fl", label: "FL-Marker", title: "Zeitmarker aus dem Playlist-Fenster der FLP" },
+              { value: "audio", label: "Audio", title: "Abschnitte aus dem Audio erkennen" },
+            ]}
+          />
           {quelle === "fl" ? (
             <Knopf
               icon={Download}

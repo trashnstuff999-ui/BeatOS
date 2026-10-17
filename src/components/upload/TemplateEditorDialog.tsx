@@ -11,7 +11,7 @@ import { FileCode2, FolderOpen, Save, RotateCcw, ShoppingBag, Music2, Youtube } 
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Modal, Button, Dropdown } from "../ui";
+import { Modal, Button, Dropdown, Segmented } from "../ui";
 import { useDialog } from "../../contexts/DialogContext";
 import type { UploadPlatform } from "../../types/upload";
 
@@ -220,40 +220,21 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
       )}
 
       {/* Plattform-Tabs */}
-      <div style={{ display: "flex", gap: 4 }}>
-        {TABS.map(t => {
-          const isActive = t.key === active;
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.key}
-              onClick={async () => {
-                if (isDirty && !await frage({
-                  titel: "Ungespeicherte Änderungen verwerfen?",
-                  text: `Die Vorlage „${tab.label}“ wurde geändert, aber nicht gespeichert.`,
-                  bestaetigen: "Verwerfen",
-                  gefahr: true,
-                })) return;
-                setActive(t.key);
-              }}
-              style={{
-                flex: 1,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "9px 12px",
-                background: isActive ? C.surfaceContainerHighest : "transparent",
-                border: `1px solid ${isActive ? t.color + "60" : C.border15}`,
-                borderRadius: radius.control, cursor: "pointer",
-                fontSize: 11, fontWeight: 700, fontFamily: "inherit",
-                color: isActive ? t.color : C.onSurfaceVariant,
-                letterSpacing: "0.08em", textTransform: "uppercase",
-              }}
-            >
-              <Icon size={13} strokeWidth={1.75} />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      <Segmented
+        full
+        label="Plattform"
+        value={active}
+        onChange={async key => {
+          if (isDirty && !await frage({
+            titel: "Ungespeicherte Änderungen verwerfen?",
+            text: `Die Vorlage „${tab.label}“ wurde geändert, aber nicht gespeichert.`,
+            bestaetigen: "Verwerfen",
+            gefahr: true,
+          })) return;
+          setActive(key);
+        }}
+        options={TABS.map(t => ({ value: t.key, label: t.label, icon: t.icon }))}
+      />
 
       {/* Einsetzen — ein Menü statt zwanzig Knöpfe.
           Gruppiert wie vorher, nur nicht mehr über <optgroup>: die aufgeklappte
