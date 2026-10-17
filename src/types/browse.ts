@@ -82,6 +82,8 @@ export interface UploadBadge {
   beat_id: string;
   platform: string;  // beatstars | soundcloud | youtube
   status: string;    // scheduled | uploaded
+  /** Link zum Video/Track, falls eingetragen. */
+  url?: string | null;
 }
 
 /** beat_id → Badges */

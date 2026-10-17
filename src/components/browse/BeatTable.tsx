@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { memo } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
 import { C, PLATFORM_CONFIG, type PlatformKey, radius } from "../../lib/theme";
 import type { Beat, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
@@ -58,23 +59,42 @@ export function PlatformDots({ badges, leer = "strich" }: {
   if ((!badges || badges.length === 0) && leer === "strich") {
     return <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
   }
-  const byPlatform = new Map((badges ?? []).map(b => [b.platform, b.status]));
+  const byPlatform = new Map((badges ?? []).map(b => [b.platform, b]));
+  // Ein Punkt mit Link öffnet ihn — mit einer unsichtbaren Trefferfläche von
+  // 16 px, denn 7 px trifft niemand. Der Klick wählt die Zeile nicht aus.
   return (
-    <span
-      title={(badges ?? []).map(b => `${PLATFORM_CONFIG[b.platform as PlatformKey]?.label ?? b.platform}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}`).join("\n")}
-      style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
-    >
+    <span style={{ display: "inline-flex", gap: 0, alignItems: "center" }}>
       {(["beatstars", "soundcloud", "youtube"] as PlatformKey[]).map(p => {
-        const status = byPlatform.get(p);
-        if (!status) return <span key={p} style={{ width: 7, height: 7, borderRadius: "50%", border: `1px solid ${C.border20}`, boxSizing: "border-box" }} />;
-        const color = PLATFORM_CONFIG[p].color;
-        return (
-          <span key={p} style={{
-            width: 7, height: 7, borderRadius: "50%",
-            background: status === "uploaded" ? color : "transparent",
-            border: `2px solid ${color}`,
-            boxSizing: "border-box",
-          }} />
+        const b = byPlatform.get(p);
+        const label = PLATFORM_CONFIG[p].label;
+        const punkt = !b
+          ? <span style={{ width: 7, height: 7, borderRadius: "50%", border: `1px solid ${C.border20}`, boxSizing: "border-box" }} />
+          : <span style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: b.status === "uploaded" ? PLATFORM_CONFIG[p].color : "transparent",
+              border: `2px solid ${PLATFORM_CONFIG[p].color}`,
+              boxSizing: "border-box",
+            }} />;
+        const link = b?.url && /^https?:\/\//i.test(b.url) ? b.url : null;
+        const titel = !b ? `${label}: offen`
+          : `${label}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}${link ? " — klicken zum Öffnen" : ""}`;
+        const flaeche: React.CSSProperties = {
+          width: 15, height: 16, padding: 0, border: "none", background: "transparent",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+        };
+        return link ? (
+          <button
+            key={p}
+            type="button"
+            title={titel}
+            onClick={e => { e.stopPropagation(); openUrl(link).catch(() => window.open(link, "_blank")); }}
+            onDoubleClick={e => e.stopPropagation()}
+            style={{ ...flaeche, cursor: "pointer", borderRadius: 4 }}
+          >
+            {punkt}
+          </button>
+        ) : (
+          <span key={p} title={titel} style={flaeche}>{punkt}</span>
         );
       })}
     </span>

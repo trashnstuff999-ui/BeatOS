@@ -384,6 +384,8 @@ pub struct UploadBadge {
     pub beat_id: String,
     pub platform: String,
     pub status: String,
+    /// Link zum Video/Track — macht den Punkt in der Archiv-Liste klickbar.
+    pub url: Option<String>,
 }
 
 #[tauri::command]
@@ -394,7 +396,7 @@ pub fn get_upload_badges(beat_ids: Vec<String>) -> Result<Vec<UploadBadge>, Stri
     let conn = open_db().map_err(|e| e.to_string())?;
     let placeholders: Vec<String> = (1..=beat_ids.len()).map(|i| format!("?{}", i)).collect();
     let sql = format!(
-        "SELECT beat_id, platform, status FROM beat_uploads
+        "SELECT beat_id, platform, status, url FROM beat_uploads
          WHERE status != 'draft' AND beat_id IN ({})",
         placeholders.join(",")
     );
@@ -406,6 +408,7 @@ pub fn get_upload_badges(beat_ids: Vec<String>) -> Result<Vec<UploadBadge>, Stri
                 beat_id: r.get(0)?,
                 platform: r.get(1)?,
                 status: r.get(2)?,
+                url: r.get(3)?,
             })
         })
         .map_err(|e| e.to_string())?
