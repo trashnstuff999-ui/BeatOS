@@ -36,7 +36,11 @@ export const colors = {
   // ── Text Hierarchy ─────────────────────────────────────────────────────────
   onSurface:           "#ffffff",  // Primary text
   onSurfaceVariant:    "#adaaaa",  // Secondary text
-  onSecondaryFixedVar: "#5c5b5b",  // Muted text, labels
+  // Gedämpfter Text, Beschriftungen. War #5c5b5b — 2,7 : 1 auf den Karten,
+  // bei 10–11 px neben FL Studio kaum zu lesen. #8a8786 erreicht 5,2 : 1 auf
+  // Karten (#131313) und 4,9 : 1 auf Feldern (#1a1919), über der Grenze von
+  // 4,5 : 1 für kleinen Text, und bleibt eine sichtbare Stufe unter #adaaaa.
+  onSecondaryFixedVar: "#8a8786",
 
   // ── Borders ────────────────────────────────────────────────────────────────
   outlineVariant: "#484847",
