@@ -216,6 +216,10 @@ export const radius = {
  *   30+  nur das Dashboard, fuer die eine grosse Zahl
  *
  * Alles darunter ist auf einem dunklen Hintergrund nicht mehr lesbar.
+ *
+ * Beschriftungen in Grossbuchstaben: fett (700), Buchstabenabstand IMMER
+ * 0.08em — vorher standen sieben verschiedene Werte von 0.04 bis 0.15em fuer
+ * dieselbe Art Beschriftung. Einzige Ausnahme: der Seitentitel (0.2em).
  */
 export const typography = {
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",

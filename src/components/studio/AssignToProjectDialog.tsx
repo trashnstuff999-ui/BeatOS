@@ -135,7 +135,7 @@ export function AssignToProjectDialog({
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
             textTransform: "uppercase", color: C.onSecondaryFixedVar,
           }}>
             Als was zuweisen

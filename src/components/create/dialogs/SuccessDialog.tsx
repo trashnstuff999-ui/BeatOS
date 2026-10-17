@@ -168,7 +168,7 @@ function Kennzahl({ wert, farbe, label }: { wert: string; farbe: string; label: 
       <div style={{ fontSize: 20, fontWeight: 700, color: farbe }}>{wert}</div>
       <div style={{
         fontSize: 10, color: C.onSurfaceVariant, marginTop: 4,
-        textTransform: "uppercase", letterSpacing: "0.1em",
+        textTransform: "uppercase", letterSpacing: "0.08em",
       }}>
         {label}
       </div>
@@ -191,7 +191,7 @@ function Kasten({ label, children, rechts }: {
       <div style={{ minWidth: 0 }}>
         <div style={{
           fontSize: 10, color: C.onSurfaceVariant, marginBottom: 5,
-          textTransform: "uppercase", letterSpacing: "0.1em",
+          textTransform: "uppercase", letterSpacing: "0.08em",
         }}>
           {label}
         </div>

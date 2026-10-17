@@ -88,7 +88,7 @@ function NaechsterSchritt({ actions, onNavigate, onFilter }: {
 
   return (
     <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurfaceVariant }}>
+      <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
         Was ansteht
       </h4>
 
@@ -137,7 +137,7 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Flame size={14} color={actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar} />
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.onSurfaceVariant }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
           Upload-Rhythmus
         </span>
         <span style={{
@@ -279,7 +279,7 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 7, color: stage.color, marginBottom: 6 }}>
               {stage.icon}
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSurfaceVariant }}>
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
                 {stage.label}
               </span>
             </div>
@@ -306,7 +306,7 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
   const total = bars.reduce((sum, b) => sum + b.count, 0) || 1;
   return (
     <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", display: "flex", flexDirection: "column" }} {...commonStyles.cardHoverHandlers}>
-      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface, marginBottom: 18, flexShrink: 0 }}>Status-Verteilung</h4>
+      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface, marginBottom: 18, flexShrink: 0 }}>Status-Verteilung</h4>
 
       {/* EIN gestapelter Balken statt vier einzelner. Vier Balken brauchten die
           vierfache Hoehe und zeigten dabei vor allem leere Strecke; gestapelt
@@ -480,7 +480,7 @@ function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
   return (
     <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: "16px 20px", transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...commonStyles.cardHoverHandlers}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Tonarten</h4>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Tonarten</h4>
         <Select value={keyMode} options={KEY_MODES} onChange={setKeyMode} />
       </div>
 
@@ -523,7 +523,7 @@ function BeatsPerMonth({ stats, onYearChange }: {
       minHeight: 360, display: "flex", flexDirection: "column", boxSizing: "border-box",
     }} {...commonStyles.cardHoverHandlers}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexShrink: 0 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Beats pro Monat</h4>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Beats pro Monat</h4>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
           <Select
@@ -565,7 +565,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
   return (
     <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", minHeight: 360, boxSizing: "border-box" }} {...commonStyles.cardHoverHandlers}>
       <div style={{ marginBottom: 18 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Top-Tags</h4>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Top-Tags</h4>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -579,7 +579,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
               {/* Category label with icon */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: colors.text }}>
                 {meta.icon}
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.13em" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   {meta.label}
                 </span>
               </div>
@@ -600,7 +600,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
                       borderRadius: radius.full,
                       fontSize: 10,
                       fontWeight: 700,
-                      letterSpacing: "0.05em",
+                      letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       color: C.onSurfaceVariant,
                       border: `1px solid ${C.border15}`,
@@ -643,7 +643,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
   return (
     <section style={{ ...commonStyles.card, background: C.surfaceContainer, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px", borderBottom: `1px solid ${C.border10}` }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
+        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
         <button
           onClick={() => onOpen()}
           style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
@@ -651,7 +651,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
           Alle anzeigen ›
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.onSecondaryFixedVar }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSecondaryFixedVar }}>
         <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
       </div>
       {beats.map((beat, i) => {

@@ -106,7 +106,7 @@ function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left
       style={{
         flex,
         fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-        letterSpacing: "0.15em", fontFamily: "inherit",
+        letterSpacing: "0.08em", fontFamily: "inherit",
         background: "transparent", border: "none", padding: 0,
         color: isActive ? C.primary : C.onSecondaryFixedVar,
         cursor: "pointer", userSelect: "none",
@@ -298,14 +298,14 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
         <div style={{
           width: 70, flexShrink: 0, textAlign: "center",
           fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-          letterSpacing: "0.15em", color: C.onSecondaryFixedVar,
+          letterSpacing: "0.08em", color: C.onSecondaryFixedVar,
         }}>
           Live
         </div>
         <div style={{
           width: 44, flexShrink: 0, textAlign: "right",
           fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-          letterSpacing: "0.15em", color: C.onSecondaryFixedVar,
+          letterSpacing: "0.08em", color: C.onSecondaryFixedVar,
           display: "flex", justifyContent: "flex-end",
         }}>
           Fav

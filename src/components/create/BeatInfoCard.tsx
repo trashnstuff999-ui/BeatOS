@@ -35,7 +35,7 @@ export function BeatInfoCard({
   return (
     <SectionCard icon={Music} title="Beat-Info">
       <label style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: "0.15em",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         display: "block", marginBottom: 10,
       }}>
@@ -98,7 +98,7 @@ function SmallInput({ label, value, onChange, placeholder, width, mono }: {
           border: `1px solid ${C.border20}`, borderRadius: radius.control,
           padding: "8px 8px", fontSize: 14,
           textAlign: "center", textTransform: "uppercase",
-          letterSpacing: "0.15em", outline: "none",
+          letterSpacing: "0.08em", outline: "none",
           color: C.onSurface,
           fontFamily: mono ? "monospace" : "Inter, sans-serif",
         }}

@@ -39,7 +39,7 @@ function Untertitel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
-      textTransform: "uppercase", letterSpacing: "0.12em",
+      textTransform: "uppercase", letterSpacing: "0.08em",
       marginTop: 18, marginBottom: 4,
     }}>
       {children}

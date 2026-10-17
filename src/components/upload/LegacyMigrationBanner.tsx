@@ -110,7 +110,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
             cursor: "pointer",
             fontSize: 11, fontWeight: 700,
             color: blocked ? C.onSurfaceVariant : C.onPrimary,
-            letterSpacing: "0.05em", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
             whiteSpace: "nowrap",
             flexShrink: 0,
           }}
@@ -220,7 +220,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
                 display: "flex", alignItems: "center", gap: 8,
                 fontSize: 10, fontWeight: 700,
                 color: C.onSecondaryFixedVar,
-                letterSpacing: "0.1em", textTransform: "uppercase",
+                letterSpacing: "0.08em", textTransform: "uppercase",
                 marginBottom: 8,
               }}>
                 <FolderOpen size={11} strokeWidth={1.5} />
@@ -262,7 +262,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
               <div style={{
                 fontSize: 10, fontWeight: 700,
                 color: C.onSecondaryFixedVar,
-                letterSpacing: "0.1em", textTransform: "uppercase",
+                letterSpacing: "0.08em", textTransform: "uppercase",
                 marginBottom: 8,
               }}>
                 Ordner wird umbenannt

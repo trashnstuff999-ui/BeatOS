@@ -90,7 +90,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
     fontSize: 10,
     fontWeight: 700,
     textTransform: "uppercase",
-    letterSpacing: "0.12em",
+    letterSpacing: "0.08em",
     color: C.onSecondaryFixedVar,
   };
 
@@ -133,7 +133,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
           }}
         >
           <Filter size={13} color={C.primary} strokeWidth={2} />
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.onSurface }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurface }}>
             Filter
           </span>
           <ChevronDown
@@ -248,7 +248,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                     <div key={titel} style={{ marginBottom: titel === "Moll" ? 12 : 0 }}>
                       <div style={{
                         fontSize: 10, fontWeight: 700, color: farbe,
-                        textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8,
+                        textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
                       }}>
                         {titel}
                       </div>

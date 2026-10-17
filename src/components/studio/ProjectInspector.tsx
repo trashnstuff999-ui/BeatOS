@@ -466,7 +466,7 @@ function StatusSection({ project: p, onPatch }: {
           padding: "5px 11px", borderRadius: radius.full, cursor: "help",
           background: status.bg, color: status.color,
           fontSize: 10, fontWeight: 700,
-          letterSpacing: "0.04em", textTransform: "uppercase",
+          letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: status.color }} />
           {status.label}
@@ -482,7 +482,7 @@ function SectionLabel({ children, right }: { children: React.ReactNode; right?: 
   return (
     <div style={{
       display: "flex", alignItems: "center",
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
       textTransform: "uppercase", color: C.onSecondaryFixedVar,
       marginBottom: 8,
     }}>

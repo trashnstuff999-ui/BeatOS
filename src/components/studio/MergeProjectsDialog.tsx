@@ -537,7 +537,7 @@ function ClassTable({ rows, checked }: { rows: MergeRow[]; checked: boolean }) {
                 textAlign: "left", padding: "7px 10px",
                 background: C.surfaceContainerHigh,
                 borderBottom: `1px solid ${C.border15}`,
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: C.onSecondaryFixedVar,
               }}>
                 {h}
@@ -636,7 +636,7 @@ const cell: React.CSSProperties = {
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
       textTransform: "uppercase", color: C.onSecondaryFixedVar,
     }}>
       {children}

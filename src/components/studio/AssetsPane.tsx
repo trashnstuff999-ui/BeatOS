@@ -244,7 +244,7 @@ function AssetCard({ asset, onClick }: { asset: AssetFile; onClick: () => void }
             background: "rgba(0,0,0,0.55)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 12, fontWeight: 700, color: "#fff",
-            letterSpacing: "0.05em", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             Zuweisen
           </div>

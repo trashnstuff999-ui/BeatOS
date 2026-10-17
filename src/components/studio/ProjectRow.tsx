@@ -205,7 +205,7 @@ export function ProjectRow({
           background: status.bg,
           color: status.color,
           fontSize: 11, fontWeight: 700,
-          letterSpacing: "0.04em", textTransform: "uppercase",
+          letterSpacing: "0.08em", textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: status.color }} />

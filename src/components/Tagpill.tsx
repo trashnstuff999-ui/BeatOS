@@ -269,7 +269,7 @@ export function TagCategoryRow({ category, tags, onAdd }: TagCategoryRowProps) {
             fontSize: 10,
             fontWeight: 700,
             textTransform: "uppercase",
-            letterSpacing: "0.1em",
+            letterSpacing: "0.08em",
           }}
         >
           {CATEGORY_LABELS[category]}
@@ -320,7 +320,7 @@ export function StatusPill({ status, size = "md", aufBild = false }: StatusPillP
         fontSize: s.fontSize,
         fontWeight: 800,
         textTransform: "uppercase",
-        letterSpacing: "0.05em",
+        letterSpacing: "0.08em",
         background: aufBild ? "rgba(0,0,0,0.62)" : cfg.bg,
         backdropFilter: aufBild ? "blur(4px)" : undefined,
         color: cfg.color,

@@ -923,7 +923,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.15em",
+  letterSpacing: "0.08em",
   color: C.onSecondaryFixedVar,
   marginBottom: 6,
 };
@@ -932,7 +932,7 @@ const miniLabel: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.12em",
+  letterSpacing: "0.08em",
   color: C.onSecondaryFixedVar,
   flexShrink: 0,
 };

@@ -419,7 +419,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
                   fontSize: 10, fontWeight: active ? 700 : 500,
                   fontFamily: "inherit",
                   color: active ? m.color : C.onSecondaryFixedVar,
-                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  letterSpacing: "0.08em", textTransform: "uppercase",
                   opacity: isSaving ? 0.6 : 1,
                   transition: "background 0.15s, color 0.15s",
                 }}

@@ -39,7 +39,7 @@ export function SourceFilesCard({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileAudio size={14} color={C.mint} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Quell-Audio {audioFiles.length > 0 && `(${audioFiles.length})`}
               </span>
             </div>
@@ -77,7 +77,7 @@ export function SourceFilesCard({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileCode size={14} color={C.primary} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Quell-FLP {flpFiles.length > 0 && `(${flpFiles.length})`}
               </span>
             </div>

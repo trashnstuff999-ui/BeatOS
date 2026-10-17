@@ -224,7 +224,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: isActive ? tab.color : C.onSecondaryFixedVar,
-                letterSpacing: "0.05em", textTransform: "uppercase",
+                letterSpacing: "0.08em", textTransform: "uppercase",
                 transition: "background 0.15s, color 0.15s",
               }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = C.onSurface; }}
@@ -493,7 +493,7 @@ function OutputRow({ label, badge, badgeWarn, onCopy, kopiert, disabled, letzte,
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
-          fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+          fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
           textTransform: "uppercase", color: C.onSecondaryFixedVar,
           marginBottom: 4,
         }}>

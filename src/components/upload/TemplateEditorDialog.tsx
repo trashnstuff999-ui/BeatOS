@@ -245,7 +245,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
                 borderRadius: radius.control, cursor: "pointer",
                 fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: isActive ? t.color : C.onSurfaceVariant,
-                letterSpacing: "0.05em", textTransform: "uppercase",
+                letterSpacing: "0.08em", textTransform: "uppercase",
               }}
             >
               <Icon size={13} strokeWidth={1.75} />
@@ -267,7 +267,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
                 <div key={gruppe.titel}>
                   <div style={{
                     fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
-                    textTransform: "uppercase", letterSpacing: "0.1em",
+                    textTransform: "uppercase", letterSpacing: "0.08em",
                     padding: "8px 10px 4px",
                   }}>
                     {gruppe.titel}

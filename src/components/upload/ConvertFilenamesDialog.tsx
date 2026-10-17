@@ -198,7 +198,7 @@ function Section({ title, color, children, muted }: {
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         fontSize: 10, fontWeight: 700,
-        color, letterSpacing: "0.1em", textTransform: "uppercase",
+        color, letterSpacing: "0.08em", textTransform: "uppercase",
         marginBottom: 8,
         opacity: muted ? 0.7 : 1,
       }}>
@@ -242,7 +242,7 @@ function OpRow({ op }: { op: RenameOp }) {
       borderRadius: radius.control,
       fontSize: 11,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", fontSize: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 10 }}>
         <Icon size={11} strokeWidth={1.75} />
         {meta.label}
       </div>

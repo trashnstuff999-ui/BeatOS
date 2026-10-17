@@ -463,7 +463,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           <Icon size={13} color={colors.text} strokeWidth={1.5} />
           <span style={{
             flex: 1, fontSize: 10, fontWeight: 700, color: colors.text,
-            letterSpacing: "0.12em", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             {label}
           </span>
@@ -540,7 +540,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             <Star size={15} color={C.primary} strokeWidth={2} />
             <span style={{
               fontSize: 14, fontWeight: 800, color: C.primary,
-              letterSpacing: "0.07em", textTransform: "uppercase",
+              letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
               Tag-Verwaltung
             </span>
@@ -581,7 +581,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 style={{
                   padding: "4px 11px", borderRadius: radius.control,
                   fontSize: 10, fontWeight: 700,
-                  letterSpacing: "0.05em", textTransform: "uppercase",
+                  letterSpacing: "0.08em", textTransform: "uppercase",
                   background: viewMode === key ? C.surfaceContainerHigh : "transparent",
                   border: "none", cursor: "pointer",
                   color: viewMode === key ? C.onSurface : C.onSecondaryFixedVar,
@@ -631,7 +631,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                             background: active ? clrs.bg : `${clrs.bg}40`,
                             color: clrs.text,
                             cursor: "pointer", transition: "all 0.12s",
-                            textTransform: "uppercase", letterSpacing: "0.04em",
+                            textTransform: "uppercase", letterSpacing: "0.08em",
                             boxShadow: active ? `0 0 0 1px ${clrs.border}, 0 0 8px ${clrs.bg}` : "none",
                             opacity: active ? 1 : 0.55,
                           }}
@@ -714,7 +714,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             </div>
             <span style={{
               fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant,
-              letterSpacing: "0.06em", textTransform: "uppercase",
+              letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
               {stagedCount > 0 && removedCount > 0
                 ? `${stagedCount} hinzugefügt · ${removedCount} entfernt`
@@ -731,7 +731,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                   onClick={() => setShowMoveMenu(v => !v)}
                   style={{
                     padding: "7px 14px", borderRadius: radius.control,
-                    fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                     background: C.surfaceContainerHighest, border: `1px solid ${C.border30}`,
                     color: C.onSurfaceVariant, cursor: "pointer",
                     display: "flex", alignItems: "center", gap: 6,
@@ -758,7 +758,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                             fontSize: 11, fontWeight: 600, color: clrs.text,
                             cursor: "pointer", textAlign: "left",
                             display: "flex", alignItems: "center", gap: 8,
-                            textTransform: "uppercase", letterSpacing: "0.05em",
+                            textTransform: "uppercase", letterSpacing: "0.08em",
                             transition: "background 0.1s",
                           }}
                           onMouseEnter={e => { e.currentTarget.style.background = clrs.bg; }}
@@ -784,7 +784,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 title="Vorgemerkte Tags aus der Datenbank löschen"
                 style={{
                   padding: "7px 14px", borderRadius: radius.control,
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                   background: alpha(C.error, 0.08), border: `1px solid ${alpha(C.error, 0.25)}`,
                   color: C.error, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 6,

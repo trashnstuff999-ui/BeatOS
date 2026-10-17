@@ -90,7 +90,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
   const hasValue = value.trim().length > 0;
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{ display: "flex", gap: 8 }}>
@@ -176,7 +176,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
 
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -238,7 +238,7 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
   const hasValue = value.trim().length > 0;
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{
@@ -313,7 +313,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
-        fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         marginBottom: 10,
       }}>

@@ -214,7 +214,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
             background: "rgba(0,0,0,0.55)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 10, fontWeight: 700, color: "#fff",
-            letterSpacing: "0.05em", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             Ersetzen
           </div>

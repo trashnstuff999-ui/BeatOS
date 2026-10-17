@@ -420,7 +420,7 @@ function Lupe({ label, path, onClose }: { label: string; path: string; onClose: 
           position: "absolute", top: -34, left: 0, right: 0,
           display: "flex", alignItems: "center", gap: 8,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             {label}
           </span>
           <span style={{ flex: 1 }} />

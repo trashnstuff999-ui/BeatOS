@@ -21,7 +21,7 @@ export function PlaceholderCard({ title, phase, description }: PlaceholderCardPr
         <Label>{title}</Label>
         <span style={{
           fontSize: 10, fontWeight: 700,
-          letterSpacing: "0.1em", textTransform: "uppercase",
+          letterSpacing: "0.08em", textTransform: "uppercase",
           color: C.onSecondaryFixedVar,
           padding: "3px 8px",
           background: C.surfaceContainerLowest,

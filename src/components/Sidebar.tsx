@@ -147,7 +147,7 @@ export default function Sidebar({ beatCount, studioCounts }: {
           <span style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>
             {beatCount.toLocaleString()}
           </span>
-          <span style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+          <span style={{ fontSize: 10, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Beats
           </span>
         </div>
