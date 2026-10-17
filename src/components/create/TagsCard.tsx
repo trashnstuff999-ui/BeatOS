@@ -62,7 +62,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
     <SectionCard icon={Tag} title="Tags">
       {/* Zeile über den Tags: Anzahl + Tag-Manager */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
           {tags.length > 0 ? `${tags.length} ausgewählt` : "Noch keine Tags"}
         </span>
         <button
@@ -70,7 +70,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
           style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "4px 10px", borderRadius: radius.control,
-            fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,
             color: C.onSurfaceVariant,

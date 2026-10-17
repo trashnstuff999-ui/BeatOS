@@ -223,7 +223,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
       {/* ─── Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig ── */}
       {drafts && !isLoading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, flexWrap: "wrap" }}>
             {hinweise.length === 0 ? (
               <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.mint }}>
                 <CheckCircle2 size={12} strokeWidth={2} /> Alles in Ordnung
@@ -260,7 +260,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           {hinweise.map(h => (
             <div key={h.text} style={{
               display: "flex", alignItems: "flex-start", gap: 6,
-              fontSize: 11, lineHeight: 1.45,
+              fontSize: 12, lineHeight: 1.45,
               color: h.stufe === "fehler" ? C.error : C.primary,
             }}>
               {h.stufe === "fehler"
@@ -303,7 +303,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           disabled={!drafts || isLoading}
         >
           {isLoading || !activeDescription
-            ? <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
+            ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
             : <Vorschau text={activeDescription} youtube={active === "youtube"} />
           }
         </OutputRow>
@@ -327,7 +327,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
             letzte
           >
             <div style={{
-              fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
+              fontSize: 12, color: C.onSurfaceVariant, fontFamily: "monospace",
               lineHeight: 1.5, wordBreak: "break-word",
             }}>
               {activeTags.split(/\r?\n/).join("  ")}
@@ -339,7 +339,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
       {fehler && (
         <div style={{
           marginTop: 10, display: "flex", alignItems: "center", gap: 8,
-          fontSize: 11, color: C.error, flexShrink: 0,
+          fontSize: 12, color: C.error, flexShrink: 0,
         }}>
           <AlertCircle size={12} strokeWidth={2} /> {fehler}
         </div>
@@ -354,7 +354,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           width={900}
           onClose={() => setEditorOpen(false)}
           footerLeft={
-            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+            <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
               {speichert ? "Speichert …" : eigeneFassung ? "Eigene Fassung gespeichert" : "Folgt der Vorlage"}
             </span>
           }
@@ -406,7 +406,7 @@ function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
   const zeilen = text.split(/\r?\n/);
   const farbe = { text: C.onSurfaceVariant, link: C.tertiary, zeit: C.tertiary, hashtag: C.tertiary };
   return (
-    <div style={{ fontSize: 11, lineHeight: 1.55, wordBreak: "break-word" }}>
+    <div style={{ fontSize: 12, lineHeight: 1.55, wordBreak: "break-word" }}>
       {zeilen.map((zeile, i) => (
         <div key={i}>
           {youtube && i === YT_SICHTBARE_ZEILEN && zeilen.length > YT_SICHTBARE_ZEILEN && (
@@ -414,7 +414,7 @@ function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
               title="Bis hierhin sehen Zuschauer die Beschreibung, ohne sie aufzuklappen"
               style={{
                 display: "flex", alignItems: "center", gap: 8, margin: "6px 0",
-                fontSize: 10, color: C.onSecondaryFixedVar,
+                fontSize: 11, color: C.onSecondaryFixedVar,
               }}
             >
               <span style={{ flex: 1, borderTop: `1px dashed ${C.border20}` }} />
@@ -464,7 +464,7 @@ function OutputRow({ label, badge, badgeWarn, onCopy, kopiert, disabled, letzte,
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
-          fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
           textTransform: "uppercase", color: C.onSecondaryFixedVar,
           marginBottom: 4,
         }}>

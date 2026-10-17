@@ -101,7 +101,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
         <span
           title={assetPath}
           style={{
-            fontSize: 10, color: C.onSecondaryFixedVar,
+            fontSize: 11, color: C.onSecondaryFixedVar,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260,
           }}
         >
@@ -125,7 +125,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
                 padding: "4px 11px",
                 background: kind === k ? C.surfaceContainerHigh : "transparent",
                 border: "none", borderRadius: radius.control, cursor: "pointer",
-                fontSize: 10, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 color: kind === k ? C.onSurface : C.onSecondaryFixedVar,
               }}
             >
@@ -257,7 +257,7 @@ function AssetCard({ asset, onClick }: { asset: AssetFile; onClick: () => void }
         }}>
           {asset.name}
         </div>
-        <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 3 }}>
+        <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
           {formatRelativeTime(asset.modified_secs)}
         </div>
       </div>

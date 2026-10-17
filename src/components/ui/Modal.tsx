@@ -121,7 +121,7 @@ export function Modal({
               {title}
             </h2>
             {subtitle && (
-              <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>
                 {subtitle}
               </div>
             )}
@@ -145,7 +145,7 @@ export function Modal({
             padding: "14px 20px",
             borderTop: `1px solid ${C.border10}`,
           }}>
-            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>{footerLeft}</div>
+            <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{footerLeft}</div>
             <div style={{ display: "flex", gap: 8 }}>{footer}</div>
           </div>
         )}

@@ -39,7 +39,7 @@ export function SourceFilesCard({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileAudio size={14} color={C.mint} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Quell-Audio {audioFiles.length > 0 && `(${audioFiles.length})`}
               </span>
             </div>
@@ -69,7 +69,7 @@ export function SourceFilesCard({
                 })()}
               </>
             ) : (
-              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine Audiodateien gefunden</span>
+              <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine Audiodateien gefunden</span>
             )}
           </div>
 
@@ -77,7 +77,7 @@ export function SourceFilesCard({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <FileCode size={14} color={C.primary} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Quell-FLP {flpFiles.length > 0 && `(${flpFiles.length})`}
               </span>
             </div>
@@ -107,7 +107,7 @@ export function SourceFilesCard({
                 })()}
               </>
             ) : (
-              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine FLP im Hauptordner gefunden</span>
+              <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic" }}>Keine FLP im Hauptordner gefunden</span>
             )}
           </div>
         </div>
@@ -136,7 +136,7 @@ function Badge({ icon, text, highlight }: { icon: React.ReactNode; text: string;
       padding: "4px 8px",
       background: highlight ? alpha(C.mint, 0.15) : C.surfaceContainerHighest,
       borderRadius: radius.control,
-      fontSize: 10, fontWeight: 700,
+      fontSize: 11, fontWeight: 700,
       color: highlight ? C.mint : C.onSurfaceVariant,
       display: "flex", alignItems: "center", gap: 4,
     }}>

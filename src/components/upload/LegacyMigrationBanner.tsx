@@ -95,7 +95,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
           <div style={{ fontSize: 12, fontWeight: 700, color: blocked ? C.error : C.primary, marginBottom: 2 }}>
             Alte Ordnerstruktur erkannt
           </div>
-          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.4 }}>
             {moveSummary}
           </div>
         </div>
@@ -108,7 +108,7 @@ export function LegacyMigrationBanner({ beatId, refreshKey, onMigrated }: Legacy
             border: blocked ? `1px solid ${C.border20}` : "none",
             borderRadius: radius.control,
             cursor: "pointer",
-            fontSize: 11, fontWeight: 700,
+            fontSize: 12, fontWeight: 700,
             color: blocked ? C.onSurfaceVariant : C.onPrimary,
             letterSpacing: "0.08em", textTransform: "uppercase",
             whiteSpace: "nowrap",
@@ -207,7 +207,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
               Diese Dateien liegen sowohl in einem alten Unterordner als auch im Hauptordner des Beats.
               Die Migration bricht ab, weil das Verschieben die Datei im Hauptordner stillschweigend
               überschreiben würde. Bitte zuerst von Hand auflösen:
-              <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 11, fontFamily: "monospace", color: C.onSurface }}>
+              <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12, fontFamily: "monospace", color: C.onSurface }}>
                 {plan.collisions.map(c => <li key={c}>{c}</li>)}
               </ul>
             </BlockBox>
@@ -218,7 +218,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
             <div key={subdir}>
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
-                fontSize: 10, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 color: C.onSecondaryFixedVar,
                 letterSpacing: "0.08em", textTransform: "uppercase",
                 marginBottom: 8,
@@ -235,7 +235,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
                 borderRadius: radius.control,
                 padding: "8px 12px",
                 maxHeight: 140, overflowY: "auto",
-                fontSize: 11, fontFamily: "monospace", color: C.onSurface,
+                fontSize: 12, fontFamily: "monospace", color: C.onSurface,
                 lineHeight: 1.6,
               }}>
                 {moves.map(m => (
@@ -260,7 +260,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
           {plan.has_03_projects && !plan.savefiles_conflict && (
             <div>
               <div style={{
-                fontSize: 10, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 color: C.onSecondaryFixedVar,
                 letterSpacing: "0.08em", textTransform: "uppercase",
                 marginBottom: 8,
@@ -281,7 +281,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
 
           {/* Aufräum-Schritt: läuft immer mit, hat aber keine Vorschau —
               welche Datei die neueste ist, steht erst nach dem Flatten fest. */}
-          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
             Danach bleibt im Root nur die neueste MP3 und die neueste WAV — ältere
             Audio-Dateien wandern mit ihrem Originalnamen nach 02_OLD/.
           </div>
@@ -292,7 +292,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
           background: alpha(C.error, 0.10),
           border: `1px solid ${alpha(C.error, 0.35)}`,
           borderRadius: radius.control,
-          fontSize: 11, color: C.error, lineHeight: 1.5,
+          fontSize: 12, color: C.error, lineHeight: 1.5,
           whiteSpace: "pre-wrap",
         }}>
           {error}
@@ -319,7 +319,7 @@ function BlockBox({ color, title, children }: { color: string; title: string; ch
         <AlertCircle size={13} strokeWidth={2} />
         {title}
       </div>
-      <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
         {children}
       </div>
     </div>

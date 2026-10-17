@@ -66,7 +66,7 @@ export function CreateFooter({
         {/* Auto-Rename Toggle */}
         <label style={{
           display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-          fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+          fontSize: 12, fontWeight: 600, letterSpacing: "0.05em",
           color: autoRename ? C.onSurface : C.onSurfaceVariant, userSelect: "none",
         }}>
           <input
@@ -83,7 +83,7 @@ export function CreateFooter({
           title="Nach verifizierter Archivierung wandert der Quellordner in den Papierkorb (wiederherstellbar)"
           style={{
             display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-            fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+            fontSize: 12, fontWeight: 600, letterSpacing: "0.05em",
             color: trashSource ? C.onSurface : C.onSurfaceVariant, userSelect: "none",
           }}
         >

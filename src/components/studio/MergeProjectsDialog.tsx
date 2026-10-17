@@ -356,7 +356,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
                           {counts.archived_complete} fertige Beats liegen noch in der Produktion.
                         </strong>{" "}
                         Byte für Byte mit dem Archiv verglichen — dort fehlt nichts. Verschieben
-                        nach <code style={{ fontSize: 11 }}>_ARCHIVIERT</code> holt sie aus der
+                        nach <code style={{ fontSize: 12 }}>_ARCHIVIERT</code> holt sie aus der
                         Studio-Liste und legt sie an einen Ort. Umzug, kein Löschen.
                       </div>
                       <Button
@@ -448,7 +448,7 @@ function PastRuns({ runs, busy, onUndo }: {
                 <div
                   title={r.log_path}
                   style={{
-                    fontSize: 10, color: C.onSecondaryFixedVar, fontFamily: "monospace",
+                    fontSize: 11, color: C.onSecondaryFixedVar, fontFamily: "monospace",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                 >
@@ -510,7 +510,7 @@ function ClassSummary({ counts }: { counts: Record<MergeClassKey, number> }) {
             <div style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
               {MERGE_CLASSES[k].label}
             </div>
-            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
               {MERGE_CLASSES[k].action}
             </div>
           </div>
@@ -528,7 +528,7 @@ function ClassTable({ rows, checked }: { rows: MergeRow[]; checked: boolean }) {
       maxHeight: 300, overflowY: "auto",
       border: `1px solid ${C.border15}`, borderRadius: radius.control,
     }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
             {["Ordner", "Wird zu", checked ? "Im Archiv" : "Älteste FLP"].map(h => (
@@ -537,7 +537,7 @@ function ClassTable({ rows, checked }: { rows: MergeRow[]; checked: boolean }) {
                 textAlign: "left", padding: "7px 10px",
                 background: C.surfaceContainerHigh,
                 borderBottom: `1px solid ${C.border15}`,
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: C.onSecondaryFixedVar,
               }}>
                 {h}
@@ -588,14 +588,14 @@ function Report({ report }: { report: MergeReport }) {
       </Note>
 
       {report.failed.length > 0 && (
-        <div style={{ maxHeight: 180, overflowY: "auto", fontSize: 11, color: C.error, lineHeight: 1.6 }}>
+        <div style={{ maxHeight: 180, overflowY: "auto", fontSize: 12, color: C.error, lineHeight: 1.6 }}>
           {report.failed.map((f, i) => <div key={i}>{f}</div>)}
         </div>
       )}
 
       {/* Wo die Aufzeichnungen liegen. Bewusst ausgeschrieben statt versteckt:
           wer in einem Jahr sucht, sucht genau danach. */}
-      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.8 }}>
+      <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.8 }}>
         {report.db_backup && <div>DB-Sicherung: <code>{report.db_backup}</code></div>}
         {report.log_path ? (
           <>
@@ -636,7 +636,7 @@ const cell: React.CSSProperties = {
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
       textTransform: "uppercase", color: C.onSecondaryFixedVar,
     }}>
       {children}

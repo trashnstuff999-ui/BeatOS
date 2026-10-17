@@ -742,7 +742,7 @@ Nummer läuft über alle Produktions-Ordner`}
                   background: "transparent",
                   border: "none", borderTop: `1px solid ${C.border10}`,
                   cursor: "pointer", textAlign: "left",
-                  fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant,
+                  fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant,
                 }}
               >
                 … {hidden} {hidden === 1 ? "weiteres Projekt" : "weitere Projekte"} anzeigen
@@ -797,7 +797,7 @@ Nummer läuft über alle Produktions-Ordner`}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>
               {discardable.length} {discardable.length === 1 ? "Projekt kann" : "Projekte können"} weg
             </div>
-            <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
               Die Ordner landen im Windows-Papierkorb. Danach können die Nummern nachrücken.
             </div>
           </div>

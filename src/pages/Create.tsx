@@ -521,7 +521,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
     <div style={{ marginTop: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{
-          fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant,
+          fontSize: 12, fontWeight: 700, color: C.onSurfaceVariant,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           Aus dem Übergabe-Ordner
@@ -540,11 +540,11 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
       </div>
 
       {fehler && (
-        <div style={{ fontSize: 11, color: C.error, marginBottom: 10 }}>{fehler}</div>
+        <div style={{ fontSize: 12, color: C.error, marginBottom: 10 }}>{fehler}</div>
       )}
 
       {!fehler && ordner.length === 0 && (
-        <div style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+        <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
           Der Übergabe-Ordner ist leer.
         </div>
       )}
@@ -583,9 +583,9 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
             {/* Ohne Audiodatei ist es vermutlich kein Beat — anklickbar bleibt
                 es trotzdem, die Einschaetzung kann falsch sein. */}
             {!o.has_audio && (
-              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>kein Audio</span>
+              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>kein Audio</span>
             )}
-            <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, fontFamily: "monospace" }}>
+            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontFamily: "monospace" }}>
               {o.file_count} {o.file_count === 1 ? "Datei" : "Dateien"} · {o.modified_at}
             </span>
           </button>

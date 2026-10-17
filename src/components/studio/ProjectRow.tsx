@@ -204,7 +204,7 @@ export function ProjectRow({
           padding: "4px 11px", borderRadius: radius.full,
           background: status.bg,
           color: status.color,
-          fontSize: 11, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
           letterSpacing: "0.08em", textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}>
@@ -255,7 +255,7 @@ export function AssetPipeline({ project: p }: { project: StudioProject }) {
                 {/* Vorhanden: grüne Plakette. Fehlt: lesbar, aber leise —
                     vorher 10px bei 22 % Deckkraft, praktisch unsichtbar. */}
                 <span style={{
-                  fontSize: 11, letterSpacing: "0.02em",
+                  fontSize: 12, letterSpacing: "0.02em",
                   fontWeight: 700,
                   padding: "2px 5px", borderRadius: radius.control,
                   background: has ? alpha(C.mint, 0.14) : "transparent",

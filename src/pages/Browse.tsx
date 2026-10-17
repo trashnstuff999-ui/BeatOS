@@ -322,7 +322,7 @@ export default function Browse() {
                           background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
                           border: "none", borderRadius: radius.control,
                           cursor: "pointer",
-                          fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                          fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                           color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
                         }}
                       >
@@ -343,7 +343,7 @@ export default function Browse() {
                       border: `1px solid ${C.border15}`,
                       color: C.onSurfaceVariant,
                       cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
-                      fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                      fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                       opacity: pagination.totalCount === 0 ? 0.5 : 1,
                     }}
                   >

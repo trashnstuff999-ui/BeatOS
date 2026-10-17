@@ -208,7 +208,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
                 ].filter(Boolean).flatMap((el, i) => i === 0 ? [el] : [
                   <span key={`sep${i}`} style={{ color: C.onSecondaryFixedVar }}>·</span>, el,
                 ])
-              : <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+              : <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
                   Archivierten Beat suchen und für den Upload vorbereiten
                 </span>
             }
@@ -334,7 +334,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
                   {b.name}
                 </span>
                 <span style={{
-                  color: C.onSecondaryFixedVar, fontSize: 11,
+                  color: C.onSecondaryFixedVar, fontSize: 12,
                   fontFamily: "monospace", flexShrink: 0,
                 }}>
                   {b.key || "—"} · {b.bpm ?? "—"}

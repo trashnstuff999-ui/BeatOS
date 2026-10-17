@@ -122,14 +122,14 @@ export function SuccessDialog({
           borderRadius: radius.control, padding: 12,
         }}>
           <AlertTriangle size={14} color={C.primary} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span style={{ fontSize: 11, color: C.primary, lineHeight: 1.5 }}>{warning}</span>
+          <span style={{ fontSize: 12, color: C.primary, lineHeight: 1.5 }}>{warning}</span>
         </div>
       )}
 
       {/* Quellordner-Cleanup */}
       <Kasten label="Quellordner aufräumen" rechts={
         trashState === "done" ? (
-          <span style={{ fontSize: 11, color: C.mint, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: C.mint, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <CheckCircle size={13} /> Im Papierkorb
           </span>
         ) : (
@@ -145,13 +145,13 @@ export function SuccessDialog({
         )
       }>
         <div style={{
-          fontSize: 11, color: C.onSurfaceVariant, fontFamily: "monospace",
+          fontSize: 12, color: C.onSurfaceVariant, fontFamily: "monospace",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {sourceFolder}
         </div>
         {trashState === "error" && (
-          <div style={{ fontSize: 10, color: C.error, marginTop: 4 }}>{trashError}</div>
+          <div style={{ fontSize: 11, color: C.error, marginTop: 4 }}>{trashError}</div>
         )}
       </Kasten>
     </Modal>
@@ -167,7 +167,7 @@ function Kennzahl({ wert, farbe, label }: { wert: string; farbe: string; label: 
     }}>
       <div style={{ fontSize: 20, fontWeight: 700, color: farbe }}>{wert}</div>
       <div style={{
-        fontSize: 10, color: C.onSurfaceVariant, marginTop: 4,
+        fontSize: 11, color: C.onSurfaceVariant, marginTop: 4,
         textTransform: "uppercase", letterSpacing: "0.08em",
       }}>
         {label}
@@ -190,7 +190,7 @@ function Kasten({ label, children, rechts }: {
     }}>
       <div style={{ minWidth: 0 }}>
         <div style={{
-          fontSize: 10, color: C.onSurfaceVariant, marginBottom: 5,
+          fontSize: 11, color: C.onSurfaceVariant, marginBottom: 5,
           textTransform: "uppercase", letterSpacing: "0.08em",
         }}>
           {label}

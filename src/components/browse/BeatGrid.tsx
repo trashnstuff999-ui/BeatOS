@@ -92,7 +92,7 @@ export function BeatGrid({
               display: "flex", alignItems: "center", gap: 10,
               padding: "10px 2px 8px",
               background: C.background,
-              fontSize: 11, fontWeight: 700,
+              fontSize: 12, fontWeight: 700,
               color: C.onSurfaceVariant,
               letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
@@ -260,7 +260,7 @@ const GridCard = memo(function GridCard({
           marginTop: 3, minWidth: 0,
           // onSurfaceVariant statt onSecondaryFixedVar: 10px in #5c5b5b auf
           // dem Seitengrund sind 2,8:1 Kontrast — lesbar ist das nicht.
-          fontSize: 10, color: C.onSurfaceVariant,
+          fontSize: 11, color: C.onSurfaceVariant,
         }}>
           <span style={{ fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>#{beat.id}</span>
           {beat.key && <><Trenner />{beat.key}</>}

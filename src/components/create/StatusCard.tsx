@@ -24,7 +24,7 @@ export function StatusCard({ status, setStatus }: StatusCardProps) {
               onClick={() => setStatus(item.key)}
               style={{
                 padding: "12px 8px", borderRadius: radius.control,
-                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                 border: "none", borderBottom: `2px solid ${isActive ? item.color : "transparent"}`,
                 background: isActive ? C.surfaceContainerHighest : C.surfaceContainer,
                 color: isActive ? item.color : C.onSurfaceVariant,

@@ -124,7 +124,7 @@ export function PresetBar({
           border: `1px solid ${open ? C.primary + "60" : C.border15}`,
           borderRadius: radius.control,
           cursor: "pointer",
-          fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+          fontSize: 12, fontWeight: 600, fontFamily: "inherit",
           color: open ? C.primary : C.onSurfaceVariant,
           whiteSpace: "nowrap",
           transition: "border-color 0.15s, color 0.15s",
@@ -158,7 +158,7 @@ export function PresetBar({
         }}>
           <div style={{ overflowY: "auto", flex: 1 }}>
             {presets.length === 0 && (
-              <div style={{ padding: 14, fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
+              <div style={{ padding: 14, fontSize: 12, color: C.onSurfaceVariant, textAlign: "center" }}>
                 Noch keine Presets — unten die aktuellen Infos als Preset sichern.
               </div>
             )}
@@ -196,17 +196,17 @@ export function PresetBar({
                       <Youtube size={10} color={PLATFORM_CONFIG.youtube.color} strokeWidth={2.5} />
                     )}
                     {p.use_count > 0 && (
-                      <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
+                      <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, fontWeight: 500 }}>
                         {p.use_count}×
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {p.main_artists}
                     {p.also_fits && <span style={{ color: C.onSecondaryFixedVar }}> · also fits {p.also_fits}</span>}
                   </div>
                   {p.genre_tags && (
-                    <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {p.genre_tags}
                     </div>
                   )}
@@ -243,7 +243,7 @@ export function PresetBar({
                   border: `1px dashed ${C.border30}`,
                   borderRadius: radius.control,
                   cursor: "pointer",
-                  fontSize: 10, fontWeight: 600,
+                  fontSize: 11, fontWeight: 600,
                   color: C.onSurfaceVariant,
                 }}
               >
@@ -275,7 +275,7 @@ export function PresetBar({
                   </Button>
                 </div>
                 {error && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: C.error }}>{error}</div>
+                  <div style={{ marginTop: 6, fontSize: 12, color: C.error }}>{error}</div>
                 )}
               </div>
             )}

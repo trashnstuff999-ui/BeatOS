@@ -135,7 +135,7 @@ export function AssignToProjectDialog({
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
             textTransform: "uppercase", color: C.onSecondaryFixedVar,
           }}>
             Als was zuweisen
@@ -160,7 +160,7 @@ export function AssignToProjectDialog({
                     flex: 1, padding: "6px 4px",
                     background: slot === s ? `${C.primary}20` : "transparent",
                     border: "none", borderRadius: radius.control, cursor: "pointer",
-                    fontSize: 11, fontWeight: 700,
+                    fontSize: 12, fontWeight: 700,
                     color: slot === s ? C.primary : C.onSecondaryFixedVar,
                   }}
                 >
@@ -170,7 +170,7 @@ export function AssignToProjectDialog({
             </div>
           )}
 
-          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
             Die Datei wird aus dem Asset-Ordner in den Projektordner verschoben.
             {slot !== "video" && ` Fehlt „${slot === "thumbnail" ? "thumbnail" : "cover"}" im Namen, wird es ergänzt.`}
             {" Ein vorhandenes " + SLOT_LABEL[slot] + " geht zurück in den Asset-Ordner."}
@@ -217,7 +217,7 @@ export function AssignToProjectDialog({
 
       {/* Stumm abzuschneiden hieß: „mein Projekt ist weg". */}
       {total > visible.length && (
-        <div style={{ paddingTop: 10, fontSize: 10, color: C.onSecondaryFixedVar, textAlign: "center" }}>
+        <div style={{ paddingTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, textAlign: "center" }}>
           {visible.length} von {total} — für die übrigen die Suche benutzen
         </div>
       )}
@@ -264,7 +264,7 @@ function ProjectChoice({ project: p, matches, busy, disabled, onClick }: {
         }}>
           {projectDisplayName(p)}
         </div>
-        <div style={{ fontSize: 10, color: matches ? C.primary : C.onSecondaryFixedVar, marginTop: 1 }}>
+        <div style={{ fontSize: 11, color: matches ? C.primary : C.onSecondaryFixedVar, marginTop: 1 }}>
           {matches ? "passt zum Dateinamen" : formatRelativeTime(p.modified_secs)}
         </div>
       </div>

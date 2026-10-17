@@ -78,7 +78,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
     border: `1px solid ${C.border15}`,
     borderRadius: radius.control,
     padding: "7px 10px",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 600,
     color: C.onSurface,
     outline: "none",
@@ -87,7 +87,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
@@ -133,7 +133,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
           }}
         >
           <Filter size={13} color={C.primary} strokeWidth={2} />
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurface }}>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurface }}>
             Filter
           </span>
           <ChevronDown
@@ -143,7 +143,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
           />
         </button>
 
-        <span style={{ fontSize: 11, fontWeight: 600, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
           {resultCount} Beats
         </span>
 
@@ -153,7 +153,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
             title="Alle Filter zurücksetzen"
             style={{
               display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-              fontSize: 11, fontWeight: 600,
+              fontSize: 12, fontWeight: 600,
               color: C.onSurfaceVariant, background: "none", border: "none", cursor: "pointer",
               fontFamily: "inherit",
             }}
@@ -183,7 +183,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                 background: alpha(C.primary, 0.12),
                 border: `1px solid ${alpha(C.primary, 0.3)}`,
                 color: C.primary, cursor: "pointer",
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.03em",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.03em",
                 maxWidth: 240, fontFamily: "inherit",
               }}
             >
@@ -235,7 +235,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                         background: alpha(C.error, 0.10),
                         border: `1px solid ${alpha(C.error, 0.30)}`,
                         borderRadius: radius.control,
-                        color: C.error, fontSize: 10, fontWeight: 700,
+                        color: C.error, fontSize: 11, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit",
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                       }}
@@ -247,7 +247,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                   {([["Moll", MINOR_KEYS, C.tertiary], ["Dur", MAJOR_KEYS, C.primary]] as const).map(([titel, keys, farbe]) => (
                     <div key={titel} style={{ marginBottom: titel === "Moll" ? 12 : 0 }}>
                       <div style={{
-                        fontSize: 10, fontWeight: 700, color: farbe,
+                        fontSize: 11, fontWeight: 700, color: farbe,
                         textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
                       }}>
                         {titel}
@@ -262,7 +262,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                               style={{
                                 padding: "4px 10px",
                                 borderRadius: radius.control - 1,
-                                fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                                fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                                 cursor: "pointer",
                                 background: isSelected ? farbe : C.surfaceContainer,
                                 color: isSelected ? "#000" : C.onSurfaceVariant,
@@ -325,7 +325,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
                       background: an ? bg : C.surfaceContainer,
                       border: `1px solid ${an ? rand : C.border15}`,
                       cursor: "pointer",
-                      fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                      fontSize: 11, fontWeight: 700, textTransform: "uppercase",
                       fontFamily: "inherit",
                       color: an ? farbe : C.onSurfaceVariant,
                       whiteSpace: "nowrap",

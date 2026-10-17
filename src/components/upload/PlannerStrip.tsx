@@ -99,15 +99,15 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
           nächste {DAYS_SHOWN} Tage
         </span>
         {error && (
-          <span style={{ marginLeft: "auto", fontSize: 10, color: C.error }}>{error}</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: C.error }}>{error}</span>
         )}
         <span style={{ marginLeft: error ? 0 : "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {PLATFORMS.map(p => (
-            <span key={p} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.onSecondaryFixedVar }}>
+            <span key={p} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.onSecondaryFixedVar }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: PLATFORM_CONFIG[p].color }} />
               {PLATFORM_CONFIG[p].short}
             </span>
@@ -159,7 +159,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   if (!busy) e.currentTarget.style.background = day.isWeekend ? "rgba(255,255,255,0.02)" : "transparent";
                 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: day.isToday ? C.primary : C.onSecondaryFixedVar, textTransform: "uppercase" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: day.isToday ? C.primary : C.onSecondaryFixedVar, textTransform: "uppercase" }}>
                   {day.isToday ? "Heute" : day.weekday}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: day.isToday ? C.primary : busy ? C.onSurface : C.onSurfaceVariant }}>
@@ -204,7 +204,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                   padding: 10,
                 }}>
                   <div style={{
-                    fontSize: 10, fontWeight: 600, color: C.onSurfaceVariant,
+                    fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant,
                     marginBottom: 8, lineHeight: 1.4,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
@@ -226,7 +226,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                             border: `1px solid ${alreadyHere ? alpha(C.mint, 0.30) : C.border15}`,
                             borderRadius: radius.control,
                             cursor: isScheduling || alreadyHere ? "default" : "pointer",
-                            fontSize: 11, fontWeight: 600,
+                            fontSize: 12, fontWeight: 600,
                             color: C.onSurface,
                             opacity: isScheduling ? 0.6 : 1,
                           }}
@@ -235,7 +235,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged 
                           {PLATFORM_CONFIG[p].label}
                           {alreadyHere && <Check size={11} color={C.mint} strokeWidth={2.5} style={{ marginLeft: "auto" }} />}
                           {row?.scheduled_at && !alreadyHere && (
-                            <span style={{ marginLeft: "auto", fontSize: 10, color: C.onSecondaryFixedVar }}>
+                            <span style={{ marginLeft: "auto", fontSize: 11, color: C.onSecondaryFixedVar }}>
                               {row.scheduled_at.slice(5)}
                             </span>
                           )}

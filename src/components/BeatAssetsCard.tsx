@@ -75,7 +75,7 @@ export function BeatAssetsCard({
           background: alpha(C.primary, 0.08),
           border: `1px solid ${alpha(C.primary, 0.30)}`,
           borderRadius: radius.control,
-          fontSize: 11, color: C.primary,
+          fontSize: 12, color: C.primary,
         }}>
           <AlertTriangle size={13} strokeWidth={2} />
           Kein Cover zugewiesen — beim Archivieren wird nachgefragt.
@@ -121,7 +121,7 @@ export function BeatAssetsCard({
       {/* Nur was man tun muss — wie Zuweisen funktioniert, steht im Tooltip
           der Slots, nicht als Dauer-Fussnote. */}
       {(noFolder || noAssetPath) && (
-        <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 10, lineHeight: 1.5 }}>
           {noFolder
             ? "Erst einen Ordner wählen."
             : "Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner eintragen."}
@@ -165,7 +165,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
           diesem Panel für Abschnitte reserviert. Standen beide gleich da, las
           sich der Slot als eigener Abschnitt. */}
       <div style={{
-        fontSize: 10, fontWeight: 600,
+        fontSize: 11, fontWeight: 600,
         color: C.onSecondaryFixedVar,
         marginBottom: 6,
       }}>
@@ -203,7 +203,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: C.onSecondaryFixedVar }}>
             <Plus size={18} strokeWidth={2} />
-            <span style={{ fontSize: 10, fontWeight: 600 }}>Zuweisen</span>
+            <span style={{ fontSize: 11, fontWeight: 600 }}>Zuweisen</span>
           </div>
         )}
 
@@ -213,7 +213,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
             position: "absolute", inset: 0,
             background: "rgba(0,0,0,0.55)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: "#fff",
+            fontSize: 11, fontWeight: 700, color: "#fff",
             letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             Ersetzen
@@ -226,7 +226,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
         <div
           title={fileName ?? undefined}
           style={{
-            fontSize: 10, marginTop: 5,
+            fontSize: 11, marginTop: 5,
             fontFamily: "monospace",
             color: C.onSurfaceVariant,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

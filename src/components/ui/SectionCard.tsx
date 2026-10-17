@@ -39,7 +39,7 @@ export function SectionCard({ icon: Icon, title, actions, children, style }: Sec
             worum es in der Karte geht. */}
         <h3 style={{
           margin: 0, flex: 1,
-          fontSize: 11, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
           color: C.onSurfaceVariant,
           letterSpacing: "0.08em",
           textTransform: "uppercase",

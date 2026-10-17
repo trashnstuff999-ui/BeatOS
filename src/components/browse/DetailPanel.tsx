@@ -459,7 +459,7 @@ export function DetailPanel({
             />
             <div style={{
               marginTop: 6, marginLeft: 1,
-              fontSize: 11, fontFamily: "monospace",
+              fontSize: 12, fontFamily: "monospace",
               color: "rgba(255,255,255,0.6)",
             }}>
               #{beat.id}{beat.created_date ? ` · ${datumKurz(beat.created_date)}` : ""}
@@ -512,11 +512,11 @@ export function DetailPanel({
           }}>
             <FolderTree size={14} color={C.primary} strokeWidth={1.75} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: C.onSurfaceVariant }}>Ordner heißt noch anders</div>
+              <div style={{ fontSize: 12, color: C.onSurfaceVariant }}>Ordner heißt noch anders</div>
               <div
                 title={ordnerZiel}
                 style={{
-                  fontSize: 10, fontFamily: "monospace", color: C.primary,
+                  fontSize: 11, fontFamily: "monospace", color: C.primary,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
@@ -532,7 +532,7 @@ export function DetailPanel({
                 background: alpha(C.primary, 0.15),
                 border: `1px solid ${alpha(C.primary, 0.35)}`,
                 cursor: angleichBusy ? "wait" : "pointer",
-                fontSize: 11, fontWeight: 700, fontFamily: "inherit", color: C.primary,
+                fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.primary,
               }}
             >
               {angleichBusy ? "läuft …" : "Angleichen"}
@@ -566,7 +566,7 @@ export function DetailPanel({
                     border: "none", borderRadius: radius.control, cursor: "pointer",
                     background: isActive ? `${cfg.color}22` : "transparent",
                     color: isActive ? cfg.color : C.onSecondaryFixedVar,
-                    fontSize: 11, fontWeight: 700, fontFamily: "inherit",
+                    fontSize: 12, fontWeight: 700, fontFamily: "inherit",
                     transition: "background 0.15s, color 0.15s",
                   }}
                 >
@@ -658,7 +658,7 @@ export function DetailPanel({
           borderTop: `1px solid ${C.border10}`,
           background: C.surfaceContainerLow,
         }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600, color: C.primary }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.primary }}>
             ● Ungespeichert
           </span>
           <button
@@ -667,7 +667,7 @@ export function DetailPanel({
             style={{
               padding: "8px 12px", borderRadius: radius.control,
               background: "transparent", border: `1px solid ${C.border20}`,
-              cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit",
+              cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit",
               color: C.onSurfaceVariant,
             }}
           >
@@ -680,7 +680,7 @@ export function DetailPanel({
               padding: "8px 14px", borderRadius: radius.control,
               background: C.primary, border: "none",
               cursor: isSaving ? "wait" : "pointer",
-              fontSize: 11, fontWeight: 700, fontFamily: "inherit", color: C.onPrimary,
+              fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onPrimary,
               opacity: isSaving ? 0.7 : 1,
             }}
           >
@@ -820,12 +820,12 @@ export function DetailPanel({
             <div style={{
               padding: 10, borderRadius: radius.control,
               background: C.surfaceContainerHigh,
-              fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5,
+              fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5,
             }}>
               Der Ordner wandert in den <strong style={{ color: C.onSurface }}>Papierkorb</strong>, der Eintrag verschwindet aus der Bibliothek. Aus dem Papierkorb lässt sich beides zurückholen.
               {beat.path && (
                 <div style={{
-                  marginTop: 8, fontSize: 10, fontFamily: "monospace",
+                  marginTop: 8, fontSize: 11, fontFamily: "monospace",
                   color: C.onSecondaryFixedVar, wordBreak: "break-all",
                 }}>
                   {beat.path}
@@ -838,7 +838,7 @@ export function DetailPanel({
                 padding: 10, borderRadius: radius.control,
                 background: `${DELETE_COLOR}15`,
                 border: `1px solid ${DELETE_BORDER}`,
-                fontSize: 11, color: DELETE_COLOR, lineHeight: 1.5,
+                fontSize: 12, color: DELETE_COLOR, lineHeight: 1.5,
                 whiteSpace: "pre-wrap",
               }}>
                 {deleteError}
@@ -895,7 +895,7 @@ function Fehler({ text }: { text: string }) {
       padding: "10px 20px",
       background: `${DELETE_COLOR}15`,
       borderTop: `1px solid ${DELETE_BORDER}`,
-      fontSize: 11, color: DELETE_COLOR, lineHeight: 1.5,
+      fontSize: 12, color: DELETE_COLOR, lineHeight: 1.5,
       whiteSpace: "pre-wrap",
     }}>
       {text}
@@ -920,7 +920,7 @@ const coverKnopf: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
@@ -929,7 +929,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 const miniLabel: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.08em",

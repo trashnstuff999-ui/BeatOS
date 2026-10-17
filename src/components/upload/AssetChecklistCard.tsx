@@ -207,7 +207,7 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
       {/* Eine leise Zeile: was man hier tun kann — oder beim Ziehen, was passiert. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-        marginTop: 10, fontSize: 11,
+        marginTop: 10, fontSize: 12,
         color: ziehen ? C.primary : C.onSecondaryFixedVar,
       }}>
         {ziehen ? (
@@ -321,7 +321,7 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
         left: 0, right: 0, bottom: 0,
         padding: da && bild && !eingehend ? "10px 4px 3px" : 0,
         background: da && bild && !eingehend ? "linear-gradient(transparent, rgba(0,0,0,0.75))" : "none",
-        fontSize: 10, fontWeight: 600, textAlign: "center",
+        fontSize: 11, fontWeight: 600, textAlign: "center",
         color: eingehend ? C.primary : da ? C.onSurface : C.onSecondaryFixedVar,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         maxWidth: "100%",
@@ -418,7 +418,7 @@ function Lupe({ label, path, onClose }: { label: string; path: string; onClose: 
           position: "absolute", top: -34, left: 0, right: 0,
           display: "flex", alignItems: "center", gap: 8,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             {label}
           </span>
           <span style={{ flex: 1 }} />

@@ -123,7 +123,7 @@ export const PreviewCard = memo(function PreviewCard({
               gap: 8, zIndex: 3, pointerEvents: "none"
             }}>
               <ImageIcon size={24} color={C.onSurfaceVariant} strokeWidth={1.5} style={{ opacity: 0.5 }} />
-              <span style={{ color: C.onSurfaceVariant, fontSize: 10, opacity: 0.5 }}>No cover in source folder</span>
+              <span style={{ color: C.onSurfaceVariant, fontSize: 11, opacity: 0.5 }}>No cover in source folder</span>
             </div>
           )}
 
@@ -137,7 +137,7 @@ export const PreviewCard = memo(function PreviewCard({
           }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusMeta.color }} />
             <span style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+              fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
               color: statusMeta.color,
             }}>
               {statusMeta.label}
@@ -148,7 +148,7 @@ export const PreviewCard = memo(function PreviewCard({
           <div style={{
             position: "absolute", top: 16, right: 16, zIndex: 4,
             background: C.primary, color: C.onPrimary,
-            fontSize: 10, fontWeight: 900,
+            fontSize: 11, fontWeight: 900,
             padding: "4px 8px", borderRadius: radius.control
           }}>
             {previewId}
@@ -191,7 +191,7 @@ export const PreviewCard = memo(function PreviewCard({
                 <TagPill key={tag} tag={tag} />
               ))}
               {tags.length > 6 && (
-                <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, padding: "4px 8px" }}>
+                <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, padding: "4px 8px" }}>
                   +{tags.length - 6} more
                 </span>
               )}
@@ -201,7 +201,7 @@ export const PreviewCard = memo(function PreviewCard({
 
         {/* Path Preview */}
         <div style={{ padding: 16, background: C.surfaceContainerLow }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, fontFamily: "monospace", color: C.onSecondaryFixedVar }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontFamily: "monospace", color: C.onSecondaryFixedVar }}>
             <FolderOpen size={14} strokeWidth={1.5} />
             <span>{previewPath}</span>
           </div>
@@ -225,7 +225,7 @@ function ReadinessChip({ label, ok, important }: { label: string; ok: boolean; i
       padding: "3px 8px", borderRadius: radius.full,
       background: bg,
       border: `1px solid ${color}30`,
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.02em",
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
       color,
       opacity: ok || important ? 1 : 0.7,
     }}>

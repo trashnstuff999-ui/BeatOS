@@ -148,7 +148,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
                 <div key={s.file} style={skipRowStyle}>
                   <Minus size={12} color={C.primary} strokeWidth={2} />
                   <span style={{ fontFamily: "monospace", color: C.onSurface, marginRight: 8 }}>{s.file}</span>
-                  <span style={{ color: C.onSurfaceVariant, fontSize: 11 }}>· {s.reason}</span>
+                  <span style={{ color: C.onSurfaceVariant, fontSize: 12 }}>· {s.reason}</span>
                 </div>
               ))}
             </Section>
@@ -197,7 +197,7 @@ function Section({ title, color, children, muted }: {
     <div>
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        fontSize: 10, fontWeight: 700,
+        fontSize: 11, fontWeight: 700,
         color, letterSpacing: "0.08em", textTransform: "uppercase",
         marginBottom: 8,
         opacity: muted ? 0.7 : 1,
@@ -240,9 +240,9 @@ function OpRow({ op }: { op: RenameOp }) {
       gap: 8,
       padding: "6px 10px",
       borderRadius: radius.control,
-      fontSize: 11,
+      fontSize: 12,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: meta.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 11 }}>
         <Icon size={11} strokeWidth={1.75} />
         {meta.label}
       </div>
@@ -280,7 +280,7 @@ function StatChip({ label, value, color, dim }: { label: string; value: number; 
       opacity: value === 0 ? (dim ? 0.4 : 0.6) : 1,
     }}>
       <div style={{ fontSize: 14, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>
         {label}
       </div>
     </div>
@@ -307,7 +307,7 @@ function bannerStyle(color: string): React.CSSProperties {
     background: `${color}1a`,
     border: `1px solid ${color}59`,
     borderRadius: radius.control,
-    fontSize: 11, color,
+    fontSize: 12, color,
     lineHeight: 1.5,
   };
 }
@@ -316,6 +316,6 @@ function bannerStyle(color: string): React.CSSProperties {
 const skipRowStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8,
   padding: "6px 10px",
-  fontSize: 11,
+  fontSize: 12,
   borderRadius: radius.control,
 };

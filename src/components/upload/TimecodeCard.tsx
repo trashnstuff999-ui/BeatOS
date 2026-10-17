@@ -465,7 +465,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             display: "flex", alignItems: "center", gap: 8,
             padding: "6px 6px 6px 10px", borderRadius: radius.control,
             background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
-            fontSize: 11, color: C.onSurface,
+            fontSize: 12, color: C.onSurface,
           }}>
             Neuer Export gefunden.
             <span style={{ flex: 1 }} />
@@ -548,7 +548,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
               style={{
                 padding: "3px 10px", borderRadius: radius.full,
                 background: "transparent", border: `1px solid ${C.border15}`,
-                fontSize: 11, color: C.onSurfaceVariant, cursor: "pointer",
+                fontSize: 12, color: C.onSurfaceVariant, cursor: "pointer",
               }}
             >
               + {v}
@@ -557,7 +557,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
         </div>
 
         {(fehler || hinweis) && (
-          <div style={{ fontSize: 11, color: fehler ? C.error : C.onSurfaceVariant, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: fehler ? C.error : C.onSurfaceVariant, lineHeight: 1.5 }}>
             {fehler ?? hinweis}
           </div>
         )}

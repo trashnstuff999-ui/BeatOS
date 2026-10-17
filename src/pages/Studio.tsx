@@ -125,7 +125,7 @@ function TabBtn({ icon: Icon, label, active, onClick }: {
         background: active ? C.surfaceContainerHigh : "transparent",
         border: "none", borderRadius: radius.control,
         cursor: "pointer",
-        fontSize: 11, fontWeight: 700,
+        fontSize: 12, fontWeight: 700,
         letterSpacing: "0.08em", textTransform: "uppercase",
         color: active ? C.onSurface : C.onSecondaryFixedVar,
         transition: "all 0.15s",

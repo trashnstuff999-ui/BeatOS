@@ -462,13 +462,13 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
         }}>
           <Icon size={13} color={colors.text} strokeWidth={1.5} />
           <span style={{
-            flex: 1, fontSize: 10, fontWeight: 700, color: colors.text,
+            flex: 1, fontSize: 11, fontWeight: 700, color: colors.text,
             letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             {label}
           </span>
           <span style={{
-            fontSize: 11, fontFamily: "monospace",
+            fontSize: 12, fontFamily: "monospace",
             color: C.onSecondaryFixedVar, fontWeight: 500,
           }}>
             {tags.length.toString().padStart(2, "0")}
@@ -482,7 +482,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           ) : (
             <div style={{
               padding: "20px 16px", textAlign: "center",
-              fontSize: 11, color: C.onSecondaryFixedVar, fontStyle: "italic",
+              fontSize: 12, color: C.onSecondaryFixedVar, fontStyle: "italic",
             }}>
               {isDragTarget
                 ? `Move to ${label}`
@@ -494,7 +494,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             <div style={{
               margin: "8px 12px", padding: "9px 12px", borderRadius: radius.control,
               border: `1px dashed ${colors.border}`,
-              fontSize: 11, textAlign: "center", color: colors.text, opacity: 0.8,
+              fontSize: 12, textAlign: "center", color: colors.text, opacity: 0.8,
             }}>
               Drop → {label}
             </div>
@@ -561,7 +561,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
 
           {/* Active count */}
           {internalSelected.length > 0 && (
-            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
+            <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
               <span style={{ color: C.mint, fontWeight: 700 }}>{internalSelected.length}</span> active
             </span>
           )}
@@ -580,7 +580,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 onClick={() => setViewMode(key)}
                 style={{
                   padding: "4px 11px", borderRadius: radius.control,
-                  fontSize: 10, fontWeight: 700,
+                  fontSize: 11, fontWeight: 700,
                   letterSpacing: "0.08em", textTransform: "uppercase",
                   background: viewMode === key ? C.surfaceContainerHigh : "transparent",
                   border: "none", cursor: "pointer",
@@ -611,7 +611,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                   boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
                 }}>
                   <p style={{
-                    margin: "0 0 12px", fontSize: 10, fontWeight: 700,
+                    margin: "0 0 12px", fontSize: 11, fontWeight: 700,
                     color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase",
                   }}>
                     Neuer Tag
@@ -626,7 +626,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                           onClick={() => setNewTagCategory(cat)}
                           style={{
                             flex: 1, padding: "6px 4px", borderRadius: radius.control,
-                            fontSize: 10, fontWeight: 700,
+                            fontSize: 11, fontWeight: 700,
                             border: `1px solid ${active ? clrs.text + "80" : clrs.border}`,
                             background: active ? clrs.bg : `${clrs.bg}40`,
                             color: clrs.text,
@@ -708,12 +708,12 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
               width: 26, height: 26, borderRadius: "50%",
               background: C.primary,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11, fontWeight: 800, color: C.onPrimary, flexShrink: 0,
+              fontSize: 12, fontWeight: 800, color: C.onPrimary, flexShrink: 0,
             }}>
               {stagedCount + removedCount}
             </div>
             <span style={{
-              fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant,
+              fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant,
               letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
               {stagedCount > 0 && removedCount > 0
@@ -731,7 +731,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                   onClick={() => setShowMoveMenu(v => !v)}
                   style={{
                     padding: "7px 14px", borderRadius: radius.control,
-                    fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                    fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                     background: C.surfaceContainerHighest, border: `1px solid ${C.border30}`,
                     color: C.onSurfaceVariant, cursor: "pointer",
                     display: "flex", alignItems: "center", gap: 6,
@@ -755,7 +755,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                           style={{
                             width: "100%", padding: "10px 14px",
                             background: "transparent", border: "none",
-                            fontSize: 11, fontWeight: 600, color: clrs.text,
+                            fontSize: 12, fontWeight: 600, color: clrs.text,
                             cursor: "pointer", textAlign: "left",
                             display: "flex", alignItems: "center", gap: 8,
                             textTransform: "uppercase", letterSpacing: "0.08em",
@@ -784,7 +784,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
                 title="Vorgemerkte Tags aus der Datenbank löschen"
                 style={{
                   padding: "7px 14px", borderRadius: radius.control,
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                  fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
                   background: alpha(C.error, 0.08), border: `1px solid ${alpha(C.error, 0.25)}`,
                   color: C.error, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 6,

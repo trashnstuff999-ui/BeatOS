@@ -56,7 +56,7 @@ export function PlatformDots({ badges, leer = "strich" }: {
   leer?: "strich" | "ringe";
 }) {
   if ((!badges || badges.length === 0) && leer === "strich") {
-    return <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
+    return <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
   }
   const byPlatform = new Map((badges ?? []).map(b => [b.platform, b.status]));
   return (
@@ -105,7 +105,7 @@ function ColHeader({ label, column, currentSort, onSort, flex = 1, align = "left
       aria-sort={isActive ? (currentSort.direction === "asc" ? "ascending" : "descending") : "none"}
       style={{
         flex,
-        fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+        fontSize: 11, fontWeight: 700, textTransform: "uppercase",
         letterSpacing: "0.08em", fontFamily: "inherit",
         background: "transparent", border: "none", padding: 0,
         color: isActive ? C.primary : C.onSecondaryFixedVar,
@@ -210,7 +210,7 @@ const BeatRow = memo(function BeatRow({
       </div>
 
       {/* ID */}
-      <div style={{ width: 80, flexShrink: 0, fontSize: 11, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
+      <div style={{ width: 80, flexShrink: 0, fontSize: 12, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
         #{beat.id}
       </div>
 
@@ -297,14 +297,14 @@ export function BeatTable({ beats, selectedBeatId, onSelectBeat, onToggleFavorit
         </div>
         <div style={{
           width: 70, flexShrink: 0, textAlign: "center",
-          fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+          fontSize: 11, fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.08em", color: C.onSecondaryFixedVar,
         }}>
           Live
         </div>
         <div style={{
           width: 44, flexShrink: 0, textAlign: "right",
-          fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+          fontSize: 11, fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.08em", color: C.onSecondaryFixedVar,
           display: "flex", justifyContent: "flex-end",
         }}>

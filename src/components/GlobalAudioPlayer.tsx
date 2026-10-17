@@ -146,7 +146,7 @@ export function GlobalAudioPlayer() {
             {error ? (
               <div style={{
                 display: "flex", alignItems: "center", gap: 5, marginTop: 2,
-                fontSize: 11, color: C.error,
+                fontSize: 12, color: C.error,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
                 <AlertTriangle size={11} strokeWidth={2} style={{ flexShrink: 0 }} />
@@ -156,7 +156,7 @@ export function GlobalAudioPlayer() {
               /* Ein Studio-Preview hat keine Katalognummer — seine ID ist der
                  Ordnerpfad und stand hier als „#studio:C:\…" quer durch die
                  Leiste. */
-              <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, marginTop: 2 }}>
                 {[
                   isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
                   currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
@@ -217,7 +217,7 @@ export function GlobalAudioPlayer() {
           width: 240, justifyContent: "flex-end", flexShrink: 0,
         }}>
           <span style={{
-            fontSize: 11, fontFamily: "monospace", color: C.onSecondaryFixedVar,
+            fontSize: 12, fontFamily: "monospace", color: C.onSecondaryFixedVar,
             fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
           }}>
             {currentTimeFormatted} / {durationFormatted}

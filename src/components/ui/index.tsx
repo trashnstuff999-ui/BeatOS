@@ -52,7 +52,7 @@ interface LabelProps {
 export function Label({ children, style }: LabelProps) {
   return (
     <label style={{
-      fontSize: 10, fontWeight: 700,
+      fontSize: 11, fontWeight: 700,
       letterSpacing: "0.08em", textTransform: "uppercase",
       color: C.onSecondaryFixedVar,
       marginBottom: 12,

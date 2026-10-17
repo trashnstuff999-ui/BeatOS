@@ -69,7 +69,7 @@ export function Segmented<T extends string>({
               borderRadius: radius.control, border: "none",
               background: an ? (o.color ? alpha(o.color, 0.14) : C.surfaceContainerHighest) : "transparent",
               color: an ? (o.color ?? C.onSurface) : C.onSecondaryFixedVar,
-              fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+              fontSize: 12, fontWeight: 600, fontFamily: "inherit",
               whiteSpace: "nowrap",
               cursor: disabled ? "wait" : an ? "default" : "pointer",
               opacity: disabled ? 0.6 : 1,

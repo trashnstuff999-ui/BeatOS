@@ -35,7 +35,7 @@ export function CreateHeader({ hasData, onResetClick, tagCount, hasNotes, sideba
             <span style={{
               minWidth: 18, height: 18, padding: "0 5px", borderRadius: radius.full,
               background: C.primary, color: C.onPrimary,
-              fontSize: 10, fontWeight: 800,
+              fontSize: 11, fontWeight: 800,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               {tagCount}

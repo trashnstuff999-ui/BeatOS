@@ -324,7 +324,7 @@ function PlannerDock({ children, onHoehe }: {
           padding: "9px 24px",
           background: "transparent", border: "none",
           cursor: "pointer",
-          fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+          fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
           textTransform: "uppercase", color: C.onSurfaceVariant,
         }}
       >

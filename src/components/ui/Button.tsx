@@ -29,7 +29,7 @@ interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const SIZES = {
-  sm: { padding: "6px 12px",  fontSize: 11, gap: 6, icon: 13 },
+  sm: { padding: "6px 12px",  fontSize: 12, gap: 6, icon: 13 },
   md: { padding: "10px 20px", fontSize: 12, gap: 8, icon: 14 },
 } as const;
 

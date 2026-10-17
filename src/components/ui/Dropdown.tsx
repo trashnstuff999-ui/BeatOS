@@ -49,7 +49,7 @@ export function Dropdown({
           background: C.surfaceContainer,
           border: `1px solid ${open ? C.border30 : C.border15}`,
           color: C.onSurface,
-          fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+          fontSize: 12, fontWeight: 600, fontFamily: "inherit",
           textAlign: "left",
           cursor: disabled ? "not-allowed" : "pointer",
           opacity: disabled ? 0.5 : 1,
@@ -154,7 +154,7 @@ export function Select<T extends string | number>({
                   background: active ? alpha(C.primary, 0.12) : "transparent",
                   border: "none",
                   color: active ? C.primary : C.onSurfaceVariant,
-                  fontSize: 11, fontWeight: active ? 700 : 600, fontFamily: "inherit",
+                  fontSize: 12, fontWeight: active ? 700 : 600, fontFamily: "inherit",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
                 }}

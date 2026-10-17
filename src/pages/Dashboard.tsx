@@ -108,7 +108,7 @@ function NaechsterSchritt({ actions, onNavigate, onFilter }: {
       )}
 
       {/* Die uebrigen Zahlen als Nebensatz, nicht als eigene Kacheln. */}
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11, color: C.onSecondaryFixedVar }}>
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: C.onSecondaryFixedVar }}>
         <Klickbar
           onClick={() => onFilter({ status: "finished", unpublishedOnly: true })}
           title="Im Archiv zeigen"
@@ -137,12 +137,12 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Flame size={14} color={actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar} />
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
           Upload-Rhythmus
         </span>
         <span style={{
           marginLeft: "auto",
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           color: actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar,
         }}>
           {actions.current_streak_weeks > 0
@@ -171,7 +171,7 @@ function RhythmCard({ actions }: { actions: DashboardActions }) {
           );
         })}
       </div>
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 6 }}>
+      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 6 }}>
         letzte 8 Wochen · aktuelle Woche rechts
       </div>
     </div>
@@ -279,12 +279,12 @@ function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 7, color: stage.color, marginBottom: 6 }}>
               {stage.icon}
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
                 {stage.label}
               </span>
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
-            <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
+            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
           </button>
         </div>
       ))}
@@ -344,7 +344,7 @@ function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (fil
             title={`${label} im Archiv zeigen`}
             style={{
               display: "flex", alignItems: "center", gap: 7,
-              fontSize: 11, color: C.onSurfaceVariant,
+              fontSize: 12, color: C.onSurfaceVariant,
               opacity: count === 0 ? 0.45 : 1,
             }}
           >
@@ -427,7 +427,7 @@ function BarChart({ data, color, onBarClick }: {
               onMouseLeave={() => setHov(null)}
               onClick={() => clickable && onBarClick(bar)}
             >
-              <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "monospace", color: isHov ? c : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: isHov ? c : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
                 {bar.count}
               </span>
               <div style={{
@@ -446,7 +446,7 @@ function BarChart({ data, color, onBarClick }: {
       <div style={{ display: "flex", justifyContent: "center", gap: 4, flexShrink: 0 }}>
         {data.map((bar, i) => (
           <span key={bar.key} style={{
-            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 10, fontWeight: 700,
+            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 11, fontWeight: 700,
             color: hov === i ? colorAt(bar, i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
             transition: "color 0.15s", lineHeight: 1.2, overflow: "hidden",
           }}>
@@ -579,7 +579,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
               {/* Category label with icon */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: colors.text }}>
                 {meta.icon}
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   {meta.label}
                 </span>
               </div>
@@ -598,7 +598,7 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
                       // Blau, Gruen und Lila gleichzeitig auf die Seite.
                       background: C.surfaceContainerHigh,
                       borderRadius: radius.full,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 700,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
@@ -646,12 +646,12 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
         <button
           onClick={() => onOpen()}
-          style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
+          style={{ fontSize: 12, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
         >
           Alle anzeigen ›
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSecondaryFixedVar }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSecondaryFixedVar }}>
         <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
       </div>
       {beats.map((beat, i) => {
@@ -697,7 +697,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
             {/* Nur die AUSNAHME zeigen — dieselbe Regel wie im Archiv-Raster.
                 "Fertig" stand auf jeder Zeile und sagte damit nichts mehr. */}
             <span>{(beat.status ?? "idea") !== "finished" && <StatusPill status={beat.status ?? "idea"} />}</span>
-            <span style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
             <span />
           </div>
         );
@@ -782,7 +782,7 @@ export default function Dashboard() {
               <span
                 title={error}
                 style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
                   color: C.error, background: alpha(C.error, 0.12),
                   border: `1px solid ${alpha(C.error, 0.35)}`,
                   padding: "4px 10px", borderRadius: radius.control,

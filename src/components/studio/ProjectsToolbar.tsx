@@ -211,7 +211,7 @@ function SortDropdown({ value, onChange }: { value: SortMode; onChange: (m: Sort
                 background: m === value ? C.surfaceContainerHigh : "transparent",
                 border: "none",
                 cursor: "pointer", textAlign: "left",
-                fontSize: 11, fontWeight: m === value ? 700 : 500,
+                fontSize: 12, fontWeight: m === value ? 700 : 500,
                 color: m === value ? C.onSurface : C.onSurfaceVariant,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}

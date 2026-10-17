@@ -206,7 +206,7 @@ function FileCard({ asset, aspect, busy, onAssign }: {
         }
       </div>
       <div style={{
-        fontSize: 10, fontFamily: "monospace", color: C.onSurface,
+        fontSize: 11, fontFamily: "monospace", color: C.onSurface,
         padding: "8px 10px",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>

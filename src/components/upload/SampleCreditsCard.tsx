@@ -125,7 +125,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
 
   const beschriftung: React.CSSProperties = {
     display: "block", marginBottom: 6,
-    fontSize: 11, color: C.onSecondaryFixedVar,
+    fontSize: 12, color: C.onSecondaryFixedVar,
   };
 
   const inhalt = (
@@ -140,7 +140,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
           // Form (gesperrt, Versalien), aber kleiner und leiser. Mit
           // identischen Werten waren „Infos & Credits" und „Credits" optisch
           // gleichrangig — das ist keine Hierarchie, sondern eine Wiederholung.
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           color: C.onSecondaryFixedVar,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
@@ -191,7 +191,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
       {/* Nur noch der Fall, der eine Handlung verlangt. Was ohne Sample-Geber
           in der Beschreibung steht, sagt jetzt das Auswahlfeld selbst. */}
       {producers.length === 0 && (
-        <div style={{ marginTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
           Noch niemand im Adressbuch. Anlegen unter{" "}
           <strong style={{ color: C.onSurfaceVariant }}>Einstellungen → Producer</strong>.
         </div>

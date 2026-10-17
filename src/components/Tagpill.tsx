@@ -46,8 +46,8 @@ export function TagPill({
 
   // Size variants
   const sizeStyles = {
-    sm: { padding: "3px 8px", fontSize: 10, gap: 4, iconSize: 10 },
-    md: { padding: "5px 10px", fontSize: 11, gap: 6, iconSize: 12 },
+    sm: { padding: "3px 8px", fontSize: 11, gap: 4, iconSize: 10 },
+    md: { padding: "5px 10px", fontSize: 12, gap: 6, iconSize: 12 },
     lg: { padding: "6px 14px", fontSize: 12, gap: 8, iconSize: 14 },
   };
 
@@ -225,7 +225,7 @@ export function TagSuggestionItem({ tag, category, onSelect }: TagSuggestionItem
       <span
         style={{
           color: C.onSecondaryFixedVar,
-          fontSize: 10,
+          fontSize: 11,
           marginLeft: "auto",
           textTransform: "uppercase",
         }}
@@ -266,7 +266,7 @@ export function TagCategoryRow({ category, tags, onAdd }: TagCategoryRowProps) {
         {CATEGORY_ICONS[category]}
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
@@ -306,8 +306,8 @@ export function StatusPill({ status, size = "md", aufBild = false }: StatusPillP
   const cfg = STATUS_CONFIG[key];
 
   const sizeStyles = {
-    sm: { padding: "2px 8px", fontSize: 10 },
-    md: { padding: "3px 10px", fontSize: 10 },
+    sm: { padding: "2px 8px", fontSize: 11 },
+    md: { padding: "3px 10px", fontSize: 11 },
   };
 
   const s = sizeStyles[size];

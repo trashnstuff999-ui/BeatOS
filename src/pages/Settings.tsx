@@ -90,7 +90,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
   const hasValue = value.trim().length > 0;
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{ display: "flex", gap: 8 }}>
@@ -129,7 +129,7 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "0 16px", borderRadius: radius.control,
-            fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+            fontSize: 12, fontWeight: 600, letterSpacing: "0.05em",
             background: C.surfaceContainerHighest,
             border: `1px solid ${C.border20}`,
             color: C.onSurfaceVariant,
@@ -176,7 +176,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
 
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -209,7 +209,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             padding: "10px 14px", borderRadius: radius.control,
-            fontSize: 11, fontWeight: 600,
+            fontSize: 12, fontWeight: 600,
             background: "transparent",
             border: `1px dashed ${C.border30}`,
             color: C.onSurfaceVariant,
@@ -238,7 +238,7 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
   const hasValue = value.trim().length > 0;
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
         {label}
       </label>
       <div style={{
@@ -313,7 +313,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
-        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         marginBottom: 10,
       }}>
@@ -322,7 +322,7 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {lines.map(([placeholder, value]) => (
-          <div key={placeholder} style={{ display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" }}>
+          <div key={placeholder} style={{ display: "flex", gap: 10, fontSize: 12, fontFamily: "monospace" }}>
             <span style={{ color: C.onSecondaryFixedVar, width: 150, flexShrink: 0 }}>{placeholder}</span>
             <span style={{ color: value === "—" ? C.onSecondaryFixedVar : C.mint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {value}
@@ -396,11 +396,11 @@ function SampleProducersCard() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <Users size={14} color={C.mint} strokeWidth={1.75} />
         <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Sample-Produzenten</span>
-        <span style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginLeft: "auto" }}>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginLeft: "auto" }}>
           {producers.length === 0 ? "noch keine" : `${producers.length} im Adressbuch`}
         </span>
       </div>
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5, marginBottom: 12 }}>
         Wessen Sample du benutzt hast. Einmal hier gepflegt, im Upload-Tab pro Beat
         ausgewählt — Name und Links landen dann von selbst in der Beschreibung.
       </div>
@@ -414,7 +414,7 @@ function SampleProducersCard() {
               background: C.surfaceContainer, border: `1px solid ${C.border15}`,
             }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>{p.name}</span>
-              <span style={{ fontSize: 10, color: C.onSecondaryFixedVar }}>
+              <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
                 {[p.instagram_url, p.beatstars_url, p.soundcloud_url, p.youtube_url].filter(Boolean).length} Links
                 {p.use_count > 0 && ` · ${p.use_count}× genannt`}
               </span>
@@ -423,7 +423,7 @@ function SampleProducersCard() {
                 style={{
                   marginLeft: "auto", padding: "4px 10px", borderRadius: radius.control,
                   background: "transparent", border: `1px solid ${C.border15}`,
-                  color: C.onSurfaceVariant, cursor: "pointer", fontSize: 10, fontWeight: 600,
+                  color: C.onSurfaceVariant, cursor: "pointer", fontSize: 11, fontWeight: 600,
                 }}
               >
                 Bearbeiten
@@ -450,7 +450,7 @@ function SampleProducersCard() {
           background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: radius.control,
           display: "flex", flexDirection: "column", gap: 14,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>
             {draft.id === null ? "Neuer Sample-Produzent" : `„${draft.name}“ bearbeiten`}
           </div>
           <TextSetting label="Name" icon={User} value={draft.name}
@@ -463,7 +463,7 @@ function SampleProducersCard() {
             placeholder="optional" onChange={feld("soundcloud_url")} monospace />
           <TextSetting label="YouTube URL" icon={Youtube} value={draft.youtube_url}
             placeholder="optional" onChange={feld("youtube_url")} monospace />
-          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
             Leere Felder werden in der Beschreibung weggelassen.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -472,7 +472,7 @@ function SampleProducersCard() {
               style={{
                 padding: "8px 16px", borderRadius: radius.control, background: C.mint,
                 border: "none", color: C.onMint, cursor: "pointer",
-                fontSize: 11, fontWeight: 700,
+                fontSize: 12, fontWeight: 700,
               }}
             >
               Speichern
@@ -482,7 +482,7 @@ function SampleProducersCard() {
               style={{
                 padding: "8px 16px", borderRadius: radius.control, background: "transparent",
                 border: `1px solid ${C.border15}`, color: C.onSurfaceVariant,
-                cursor: "pointer", fontSize: 11, fontWeight: 600,
+                cursor: "pointer", fontSize: 12, fontWeight: 600,
               }}
             >
               Abbrechen
@@ -492,7 +492,7 @@ function SampleProducersCard() {
       )}
 
       {error && (
-        <div style={{ fontSize: 11, color: C.error, marginBottom: 12 }}>{error}</div>
+        <div style={{ fontSize: 12, color: C.error, marginBottom: 12 }}>{error}</div>
       )}
 
       {!draft && (
@@ -502,7 +502,7 @@ function SampleProducersCard() {
             display: "flex", alignItems: "center", gap: 6,
             padding: "8px 16px", borderRadius: radius.control,
             background: C.surfaceContainer, border: `1px solid ${C.border15}`,
-            color: C.onSurface, cursor: "pointer", fontSize: 11, fontWeight: 700,
+            color: C.onSurface, cursor: "pointer", fontSize: 12, fontWeight: 700,
           }}
         >
           <Plus size={12} strokeWidth={2} />
@@ -576,8 +576,8 @@ function RelocateCard() {
     }
   };
 
-  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" };
-  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 11 };
+  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 12, fontFamily: "monospace" };
+  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 12 };
   const pfad: React.CSSProperties = { color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
   // Solange das Archiv da liegt, wo es hingehört, ist das hier eine stille
@@ -595,7 +595,7 @@ function RelocateCard() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <FolderTree size={14} color={vermisst ? C.error : C.mint} strokeWidth={1.75} />
         <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Bibliothek umgezogen</span>
-        <span style={{ fontSize: 10, fontWeight: 600, color: vermisst ? C.error : C.mint, marginLeft: "auto" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: vermisst ? C.error : C.mint, marginLeft: "auto" }}>
           {status === null ? "…" : vermisst ? "Archivordner nicht gefunden" : "Alles am Platz"}
         </span>
       </div>
@@ -606,7 +606,7 @@ function RelocateCard() {
       </div>
 
       {vermisst && (
-        <div style={{ fontSize: 10, color: C.error, lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: C.error, lineHeight: 1.5, marginBottom: 12 }}>
           Der Archivordner liegt nicht dort, wo die Datenbank ihn vermutet. Das heißt
           nicht zwingend, dass etwas umgezogen ist — eine abgezogene Platte oder eine
           nicht eingebundene Freigabe sieht genauso aus. Erst nachsehen, dann handeln.
@@ -618,7 +618,7 @@ function RelocateCard() {
           padding: "12px 14px", marginBottom: 12,
           background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: radius.control,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.onSurface, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface, marginBottom: 8 }}>
             Vorschau — es ist noch nichts geschrieben
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
@@ -638,11 +638,11 @@ function RelocateCard() {
               <div style={row}><span style={rowLabel}>nachher</span><span style={{ ...pfad, color: C.mint }}>{probe.sample_after}</span></div>
             </div>
           )}
-          <div style={{ fontSize: 11, fontWeight: 700, color: plan.total > 0 ? C.onSurface : C.error }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: plan.total > 0 ? C.onSurface : C.error }}>
             {plan.total} Werte würden sich ändern, {plan.skipped} blieben liegen
           </div>
           {plan.total === 0 && (
-            <div style={{ fontSize: 10, color: C.error, marginTop: 6, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: C.error, marginTop: 6, lineHeight: 1.5 }}>
               Kein einziger Pfad passt. Vermutlich liegt der gewählte Ordner eine Ebene
               zu tief oder zu hoch — gesucht ist der Ordner, der die Bibliothek enthält,
               nicht die Bibliothek selbst.
@@ -656,20 +656,20 @@ function RelocateCard() {
           padding: "12px 14px", marginBottom: 12,
           background: C.surfaceContainer, border: `1px solid ${C.mint}`, borderRadius: radius.control,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.mint, marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.mint, marginBottom: 6 }}>
             {done.changed} Pfade umgeschrieben ✓
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <div style={row}><span style={rowLabel}>Sicherung</span><span style={pfad}>{done.backup_path}</span></div>
           </div>
-          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
             Die App arbeitet noch mit den alten Pfaden im Speicher — einmal neu laden.
           </div>
         </div>
       )}
 
       {error && (
-        <div style={{ fontSize: 11, color: C.error, marginBottom: 12, whiteSpace: "pre-wrap" }}>{error}</div>
+        <div style={{ fontSize: 12, color: C.error, marginBottom: 12, whiteSpace: "pre-wrap" }}>{error}</div>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -681,7 +681,7 @@ function RelocateCard() {
             padding: "8px 16px", borderRadius: radius.control,
             background: C.surfaceContainer, border: `1px solid ${C.border15}`,
             color: C.onSurface, cursor: busy ? "wait" : "pointer",
-            fontSize: 11, fontWeight: 700,
+            fontSize: 12, fontWeight: 700,
           }}
         >
           {busy ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <FolderOpen size={12} strokeWidth={2} />}
@@ -697,7 +697,7 @@ function RelocateCard() {
               padding: "8px 16px", borderRadius: radius.control,
               background: C.mint, border: "none",
               color: C.onMint, cursor: busy ? "wait" : "pointer",
-              fontSize: 11, fontWeight: 700,
+              fontSize: 12, fontWeight: 700,
             }}
           >
             <CheckCircle size={12} strokeWidth={2} />
@@ -711,7 +711,7 @@ function RelocateCard() {
             style={{
               padding: "8px 16px", borderRadius: radius.control,
               background: C.mint, border: "none",
-              color: C.onMint, cursor: "pointer", fontSize: 11, fontWeight: 700,
+              color: C.onMint, cursor: "pointer", fontSize: 12, fontWeight: 700,
             }}
           >
             App neu laden
@@ -719,7 +719,7 @@ function RelocateCard() {
         )}
       </div>
 
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
         Getauscht wird nur das gemeinsame Präfix aller Pfade. Es wird ausschließlich die
         Datenbank geschrieben, keine Datei verschoben — und der Weg zurück stellt den
         Ausgangszustand wieder her.
@@ -839,8 +839,8 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
     }
   };
 
-  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 11, fontFamily: "monospace" };
-  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 11 };
+  const row: React.CSSProperties = { display: "flex", gap: 10, fontSize: 12, fontFamily: "monospace" };
+  const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 12 };
 
   return (
     <Section
@@ -859,7 +859,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             <DatabaseBackup size={14} color={C.mint} strokeWidth={1.75} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Datenbank-Backup</span>
             <span style={{
-              fontSize: 10, fontWeight: 600,
+              fontSize: 11, fontWeight: 600,
               color: info?.last_backup_secs ? C.mint : C.error,
               marginLeft: "auto",
             }}>
@@ -881,15 +881,15 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
                 padding: "8px 16px", borderRadius: radius.control,
                 background: C.mint, border: "none",
                 color: C.onMint, cursor: busy ? "wait" : "pointer",
-                fontSize: 11, fontWeight: 700,
+                fontSize: 12, fontWeight: 700,
               }}
             >
               {busy === "backup" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <DatabaseBackup size={12} strokeWidth={2} />}
               Jetzt sichern
             </button>
-            {message && <span style={{ fontSize: 11, color: message.includes("✓") ? C.mint : C.error }}>{message}</span>}
+            {message && <span style={{ fontSize: 12, color: message.includes("✓") ? C.mint : C.error }}>{message}</span>}
           </div>
-          <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
             Läuft zusätzlich automatisch bei jedem App-Start und nach jeder Archivierung.
           </div>
         </div>
@@ -908,7 +908,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             <Wrench size={14} color={C.error} strokeWidth={1.75} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>System-Reparatur</span>
           </div>
-          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
             Importiert Beats, die im Archiv-Ordner liegen, aber in der Datenbank fehlen,
             und liest alle Erstell-Daten aus den FLP-Dateien neu.
           </div>
@@ -921,7 +921,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               background: alpha(C.error, 0.12),
               border: `1px solid ${alpha(C.error, 0.35)}`,
               color: C.error, cursor: busy ? "wait" : "pointer",
-              fontSize: 11, fontWeight: 700,
+              fontSize: 12, fontWeight: 700,
             }}
           >
             {busy === "repair" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <Wrench size={12} strokeWidth={2} />}
@@ -940,7 +940,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             <FolderTree size={14} color={C.mint} strokeWidth={1.75} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Ordner-Abgleich</span>
           </div>
-          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
             Benennt Ordner und Dateien im Archiv nach den Werten aus der Datenbank und
             räumt ältere MP3/WAV nach 02_OLD —
             für Beats, die in der App längst anders heißen als auf der Platte.
@@ -954,10 +954,10 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               padding: syncPlan.length > 0 ? "10px 12px" : 0,
               background: syncPlan.length > 0 ? C.surfaceContainer : "transparent",
               borderRadius: radius.control, marginBottom: 12,
-              fontSize: 11, fontFamily: "monospace",
+              fontSize: 12, fontFamily: "monospace",
             }}>
               {syncPlan.length === 0 ? (
-                <span style={{ fontSize: 11, fontFamily: "Inter, sans-serif", color: C.mint }}>
+                <span style={{ fontSize: 12, fontFamily: "Inter, sans-serif", color: C.mint }}>
                   Alles im Reinen — nichts umzubenennen.
                 </span>
               ) : syncPlan.map(s => (
@@ -1007,7 +1007,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           <FileText size={14} color={C.tertiary ?? C.tertiary} strokeWidth={1.75} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Templates</div>
-            <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
               beatstars / soundcloud / youtube .template — Änderungen wirken beim nächsten Re-Render
             </div>
           </div>
@@ -1018,7 +1018,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               padding: "8px 14px", borderRadius: radius.control,
               background: "transparent", border: `1px solid ${C.border20}`,
               color: C.onSurfaceVariant, cursor: "pointer",
-              fontSize: 11, fontWeight: 600,
+              fontSize: 12, fontWeight: 600,
             }}
           >
             <FolderOpen size={12} strokeWidth={1.75} />

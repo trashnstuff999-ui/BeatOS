@@ -35,7 +35,7 @@ export function BeatInfoCard({
   return (
     <SectionCard icon={Music} title="Beat-Info">
       <label style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
         textTransform: "uppercase", color: C.onSecondaryFixedVar,
         display: "block", marginBottom: 10,
       }}>
@@ -63,7 +63,7 @@ export function BeatInfoCard({
       </div>
 
       {createdDate && (
-        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.onSecondaryFixedVar }}>
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.onSecondaryFixedVar }}>
           <CheckCircle size={14} color={C.mint} />
           <span>Created: {createdDate}</span>
           <span style={{ opacity: 0.5 }}>•</span>
@@ -86,7 +86,7 @@ function SmallInput({ label, value, onChange, placeholder, width, mono }: {
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "-0.02em" }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSecondaryFixedVar, textTransform: "uppercase", letterSpacing: "-0.02em" }}>
         {label}
       </label>
       <input

@@ -247,7 +247,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
               {GRUPPEN.map(gruppe => (
                 <div key={gruppe.titel}>
                   <div style={{
-                    fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
+                    fontSize: 11, fontWeight: 700, color: C.onSecondaryFixedVar,
                     textTransform: "uppercase", letterSpacing: "0.08em",
                     padding: "8px 10px 4px",
                   }}>
@@ -264,7 +264,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
                         padding: "7px 10px", borderRadius: radius.control - 1,
                         background: "transparent", border: "none",
                         color: C.onSurfaceVariant,
-                        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                        fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                         cursor: "pointer",
                       }}
                       onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHighest; }}
@@ -278,7 +278,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
             </div>
           )}
         </Dropdown>
-        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+        <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
           schreibt an die Cursorposition in der Vorlage
         </span>
       </div>
@@ -327,7 +327,7 @@ const paneBox: React.CSSProperties = {
   borderRadius: radius.control,
   color: C.onSurface,
   fontFamily: "monospace",
-  fontSize: 11,
+  fontSize: 12,
   lineHeight: 1.55,
   whiteSpace: "pre-wrap",
   boxSizing: "border-box",
@@ -336,7 +336,7 @@ const paneBox: React.CSSProperties = {
 function Pane({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginBottom: 7 }}>
+      <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, marginBottom: 7 }}>
         {label}
       </div>
       {children}

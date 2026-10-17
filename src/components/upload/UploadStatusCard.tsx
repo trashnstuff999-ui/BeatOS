@@ -162,13 +162,13 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {eingefuegt ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.onSurfaceVariant }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.onSurfaceVariant }}>
               <Check size={12} color={C.mint} strokeWidth={2.5} />
               {PLATFORM_CONFIG[eingefuegt.platform].label}-Link übernommen
               <IconButton icon={Undo2} size={28} onClick={rueckgaengig} title="Rückgängig" />
             </span>
           ) : (
-            <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+            <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
               Link mit Strg+V einfügen
             </span>
           )}
@@ -461,7 +461,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
         }}>
-        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+        <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
           {row.status === "uploaded" ? "Hochgeladen am" : "Geplant für"}
         </span>
 

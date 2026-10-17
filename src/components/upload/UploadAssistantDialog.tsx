@@ -164,7 +164,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                 <span key={p} style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "4px 10px", borderRadius: radius.full,
-                  fontSize: 11, fontWeight: 600,
+                  fontSize: 12, fontWeight: 600,
                   border: `1px solid ${jetzt ? alpha(PLATFORM_CONFIG[p].color, 0.5) : C.border15}`,
                   color: fertig ? C.mint : jetzt ? PLATFORM_CONFIG[p].color : C.onSecondaryFixedVar,
                 }}>
@@ -180,7 +180,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
           <div style={{
             padding: "8px 12px", borderRadius: radius.control,
             background: alpha(C.error, 0.10), border: `1px solid ${alpha(C.error, 0.35)}`,
-            fontSize: 11, color: C.error,
+            fontSize: 12, color: C.error,
           }}>
             {error}
           </div>
@@ -191,7 +191,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
             display: "flex", alignItems: "center", gap: 8,
             padding: "8px 12px", borderRadius: radius.control,
             background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
-            fontSize: 11, color: C.onSurface,
+            fontSize: 12, color: C.onSurface,
           }}>
             <AlertTriangle size={13} color={C.primary} style={{ flexShrink: 0 }} />
             Noch kein BeatStars-Link — die Beschreibung enthält keinen Link zum Beat.
@@ -267,7 +267,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                   style={{
                     flex: 1,
                     padding: "7px 10px",
-                    fontSize: 11, fontFamily: "monospace",
+                    fontSize: 12, fontFamily: "monospace",
                     background: C.surfaceContainerHigh,
                     border: `1px solid ${falscherLink ? alpha(C.error, 0.5) : C.border20}`,
                     borderRadius: radius.control,
@@ -277,7 +277,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                 />
               </div>
               {falscherLink && linkPlattform && (
-                <div style={{ marginTop: 6, fontSize: 11, color: C.error }}>
+                <div style={{ marginTop: 6, fontSize: 12, color: C.error }}>
                   Das ist ein {PLATFORM_CONFIG[linkPlattform].label}-Link.
                 </div>
               )}
@@ -318,7 +318,7 @@ function StepIndex({ index, done }: { index: number; done: boolean }) {
       display: "flex", alignItems: "center", justifyContent: "center",
       background: done ? alpha(C.mint, 0.15) : "rgba(255,255,255,0.05)",
       border: `1px solid ${done ? alpha(C.mint, 0.45) : C.border20}`,
-      fontSize: 10, fontWeight: 700,
+      fontSize: 11, fontWeight: 700,
       color: done ? C.mint : C.onSurfaceVariant,
     }}>
       {done ? <Check size={11} strokeWidth={3} /> : index}
@@ -347,7 +347,7 @@ function StepRow({ index, done, label, detail, action, icon }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>{label}</div>
         <div style={{
-          fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 2,
+          fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {detail}

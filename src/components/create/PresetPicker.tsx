@@ -103,7 +103,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
           overflowY: "auto",
         }}>
           {presets.length === 0 && (
-            <div style={{ padding: 12, fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
+            <div style={{ padding: 12, fontSize: 12, color: C.onSurfaceVariant, textAlign: "center" }}>
               Noch keine Presets — im Upload-Tab anlegen.
             </div>
           )}
@@ -123,14 +123,14 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
             >
               <div style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>{p.label}</div>
-              <div style={{ fontSize: 10, color: C.onSurfaceVariant, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {p.main_artists}{p.genre_tags ? ` · ${p.genre_tags}` : ""}
               </div>
             </button>
           ))}
         </div>
       )}
-      <div style={{ fontSize: 10, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
         {selected
           ? "Artists, Genres und Plattform-Tags werden mit archiviert."
           : "Optional — spart das Nachtragen im Upload-Tab."}

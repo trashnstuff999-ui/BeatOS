@@ -157,7 +157,7 @@ export function ChipListEditor({
         title={hint}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          fontSize: 11,
+          fontSize: 12,
           color: C.onSecondaryFixedVar,
           marginBottom: 6,
           cursor: hint ? "help" : undefined,
@@ -204,7 +204,7 @@ export function ChipListEditor({
           <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             {i > 0 && (
               <span style={{
-                fontSize: 10, fontWeight: 700, fontFamily: "monospace",
+                fontSize: 11, fontWeight: 700, fontFamily: "monospace",
                 color: C.onSecondaryFixedVar, opacity: 0.6,
                 userSelect: "none",
               }}>

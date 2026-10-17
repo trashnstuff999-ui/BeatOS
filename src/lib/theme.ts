@@ -207,9 +207,8 @@ export const radius = {
  * — 470 Stellen auf `typography.klein` umzuhaengen kostet Aufwand und aendert
  * kein Pixel. Der Wert dieser Liste ist die Regel, nicht die Umleitung:
  *
- *   10   Beschriftungen in Grossbuchstaben, Zaehler
- *   11   Bedienelemente, Tabellenzellen — der Standardfall
- *   12   Fliesstext, Eingabefelder
+ *   11   Beschriftungen in Grossbuchstaben, Zaehler
+ *   12   Bedienelemente, Tabellenzellen, Fliesstext, Eingabefelder — der Standardfall
  *   13   Dialogtext
  *   14   Kartenueberschriften
  *   20   Zahlen, die fuer sich stehen (Kennzahlen, Beat-Titel)
@@ -220,13 +219,17 @@ export const radius = {
  * Beschriftungen in Grossbuchstaben: fett (700), Buchstabenabstand IMMER
  * 0.08em — vorher standen sieben verschiedene Werte von 0.04 bis 0.15em fuer
  * dieselbe Art Beschriftung. Einzige Ausnahme: der Seitentitel (0.2em).
+ *
+ * Seit 10/2026 eine Stufe groesser (10→11, 11→12): BeatOS liegt neben
+ * FL Studio offen und wird mit Abstand gelesen; 10 px war die haeufigste
+ * Beschriftungsgroesse und zu klein dafuer.
  */
 export const typography = {
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
   fontMono:   "Consolas, Monaco, 'Courier New', monospace",
 
-  label:   10,
-  control: 11,
+  label:   11,
+  control: 12,
   body:    12,
   dialog:  13,
   heading: 14,

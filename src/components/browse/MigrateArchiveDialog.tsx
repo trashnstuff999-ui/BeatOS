@@ -253,7 +253,7 @@ function Zeile({ zahl, titel, text }: { zahl: number; titel: string; text: strin
       </span>
       <span style={{ flex: 1 }}>
         <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.onSurface }}>{titel}</span>
-        <span style={{ display: "block", fontSize: 11, color: C.onSurfaceVariant, marginTop: 3, lineHeight: 1.5 }}>{text}</span>
+        <span style={{ display: "block", fontSize: 12, color: C.onSurfaceVariant, marginTop: 3, lineHeight: 1.5 }}>{text}</span>
       </span>
     </div>
   );
@@ -276,12 +276,12 @@ function Uebersprungen({ anzahl, grund, zeilen }: {
         borderRadius: radius.control, border: `1px solid ${C.border15}`,
       }}>
         {zeilen.slice(0, 20).map(z => (
-          <li key={z.id} style={{ fontSize: 11, color: C.onSurfaceVariant, padding: "2px 0" }}>
+          <li key={z.id} style={{ fontSize: 12, color: C.onSurfaceVariant, padding: "2px 0" }}>
             <strong style={{ color: C.onSurface }}>{z.id}</strong>{" — "}{z.text}
           </li>
         ))}
         {zeilen.length > 20 && (
-          <li style={{ fontSize: 11, color: C.onSecondaryFixedVar, paddingTop: 4 }}>
+          <li style={{ fontSize: 12, color: C.onSecondaryFixedVar, paddingTop: 4 }}>
             … {zeilen.length - 20} weitere
           </li>
         )}
@@ -303,7 +303,7 @@ function Hinweis({ ton, children }: { ton: keyof typeof TON; children: React.Rea
       display: "flex", gap: 8, alignItems: "flex-start",
       padding: "10px 12px", borderRadius: radius.control,
       background: t.grund, border: `1px solid ${t.rand}`,
-      fontSize: 11, color: t.farbe, lineHeight: 1.6,
+      fontSize: 12, color: t.farbe, lineHeight: 1.6,
     }}>
       {ton !== "info" && <AlertTriangle size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />}
       <div>{children}</div>

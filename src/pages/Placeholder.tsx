@@ -38,7 +38,7 @@ function Section({ icon: Icon, title, children }: {
 function Untertitel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, color: C.onSecondaryFixedVar,
+      fontSize: 11, fontWeight: 700, color: C.onSecondaryFixedVar,
       textTransform: "uppercase", letterSpacing: "0.08em",
       marginTop: 18, marginBottom: 4,
     }}>
@@ -63,7 +63,7 @@ function ShortcutRow({ keys, description }: { keys: string[]; description: strin
             padding: "2px 8px", borderRadius: radius.control,
             background: C.surfaceContainerHigh,
             border: `1px solid ${C.border20}`,
-            fontSize: 11, color: C.onSurface,
+            fontSize: 12, color: C.onSurface,
             fontFamily: "Consolas, monospace",
           }}>{k}</kbd>
         ))}

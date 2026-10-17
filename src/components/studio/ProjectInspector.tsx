@@ -252,7 +252,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
           <div style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
             {dropping ? "Wird übernommen …" : `Ablegen für „${title}“`}
           </div>
-          <div style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
             Bilder und Videos landen im Projektordner. „thumb" im Namen wird
             Thumbnail, ein Video das Video, alles andere das Cover.
           </div>
@@ -377,7 +377,7 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
                 <FileMusic size={12} color={i === 0 ? C.primary : C.onSecondaryFixedVar} strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span style={{
                   flex: 1, minWidth: 0,
-                  fontSize: 11, fontFamily: "monospace", color: C.onSurface,
+                  fontSize: 12, fontFamily: "monospace", color: C.onSurface,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {flp.name}
@@ -387,14 +387,14 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
                     flexShrink: 0,
                     padding: "1px 6px", borderRadius: radius.full,
                     background: `${C.primary}18`, color: C.primary,
-                    fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
                   }}>
                     NEUESTE
                   </span>
                 )}
                 <span
                   title={flp.modified_date ?? undefined}
-                  style={{ flexShrink: 0, fontSize: 10, color: C.onSecondaryFixedVar }}
+                  style={{ flexShrink: 0, fontSize: 11, color: C.onSecondaryFixedVar }}
                 >
                   {formatRelativeTime(flp.modified_secs)}
                 </span>
@@ -465,7 +465,7 @@ function StatusSection({ project: p, onPatch }: {
           display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0,
           padding: "5px 11px", borderRadius: radius.full, cursor: "help",
           background: status.bg, color: status.color,
-          fontSize: 10, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: status.color }} />
@@ -482,12 +482,12 @@ function SectionLabel({ children, right }: { children: React.ReactNode; right?: 
   return (
     <div style={{
       display: "flex", alignItems: "center",
-      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
       textTransform: "uppercase", color: C.onSecondaryFixedVar,
       marginBottom: 8,
     }}>
       {children}
-      <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>{right}</span>
+      <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>{right}</span>
     </div>
   );
 }

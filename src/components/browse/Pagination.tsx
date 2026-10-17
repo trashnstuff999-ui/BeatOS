@@ -159,7 +159,7 @@ export function Pagination({ pagination, totalPages, onPageChange, onPageSizeCha
 
       {/* Right: Page Size */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: C.onSurfaceVariant }}>Pro Seite:</span>
+        <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>Pro Seite:</span>
         <Select
           value={pageSize}
           options={PAGE_SIZES}

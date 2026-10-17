@@ -96,7 +96,7 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onM
             ) : (
               <kbd style={{
                 position: "absolute", right: 9, pointerEvents: "none",
-                fontSize: 10, fontWeight: 700, fontFamily: "inherit",
+                fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                 color: C.onSecondaryFixedVar,
                 border: `1px solid ${C.border20}`, borderRadius: radius.control,
                 padding: "1px 5px", lineHeight: "14px",
