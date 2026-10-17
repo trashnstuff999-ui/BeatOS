@@ -173,56 +173,9 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
     && norm(dateien[active]) !== norm(gerendert[active]);
   const tabLabel = TABS.find(t => t.key === active)?.label ?? active;
 
-  return (
-    <SectionCard
-      icon={FileText}
-      title="Beschreibungen"
-      style={{ display: "flex", flexDirection: "column", ...style }}
-      actions={
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {speichert && <Loader2 size={12} color={C.onSecondaryFixedVar} style={{ animation: "spin 0.8s linear infinite" }} />}
-          <Button
-            size="sm" variant="secondary" icon={Pencil}
-            onClick={() => setEditorOpen(true)}
-            disabled={!drafts}
-            title={`${tabLabel}-Text von Hand bearbeiten — speichert sich selbst`}
-          >
-            Bearbeiten
-          </Button>
-          <Button
-            size="sm" variant="secondary" icon={FileCode2}
-            onClick={() => setShowTemplates(true)}
-            title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
-          >
-            Vorlagen
-          </Button>
-        </div>
-      }
-    >
-      {/* ─── Reiter ──────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 10, flexShrink: 0 }}>
-        <Segmented
-          full
-          label="Plattform"
-          value={active}
-          onChange={setActive}
-          options={TABS.map(tab => ({
-            value: tab.key,
-            label: tab.label,
-            icon: tab.icon,
-            color: tab.color,
-            zusatz: overrides[tab.key] !== undefined && (
-              <span title="Von Hand geändert" style={{ display: "flex" }}>
-                <Pencil size={10} strokeWidth={2.25} />
-              </span>
-            ),
-          }))}
-        />
-      </div>
-
-      {/* ─── Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig ── */}
-      {drafts && !isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6, flexShrink: 0 }}>
+  // Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig.
+  const pruefung = drafts && !isLoading && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "10px 2px", borderTop: `1px solid ${C.border10}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, flexWrap: "wrap" }}>
             {hinweise.length === 0 ? (
               <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.mint }}>
@@ -270,14 +223,62 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
             </div>
           ))}
         </div>
-      )}
+      );
 
-      {/* ─── Ausgabe: Titel / Beschreibung / Tags ────────────────────────────
-          Die Karte ist so hoch wie ihr Inhalt, höchstens so hoch wie die
-          linke Spalte — darüber scrollt dieser Teil. Vorher füllte sie immer
-          die ganze Höhe, und eine kurze BeatStars-Beschreibung stand in einem
-          halbleeren Kasten. */}
-      <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
+  return (
+    <SectionCard
+      icon={FileText}
+      title="Beschreibungen"
+      style={{ display: "flex", flexDirection: "column", ...style }}
+      actions={
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {speichert && <Loader2 size={12} color={C.onSecondaryFixedVar} style={{ animation: "spin 0.8s linear infinite" }} />}
+          <Button
+            size="sm" variant="secondary" icon={Pencil}
+            onClick={() => setEditorOpen(true)}
+            disabled={!drafts}
+            title={`${tabLabel}-Text von Hand bearbeiten — speichert sich selbst`}
+          >
+            Bearbeiten
+          </Button>
+          <Button
+            size="sm" variant="secondary" icon={FileCode2}
+            onClick={() => setShowTemplates(true)}
+            title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
+          >
+            Vorlagen
+          </Button>
+        </div>
+      }
+    >
+      {/* ─── Reiter ──────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 10, flexShrink: 0 }}>
+        <Segmented
+          full
+          label="Plattform"
+          value={active}
+          onChange={setActive}
+          options={TABS.map(tab => ({
+            value: tab.key,
+            label: tab.label,
+            icon: tab.icon,
+            color: tab.color,
+            zusatz: overrides[tab.key] !== undefined && (
+              <span title="Von Hand geändert" style={{ display: "flex" }}>
+                <Pencil size={10} strokeWidth={2.25} />
+              </span>
+            ),
+          }))}
+        />
+      </div>
+
+      {/* ─── Ausgabe ──────────────────────────────────────────────────────────
+          Die Karte steht über die volle Breite, neben ihr nichts — so kann
+          keine Lücke entstehen, egal wie kurz die BeatStars-Beschreibung ist.
+          Innen zwei Spalten, damit die Zeilen lesbar kurz bleiben: links der
+          Text, rechts Prüfung und Tags. */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(260px, 2fr)", gap: "0 32px", alignItems: "start" }}>
+      <div style={{ minWidth: 0 }}>
         <OutputRow
           label="Titel"
           badge={`${activeTitle.length}/${TITEL_MAX}`}
@@ -307,6 +308,10 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
             : <Vorschau text={activeDescription} youtube={active === "youtube"} />
           }
         </OutputRow>
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        {pruefung}
 
         {activeTags && (
           <OutputRow
@@ -334,6 +339,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
             </div>
           </OutputRow>
         )}
+      </div>
       </div>
 
       {fehler && (

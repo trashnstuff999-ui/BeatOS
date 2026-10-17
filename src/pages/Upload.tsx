@@ -100,17 +100,6 @@ export default function Upload() {
     else localStorage.removeItem(LETZTER_BEAT);
   }, [selectedBeat?.id]);
 
-  // Höhe der linken Spalte — die Beschreibungen werden höchstens so hoch.
-  const linkeSpalte = useRef<HTMLDivElement>(null);
-  const [linksHoehe, setLinksHoehe] = useState(0);
-  useEffect(() => {
-    const el = linkeSpalte.current;
-    if (!el) return;
-    const beobachter = new ResizeObserver(([e]) => setLinksHoehe(e.contentRect.height));
-    beobachter.observe(el);
-    return () => beobachter.disconnect();
-  }, [data?.beat.id, error]);
-
   // Zurück aus FL Studio oder dem Explorer: den Ordner neu lesen. Vorher
   // zeigte die Asset-Ampel einen neuen Export erst nach einem Klick auf ↻.
   // Die Karten verlieren dabei nichts — sie setzen ihre Entwürfe nur beim
@@ -193,9 +182,19 @@ export default function Upload() {
             />
           )}
 
-          {/* Arbeitsflaeche: Eingabe links, Ausgabe rechts — was links steht,
-              erzeugt rechts den Text. Vorher stand der Status dazwischen, und
-              der Blick sprang bei jedem Beat links-rechts-mitte.
+          {/* Die Seite liest sich von oben nach unten wie der Ablauf:
+              Infos → Kapitel → Beschreibung → Status.
+
+              Oben die Eingabe nebeneinander: Infos & Credits und Kapitel sind
+              ähnlich hoch, und beide fließen in den Text darunter. Gleich hoch
+              gestreckt, damit die Kanten bündig abschließen.
+
+              Vorher stand die Beschreibung rechts neben einer Spalte aus Infos
+              und Kapitel. Ihre Höhe hängt am Text — YouTube lang, BeatStars
+              kurz —, und neben einer festen Spalte blieb dann entweder eine
+              Lücke darunter oder eine Leere darin. Über die volle Breite hat
+              sie keinen Nachbarn mehr, der eine Höhe vorgibt.
+
               auto-fit: bricht bei schmalem Fenster auf eine Spalte um, statt
               hinter PageBodys overflowX:hidden abgeschnitten zu werden. */}
           {data && !error && (
@@ -203,36 +202,21 @@ export default function Upload() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
               gap: 24,
-              alignItems: "start",
+              alignItems: "stretch",
             }}>
-              {/* Eingabe — Infos und Credits liegen auf einer Flaeche, durch
-                  Haarlinien getrennt. Beides gehoert zum selben Beat und
-                  fliesst in dieselbe Beschreibung; zwei Kaesten dafuer waren
-                  eine Trennung ohne Bedeutung. */}
-              <div ref={linkeSpalte} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <TypeBeatCard beat={data.beat} onSaved={refresh}>
                 <SampleCreditsCard bare beatId={data.beat.id} onSaved={refresh} />
               </TypeBeatCard>
-
-              {/* Kapitelmarken — Eingabe, die rechts in der YouTube-Beschreibung
-                  landet. Deshalb links, unter Type-Beat und Credits. */}
               <TimecodeCard beat={data.beat} flpPath={data.assets.flp_path} onSaved={refresh} />
-              </div>
-
-              {/* Ausgabe.
-                  So hoch wie ihr Inhalt, höchstens so hoch wie die linke
-                  Spalte — darüber scrollt der Text in der Karte. Vorher füllte
-                  sie immer die ganze Höhe, und eine kurze BeatStars-
-                  Beschreibung stand in einem halbleeren Kasten.
-                  Mindestens 480: im einspaltigen Fall (schmales Fenster) gibt
-                  es keine linke Spalte daneben, die eine Höhe vorgibt. */}
-              <DescriptionFilesCard
-                beatId={data.beat.id}
-                rerenderKey={rerenderKey}
-                beatstarsUrl={data.uploads.find(x => x.platform === "beatstars")?.url ?? null}
-                style={{ maxHeight: Math.max(linksHoehe, 480) }}
-              />
             </div>
+          )}
+
+          {data && !error && (
+            <DescriptionFilesCard
+              beatId={data.beat.id}
+              rerenderKey={rerenderKey}
+              beatstarsUrl={data.uploads.find(x => x.platform === "beatstars")?.url ?? null}
+            />
           )}
 
           {/* Veroeffentlichung — der letzte Schritt, deshalb ganz unten und
