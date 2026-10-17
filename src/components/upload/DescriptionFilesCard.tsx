@@ -21,7 +21,7 @@ import {
 import { C, PLATFORM_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
-import { Button, Modal } from "../ui";
+import { Button, IconButton, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
 import type { UploadPlatform, UploadDescriptions } from "../../types/upload";
@@ -433,19 +433,12 @@ function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
   );
 }
 
+/** Aktion mitten in einer Hinweiszeile: der ghost-Button, nur enger. */
 function LinkKnopf({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        padding: 0, background: "none", border: "none",
-        color: C.primary, cursor: "pointer",
-        fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-      }}
-    >
+    <Button variant="ghost" size="sm" onClick={onClick} title={title} style={{ padding: "2px 6px", color: C.primary }}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -491,23 +484,13 @@ function OutputRow({ label, badge, badgeWarn, onCopy, kopiert, disabled, letzte,
       </div>
       {/* Kopieren: der Haken im Knopf selbst sagt „erledigt" — vorher sprang
           dafür eine Meldung unter die Karte und schob alles nach unten. */}
-      <button
+      <IconButton
+        icon={kopiert ? Check : Copy} size={28} variant="secondary"
         onClick={onCopy}
         disabled={disabled}
         title={kopiert ? "Kopiert" : `${label} kopieren`}
-        style={{
-          width: 28, height: 28, borderRadius: radius.control, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: "transparent",
-          border: `1px solid ${kopiert ? alpha(C.mint, 0.5) : C.border20}`,
-          color: kopiert ? C.mint : C.onSurfaceVariant,
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.45 : 1,
-          transition: "border-color 0.15s, color 0.15s",
-        }}
-      >
-        {kopiert ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
-      </button>
+        style={{ flexShrink: 0, ...(kopiert ? { color: C.mint, borderColor: C.mint } : null) }}
+      />
     </div>
   );
 }

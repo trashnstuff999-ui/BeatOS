@@ -19,6 +19,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { C, alpha, radius } from "../../lib/theme";
 import { SectionIconBtn } from "../ui/SectionCard";
+import { Button } from "../ui/Button";
 import { useEscapeStack } from "../ui";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -226,17 +227,14 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
                 <span style={{ color: C.onSurfaceVariant }}>
                   {assets.alte_exporte === 1 ? "1 älterer Export" : `${assets.alte_exporte} ältere Exporte`}
                 </span>
-                <button
+                <Button
+                  variant="ghost" size="sm"
                   onClick={aufraeumen}
                   title="Ältere MP3/WAV nach 02_OLD verschieben — die neueste bleibt"
-                  style={{
-                    padding: 0, background: "none", border: "none",
-                    color: C.primary, cursor: "pointer",
-                    fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-                  }}
+                  style={{ padding: "2px 6px", color: C.primary }}
                 >
                   nach 02_OLD verschieben
-                </button>
+                </Button>
               </>
             )}
           </>

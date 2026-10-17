@@ -12,6 +12,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { computeReadySteps } from "../../lib/uploadReady";
+import { IconButton } from "../ui/Button";
 import type { UploadData } from "../../types/upload";
 import type { Beat } from "../../types/browse";
 
@@ -191,18 +192,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
 
             {/* Clear selection */}
             {selectedBeat && (
-              <button
-                onClick={() => onSelect(null)}
-                title="Auswahl aufheben"
-                style={{
-                  width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-                  background: "transparent", border: "none",
-                  cursor: "pointer", color: C.onSurfaceVariant,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <X size={14} />
-              </button>
+              <IconButton icon={X} size={28} onClick={() => onSelect(null)} title="Auswahl aufheben" />
             )}
           </div>
 

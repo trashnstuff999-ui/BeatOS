@@ -21,7 +21,7 @@ import { C, radius, PLATFORM_CONFIG, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { extractTitle, extractDescription, extractTags } from "../../lib/descriptions";
 import { RELEASE_REIHENFOLGE, plattformAusLink, hochgeladenMelden } from "../../lib/uploadLinks";
-import { Modal } from "../ui";
+import { Modal, Button } from "../ui";
 import type { UploadPlatform, UploadDescriptions, UploadPlatformRow } from "../../types/upload";
 
 const PLATFORM_ICON: Record<UploadPlatform, React.ElementType> = {
@@ -282,43 +282,25 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button
+                <Button
+                  variant="secondary"
                   onClick={weiter}
                   disabled={speichert}
                   title="Diese Plattform jetzt auslassen — sie bleibt, wie sie ist"
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: radius.control,
-                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                    background: "transparent",
-                    border: `1px solid ${C.border20}`,
-                    color: C.onSurfaceVariant,
-                    cursor: "pointer",
-                  }}
                 >
                   Überspringen
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary" icon={Check}
                   onClick={hochgeladen}
-                  disabled={falscherLink || speichert}
-                  style={{
-                    flex: 1,
-                    padding: "10px 16px",
-                    borderRadius: radius.control,
-                    fontSize: 12, fontWeight: 700, fontFamily: "inherit",
-                    background: C.mint,
-                    border: "none",
-                    color: C.onMint,
-                    cursor: falscherLink || speichert ? "default" : "pointer",
-                    opacity: falscherLink ? 0.5 : 1,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  }}
+                  disabled={falscherLink}
+                  loading={speichert}
+                  style={{ flex: 1 }}
                 >
-                  <Check size={14} strokeWidth={2.5} />
                   {schritt + 1 < reihe.length
                     ? `Hochgeladen — weiter zu ${PLATFORM_CONFIG[reihe[schritt + 1]].label}`
                     : "Hochgeladen — fertig"}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -383,23 +365,16 @@ function StepBtn({ onClick, done, icon: Icon, label, disabled }: {
   label: string;
   disabled?: boolean;
 }) {
+  // Der secondary-Button der Familie; erledigt trägt er Mint und einen Haken.
   return (
-    <button
+    <Button
+      variant="secondary" size="sm"
+      icon={done ? Check : Icon}
       onClick={onClick}
       disabled={disabled}
-      style={{
-        display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-        padding: "6px 12px", borderRadius: radius.control,
-        background: done ? alpha(C.mint, 0.12) : "transparent",
-        border: `1px solid ${done ? alpha(C.mint, 0.40) : C.border20}`,
-        color: done ? C.mint : C.onSurfaceVariant,
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontSize: 10, fontWeight: 700,
-        opacity: disabled ? 0.5 : 1,
-      }}
+      style={{ flexShrink: 0, ...(done ? { color: C.mint, borderColor: alpha(C.mint, 0.4) } : null) }}
     >
-      {done ? <Check size={11} strokeWidth={2.5} /> : <Icon size={11} strokeWidth={2} />}
       {label}
-    </button>
+    </Button>
   );
 }

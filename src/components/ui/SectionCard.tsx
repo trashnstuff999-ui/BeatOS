@@ -8,6 +8,7 @@
 
 import React from "react";
 import { C, radius } from "../../lib/theme";
+import { IconButton } from "./Button";
 
 interface SectionCardProps {
   icon?: React.ElementType;
@@ -52,32 +53,13 @@ export function SectionCard({ icon: Icon, title, actions, children, style }: Sec
   );
 }
 
-/** Small icon button for SectionCard action slots. */
-export function SectionIconBtn({ icon: Icon, title, onClick, disabled }: {
+/** Kleiner Icon-Knopf für Karten-Kopfzeilen — der IconButton der Familie,
+ *  nicht mehr ein eigener Stil. */
+export function SectionIconBtn({ icon, title, onClick, disabled }: {
   icon: React.ElementType;
   title: string;
   onClick: () => void;
   disabled?: boolean;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      style={{
-        width: 26, height: 26, borderRadius: radius.control,
-        background: "transparent",
-        border: `1px solid ${C.border15}`,
-        cursor: disabled ? "not-allowed" : "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: C.onSurfaceVariant,
-        opacity: disabled ? 0.5 : 1,
-        transition: "border-color 0.15s, color 0.15s",
-      }}
-      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.borderColor = C.border30; e.currentTarget.style.color = C.onSurface; } }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border15; e.currentTarget.style.color = C.onSurfaceVariant; }}
-    >
-      <Icon size={13} strokeWidth={1.75} />
-    </button>
-  );
+  return <IconButton icon={icon} title={title} onClick={onClick} disabled={disabled} variant="secondary" size={28} />;
 }

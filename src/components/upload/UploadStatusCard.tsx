@@ -23,6 +23,7 @@ import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check, Undo2 } from "
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
+import { Button, IconButton } from "../ui/Button";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
 import { plattformAusLink, hochgeladenMelden, heuteISO } from "../../lib/uploadLinks";
@@ -164,16 +165,7 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.onSurfaceVariant }}>
               <Check size={12} color={C.mint} strokeWidth={2.5} />
               {PLATFORM_CONFIG[eingefuegt.platform].label}-Link übernommen
-              <button
-                onClick={rueckgaengig}
-                title="Rückgängig"
-                style={{
-                  display: "flex", padding: 4, border: "none", background: "transparent",
-                  color: C.onSurfaceVariant, cursor: "pointer",
-                }}
-              >
-                <Undo2 size={12} strokeWidth={2} />
-              </button>
+              <IconButton icon={Undo2} size={28} onClick={rueckgaengig} title="Rückgängig" />
             </span>
           ) : (
             <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
@@ -181,20 +173,13 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
             </span>
           )}
           {offen && (
-            <button
+            <Button
+              variant="secondary" size="sm" icon={Rocket}
               onClick={() => setReleaseOffen(true)}
               title="Alle offenen Plattformen nacheinander hochladen: BeatStars, YouTube, SoundCloud"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "5px 10px", borderRadius: radius.control,
-                background: "transparent", border: `1px solid ${C.border20}`,
-                color: C.onSurfaceVariant, cursor: "pointer",
-                fontSize: 11, fontWeight: 600,
-              }}
             >
-              <Rocket size={12} strokeWidth={2} />
               Release starten
-            </button>
+            </Button>
           )}
         </div>
       }
@@ -461,22 +446,13 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
           />
           {/* Kopieren wie bei den Beschreibungen — der Link wird auf der
               Plattform gebraucht, nicht hier. */}
-          <button
+          <IconButton
+            icon={copied ? Check : Copy} size={28} variant="secondary"
             onClick={copyUrl}
             disabled={!urlDraft.trim()}
             title={copied ? "Kopiert" : "Link kopieren"}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-              background: "transparent",
-              border: `1px solid ${copied ? C.mint : C.border15}`,
-              color: copied ? C.mint : C.onSurfaceVariant,
-              cursor: urlDraft.trim() ? "pointer" : "default",
-              opacity: urlDraft.trim() ? 1 : 0.35,
-            }}
-          >
-            {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
-          </button>
+            style={copied ? { color: C.mint, borderColor: C.mint } : undefined}
+          />
         </div>
 
         {/* Fusszeile: nur noch das Datum, beschriftet. Am Entwurf ist kein Tag

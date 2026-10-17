@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ListOrdered, Play, Pause, Plus, X, CornerDownLeft, Lock, RotateCw,
-  Download, AudioWaveform, Loader2, Magnet, Undo2, type LucideIcon,
+  Download, AudioWaveform, Magnet, Undo2, type LucideIcon,
 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
@@ -25,6 +25,7 @@ import { C, alpha, radius } from "../../lib/theme";
 import { kapitelVorschlagen } from "../../lib/kapitelVorschlag";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
+import { Button, IconButton } from "../ui/Button";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { UploadBeatInfo, Timecode } from "../../types/upload";
 import type { Beat } from "../../types/browse";
@@ -394,7 +395,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             </Knopf>
           ) : (
             <Knopf
-              icon={analysiert ? Loader2 : AudioWaveform}
+              icon={AudioWaveform} laedt={analysiert}
               onClick={analysieren}
               disabled={!beat.bpm || analysiert}
               title={beat.bpm
@@ -434,18 +435,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             {laeuftHier ? mmss(jetzt) : "—:—"}
           </span>
           {laeuftHier && (
-            <button
-              onClick={neuLaden}
-              title="Neuesten Export laden"
-              style={{
-                width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-                background: "transparent", border: "none",
-                color: C.onSurfaceVariant, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <RotateCw size={12} strokeWidth={2} />
-            </button>
+            <IconButton icon={RotateCw} size={28} onClick={neuLaden} title="Neuesten Export laden" />
           )}
           <span style={{ flex: 1 }} />
           {/* Direkt neben „+ Marke": Einrasten ändert nur, wo neue Marken landen. */}
@@ -459,21 +449,15 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
               Einrasten
             </Knopf>
           )}
-          <button
+          <Button
+            variant="secondary" size="sm" icon={Plus}
             onClick={() => hinzufuegen()}
             title="Marke setzen — beim Hören auch mit der Taste M"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: radius.control,
-              background: "transparent", border: `1px solid ${C.border20}`,
-              cursor: "pointer", fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant,
-            }}
           >
-            <Plus size={12} strokeWidth={2.5} />
             {marken.length === 0
               ? "Erste Marke bei 0:00"
               : laeuftHier ? `Marke bei ${mmss(jetzt)}` : "Marke"}
-          </button>
+          </Button>
         </div>
 
         {neuerExport && (
@@ -544,34 +528,13 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
                 }}
               />
 
-              <button
+              <IconButton
+                icon={CornerDownLeft} size={28}
                 onClick={() => seekSeconds(m.seconds)}
                 disabled={!laeuftHier}
                 title="An diese Stelle springen"
-                style={{
-                  width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-                  background: "transparent", border: "none",
-                  color: C.onSurfaceVariant,
-                  cursor: laeuftHier ? "pointer" : "default",
-                  opacity: laeuftHier ? 1 : 0.3,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <CornerDownLeft size={11} strokeWidth={2} />
-              </button>
-
-              <button
-                onClick={() => entfernen(m.id)}
-                title="Marke entfernen"
-                style={{
-                  width: 26, height: 26, borderRadius: radius.control, flexShrink: 0,
-                  background: "transparent", border: "none",
-                  color: C.onSecondaryFixedVar, cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <X size={12} strokeWidth={2} />
-              </button>
+              />
+              <IconButton icon={X} size={28} onClick={() => entfernen(m.id)} title="Marke entfernen" />
             </div>
           );
         })}
@@ -603,8 +566,9 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
   );
 }
 
-/** Leiser Knopf mit Icon: ohne Rand und Fläche, damit die Karte ruhig bleibt. */
-function Knopf({ icon: Icon, onClick, children, title, disabled, aktiv }: {
+/** Leiser Knopf: der ghost-Button der Familie. Als Schalter (`aktiv`) trägt
+ *  er die Akzentfarbe, solange er an ist. */
+function Knopf({ icon, onClick, children, title, disabled, aktiv, laedt }: {
   icon: LucideIcon;
   onClick: () => void;
   children?: React.ReactNode;
@@ -612,25 +576,16 @@ function Knopf({ icon: Icon, onClick, children, title, disabled, aktiv }: {
   disabled?: boolean;
   /** Für Schalter: eingeschaltet. */
   aktiv?: boolean;
+  laedt?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-pressed={aktiv}
-      style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "4px 8px", borderRadius: radius.control,
-        background: "transparent", border: "none",
-        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
-        fontSize: 11, fontWeight: 600,
-        color: aktiv ? C.primary : C.onSurfaceVariant,
-      }}
+    <Button
+      variant="ghost" size="sm" icon={icon}
+      onClick={onClick} disabled={disabled} loading={laedt}
+      title={title} aria-pressed={aktiv}
+      style={aktiv ? { color: C.primary } : undefined}
     >
-      <Icon size={12} strokeWidth={2}
-        style={Icon === Loader2 ? { animation: "spin 0.8s linear infinite" } : undefined} />
       {children}
-    </button>
+    </Button>
   );
 }
