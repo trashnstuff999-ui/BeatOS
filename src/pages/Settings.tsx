@@ -9,7 +9,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
-  Settings as SettingsIcon, FolderTree, Users, Trash2, Plus,
+  Settings as SettingsIcon, FolderTree, Users, Trash2, Plus, History,
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
@@ -18,6 +18,7 @@ import type { AppSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/time";
 import { ChipListEditor } from "../components/upload/ChipListEditor";
+import { UploadsNacherfassenDialog } from "../components/UploadsNacherfassenDialog";
 import type { FolderSync } from "../types/upload";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
 import { useDialog } from "../contexts/DialogContext";
@@ -1041,6 +1042,7 @@ export function Settings() {
   // Settings-Objekt ohne den neuesten Schlüssel (alter Stand im Speicher)
   // die Seite nicht mit "cannot read properties of undefined" abschießt.
   const [draft, setDraft] = useState<Draft>(() => ({ ...DEFAULTS, ...settings }));
+  const [nacherfassen, setNacherfassen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [section, setSection] = useState<SettingsSection>("paths");
 
@@ -1258,6 +1260,22 @@ export function Settings() {
                 onChange={v => update("beatstarsUrl", v)}
                 monospace
               />
+              {/* Selten gebraucht: ältere Uploads nachtragen, die vor der
+                  Upload-Erfassung (02/2026) liegen. Liest die Kanäle oben. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: C.onSecondaryFixedVar }}>
+                <Button variant="ghost" size="sm" icon={History} onClick={() => setNacherfassen(true)}
+                  title="Videos und Tracks der Kanäle oben lesen und fehlende Upload-Einträge ergänzen">
+                  Uploads von den Kanälen nacherfassen …
+                </Button>
+                <span>für Beats, die vor 02/2026 hochgeladen wurden</span>
+              </div>
+              {nacherfassen && (
+                <UploadsNacherfassenDialog
+                  youtubeUrl={draft.youtubeUrl}
+                  soundcloudUrl={draft.soundcloudUrl}
+                  onClose={() => setNacherfassen(false)}
+                />
+              )}
               {/* Default-Tags als Chips — gespeichert weiterhin als Komma-Liste */}
               <ChipListEditor
                 label="Standard-Tags für SoundCloud"

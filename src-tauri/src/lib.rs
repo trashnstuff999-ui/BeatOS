@@ -52,6 +52,9 @@ use commands::{
     get_beat_cover_path,
     get_file_mtime,
     read_flp_markers,
+    kanal_liste,
+    upload_daten,
+    upload_nacherfassen,
     // Settings commands
     get_settings,
     save_settings,
@@ -222,6 +225,9 @@ pub fn run() {
             get_beat_cover_path,
             get_file_mtime,
             read_flp_markers,
+            kanal_liste,
+            upload_daten,
+            upload_nacherfassen,
             // Settings
             get_settings,
             save_settings,

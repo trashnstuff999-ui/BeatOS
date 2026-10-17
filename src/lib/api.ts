@@ -18,6 +18,7 @@ import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relo
 import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
 import type { Stats, DashboardActions } from "../types/stats";
 import { effektiv } from "./descriptions";
+import type { KanalEintrag } from "./nacherfassen";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -142,7 +143,7 @@ export const api = {
 
     /** Plattform-Badges (scheduled/uploaded) für eine Seite Beats */
     getUploadBadges: (beatIds: string[]) =>
-      invoke<Array<{ beat_id: string; platform: string; status: string }>>("get_upload_badges", { beatIds }),
+      invoke<Array<{ beat_id: string; platform: string; status: string; url: string | null }>>("get_upload_badges", { beatIds }),
 
     getById: (beatId: string) =>
       invoke<Beat | null>("get_beat_by_id", { beatId }),
@@ -244,6 +245,20 @@ export const api = {
     /** Zeitmarker aus der FLP als Kapitel. */
     getFlpMarkers: (flpPath: string, bpm: number | null) =>
       invoke<Timecode[]>("read_flp_markers", { flpPath, bpm }),
+  },
+
+  // ─── Kanäle (yt-dlp): Uploads nacherfassen ──────────────────────────────
+
+  kanal: {
+    /** Videos bzw. Tracks eines Kanals — schnell, aber ohne Datum. */
+    liste: (kanal: string) =>
+      invoke<KanalEintrag[]>("kanal_liste", { kanal }),
+    /** Upload-Datum je Link, ~2 s pro Link — deshalb in kleinen Stücken. */
+    daten: (urls: string[]) =>
+      invoke<[string, string][]>("upload_daten", { urls }),
+    /** Upload nachtragen, ohne Vorhandenes zu überschreiben. */
+    nacherfassen: (beatId: string, platform: string, url: string, datum: string | null) =>
+      invoke<void>("upload_nacherfassen", { beatId, platform, url, datum }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────
