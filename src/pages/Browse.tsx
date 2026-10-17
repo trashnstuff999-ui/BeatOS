@@ -123,6 +123,18 @@ export default function Browse() {
   // — er filterte aber nur nach dem Namen und liess das Detailpanel zu. Jetzt
   // ist der Beat auch wirklich ausgewaehlt, sobald die Liste da ist.
   const beatGewaehlt = useRef(false);
+
+  // Neuer Deep-Link, während das Archiv schon offen ist (Strg+K aus dem
+  // Archiv heraus): die Seite bleibt geladen, also die Vorgaben selbst
+  // übernehmen und die Auswahl neu zulassen. Beim ersten Laden erledigt das
+  // useBeats(initialFilters) — der erste Durchlauf wird übersprungen.
+  const ersterLink = useRef(location.key);
+  useEffect(() => {
+    if (location.key === ersterLink.current) return;
+    beatGewaehlt.current = false;
+    if (navState?.initialFilters) setFilters(f => ({ ...f, ...navState.initialFilters }));
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (beatGewaehlt.current || !navState?.initialBeatId) return;
     const treffer = beats.find(b => b.id === navState.initialBeatId);

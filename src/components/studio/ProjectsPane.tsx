@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -129,6 +129,18 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   // Klick daneben — in die Projektliste oder in die Seitenleiste — schliesst
   // den Inspector. Dieselbe Geste wie im Archiv.
   useKlickDaneben(!!inspectorPath, () => setInspectorPath(null));
+
+  // Von außen vorgewählt (Strg+K-Suche): den Inspector dieses Projekts öffnen,
+  // sobald der Scan es geliefert hat — einmal, nicht bei jedem Neuladen.
+  const location = useLocation();
+  const vorwahl = (location.state as { projektPfad?: string } | null)?.projektPfad;
+  const vorgewaehlt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!vorwahl || vorgewaehlt.current === vorwahl) return;
+    if (!projects.some(p => p.path === vorwahl)) return;
+    vorgewaehlt.current = vorwahl;
+    setInspectorPath(vorwahl);
+  }, [projects, vorwahl]);
   const [isCreating, setIsCreating] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [showMerge, setShowMerge] = useState(false);

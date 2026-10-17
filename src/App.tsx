@@ -24,6 +24,7 @@ import { TagManagerProvider, useTagManager } from "./contexts/TagManagerContext"
 import { DialogProvider } from "./contexts/DialogContext";
 import { AllTagsModal } from "./components/create/dialogs/AllTagsModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Schnellsuche } from "./components/Schnellsuche";
 
 function AppRoutes() {
   const location = useLocation();
@@ -113,6 +114,7 @@ function AppContent() {
       </main>
       <GlobalAudioPlayer />
       <GlobalTagManager />
+      <Schnellsuche />
     </div>
   );
 }
