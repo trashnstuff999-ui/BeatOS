@@ -119,6 +119,9 @@ pub struct ParsedBeatFolder {
     pub flp_files: Vec<FlpFileInfo>,
     pub created_date: Option<String>,
     pub year_month: String,
+    /// Der Monat ist geraten: keine FLP (dann heute), oder die FLP wurde
+    /// kopiert/entpackt und ihr Erstelldatum ist das Kopierdatum.
+    pub year_month_geschaetzt: bool,
     pub audio_files: Vec<AudioFileInfo>,
     pub all_files: Vec<String>,
     /// Bild ohne "thumb" im Namen

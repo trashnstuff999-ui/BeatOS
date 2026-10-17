@@ -76,7 +76,7 @@ function stubInvoke(assets: AssetFile[] = [], projects: StudioProject[] = PROJEC
       case "parse_beat_folder_for_create":
         return Promise.resolve({
           name: "x", key: null, bpm: null, flp_path: null, flp_files: [],
-          created_date: null, year_month: "2026/08", audio_files: [], all_files: [],
+          created_date: null, year_month: "2026/08", year_month_geschaetzt: false, audio_files: [], all_files: [],
           cover_path: null, thumbnail_path: null, video_path: null, suggested_id: 1,
         }) as never;
       default: return Promise.resolve(null) as never;

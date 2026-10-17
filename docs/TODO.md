@@ -37,6 +37,49 @@ Beide Enden sind da, es fehlt nur das Bedienelement dazwischen.
 
 ---
 
+## Vorgemerkt am 17.10.2026 (nach dem Upload-Tab-Durchgang)
+
+### Durchsicht aller Tabs nach Schrift/Kontrast-Umstellung
+Die Scheiben „Kontrast" (fcdd185), „Buchstabenabstand" (0bd1f4f) und
+„Schrift eine Stufe größer" (9798feb) wirken in der ganzen App, angesehen
+wurde aber nur der Upload-Tab.
+- [ ] Archiv, Studio, Create, Dashboard, Einstellungen per Screenshot prüfen
+      (`docs/vergleich/screenshot.js`, Kopie auf eigenem Port)
+- [ ] Umbrüche, abgeschnittene Texte, zu enge Spalten korrigieren
+
+### Einheitlichkeit in den anderen Tabs
+Im Upload-Tab gibt es jetzt `ui/Segmented` (ein Umschalter) und die
+Knopf-Familie (`Button`/`IconButton`). Archiv, Studio und Create haben noch
+eigene Bauarten.
+- [ ] Umschalter auf `Segmented` umstellen, Tab für Tab
+- [ ] Selbstgestylte `<button>` auf `Button`/`IconButton`, außer Sonderformen
+
+### Monatskalender in der Planung (QoL-Fahrplan Nr. 5)
+Wird eingebaut, sobald der Rest gut läuft. Baut auf der Planungs-Leiste auf:
+Warteschlange „Ohne Termin" + Ziehen auf Tage gibt es schon.
+
+### Analyse-Tab (eigener Tab, später)
+- [ ] Aufrufe pro Beat über yt-dlp (ohne API-Schlüssel), täglich aktualisiert
+- [ ] Welche Type-Beat-Artists, Genres, BPM-Bereiche, Upload-Wochentage bei
+      den eigenen Videos die meisten Aufrufe bringen
+- Voraussetzung: Uploads sind nacherfasst (sonst fehlen 2024/25)
+
+### Lautheit/Clipping prüfen (später, nicht dringend)
+ffmpeg misst LUFS und Spitzen beim Laden des Beats, Anzeige in der
+Asset-Kachel.
+
+### Getaggte MP3 per ffmpeg (Idee, offen)
+Tags sitzen nicht immer an festen Stellen — Standard-Tags schon, manche
+liegen bewusst in Pausen des Beats. Ein starres „alle 30 s" passt also
+nicht; bräuchte Tag-Positionen je Beat (z. B. aus FL-Markern?).
+
+### Zum Schluss der Sitzung am 17.10.2026
+- [ ] Arbeitskopien in `%TEMP%\beatos-vorher`, `beatos-nachher` und den
+      Build-Ordner `beatos-target` löschen (node_modules dort ist eine
+      Junction — nicht rekursiv hindurch löschen)
+
+---
+
 ## Erledigt
 
 ### Collabs / Sample-Credits — umgesetzt am 04.09.2026

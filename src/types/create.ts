@@ -29,6 +29,8 @@ export interface ParsedBeatFolder {
   flp_files: FlpFileInfo[];
   created_date: string | null;
   year_month: string;
+  /** Monat geraten: keine FLP, oder FLP kopiert/entpackt (Erstelldatum = Kopierdatum). */
+  year_month_geschaetzt: boolean;
   audio_files: AudioFileInfo[];
   all_files: string[];
   /** Bild ohne "thumb" im Namen */

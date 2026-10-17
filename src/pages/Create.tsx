@@ -60,6 +60,8 @@ export default function Create() {
   const [sourceFolderPath, setSourceFolderPath] = useState<string | null>(null);
   const [createdDate, setCreatedDate] = useState<string | null>(null);
   const [yearMonth, setYearMonth] = useState<string>("");
+  /** Monat aus keiner FLP oder einer kopierten FLP — als „geschätzt" markiert. */
+  const [ymGeschaetzt, setYmGeschaetzt] = useState(false);
   const [autoRename, setAutoRename] = useState(true);
   const [trashSource, setTrashSource] = useState(true);
   const [preset, setPreset] = useState<TypeBeatPreset | null>(null);
@@ -113,6 +115,7 @@ export default function Create() {
     setSourceFolderPath(null);
     setCreatedDate(null);
     setYearMonth("");
+    setYmGeschaetzt(false);
     setAudioFiles([]);
     setFlpFiles([]);
     setCoverImage(null);
@@ -233,6 +236,7 @@ export default function Create() {
       setCatalogId(`#${String(parsed.suggested_id).padStart(4, "0")}`);
       setCreatedDate(parsed.created_date);
       setYearMonth(parsed.year_month);
+      setYmGeschaetzt(parsed.year_month_geschaetzt);
       setAudioFiles(parsed.audio_files);
 
       if (parsed.audio_files.length > 0) {
@@ -403,6 +407,8 @@ export default function Create() {
               setCatalogId={setCatalogId}
               createdDate={createdDate}
               yearMonth={yearMonth}
+              setYearMonth={v => { setYearMonth(v); setYmGeschaetzt(false); }}
+              yearMonthGeschaetzt={ymGeschaetzt}
             />
           </div>
 

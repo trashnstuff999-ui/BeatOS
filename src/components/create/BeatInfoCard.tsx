@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { CheckCircle, Music } from "lucide-react";
-import { C, commonStyles, radius } from "../../lib/theme";
+import { C, alpha, commonStyles, radius } from "../../lib/theme";
+import { getYearMonthFolder } from "../../lib/archive";
 import { SectionCard } from "../ui/SectionCard";
 
 interface BeatInfoCardProps {
@@ -17,7 +18,11 @@ interface BeatInfoCardProps {
   catalogId: string;
   setCatalogId: (v: string) => void;
   createdDate: string | null;
+  /** Archivordner "JJJJ/MM_MONAT" — bestimmt, wo der Beat im Archiv landet. */
   yearMonth: string;
+  setYearMonth: (v: string) => void;
+  /** Monat geraten (keine FLP, oder FLP kopiert/entpackt) — dann prüfen lassen. */
+  yearMonthGeschaetzt: boolean;
 }
 
 export function BeatInfoCard({
@@ -31,6 +36,8 @@ export function BeatInfoCard({
   setCatalogId,
   createdDate,
   yearMonth,
+  setYearMonth,
+  yearMonthGeschaetzt,
 }: BeatInfoCardProps) {
   return (
     <SectionCard icon={Music} title="Beat-Info">
@@ -62,12 +69,44 @@ export function BeatInfoCard({
         <SmallInput label="Katalog-ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" width={96} mono />
       </div>
 
-      {createdDate && (
-        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.onSecondaryFixedVar }}>
-          <CheckCircle size={14} color={C.mint} />
-          <span>Created: {createdDate}</span>
-          <span style={{ opacity: 0.5 }}>•</span>
-          <span style={{ opacity: 0.7 }}>{yearMonth}</span>
+      {/* Archivmonat: wohin der Beat im Archiv kommt. Vorher nur Anzeige —
+          kam ein Beat als ZIP oder über Dropbox, landete er im Monat des
+          Entpackens, und man konnte es nicht ändern. */}
+      {yearMonth && (
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: C.onSecondaryFixedVar }}>
+          {createdDate && (
+            <>
+              <CheckCircle size={14} color={C.mint} />
+              <span>Created: {createdDate}</span>
+              <span style={{ opacity: 0.5 }}>•</span>
+            </>
+          )}
+          <label htmlFor="archivmonat">Archivmonat</label>
+          <input
+            id="archivmonat"
+            type="month"
+            value={`${yearMonth.slice(0, 4)}-${yearMonth.slice(5, 7)}`}
+            onChange={e => {
+              const [j, m] = e.target.value.split("-").map(Number);
+              if (j && m) setYearMonth(getYearMonthFolder(new Date(j, m - 1, 1)));
+            }}
+            style={{
+              padding: "4px 8px", fontSize: 12, fontFamily: "inherit",
+              colorScheme: "dark", outline: "none",
+              background: C.surfaceContainerLowest, color: C.onSurface,
+              border: `1px solid ${yearMonthGeschaetzt ? alpha(C.primary, 0.6) : C.border20}`,
+              borderRadius: radius.control,
+            }}
+          />
+          <span style={{ fontFamily: "monospace", opacity: 0.8 }}>{yearMonth}</span>
+          {yearMonthGeschaetzt && (
+            <span
+              title="Keine FLP gefunden, oder die FLP wurde kopiert/entpackt — dann ist ihr Erstelldatum das Kopierdatum, nicht der Produktionsmonat."
+              style={{ color: C.primary, cursor: "help" }}
+            >
+              geschätzt — bitte prüfen
+            </span>
+          )}
         </div>
       )}
     </SectionCard>

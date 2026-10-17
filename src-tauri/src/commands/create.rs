@@ -182,6 +182,15 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
         (None, None, year_month_from_secs(now_secs))
     };
     
+    // Geschätzt: ohne FLP ist es das heutige Datum. Und beim Kopieren oder
+    // Entpacken (ZIP, Dropbox) setzt Windows das Erstelldatum auf jetzt,
+    // das Änderungsdatum bleibt — „erstellt nach geändert" heißt also: das
+    // Erstelldatum ist das Kopierdatum, der Monat vermutlich falsch.
+    let year_month_geschaetzt = match flp_by_created.first() {
+        None => true,
+        Some((created, modified, _)) => *created > modified.saturating_add(60),
+    };
+
     // Asset slots — cover and thumbnail are told apart by the "thumb" marker
     // in the filename (same rule as the Studio scan). Taking "the first
     // image" would show the thumbnail as cover whenever it sorts first.
@@ -198,6 +207,7 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
         flp_files,
         created_date,
         year_month,
+        year_month_geschaetzt,
         audio_files,
         all_files,
         cover_path,
