@@ -221,3 +221,23 @@ export function zerlege(zeile: string): Stueck[] {
   if (zuletzt < zeile.length) out.push({ art: "text", text: zeile.slice(zuletzt) });
   return out;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Exportnamen
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Die Paare „ÜBERSCHRIFT:" + Zeile darunter aus dem Text unter dem Titel —
+ *  so stehen in der BeatStars-Vorlage die Namen für den Export aus Premiere
+ *  und Photoshop. Die Vorlage bleibt die Quelle: ändert sie sich, ändern sich
+ *  die Namen mit. „TAGS:" ist kein Exportname. */
+export function exportNamen(inhalt: string): { label: string; wert: string }[] {
+  const zeilen = extractDescription(inhalt).split(/\r?\n/).map(z => z.trim());
+  const out: { label: string; wert: string }[] = [];
+  zeilen.forEach((z, i) => {
+    const m = z.match(/^(.+?):$/);
+    if (!m || /^tags$/i.test(m[1])) return;
+    const wert = zeilen.slice(i + 1).find(x => x !== "");
+    if (wert && !wert.endsWith(":")) out.push({ label: m[1], wert });
+  });
+  return out;
+}

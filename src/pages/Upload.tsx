@@ -152,6 +152,7 @@ export default function Upload() {
           >
             {data && !error && (
               <AssetChecklistCard
+                beatId={data.beat.id}
                 assets={data.assets}
                 beatPath={data.beat.path}
                 onRefresh={refresh}

@@ -10,16 +10,17 @@
 // landen würde, leuchtet schon beim Ziehen auf.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  FileAudio, FileVideo, FolderOpen, FolderTree, RefreshCw, Wand2, X, Plus, Archive,
+  FileAudio, FileVideo, FolderOpen, FolderTree, RefreshCw, Wand2, X, Plus, Archive, Copy, Check,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { C, alpha, radius } from "../../lib/theme";
 import { SectionIconBtn } from "../ui/SectionCard";
-import { Button } from "../ui/Button";
+import { Button, IconButton } from "../ui/Button";
+import { exportNamen } from "../../lib/descriptions";
 import { useEscapeStack } from "../ui";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -29,6 +30,8 @@ import type { AssetCheck } from "../../types/upload";
 import { UPLOAD_AKTION, type UploadAktion } from "../../lib/uploadReady";
 
 interface AssetChecklistCardProps {
+  /** Für die Exportnamen (aus der BeatStars-Vorlage dieses Beats). */
+  beatId: string;
   assets: AssetCheck;
   beatPath: string;
   onRefresh: () => void;
@@ -92,7 +95,7 @@ function useImageSize(pfad: string | null, regel?: { verhaeltnis: number; minBre
   return mass;
 }
 
-export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: AssetChecklistCardProps) {
+export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConvert }: AssetChecklistCardProps) {
   const { settings } = useSettings();
   const { melde } = useDialog();
   const [picker, setPicker] = useState<AssetSlotKind | null>(null);
@@ -225,6 +228,8 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
         ) : (
           <>
             Dateien aus dem Explorer hierher ziehen
+            <span>·</span>
+            <ExportNamen beatId={beatId} />
             {/* Nach ein paar Exporten aus FL liegen mehrere MP3/WAV im Ordner.
                 Gezeigt wird die neueste; die übrigen lassen sich wegräumen. */}
             {assets.alte_exporte > 0 && (
@@ -260,6 +265,94 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
         />
       )}
     </>
+  );
+}
+
+/** „Exportnamen" in der Hinweiszeile: ein Klick öffnet die Namen für den
+ *  Export aus Premiere und Photoshop, je mit Kopier-Knopf. Sie kommen aus
+ *  der BeatStars-Vorlage (dort standen sie schon) — geladen erst beim Öffnen.
+ *  Das Fenster liegt über allem und schiebt im Kopf nichts zur Seite. */
+function ExportNamen({ beatId }: { beatId: string }) {
+  const [offen, setOffen] = useState(false);
+  const [namen, setNamen] = useState<{ label: string; wert: string }[] | null>(null);
+  const [kopiert, setKopiert] = useState<string | null>(null);
+  const huelle = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!offen) return;
+    let abgebrochen = false;
+    setNamen(null);
+    api.upload.effectiveDescriptions(beatId)
+      .then(d => { if (!abgebrochen) setNamen(exportNamen(d.beatstars)); })
+      .catch(() => { if (!abgebrochen) setNamen([]); });
+    const daneben = (e: MouseEvent) => { if (!huelle.current?.contains(e.target as Node)) setOffen(false); };
+    const taste = (e: KeyboardEvent) => { if (e.key === "Escape") setOffen(false); };
+    document.addEventListener("mousedown", daneben);
+    document.addEventListener("keydown", taste);
+    return () => {
+      abgebrochen = true;
+      document.removeEventListener("mousedown", daneben);
+      document.removeEventListener("keydown", taste);
+    };
+  }, [offen, beatId]);
+
+  const kopieren = async (wert: string) => {
+    try {
+      await navigator.clipboard.writeText(wert);
+      setKopiert(wert);
+      setTimeout(() => setKopiert(k => (k === wert ? null : k)), 1400);
+    } catch (e) {
+      console.error("[Exportnamen] Kopieren fehlgeschlagen:", e);
+    }
+  };
+
+  return (
+    <span ref={huelle} style={{ position: "relative", display: "inline-flex" }}>
+      <Button
+        variant="ghost" size="sm"
+        onClick={() => setOffen(o => !o)}
+        title="Namen für den Export aus Premiere und Photoshop"
+        style={{ padding: "2px 6px", color: C.primary }}
+      >
+        Exportnamen
+      </Button>
+      {offen && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40,
+          width: 420, maxWidth: "70vw", padding: 12,
+          display: "flex", flexDirection: "column", gap: 10,
+          background: C.surfaceContainer, border: `1px solid ${C.border20}`,
+          borderRadius: radius.card, boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+          color: C.onSurface,
+        }}>
+          {namen === null && <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Lade …</span>}
+          {namen?.length === 0 && (
+            <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
+              Keine Exportnamen gefunden — sie kommen aus der BeatStars-Vorlage
+              (Zeilen „ÜBERSCHRIFT:" und der Name darunter).
+            </span>
+          )}
+          {namen?.map(n => (
+            <div key={n.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar }}>
+                  {n.label}
+                </div>
+                <div style={{ fontSize: 12, fontFamily: "monospace", color: C.onSurface, wordBreak: "break-word", marginTop: 2 }}>
+                  {n.wert}
+                </div>
+              </div>
+              <IconButton
+                icon={kopiert === n.wert ? Check : Copy} size={28} variant="secondary"
+                onClick={() => kopieren(n.wert)}
+                title={kopiert === n.wert ? "Kopiert" : "Kopieren"}
+                style={{ flexShrink: 0, ...(kopiert === n.wert ? { color: C.mint, borderColor: C.mint } : null) }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 

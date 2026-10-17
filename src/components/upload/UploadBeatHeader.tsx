@@ -111,7 +111,9 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div style={{
-        position: "relative", overflow: "hidden",
+        // Kein overflow:hidden hier: das Fenster „Exportnamen" darf über den
+        // Rand hinaus. Abgeschnitten wird nur der Hintergrund, in eigener Ebene.
+        position: "relative",
         background: C.surfaceContainerLow,
         border: `1px solid ${open ? C.primary + "50" : C.border10}`,
         borderRadius: radius.card,
@@ -122,8 +124,11 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
           auslaufend. So hat jeder Beat seine eigene Stimmung — der Kopf soll
           nach dem Beat aussehen, nicht nach einem Formular. */}
       {coverUrl && (
-        <>
-          <div aria-hidden style={{
+        <div aria-hidden style={{
+          position: "absolute", inset: 0, overflow: "hidden",
+          borderRadius: radius.card, pointerEvents: "none",
+        }}>
+          <div style={{
             position: "absolute", inset: -60,
             backgroundImage: `url("${coverUrl}")`,
             backgroundSize: "cover", backgroundPosition: "center",
@@ -136,7 +141,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
             background: `linear-gradient(90deg, transparent 0%, ${alpha(C.surfaceContainerLow, 0.85)} 75%)`,
             pointerEvents: "none",
           }} />
-        </>
+        </div>
       )}
 
       {/* Auswahl aufheben — fest in der Ecke. Am Ende der Titelzeile hing es

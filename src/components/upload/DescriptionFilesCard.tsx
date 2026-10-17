@@ -297,17 +297,29 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           </div>
         </OutputRow>
 
-        <OutputRow
-          label="Beschreibung"
-          kopiert={kopiert === "description"}
-          onCopy={() => kopieren("description", activeDescription)}
-          disabled={!drafts || isLoading}
-        >
-          {isLoading || !activeDescription
-            ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
-            : <Vorschau text={activeDescription} youtube={active === "youtube"} />
-          }
-        </OutputRow>
+        {/* BeatStars bekommt keine Beschreibung: das Feld wird dort nicht
+            genutzt, und der Text unter dem Titel der Vorlage sind die
+            Exportnamen — die stehen jetzt oben bei den Dateien. */}
+        {active === "beatstars" ? (
+          <div style={{
+            padding: "10px 2px", borderTop: `1px solid ${C.border10}`,
+            fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5,
+          }}>
+            BeatStars ohne Beschreibung · Exportnamen stehen oben bei den Dateien
+          </div>
+        ) : (
+          <OutputRow
+            label="Beschreibung"
+            kopiert={kopiert === "description"}
+            onCopy={() => kopieren("description", activeDescription)}
+            disabled={!drafts || isLoading}
+          >
+            {isLoading || !activeDescription
+              ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
+              : <Vorschau text={activeDescription} youtube={active === "youtube"} />
+            }
+          </OutputRow>
+        )}
       </div>
 
       <div style={{ minWidth: 0 }}>

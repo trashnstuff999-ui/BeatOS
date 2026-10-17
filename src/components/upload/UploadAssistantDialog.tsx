@@ -94,6 +94,14 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
     tags: extractTags(content),
   };
 
+  const kopierSchritte = ([
+    ["title", "Titel kopieren"],
+    ["description", "Beschreibung kopieren"],
+    ["tags", "Tags kopieren"],
+  ] as Array<[CopyKey, string]>)
+    .filter(([key]) => !(platform === "beatstars" && key === "description"))
+    .filter(([key]) => key === "title" || pieces[key]);
+
   const linkPlattform = url.trim() ? plattformAusLink(url) : null;
   const falscherLink = linkPlattform !== null && linkPlattform !== platform;
   const ohneBeatstarsLink = platform !== "beatstars"
@@ -218,12 +226,10 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
               icon={<PlatIcon size={13} color={meta.color} strokeWidth={2} />}
             />
 
-            {/* Steps 2-4: copy pieces */}
-            {([
-              [2, "title", "Titel kopieren"],
-              [3, "description", "Beschreibung kopieren"],
-              [4, "tags", "Tags kopieren"],
-            ] as Array<[number, CopyKey, string]>).map(([idx, key, label]) => (
+            {/* Kopier-Schritte. BeatStars ohne Beschreibung: dort stehen in der
+                Vorlage die Exportnamen, kein Text für die Plattform. Was leer
+                ist, ist kein Schritt — es gäbe nichts zu kopieren. */}
+            {kopierSchritte.map(([key, label], i) => [i + 2, key, label] as const).map(([idx, key, label]) => (
               <StepRow
                 key={key}
                 index={idx}
@@ -253,7 +259,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
               borderRadius: radius.card,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <StepIndex index={5} done={linkPlattform === platform} />
+                <StepIndex index={kopierSchritte.length + 2} done={linkPlattform === platform} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
                   Hochgeladen? Link einfügen
                 </span>
