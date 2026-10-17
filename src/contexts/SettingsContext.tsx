@@ -26,6 +26,8 @@ export interface AppSettings {
   youtubeUrl: string;
   beatstarsUrl: string;
   defaultGenreTags: string;
+  /** Upload-Rhythmus: Wochentage als Zahlen (0 = So … 6 = Sa), z. B. "1,3,5". Leer = kein Rhythmus. */
+  uploadDays: string;
 }
 
 export const DEFAULTS: AppSettings = {
@@ -41,6 +43,7 @@ export const DEFAULTS: AppSettings = {
   youtubeUrl: "",
   beatstarsUrl: "",
   defaultGenreTags: "",
+  uploadDays: "",
 };
 
 const STORAGE_KEY = "beatos_settings";
@@ -59,6 +62,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   youtubeUrl: "youtube_url",
   beatstarsUrl: "beatstars_url",
   defaultGenreTags: "default_genre_tags",
+  uploadDays: "upload_days",
 };
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {

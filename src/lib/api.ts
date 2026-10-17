@@ -27,6 +27,7 @@ import type {
 import type {
   UploadData,
   ScheduleEntry,
+  QueueBeat,
   TypeBeatPreset,
   SaveTypeBeatPresetParams,
   UpdateUploadStatusParams,
@@ -326,6 +327,13 @@ export const api = {
     /** Scheduled/uploaded entries between two YYYY-MM-DD dates (inclusive). */
     getSchedule: (fromDate: string, toDate: string) =>
       invoke<ScheduleEntry[]>("get_upload_schedule", { fromDate, toDate }),
+
+    /** Beats der letzten 180 Tage ohne Termin. */
+    getQueue: () => invoke<QueueBeat[]>("get_upload_queue"),
+
+    /** Einen Beat an einem Tag für alle noch offenen Plattformen einplanen. */
+    scheduleRelease: (beatId: string, date: string) =>
+      invoke<void>("schedule_release", { beatId, date }),
 
     updateTypeBeatInfo: (
       beatId: string,

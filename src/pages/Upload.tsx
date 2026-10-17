@@ -261,6 +261,9 @@ export default function Upload() {
           beatName={data?.beat.name ?? null}
           uploads={data?.uploads ?? null}
           onChanged={handleStatusChanged}
+          onSelectBeat={id => {
+            api.beats.getById(id).then(b => { if (b) setSelectedBeat(b); }).catch(() => {});
+          }}
         />
       </PlannerDock>
 

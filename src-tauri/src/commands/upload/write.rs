@@ -142,6 +142,34 @@ pub fn update_upload_status(params: UpdateUploadStatusParams) -> Result<(), Stri
     Ok(())
 }
 
+/// Einen Beat an einem Tag für alle Plattformen einplanen — das Ziehen aus
+/// der Warteschlange auf einen Tag. Schon Hochgeladenes bleibt, wie es ist.
+#[tauri::command]
+pub fn schedule_release(beat_id: String, date: String) -> Result<(), String> {
+    // YYYY-MM-DD — dieselbe Form, die das Datumsfeld im Status schreibt.
+    let b = date.as_bytes();
+    let gueltig = b.len() == 10 && b[4] == b'-' && b[7] == b'-'
+        && b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit());
+    if !gueltig { return Err(format!("Kein gültiges Datum: {date}")); }
+
+    let conn = open_db().map_err(|e| e.to_string())?;
+    release_einplanen(&conn, &beat_id, &date).map_err(|e| format!("Planen fehlgeschlagen: {e}"))
+}
+
+pub(crate) fn release_einplanen(conn: &rusqlite::Connection, beat_id: &str, date: &str) -> rusqlite::Result<()> {
+    for p in PLATFORMS {
+        conn.execute(
+            "INSERT INTO beat_uploads (beat_id, platform, status, scheduled_at)
+             VALUES (?1, ?2, 'scheduled', ?3)
+             ON CONFLICT(beat_id, platform) DO UPDATE SET
+                status       = CASE WHEN status = 'uploaded' THEN status ELSE 'scheduled' END,
+                scheduled_at = CASE WHEN status = 'uploaded' THEN scheduled_at ELSE excluded.scheduled_at END",
+            rusqlite::params![beat_id, p, date],
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Serialize)]
 pub struct TypeBeatPreset {
     pub id:              i64,

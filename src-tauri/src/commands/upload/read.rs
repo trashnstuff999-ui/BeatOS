@@ -19,6 +19,8 @@ pub struct ScheduleEntry {
     pub status: String,     // scheduled | uploaded
     pub beat_id: String,
     pub beat_name: String,
+    /// Voller Pfad zum Cover — die Planung zeigt Covers statt Punkte.
+    pub cover: Option<String>,
 }
 
 /// A "scheduled" entry whose date has passed: promote it to
@@ -39,12 +41,12 @@ pub fn promote_past_scheduled(conn: &rusqlite::Connection) -> rusqlite::Result<u
 
 /// All scheduled/uploaded platform entries between two dates (inclusive).
 /// Dates are YYYY-MM-DD strings, so a plain string BETWEEN is correct.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<ScheduleEntry>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT u.scheduled_at, u.platform, u.status, b.id, b.name
+        "SELECT u.scheduled_at, u.platform, u.status, b.id, b.name, b.path
          FROM beat_uploads u JOIN beats b ON b.id = u.beat_id
          WHERE u.scheduled_at IS NOT NULL AND u.scheduled_at != ''
            AND u.scheduled_at BETWEEN ?1 AND ?2
@@ -59,6 +61,8 @@ pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<Sch
                 status:    row.get(2)?,
                 beat_id:   row.get(3)?,
                 beat_name: row.get(4)?,
+                cover:     row.get::<_, Option<String>>(5)?
+                    .and_then(|p| crate::commands::get_beat_cover_path(p).ok().flatten()),
             })
         })
         .map_err(|e| e.to_string())?
@@ -66,6 +70,69 @@ pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<Sch
         .collect();
 
     Ok(entries)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Warteschlange: fertig, aber noch ohne Termin
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize)]
+pub struct QueueBeat {
+    pub id: String,
+    pub name: String,
+    pub cover: Option<String>,
+    /// Was vor dem Upload noch fehlt ("Infos", "Audio", "Cover") — leer = bereit.
+    pub fehlt: Vec<String>,
+}
+
+/// Wie weit zurück die Warteschlange schaut. `beat_uploads` wird erst seit
+/// 02/2026 geführt: ältere Beats sind oft längst hochgeladen, haben aber
+/// keinen Eintrag — ohne Grenze stünden sie alle als „fertig, ohne Termin" da.
+// ponytail: feste Grenze; entfällt, wenn der Archiv-Tab Uploads nacherfassen kann.
+const WARTESCHLANGE_TAGE: i64 = 180;
+
+/// Beats ohne Termin auf irgendeiner Plattform — mit dem, was vor dem
+/// Upload noch fehlt.
+///
+/// Nur „bereite" Beats zu zeigen, ließ die Liste fast immer leer: gemessen
+/// am 17.10.2026 hatten nur 3 Beats Infos, aber keinen Termin — die Infos
+/// entstehen meist erst beim Upload. Einplanen darf man vorher; was fehlt,
+/// steht dabei.
+#[tauri::command(async)]
+pub fn get_upload_queue() -> Result<Vec<QueueBeat>, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT b.id, b.name, b.path,
+                TRIM(COALESCE(b.type_beat_main, '')) != '' AND TRIM(COALESCE(b.genre_tags, '')) != ''
+         FROM beats b
+         WHERE b.path IS NOT NULL
+           AND COALESCE(b.created_date, '') >= date('now', ?1)
+           AND NOT EXISTS (
+             SELECT 1 FROM beat_uploads u WHERE u.beat_id = b.id
+               AND ((u.scheduled_at IS NOT NULL AND u.scheduled_at != '') OR u.status = 'uploaded'))
+         ORDER BY b.created_date DESC",
+    ).map_err(|e| e.to_string())?;
+    let zeilen: Vec<(String, String, String, bool)> = stmt
+        .query_map(rusqlite::params![format!("-{WARTESCHLANGE_TAGE} days")],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(zeilen.into_iter()
+        .map(|(id, name, path, infos)| {
+            let a = scan_beat_assets(Path::new(&path));
+            let mut fehlt = Vec::new();
+            if !infos { fehlt.push("Infos".to_string()); }
+            if a.mp3.is_none() && a.wav.is_none() { fehlt.push("Audio".to_string()); }
+            if a.cover.is_none() { fehlt.push("Cover".to_string()); }
+            QueueBeat {
+                id, name, fehlt,
+                cover: crate::commands::get_beat_cover_path(path).ok().flatten(),
+            }
+        })
+        .collect())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -446,5 +513,25 @@ mod tests {
         assert_eq!(row(&conn, "0004", "beatstars").0, "draft");
         // an existing uploaded_at is never overwritten
         assert_eq!(row(&conn, "0005", "beatstars").1.as_deref(), Some("2020-01-02"));
+    }
+
+    /// Auf einen Tag ziehen plant alle Plattformen ein — schon Hochgeladenes
+    /// behält Zustand und Datum.
+    #[test]
+    fn release_einplanen_laesst_hochgeladenes_stehen() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO beat_uploads (beat_id, platform, status, scheduled_at, uploaded_at)
+             VALUES ('0900', 'beatstars', 'uploaded', '2026-10-01', '2026-10-01')", [],
+        ).unwrap();
+        super::super::write::release_einplanen(&conn, "0900", "2026-10-24").unwrap();
+
+        let zeile = |p: &str| conn.query_row(
+            "SELECT status, scheduled_at FROM beat_uploads WHERE beat_id = '0900' AND platform = ?1",
+            [p], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        ).unwrap();
+        assert_eq!(zeile("beatstars"), ("uploaded".into(), "2026-10-01".into()));
+        assert_eq!(zeile("youtube"), ("scheduled".into(), "2026-10-24".into()));
+        assert_eq!(zeile("soundcloud"), ("scheduled".into(), "2026-10-24".into()));
     }
 }

@@ -63,6 +63,8 @@ export interface ScheduleEntry {
   status: UploadStatus;
   beat_id: string;
   beat_name: string;
+  /** Voller Pfad zum Cover, falls vorhanden. */
+  cover: string | null;
 }
 
 export interface TypeBeatPreset {
@@ -189,4 +191,13 @@ export interface FolderSync {
   to: string;
   files_renamed: number;
   error: string | null;
+}
+
+/** Ein Beat ohne Termin — für die Warteschlange der Planung. */
+export interface QueueBeat {
+  id: string;
+  name: string;
+  cover: string | null;
+  /** Was vor dem Upload noch fehlt ("Infos", "Audio", "Cover") — leer = bereit. */
+  fehlt: string[];
 }
