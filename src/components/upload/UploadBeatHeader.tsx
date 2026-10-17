@@ -7,11 +7,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { Music, CheckCircle2, Search, ChevronDown, X } from "lucide-react";
+import { Music, Search, ChevronDown, X } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { computeReadySteps } from "../../lib/uploadReady";
+import { naechsterSchritt } from "../../lib/uploadReady";
+import { NaechsterSchrittBlock } from "./NaechsterSchrittBlock";
 import { IconButton } from "../ui/Button";
 import type { UploadData } from "../../types/upload";
 import type { Beat } from "../../types/browse";
@@ -22,12 +23,14 @@ interface UploadBeatHeaderProps {
   data: UploadData | null;
   /** Wird unter der Kopfzeile in dieselbe Karte gehaengt (Asset-Ampel). */
   children?: React.ReactNode;
+  /** Nach dem Einplanen aus dem Kopf: Daten und Planung neu laden. */
+  onChanged: () => void;
+  /** „Planen" im Kopf klappt die Planungs-Leiste auf. */
+  onPlanungOeffnen: () => void;
 }
 
-export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: UploadBeatHeaderProps) {
-  const steps = data ? computeReadySteps(data) : null;
-  const doneCount = steps?.filter(s => s.done).length ?? 0;
-  const missingSteps = steps?.filter(s => !s.done) ?? [];
+export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onChanged, onPlanungOeffnen }: UploadBeatHeaderProps) {
+  const schritt = data ? naechsterSchritt(data) : null;
 
   // ── Cover via asset protocol (stale-guard like AudioPlayerContext) ────────
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -214,33 +217,6 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
             }
           </div>
 
-          {/* „Bin ich fertig?" — die wichtigste Frage auf dieser Seite, als
-              stille Zeile unter dem Titel. */}
-          {steps && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 2 }}>
-              {missingSteps.length === 0 ? (
-                <span style={{ display: "flex", alignItems: "center", gap: 6, color: C.mint, fontWeight: 600 }}>
-                  <CheckCircle2 size={14} strokeWidth={2} />
-                  Bereit zum Hochladen
-                </span>
-              ) : (
-                <>
-                  <span style={{ color: C.onSecondaryFixedVar }}>Es fehlt</span>
-                  {missingSteps.map((step, i) => (
-                    <span key={step.key} title={step.detail} style={{ color: C.onSurface, cursor: "help" }}>
-                      {step.label}{i < missingSteps.length - 1 ? "," : ""}
-                    </span>
-                  ))}
-                  <span style={{
-                    color: C.onSecondaryFixedVar, fontVariantNumeric: "tabular-nums", marginLeft: 4,
-                  }}>
-                    {doneCount}/{steps.length}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-
           {/* Asset-Kacheln: gehören zu „wie weit bin ich" — unten in der Spalte */}
           {children && (
             <div style={{ marginTop: "auto", paddingTop: 12 }}>
@@ -248,6 +224,19 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children }: Upl
             </div>
           )}
         </div>
+
+        {/* Rechts: was als Nächstes ansteht — mit dem Knopf, der dorthin führt.
+            Vorher stand hier freie Fläche, und der Fortschritt als Zeile
+            „Es fehlt … 2/4" unter dem Titel. */}
+        {data && schritt && (
+          <NaechsterSchrittBlock
+            schritt={schritt}
+            beatId={data.beat.id}
+            beatPath={data.beat.path}
+            onChanged={onChanged}
+            onPlanungOeffnen={onPlanungOeffnen}
+          />
+        )}
       </div>
       </div>
 

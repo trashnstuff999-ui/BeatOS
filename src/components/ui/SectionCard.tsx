@@ -17,11 +17,14 @@ interface SectionCardProps {
   actions?: React.ReactNode;
   children: React.ReactNode;
   style?: React.CSSProperties;
+  /** Sprungziel, z. B. für „Zu den Infos" im Kopf des Upload-Tabs. */
+  id?: string;
 }
 
-export function SectionCard({ icon: Icon, title, actions, children, style }: SectionCardProps) {
+export function SectionCard({ icon: Icon, title, actions, children, style, id }: SectionCardProps) {
   return (
-    <section style={{
+    <section id={id} style={{
+      scrollMarginTop: 16,
       background: C.surfaceContainerLow,
       border: `1px solid ${C.border10}`,
       borderRadius: radius.card,

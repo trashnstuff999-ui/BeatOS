@@ -26,6 +26,7 @@ import { useSettings } from "../../contexts/SettingsContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { AssetPickerDialog, type AssetSlotKind } from "../AssetPickerDialog";
 import type { AssetCheck } from "../../types/upload";
+import { UPLOAD_AKTION, type UploadAktion } from "../../lib/uploadReady";
 
 interface AssetChecklistCardProps {
   assets: AssetCheck;
@@ -95,6 +96,12 @@ export function AssetChecklistCard({ assets, beatPath, onRefresh, onConvert }: A
   const { settings } = useSettings();
   const { melde } = useDialog();
   const [picker, setPicker] = useState<AssetSlotKind | null>(null);
+  // „Cover zuweisen" im Kopf öffnet den Picker hier.
+  useEffect(() => {
+    const auf = (e: Event) => { if ((e as CustomEvent<UploadAktion>).detail.art === "cover") setPicker("cover"); };
+    window.addEventListener(UPLOAD_AKTION, auf);
+    return () => window.removeEventListener(UPLOAD_AKTION, auf);
+  }, []);
   const [preview, setPreview] = useState<{ label: string; path: string } | null>(null);
 
   // Trenner aus dem Pfad selbst ablesen statt fest annehmen: die Bibliothek

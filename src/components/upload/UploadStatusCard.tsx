@@ -31,6 +31,7 @@ import { Button, IconButton } from "../ui/Button";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
 import { tageRelativ } from "../../lib/time";
+import { UPLOAD_AKTION, type UploadAktion } from "../../lib/uploadReady";
 import { plattformAusLink, hochgeladenMelden, heuteISO } from "../../lib/uploadLinks";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";
 
@@ -113,6 +114,12 @@ const ROW_CSS = `
 export function UploadStatusCard(props: UploadStatusCardProps) {
   const { beatId, uploads, onChanged } = props;
   const [releaseOffen, setReleaseOffen] = useState(false);
+  // „Release starten" im Kopf öffnet den Assistenten hier.
+  useEffect(() => {
+    const auf = (e: Event) => { if ((e as CustomEvent<UploadAktion>).detail.art === "release") setReleaseOffen(true); };
+    window.addEventListener(UPLOAD_AKTION, auf);
+    return () => window.removeEventListener(UPLOAD_AKTION, auf);
+  }, []);
   /** Zuletzt per Einfügen übernommen — mit dem Stand davor, für Rückgängig. */
   const [eingefuegt, setEingefuegt] = useState<UploadPlatformRow | null>(null);
   const offen = uploads.some(u => u.status !== "uploaded");

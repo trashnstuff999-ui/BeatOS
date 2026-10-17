@@ -39,6 +39,7 @@ export default function Upload() {
   const [selectedBeat, setSelectedBeat] = useState<Beat | null>(null);
   const [convertOpen, setConvertOpen]   = useState(false);
   const [plannerRefresh, setPlannerRefresh] = useState(0);
+  const [planungOffen, setPlanungOffen] = useState(false);
   /** Hoehe der zugeklappten Planungs-Leiste, von ihr selbst gemessen. */
   const [dockHoehe, setDockHoehe] = useState(39);
   const { data, isLoading, error, refresh } = useUploadData(selectedBeat?.id ?? null);
@@ -146,6 +147,8 @@ export default function Upload() {
             selectedBeat={selectedBeat}
             onSelect={setSelectedBeat}
             data={!error ? data : null}
+            onChanged={handleStatusChanged}
+            onPlanungOeffnen={() => setPlanungOffen(true)}
           >
             {data && !error && (
               <AssetChecklistCard
@@ -238,7 +241,7 @@ export default function Upload() {
       </PageBody>
 
       {/* Planung — fixiert am unteren Rand, klappt nach oben auf */}
-      <PlannerDock onHoehe={setDockHoehe}>
+      <PlannerDock onHoehe={setDockHoehe} open={planungOffen} setOpen={setPlanungOffen}>
         <PlannerStrip
           refreshKey={plannerRefresh}
           beatId={data?.beat.id ?? null}
@@ -268,12 +271,14 @@ export default function Upload() {
 /** Der Planer beantwortet „was steht diese Woche an", nicht „was mache ich mit
  *  diesem Song". Deshalb liegt er als schmale Leiste am unteren Fensterrand
  *  und klappt bei Bedarf nach oben auf — ueber dem Player, wenn der laeuft. */
-function PlannerDock({ children, onHoehe }: {
+function PlannerDock({ children, onHoehe, open, setOpen }: {
   children: React.ReactNode;
+  /** Von außen steuerbar: „Planen" im Kopf klappt die Leiste auf. */
+  open: boolean;
+  setOpen: (f: (o: boolean) => boolean) => void;
   /** Meldet die gemessene Hoehe nach oben — daraus entsteht die Luft am Seitenende. */
   onHoehe: (px: number) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const { currentBeat } = useAudioPlayerContext();
   const bottom = currentBeat ? GLOBAL_PLAYER_HEIGHT : 0;
 

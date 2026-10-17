@@ -369,6 +369,9 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
     <SectionCard
       icon={ListOrdered}
       title="Kapitel"
+      // Neben „Infos & Credits" gleich hoch gestreckt: der Inhalt füllt die
+      // Höhe, damit die Chips unten sitzen können (siehe unten).
+      style={{ display: "flex", flexDirection: "column" }}
       // Was die ganze Liste füllt, steht im Kopf — es ist der erste Schritt:
       // Liste holen, dann anhören und verfeinern.
       actions={
@@ -409,7 +412,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
         </div>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
 
         {/* Abspielen + laufende Zeit */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -539,8 +542,11 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
           );
         })}
 
-        {/* Vorschläge — freie Eingabe bleibt, das hier ist nur schneller */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {/* Vorschläge — freie Eingabe bleibt, das hier ist nur schneller.
+            Am unteren Rand der Karte: neben der höheren Infos-Karte liegt der
+            freie Platz dann zwischen Liste und Chips — Platz zum Wachsen,
+            den neue Kapitel von oben füllen, statt einer Lücke am Ende. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: "auto", paddingTop: 4 }}>
           {VORSCHLAEGE.map(v => (
             <button
               key={v}
