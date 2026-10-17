@@ -139,6 +139,15 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
         </>
       )}
 
+      {/* Auswahl aufheben — fest in der Ecke. Am Ende der Titelzeile hing es
+          mitten im Kopf, seit rechts der nächste Schritt steht. */}
+      {selectedBeat && (
+        <IconButton
+          icon={X} size={28} onClick={() => onSelect(null)} title="Auswahl aufheben"
+          style={{ position: "absolute", top: 10, right: 10, zIndex: 1 }}
+        />
+      )}
+
       <div style={{
         position: "relative",
         display: "flex", alignItems: beatId ? "stretch" : "center", gap: 24,
@@ -193,10 +202,6 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
               />
             </button>
 
-            {/* Clear selection */}
-            {selectedBeat && (
-              <IconButton icon={X} size={28} onClick={() => onSelect(null)} title="Auswahl aufheben" />
-            )}
           </div>
 
           {/* Eine Zeile statt fünf Pillen — dieselben Angaben, ruhiger. */}

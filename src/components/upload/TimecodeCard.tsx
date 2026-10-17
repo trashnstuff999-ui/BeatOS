@@ -476,6 +476,24 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
           </div>
         )}
 
+        {/* Noch keine Kapitel: statt einer leeren Fläche, wie man anfängt. */}
+        {marken.length === 0 && (
+          <div style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 6, padding: "16px 8px", textAlign: "center",
+            fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.6,
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>Noch keine Kapitel</span>
+            <span>
+              Oben <b style={{ color: C.onSurfaceVariant }}>FL-Marker</b> oder <b style={{ color: C.onSurfaceVariant }}>Audio</b> wählen
+              und übernehmen —<br />oder abspielen und an jeder neuen Stelle <kbd style={{
+                padding: "1px 6px", borderRadius: 4, border: `1px solid ${C.border20}`,
+                fontFamily: "inherit", color: C.onSurfaceVariant,
+              }}>M</kbd> drücken.
+            </span>
+          </div>
+        )}
+
         {/* Zeilen */}
         {marken.map((m, i) => {
           const ersteZeile = i === 0;
