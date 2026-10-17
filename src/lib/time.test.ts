@@ -1,6 +1,7 @@
 // src/lib/time.test.ts
+import { describe, it, expect } from "vitest";
 
-import { formatRelativeTime, daysSince } from "./time";
+import { formatRelativeTime, daysSince, tageRelativ } from "./time";
 
 const NOW = 1_800_000_000; // fixed reference
 
@@ -37,5 +38,17 @@ describe("daysSince", () => {
   it("counts whole days", () => {
     expect(daysSince(ago(10), NOW)).toBe(0);
     expect(daysSince(ago(31 * DAY), NOW)).toBe(31);
+  });
+});
+
+describe("tageRelativ", () => {
+  const heute = new Date(2026, 9, 17, 23, 30);   // Sa 17.10.2026, spät abends
+  it("zählt Kalendertage in beide Richtungen", () => {
+    expect(tageRelativ("2026-10-17", heute)).toBe("heute");
+    expect(tageRelativ("2026-10-18", heute)).toBe("morgen");
+    expect(tageRelativ("2026-10-21", heute)).toBe("in 4 Tagen");
+    expect(tageRelativ("2026-10-16", heute)).toBe("gestern");
+    expect(tageRelativ("2026-10-12", heute)).toBe("vor 5 Tagen");
+    expect(tageRelativ("2026-09-19", heute)).toBe("vor 4 Wochen");
   });
 });

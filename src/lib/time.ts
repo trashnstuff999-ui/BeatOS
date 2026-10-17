@@ -43,3 +43,24 @@ export function formatRelativeTime(secs: number, now: number = nowSecs()): strin
   const years = Math.floor(diff / YEAR);
   return years === 1 ? "vor 1 Jahr" : `vor ${years} Jahren`;
 }
+
+/** Ein Kalendertag relativ zu heute, in beide Richtungen: „heute",
+ *  „morgen", „in 4 Tagen", „gestern", „vor 5 Tagen", „vor 3 Wochen".
+ *  Gerechnet wird in ganzen Kalendertagen, nicht in Stunden — ein Upload
+ *  morgen früh ist „morgen", auch wenn es jetzt 23 Uhr ist. */
+export function tageRelativ(iso: string, heute: Date = new Date()): string {
+  const [j, m, t] = iso.split("-").map(Number);
+  if (!j || !m || !t) return "";
+  const ziel = Date.UTC(j, m - 1, t);
+  const jetzt = Date.UTC(heute.getFullYear(), heute.getMonth(), heute.getDate());
+  const tage = Math.round((ziel - jetzt) / 86_400_000);
+  if (tage === 0) return "heute";
+  if (tage === 1) return "morgen";
+  if (tage === -1) return "gestern";
+  const n = Math.abs(tage);
+  const text = n < 14 ? `${n} Tagen`
+    : n < 60 ? `${Math.floor(n / 7)} Wochen`
+    : n < 730 ? `${Math.floor(n / 30)} Monaten`
+    : `${Math.floor(n / 365)} Jahren`;
+  return tage > 0 ? `in ${text}` : `vor ${text}`;
+}

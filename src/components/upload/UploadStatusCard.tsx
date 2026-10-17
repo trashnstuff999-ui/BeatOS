@@ -19,13 +19,18 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
-import { ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check, Undo2 } from "lucide-react";
+import {
+  ShoppingBag, Music2, Youtube, Send, Rocket, Copy, Check, Undo2,
+  ExternalLink, CheckCircle2, ChevronDown, ChevronUp,
+} from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
 import { Button, IconButton } from "../ui/Button";
 import { UploadAssistantDialog } from "./UploadAssistantDialog";
 import { api } from "../../lib/api";
+import { tageRelativ } from "../../lib/time";
 import { plattformAusLink, hochgeladenMelden, heuteISO } from "../../lib/uploadLinks";
 import type { UploadPlatformRow, UploadPlatform, UploadStatus } from "../../types/upload";
 
@@ -147,6 +152,11 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
   }, [eingefuegt]);
   useEffect(() => setEingefuegt(null), [beatId]);
 
+  // Aufgeklappt bleibt es nur für diesen Beat — der nächste fertige Beat
+  // zeigt wieder die eine Zeile.
+  const [details, setDetails] = useState(false);
+  useEffect(() => setDetails(false), [beatId]);
+
   const rueckgaengig = async () => {
     if (!eingefuegt) return;
     const { platform, status, scheduled_at, uploaded_at, url } = eingefuegt;
@@ -184,7 +194,22 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
         </div>
       }
     >
-      <UploadPlatformGrid {...props} />
+      {/* Alles draußen: eine Zeile statt drei gleicher Kacheln. Die Kacheln
+          gibt es weiter — aufgeklappt, um etwas zu korrigieren. */}
+      {!offen && !details
+        ? <Erledigt uploads={uploads} onDetails={() => setDetails(true)} />
+        : (
+          <>
+            <UploadPlatformGrid {...props} />
+            {!offen && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <Button variant="ghost" size="sm" icon={ChevronUp} onClick={() => setDetails(false)}>
+                  Zuklappen
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       {releaseOffen && (
         <UploadAssistantDialog
           beatId={beatId}
@@ -194,6 +219,54 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
         />
       )}
     </SectionCard>
+  );
+}
+
+/** Link im Browser öffnen. Ohne Tauri (Test, Browser) über window.open. */
+function linkOeffnen(url: string) {
+  const u = url.trim();
+  if (!/^https?:\/\//i.test(u)) return;
+  openUrl(u).catch(() => window.open(u, "_blank"));
+}
+
+const datumDeutsch = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+
+/** Alle drei hochgeladen: eine ruhige Zeile mit Datum und den drei Links. */
+function Erledigt({ uploads, onDetails }: { uploads: UploadPlatformRow[]; onDetails: () => void }) {
+  const daten = [...new Set(uploads.map(u => u.uploaded_at).filter((d): d is string => !!d))].sort();
+  const zuletzt = daten[daten.length - 1];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.mint }}>
+        <CheckCircle2 size={15} strokeWidth={2} />
+        Überall hochgeladen
+      </span>
+      {zuletzt && (
+        <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>
+          {daten.length > 1 ? "zuletzt am " : "am "}{datumDeutsch(zuletzt)} · {tageRelativ(zuletzt)}
+        </span>
+      )}
+      <span style={{ flex: 1 }} />
+      {uploads.map(u => {
+        const Icon = PLATFORM_ICON[u.platform];
+        const hatLink = !!u.url && /^https?:\/\//i.test(u.url);
+        return (
+          <Button
+            key={u.platform}
+            variant="secondary" size="sm" icon={Icon}
+            onClick={() => u.url && linkOeffnen(u.url)}
+            disabled={!hatLink}
+            title={hatLink ? `Auf ${PLATFORM_CONFIG[u.platform].label} öffnen\n${u.url}` : "Kein Link eingetragen"}
+            style={hatLink ? { color: PLATFORM_CONFIG[u.platform].color } : undefined}
+          >
+            {PLATFORM_CONFIG[u.platform].label}
+          </Button>
+        );
+      })}
+      <Button variant="ghost" size="sm" icon={ChevronDown} onClick={onDetails} title="Status, Links und Daten bearbeiten">
+        Details
+      </Button>
+    </div>
   );
 }
 
@@ -444,6 +517,14 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
               color: C.onSurface,
             }}
           />
+          {/* Öffnen: das Video bzw. den Track im Browser ansehen. Vorher ließ
+              sich der Link nur kopieren. */}
+          <IconButton
+            icon={ExternalLink} size={28} variant="secondary"
+            onClick={() => linkOeffnen(urlDraft)}
+            disabled={!/^https?:\/\//i.test(urlDraft.trim())}
+            title={`Auf ${meta.label} öffnen`}
+          />
           {/* Kopieren wie bei den Beschreibungen — der Link wird auf der
               Plattform gebraucht, nicht hier. */}
           <IconButton
@@ -466,6 +547,17 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
         </span>
 
         <span style={{ flex: 1 }} />
+
+        {/* „in 4 Tagen" liest sich schneller als ein Datum. Geplant und nah
+            dran in der Akzentfarbe — das ist, was als Nächstes ansteht. */}
+        {dateValue && (
+          <span style={{
+            fontSize: 12,
+            color: geplant && tageRelativ(dateValue).match(/^(heute|morgen)$/) ? C.primary : C.onSurfaceVariant,
+          }}>
+            {tageRelativ(dateValue)}
+          </span>
+        )}
 
         {/* Datum rechtsbuendig. Kein Kasten, aber beim Ueberfahren hebt sich
             das Feld leicht ab — so ist erkennbar, dass man es anklicken kann,
