@@ -20,7 +20,7 @@ import {
   type AngleichModus,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
-import { PageBody, EmptyState, Button, Select } from "../components/ui";
+import { PageBody, EmptyState, Button, Select, Segmented } from "../components/ui";
 import type { Beat, SortColumn } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -317,32 +317,15 @@ export default function Browse() {
                     triggerStyle={{ padding: "6px 10px", color: C.onSurfaceVariant }}
                   />
 
-                  <div style={{
-                    display: "flex", gap: 2, flexShrink: 0,
-                    background: "rgba(255,255,255,0.03)",
-                    border: `1px solid ${C.border15}`,
-                    borderRadius: radius.control, padding: 2,
-                  }}>
-                    {([["table", List, "Tabelle"], ["grid", LayoutGrid, "Cover-Grid"]] as const).map(([mode, Icon, label]) => (
-                      <button
-                        key={mode}
-                        onClick={() => setViewMode(mode)}
-                        title={label}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 5,
-                          padding: "5px 11px",
-                          background: viewMode === mode ? C.surfaceContainerHigh : "transparent",
-                          border: "none", borderRadius: radius.control,
-                          cursor: "pointer",
-                          fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                          color: viewMode === mode ? C.onSurface : C.onSecondaryFixedVar,
-                        }}
-                      >
-                        <Icon size={12} strokeWidth={2} />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <Segmented
+                    label="Ansicht"
+                    value={viewMode}
+                    onChange={setViewMode}
+                    options={[
+                      { value: "table", label: "Tabelle", icon: List },
+                      { value: "grid", label: "Cover-Grid", icon: LayoutGrid },
+                    ]}
+                  />
 
                   <button
                     onClick={handleRandomBeat}

@@ -16,7 +16,7 @@ import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { EmptyState, Button, IconButton, Modal } from "../ui";
+import { EmptyState, Button, IconButton, Modal, Segmented } from "../ui";
 import { bildHash, nummerAusName, planeNummern, rolleAusMassen, rolleAusName, type Bild, type Umbenennung } from "../../lib/assetNummern";
 import { AssetImage, AssetVideo } from "../AssetPickerDialog";
 import { AssignToProjectDialog } from "./AssignToProjectDialog";
@@ -129,28 +129,12 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
         <div style={{ flex: 1 }} />
 
         {/* Art-Filter */}
-        <div style={{
-          display: "flex", gap: 2,
-          background: "rgba(255,255,255,0.03)",
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control, padding: 2,
-        }}>
-          {(["all", "image", "video"] as const).map(k => (
-            <button
-              key={k}
-              onClick={() => setKind(k)}
-              style={{
-                padding: "4px 11px",
-                background: kind === k ? C.surfaceContainerHigh : "transparent",
-                border: "none", borderRadius: radius.control, cursor: "pointer",
-                fontSize: 11, fontWeight: 700,
-                color: kind === k ? C.onSurface : C.onSecondaryFixedVar,
-              }}
-            >
-              {KIND_LABEL[k]} {counts[k]}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Art"
+          value={kind}
+          onChange={setKind}
+          options={(["all", "image", "video"] as const).map(k => ({ value: k, label: `${KIND_LABEL[k]} ${counts[k]}` }))}
+        />
 
         {auswahl ? (
           <>

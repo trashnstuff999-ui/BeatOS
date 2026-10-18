@@ -12,7 +12,7 @@ import { useState, useMemo } from "react";
 import { Search, Loader2, Film, Image as ImageIcon } from "lucide-react";
 import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Modal } from "../ui";
+import { Modal, Segmented } from "../ui";
 import { AssetImage, type AssetSlotKind } from "../AssetPickerDialog";
 import { AssetPipeline } from "./ProjectRow";
 import { projectDisplayName } from "../../types/studio";
@@ -146,28 +146,13 @@ export function AssignToProjectDialog({
               Videodatei — geht in den Video-Slot.
             </div>
           ) : (
-            <div style={{
-              display: "flex", gap: 2,
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${C.border15}`,
-              borderRadius: radius.control, padding: 2,
-            }}>
-              {(["cover", "thumbnail"] as const).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSlot(s)}
-                  style={{
-                    flex: 1, padding: "6px 4px",
-                    background: slot === s ? `${C.primary}20` : "transparent",
-                    border: "none", borderRadius: radius.control, cursor: "pointer",
-                    fontSize: 12, fontWeight: 700,
-                    color: slot === s ? C.primary : C.onSecondaryFixedVar,
-                  }}
-                >
-                  {SLOT_LABEL[s]}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              full
+              label="Slot"
+              value={slot}
+              onChange={setSlot}
+              options={(["cover", "thumbnail"] as const).map(s => ({ value: s, label: SLOT_LABEL[s] }))}
+            />
           )}
 
           <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>

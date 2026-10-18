@@ -10,7 +10,7 @@ import {
   Plus, Trash2, Check, MoveRight,
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../../../lib/theme";
-import { Button, useEscapeStack } from "../../ui";
+import { Button, Segmented, useEscapeStack } from "../../ui";
 import { CATEGORY_LABELS } from "../../../lib/tags";
 import { useDialog } from "../../../contexts/DialogContext";
 import {
@@ -569,29 +569,13 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           <div style={{ flex: 1 }} />
 
           {/* View tabs */}
-          <div style={{
-            display: "flex", gap: 2,
-            background: C.surfaceContainerHighest,
-            borderRadius: radius.control, padding: 3,
-          }}>
-            {([{ key: "all" as ViewMode, label: "Alle" }, ...COLUMNS] as { key: ViewMode; label: string }[]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setViewMode(key)}
-                style={{
-                  padding: "4px 11px", borderRadius: radius.control,
-                  fontSize: 11, fontWeight: 700,
-                  letterSpacing: "0.08em", textTransform: "uppercase",
-                  background: viewMode === key ? C.surfaceContainerHigh : "transparent",
-                  border: "none", cursor: "pointer",
-                  color: viewMode === key ? C.onSurface : C.onSecondaryFixedVar,
-                  transition: "all 0.12s",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Kategorie"
+            value={viewMode}
+            onChange={setViewMode}
+            options={([{ key: "all" as ViewMode, label: "Alle" }, ...COLUMNS] as { key: ViewMode; label: string }[])
+              .map(({ key, label }) => ({ value: key, label }))}
+          />
 
           {/* Create Tag */}
           {editMode && (

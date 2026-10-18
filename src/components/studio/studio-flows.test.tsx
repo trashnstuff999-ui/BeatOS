@@ -407,7 +407,7 @@ describe("F2 — der Assets-Tab zeigt die Inbox", () => {
 
     // Umschalten auf Thumbnail — vorher war so eine Datei in keinem Slot
     // erreichbar, weil der Filter "thumb" im Namen verlangte.
-    await user.click(screen.getByRole("button", { name: "Thumbnail" }));
+    await user.click(screen.getByRole("radio", { name: "Thumbnail" }));
     await user.click(screen.getByText("ARE YOU HERE"));
 
     await waitFor(() => expect(calls["assign_asset_to_project"]).toHaveLength(1));
@@ -433,7 +433,7 @@ describe("Inbox-Filter", () => {
     renderAssets({ assetPath: "C:\\ASSETS" });
     await screen.findByText("MEMORIES_final.png");
 
-    await user.click(screen.getByRole("button", { name: /Videos 1/ }));
+    await user.click(screen.getByRole("radio", { name: /Videos 1/ }));
     expect(screen.getByText("clip.mp4")).toBeInTheDocument();
     expect(screen.queryByText("MEMORIES_final.png")).not.toBeInTheDocument();
   });

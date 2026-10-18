@@ -35,6 +35,7 @@ import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus, EditFormState, UpdateBeatParams } from "../../types/browse";
 import { parseTags, isFavorite, beatToEditForm } from "../../types/browse";
 import { STATUS_CONFIG, STATUS_ITEMS } from "../../lib/theme";
+import { Segmented } from "../ui";
 import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
 import { useTagManager } from "../../contexts/TagManagerContext";
 import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
@@ -545,36 +546,16 @@ export function DetailPanel({
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Status — ein Band aus vier Segmenten statt vier Kacheln. */}
-          <div style={{
-            display: "flex", gap: 2,
-            background: "rgba(255,255,255,0.03)",
-            border: `1px solid ${C.border15}`,
-            borderRadius: radius.control, padding: 2,
-          }}>
-            {STATUS_ITEMS.map(({ key, label }) => {
-              const isActive = beat.status === key;
-              const cfg = STATUS_CONFIG[key];
-              return (
-                <button
-                  key={key}
-                  // STATUS_CONFIG ist Record<string, …>, damit FilterBar auch
-                  // mit "all" indizieren kann; die vier Schluessel hier sind
-                  // genau BeatStatus.
-                  onClick={() => onUpdateStatus(beat.id, key as BeatStatus)}
-                  style={{
-                    flex: 1, padding: "8px 2px",
-                    border: "none", borderRadius: radius.control, cursor: "pointer",
-                    background: isActive ? `${cfg.color}22` : "transparent",
-                    color: isActive ? cfg.color : C.onSecondaryFixedVar,
-                    fontSize: 12, fontWeight: 700, fontFamily: "inherit",
-                    transition: "background 0.15s, color 0.15s",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <Segmented
+            full
+            label="Status"
+            // Ohne Status ist nichts gewählt — "" passt auf keine Option.
+            value={(beat.status ?? "") as BeatStatus}
+            onChange={key => onUpdateStatus(beat.id, key)}
+            // STATUS_CONFIG ist Record<string, …>, damit FilterBar auch mit
+            // "all" indizieren kann; die vier Schlüssel hier sind genau BeatStatus.
+            options={STATUS_ITEMS.map(({ key, label }) => ({ value: key as BeatStatus, label, color: STATUS_CONFIG[key].color }))}
+          />
 
           {zeigeKaeufer && (
             <div>

@@ -10,8 +10,8 @@
 
 import { useState, useMemo } from "react";
 import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, Users } from "lucide-react";
-import { C, radius } from "../lib/theme";
-import { PageHeader, PageBody } from "../components/ui";
+import { C } from "../lib/theme";
+import { PageHeader, PageBody, Segmented } from "../components/ui";
 import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../contexts/SettingsContext";
 import { ArtistsPane } from "../components/studio/ArtistsPane";
 import { ProjectsPane } from "../components/studio/ProjectsPane";
@@ -45,38 +45,17 @@ export default function Studio() {
     }}>
       {/* Header with tabs */}
       <PageHeader icon={Disc3} title="Studio">
-        {/* Tab switch */}
-        <div style={{
-          display: "flex", gap: 2,
-          background: "rgba(255,255,255,0.03)",
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control, padding: 2,
-        }}>
-          <TabBtn
-            icon={FolderKanban}
-            label="Projekte"
-            active={tab === "projects"}
-            onClick={() => setTab("projects")}
-          />
-          <TabBtn
-            icon={BrushCleaning}
-            label="Aufräumen"
-            active={tab === "cleanup"}
-            onClick={() => setTab("cleanup")}
-          />
-          <TabBtn
-            icon={ImageIcon}
-            label="Assets"
-            active={tab === "assets"}
-            onClick={() => setTab("assets")}
-          />
-          <TabBtn
-            icon={Users}
-            label="Künstler"
-            active={tab === "artists"}
-            onClick={() => setTab("artists")}
-          />
-        </div>
+        <Segmented
+          label="Bereich im Studio"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "projects", label: "Projekte", icon: FolderKanban },
+            { value: "cleanup", label: "Aufräumen", icon: BrushCleaning },
+            { value: "assets", label: "Assets", icon: ImageIcon },
+            { value: "artists", label: "Künstler", icon: Users },
+          ]}
+        />
       </PageHeader>
 
       {/* Content */}
@@ -118,32 +97,5 @@ export default function Studio() {
       </PageBody>
       </div>
     </div>
-  );
-}
-
-function TabBtn({ icon: Icon, label, active, onClick }: {
-  icon: React.ElementType;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "6px 14px",
-        background: active ? C.surfaceContainerHigh : "transparent",
-        border: "none", borderRadius: radius.control,
-        cursor: "pointer",
-        fontSize: 12, fontWeight: 700,
-        letterSpacing: "0.08em", textTransform: "uppercase",
-        color: active ? C.onSurface : C.onSecondaryFixedVar,
-        transition: "all 0.15s",
-      }}
-    >
-      <Icon size={12} strokeWidth={2} />
-      {label}
-    </button>
   );
 }
