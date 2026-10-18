@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { passtZumSong, pfadSchluessel, songStand } from "./kuenstler";
+import { passtZumSong, pfadSchluessel, songStand, songVerlauf } from "./kuenstler";
+
+describe("songVerlauf", () => {
+  it("nimmt je Etappe die erste Datei, sortiert nach Datum", () => {
+    const t = (iso: string) => new Date(iso).getTime() / 1000;
+    const v = songVerlauf([
+      { art: "mix", geaendert: t("2026-10-15T10:00:00") },
+      { art: "vocals", geaendert: t("2026-10-14T10:00:00") },
+      { art: "vocals", geaendert: t("2026-10-12T10:00:00") },
+      { art: "beat", geaendert: t("2026-10-01T10:00:00") },
+    ], "2026-10-18");
+    expect(v.map(s => [s.label, s.datum.getDate()])).toEqual([["Vocals", 12], ["Mix", 15], ["Abgegeben", 18]]);
+    expect(songVerlauf([], null)).toEqual([]);
+  });
+});
 
 describe("songStand", () => {
   const s = { fertig: false, warten: false, vocals: false, mix: false, master: false };

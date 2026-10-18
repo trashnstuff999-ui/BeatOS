@@ -144,3 +144,15 @@ werden.
   sie heißen „Demo" → 02. Danach werden die FLP-Pfade nachgezogen.
 - Vocals: in 02_ASSETS auch alles mit dem Songnamen außer der Demo selbst
   (Jarno schickt „Teufelskraut alles.mp3").
+
+## Umbau der Ansicht (18.10.2026)
+
+- **A+B** Liste links (Stand in Worten + Balken Vocals → Mix → Master →
+  Abgegeben, Punkt bei „etwas zu tun"), Song rechts: In FL öffnen mit
+  Version, Downloads/Pfade, Bausteine, Notiz, Mein Beat, Status, Abgeben.
+- **C+D** Profilbild + Links im Künstler-Ordner (`_profil_<zeit>.<ext>`,
+  `_kuenstler.json`); Bild holen über og:image der Profilseite (Spotify,
+  SoundCloud, YouTube, Instagram — ohne Konto); Bild aufs Profil ziehen.
+- **E+F** Reinhören (je Rolle die neueste Datei, im Player der App) und
+  Verlauf (erste Vocals, erster Mix, erster Master, Abgabe).
+- Offen (TODO): **G** „veröffentlicht"-Erkennung über die Plattform-Links.

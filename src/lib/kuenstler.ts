@@ -17,6 +17,26 @@ export function songStand(s: { fertig: boolean; warten: boolean; vocals: boolean
   return { text: "Bereit zum Abgeben", schritt, ton: "bereit" };
 }
 
+/** Verlauf eines Songs aus den Dateidaten: wann kamen die ersten Vocals,
+ *  der erste Mix, der erste Master — und wann wurde abgegeben. */
+export function songVerlauf(
+  audio: { art: string; geaendert: number }[],
+  abgegeben: string | null,
+): { label: string; datum: Date }[] {
+  const erste = (art: string) => {
+    const t = audio.filter(a => a.art === art).map(a => a.geaendert);
+    return t.length ? new Date(Math.min(...t) * 1000) : null;
+  };
+  const schritte: { label: string; datum: Date | null }[] = [
+    { label: "Vocals", datum: erste("vocals") },
+    { label: "Mix", datum: erste("mix") },
+    { label: "Master", datum: erste("master") },
+    { label: "Abgegeben", datum: abgegeben ? new Date(`${abgegeben}T12:00:00`) : null },
+  ];
+  return schritte.filter((s): s is { label: string; datum: Date } => s.datum !== null)
+    .sort((a, b) => a.datum.getTime() - b.datum.getTime());
+}
+
 /** Windows-Pfade vergleichbar machen: Groß/klein, „/" oder „\", doppelte Trenner. */
 export const pfadSchluessel = (p: string) => p.toLowerCase().replace(/[\\/]+/g, "\\");
 

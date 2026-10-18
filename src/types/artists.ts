@@ -32,6 +32,8 @@ export interface ArtistSong {
   umbau: number;
   /** FLPs des Songs (01_SAVEFILES oder lose), neueste zuerst. */
   flps: { name: string; path: string; geaendert: number }[];
+  /** Alle Audiodateien mit Rolle, neueste zuerst — Reinhören und Verlauf. */
+  audio: { art: "vocals" | "demo" | "beat" | "mix" | "master"; name: string; path: string; geaendert: number }[];
   /** „Mein Beat": der verknüpfte Katalog-Beat. */
   beat_id: string | null;
   /** Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag. */

@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2, Play, Cloud, Youtube, Instagram, MessageCircle, Download, Image as ImageIcon } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2, Play, Cloud, Youtube, Instagram, MessageCircle, Download, Image as ImageIcon, Pause } from "lucide-react";
 import { revealItemInDir, openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { AssetImage } from "../AssetPickerDialog";
@@ -25,7 +25,9 @@ import { formatRelativeTime, tageRelativ } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
-import { passtZumSong, pfadSchluessel, songStand } from "../../lib/kuenstler";
+import { passtZumSong, pfadSchluessel, songStand, songVerlauf } from "../../lib/kuenstler";
+import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 import type { UploadData } from "../../types/upload";
 import type { Beat } from "../../types/browse";
@@ -252,7 +254,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
             ))}
           </div>
           {gewaehlt ? (
-            <SongDetail key={gewaehlt.s.path} song={gewaehlt.s} kuenstler={gewaehlt.k.name}
+            <SongDetail key={gewaehlt.s.path} song={gewaehlt.s} kuenstler={gewaehlt.k.name} bild={gewaehlt.k.bild}
               onGeaendert={laden} downloads={downloads} uebernehmen={uebernehmen} />
           ) : (
             <EmptyState icon={Mic2} title="Noch keine Songs" description="Mit „Neuer Song“ oben rechts anlegen." />
@@ -862,10 +864,77 @@ function SongZeile({ song: s, gewaehlt, onWaehlen, zuTun, ziel }: {
   );
 }
 
+const HOEREN: { art: ArtistSong["audio"][number]["art"]; label: string }[] = [
+  { art: "vocals", label: "Vocals" },
+  { art: "demo", label: "Demo" },
+  { art: "beat", label: "Beat" },
+  { art: "mix", label: "Mix" },
+  { art: "master", label: "Master" },
+];
+
+/** Reinhören (je Rolle die neueste Datei, über den Player der App) und der
+ *  Verlauf aus den Dateidaten. */
+function Reinhoeren({ song: s, kuenstler, bild }: { song: ArtistSong; kuenstler: string; bild: string | null }) {
+  const { playBeat, currentBeat, isPlaying, togglePlay } = useAudioPlayerContext();
+  const verlauf = songVerlauf(s.audio, s.abgegeben);
+  const knoepfe = HOEREN.map(h => ({ ...h, dateien: s.audio.filter(a => a.art === h.art) })).filter(h => h.dateien.length > 0);
+  const beschriftung: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar, width: 80, flexShrink: 0,
+  };
+  if (knoepfe.length === 0 && verlauf.length === 0) return null;
+
+  const abspielen = (pfad: string, label: string) => {
+    const id = `kuenstler:${pfad}`;
+    if (currentBeat?.id === id) { togglePlay(); return; }
+    playBeat({
+      id, name: `${s.name} · ${label} — ${kuenstler}`, path: s.path, bpm: null, key: null,
+      status: null, tags: null, favorite: null, created_date: null, modified_date: null,
+      notes: null, sold_to: null, has_artwork: null, has_video: null,
+    }, bild ? convertFileSrc(bild.replace(/\\/g, "/")) : null, undefined, pfad);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {knoepfe.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span style={beschriftung}>Reinhören</span>
+          {knoepfe.map(h => {
+            const neueste = h.dateien[0];
+            const laeuft = currentBeat?.id === `kuenstler:${neueste.path}` && isPlaying;
+            return (
+              <Button key={h.art} variant="secondary" size="sm" icon={laeuft ? Pause : Play}
+                title={`${neueste.name}${h.dateien.length > 1 ? ` — die neueste von ${h.dateien.length}` : ""}`}
+                onClick={() => abspielen(neueste.path, h.label)}
+              >
+                {h.label}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+      {verlauf.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 12 }}>
+          <span style={beschriftung}>Verlauf</span>
+          {verlauf.map((v, i) => (
+            <Fragment key={v.label}>
+              {i > 0 && <ArrowRight size={11} color={C.onSecondaryFixedVar} />}
+              <span style={{ color: C.onSurfaceVariant }}>
+                {v.label} <span style={{ color: C.onSurface, fontWeight: 600 }}>{v.datum.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</span>
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Rechts: der gewählte Song mit allem, was man an ihm tut. */
-function SongDetail({ song: s, kuenstler, onGeaendert, downloads, uebernehmen }: {
+function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, uebernehmen }: {
   song: ArtistSong;
   kuenstler: string;
+  /** Profilbild des Künstlers — als Cover im Player. */
+  bild: string | null;
   onGeaendert: () => void;
   downloads: Download[];
   uebernehmen: ZeilenDrop["uebernehmen"];
@@ -972,6 +1041,8 @@ function SongDetail({ song: s, kuenstler, onGeaendert, downloads, uebernehmen }:
           );
         })}
       </div>
+
+      <Reinhoeren song={s} kuenstler={kuenstler} bild={bild} />
 
       <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span style={beschriftung}>Notiz</span>

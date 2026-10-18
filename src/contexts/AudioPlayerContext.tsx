@@ -51,7 +51,8 @@ interface AudioPlayerContextValue {
   volume: number;
   error: string | null;
   /** `startSeconds`: dort weiterspielen — fuers Neuladen nach einem Export. */
-  playBeat: (beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number) => void;
+  /** `datei`: genau diese Audiodatei statt der besten im Beat-Ordner (Künstler-Songs). */
+  playBeat: (beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number, datei?: string) => void;
   /** Welche Datei mit welchem Stand gerade geladen ist — fuer „neuer Export da?". */
   getGeladeneDatei: () => { pfad: string; stand: number | null } | null;
   togglePlay: () => void;
@@ -111,7 +112,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const playBeat = useCallback((beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number) => {
+  const playBeat = useCallback((beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number, datei?: string) => {
     const beatPath = beat.path;
     if (!beatPath) return;
     startRef.current = startSeconds ?? null;
@@ -148,7 +149,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     (async () => {
       try {
-        const ap = await api.audio.getAudioPath(beatPath);
+        const ap = datei ?? await api.audio.getAudioPath(beatPath);
         if (currentBeatPathRef.current !== beatPath) return;
         if (!ap) { setError("Keine Audiodatei gefunden"); setIsLoading(false); return; }
         const stand = await api.audio.getFileMtime(ap).catch(() => null);
