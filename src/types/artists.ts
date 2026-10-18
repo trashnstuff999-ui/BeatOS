@@ -16,8 +16,14 @@ export interface ArtistSong {
   /** Von Hand: eine Notiz und „Warte auf Künstler". */
   notiz: string | null;
   warten: boolean;
-  /** Dateinamen in Eingang/. */
-  eingang: string[];
+  /** Dateinamen im Song-Ordner, in Eingang/ und Audio/. */
+  dateien: string[];
+  /** Audio-Pfade aus den FLPs, die es gibt (auch außerhalb, z. B. in den Downloads). */
+  verweise: string[];
+  /** Fehlende FLP-Verweise, deren Datei BeatOS gefunden hat. */
+  reparierbar: number;
+  /** Fehlende FLP-Verweise ohne Fundort. */
+  fehlend: string[];
   /** Audiodateien im Song-Ordner (Mix, Master), neueste zuerst. */
   exporte: string[];
   /** Datum der Abgabe (JJJJ-MM-TT). */

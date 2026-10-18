@@ -66,6 +66,7 @@ use commands::{
     artist_eingang_fuellen,
     artist_abgeben,
     artist_wieder_oeffnen,
+    artist_pfade_reparieren,
     // Settings commands
     get_settings,
     save_settings,
@@ -250,6 +251,7 @@ pub fn run() {
             artist_eingang_fuellen,
             artist_abgeben,
             artist_wieder_oeffnen,
+            artist_pfade_reparieren,
             // Settings
             get_settings,
             save_settings,

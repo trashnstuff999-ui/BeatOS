@@ -36,9 +36,16 @@ pub struct ArtistSong {
     /// Von Hand, aus artist_songs: eine Notiz und „Warte auf Künstler".
     pub notiz: Option<String>,
     pub warten: bool,
-    /// Dateinamen in Eingang/ — damit Downloads, die schon da sind, nicht
-    /// noch einmal vorgeschlagen werden.
-    pub eingang: Vec<String>,
+    /// Dateinamen im Song-Ordner, in Eingang/ und Audio/ — damit Downloads,
+    /// die schon da sind, nicht noch einmal vorgeschlagen werden.
+    pub dateien: Vec<String>,
+    /// Audio-Pfade aus den FLPs, die es gibt — zeigt eine davon in die
+    /// Downloads, gehört der Download zu diesem Song, egal wie er heißt.
+    pub verweise: Vec<String>,
+    /// Fehlende Verweise, deren Datei BeatOS gefunden hat (Pfade reparieren).
+    pub reparierbar: usize,
+    /// Fehlende Verweise ohne Fundort.
+    pub fehlend: Vec<String>,
     /// Audiodateien direkt im Song-Ordner (Mix, Master), neueste zuerst —
     /// zur Auswahl beim Abgeben.
     pub exporte: Vec<String>,
@@ -241,13 +248,18 @@ pub struct Download {
 /// Audiodateien im Downloads-Ordner der letzten 30 Tage, neueste zuerst —
 /// zum Auswählen beim Anlegen eines Songs. Welche zum Song passen, entscheidet
 /// das Frontend am Namen („heartbreak highlights_vocals").
+/// `dir` aus den Einstellungen; leer = der Downloads-Ordner von Windows.
 #[tauri::command(async)]
-pub fn artist_downloads(app: tauri::AppHandle) -> Result<Vec<Download>, String> {
+pub fn artist_downloads(app: tauri::AppHandle, dir: Option<String>) -> Result<Vec<Download>, String> {
     use tauri::Manager;
-    let dir = app.path().download_dir().map_err(|e| format!("Downloads-Ordner nicht gefunden: {e}"))?;
-    let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let dir = match dir.filter(|d| !d.trim().is_empty()) {
+        Some(d) => std::path::PathBuf::from(d.trim()),
+        None => app.path().download_dir().map_err(|e| format!("Downloads-Ordner nicht gefunden: {e}"))?,
+    };
+    // ponytail: ohne Altersgrenze — Vocals bleiben oft Wochen liegen. Bei
+    // hunderten Audiodateien im Ordner eine Grenze einziehen.
     let mut out: Vec<Download> = dateien(&dir).into_iter()
-        .filter(|(n, t)| ist_audio(n) && *t + 30 * 86_400 >= jetzt)
+        .filter(|(n, _)| ist_audio(n))
         .map(|(name, geaendert)| Download { path: dir.join(&name).to_string_lossy().to_string(), name, geaendert })
         .collect();
     out.sort_by(|a, b| b.geaendert.cmp(&a.geaendert));
@@ -260,7 +272,18 @@ pub fn artist_downloads(app: tauri::AppHandle) -> Result<Vec<Download>, String> 
 pub fn artist_eingang_fuellen(song_path: String, dateien: Vec<String>) -> Result<Vec<UmzugErgebnis>, String> {
     let eingang = Path::new(&song_path).join(EINGANG);
     fs::create_dir_all(&eingang).map_err(|e| format!("Eingang ließ sich nicht anlegen: {e}"))?;
-    Ok(dateien.into_iter().map(|d| {
+    let mut erg = eingang_verschieben(&eingang, dateien);
+    // Verwendet die FLP eine der Dateien, zeigt sie jetzt ins Leere — nachziehen.
+    if erg.iter().any(|e| e.ok) {
+        if let Err(e) = pfade_reparieren(Path::new(&song_path)) {
+            erg.push(UmzugErgebnis { pfad: song_path.clone(), ok: false, meldung: format!("FLP-Pfade nicht nachgezogen: {e}") });
+        }
+    }
+    Ok(erg)
+}
+
+fn eingang_verschieben(eingang: &Path, dateien: Vec<String>) -> Vec<UmzugErgebnis> {
+    dateien.into_iter().map(|d| {
         let ergebnis = |ok: bool, meldung: String| UmzugErgebnis { pfad: d.clone(), ok, meldung };
         let quelle = Path::new(&d);
         let Some(name) = quelle.file_name() else { return ergebnis(false, "Kein Dateiname".into()) };
@@ -275,7 +298,99 @@ pub fn artist_eingang_fuellen(song_path: String, dateien: Vec<String>) -> Result
             Ok(()) => ergebnis(true, "→ Eingang".into()),
             Err(e) => ergebnis(false, e),
         }
-    }).collect())
+    }).collect()
+}
+
+// ─── FLP-Pfade reparieren ────────────────────────────────────────────────────
+//
+// FL merkt sich Audio mit vollem Pfad. Nach dem Umzug aus dem Archiv und nach
+// dem Holen aus den Downloads zeigen die Pfade ins Leere. Die Datei wird so
+// gesucht: erst die letzten Pfadteile unter dem Künstler-Ordner
+// („<Song>\Audio\x.wav", auch ein Nachbarordner wie „NO BLEED (Prod.
+// goodbxy)\vocals\…"), dann der Dateiname im Song-Ordner und seinen
+// Unterordnern. Nur die FLPs direkt im Song-Ordner — Backup/ bleibt, wie es ist.
+
+#[derive(Default)]
+struct PfadPlan {
+    /// je FLP: (alt, neu)
+    ersatz: Vec<(std::path::PathBuf, Vec<(String, String)>)>,
+    fehlend: Vec<String>,
+    verweise: Vec<String>,
+}
+
+fn pfad_plan(song: &Path) -> PfadPlan {
+    let mut plan = PfadPlan::default();
+    let kuenstler_dir = match song.parent() {
+        Some(p) if p.file_name().is_some_and(|n| n == FERTIG) => p.parent(),
+        p => p,
+    };
+    let unterordner_song: Vec<std::path::PathBuf> = std::iter::once(song.to_path_buf())
+        .chain(unterordner(song).into_iter().filter(|(n, _)| !n.eq_ignore_ascii_case("backup")).map(|(_, p)| p))
+        .collect();
+    let finden = |fehlt: &str| -> Option<String> {
+        let teile: Vec<&str> = fehlt.split(['\\', '/']).filter(|t| !t.is_empty()).collect();
+        if let Some(k) = kuenstler_dir {
+            for n in [3, 2] {
+                if teile.len() > n {
+                    let kandidat = teile[teile.len() - n..].iter().fold(k.to_path_buf(), |p, t| p.join(t));
+                    if kandidat.is_file() { return Some(kandidat.to_string_lossy().to_string()); }
+                }
+            }
+        }
+        let name = teile.last()?;
+        unterordner_song.iter().map(|d| d.join(name)).find(|p| p.is_file()).map(|p| p.to_string_lossy().to_string())
+    };
+
+    for (n, _) in dateien(song) {
+        if !is_flp(Path::new(&n)) { continue; }
+        let flp = song.join(&n);
+        let Ok(bytes) = fs::read(&flp) else { continue };
+        let mut ersatz = Vec::new();
+        for p in crate::commands::flp::audio_pfade(&bytes) {
+            if p.starts_with('%') { continue; }
+            if Path::new(&p).exists() {
+                if !plan.verweise.contains(&p) { plan.verweise.push(p); }
+            } else if let Some(neu) = finden(&p) {
+                // FL schreibt Windows-Pfade; kein gemischtes „Yoghi/No Bleed\…" eintragen.
+                let neu = if cfg!(windows) { neu.replace('/', "\\") } else { neu };
+                ersatz.push((p, neu));
+            } else if !plan.fehlend.contains(&p) {
+                plan.fehlend.push(p);
+            }
+        }
+        if !ersatz.is_empty() { plan.ersatz.push((flp, ersatz)); }
+    }
+    plan
+}
+
+/// Gefundene Pfade in die FLPs schreiben. Vorher eine Sicherung in Backup/ —
+/// die erste bleibt stehen, sie ist der Stand vor BeatOS.
+fn pfade_reparieren(song: &Path) -> Result<usize, String> {
+    let mut gesamt = 0;
+    for (flp, ersatz) in pfad_plan(song).ersatz {
+        let alt = fs::read(&flp).map_err(|e| format!("{} nicht lesbar: {e}", flp.display()))?;
+        let (neu, zahl) = crate::commands::flp::pfade_ersetzen(&alt, &ersatz)
+            .ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
+        if zahl == 0 { continue; }
+        let stamm = flp.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        let backup = song.join("Backup").join(format!("{stamm} (vor Pfad-Reparatur).flp"));
+        if !backup.exists() {
+            fs::create_dir_all(song.join("Backup")).map_err(|e| e.to_string())?;
+            fs::copy(&flp, &backup).map_err(|e| format!("Sicherung fehlgeschlagen: {e}"))?;
+        }
+        // Erst daneben schreiben, dann austauschen — nie eine halbe FLP.
+        let tmp = flp.with_extension("flp.beatos-tmp");
+        fs::write(&tmp, &neu).map_err(|e| format!("Schreiben fehlgeschlagen: {e}"))?;
+        fs::rename(&tmp, &flp).map_err(|e| { let _ = fs::remove_file(&tmp); format!("{} ist gesperrt (in FL offen?): {e}", flp.display()) })?;
+        gesamt += zahl;
+    }
+    Ok(gesamt)
+}
+
+/// „Pfade reparieren" an einem Song. Gibt die Zahl der Ersetzungen zurück.
+#[tauri::command(async)]
+pub fn artist_pfade_reparieren(song_path: String) -> Result<usize, String> {
+    pfade_reparieren(Path::new(&song_path))
 }
 
 // ─── Altbestand aus dem Archiv umziehen ─────────────────────────────────────
@@ -405,7 +520,13 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     s.demo = eingang.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) == song_name);
     s.beat = eingang.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) != song_name);
     s.geaendert = wurzel.iter().chain(&eingang).chain(&audio_ordner).map(|(_, t)| *t).max().unwrap_or(0);
-    s.eingang = eingang.iter().map(|(n, _)| n.clone()).collect();
+    s.dateien = wurzel.iter().chain(&eingang).chain(&audio_ordner).map(|(n, _)| n.clone()).collect();
+    let plan = pfad_plan(pfad);
+    s.verweise = plan.verweise;
+    // Verschiedene Dateien zählen — Mindestens 2K, _2, _3 verweisen auf dieselben.
+    s.reparierbar = plan.ersatz.iter().flat_map(|(_, e)| e.iter().map(|(alt, _)| alt))
+        .collect::<std::collections::HashSet<_>>().len();
+    s.fehlend = plan.fehlend;
     let mut exporte: Vec<&(String, u64)> = wurzel.iter().filter(|(n, _)| ist_audio(n)).collect();
     exporte.sort_by(|a, b| b.1.cmp(&a.1));
     s.exporte = exporte.into_iter().map(|(n, _)| n.clone()).collect();
@@ -520,6 +641,63 @@ mod tests {
         assert!(wieder_oeffnen_dateien(&song).is_err(), "nicht in _Fertig");
         let _ = fs::remove_dir_all(&root);
     }
+
+    /// Kleinste FLP mit Audio-Pfaden (Ereignis 196).
+    fn flp_mit(pfade: &[String]) -> Vec<u8> {
+        let mut e = Vec::new();
+        for p in pfade {
+            let d: Vec<u8> = p.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect();
+            e.push(196);
+            if d.len() >= 128 { e.extend([(d.len() & 0x7f) as u8 | 0x80, (d.len() >> 7) as u8]); } else { e.push(d.len() as u8); }
+            e.extend(d);
+        }
+        let mut b = b"FLhd".to_vec();
+        b.extend(6u32.to_le_bytes());
+        b.extend([0, 0, 1, 0, 96, 0]);
+        b.extend(b"FLdt");
+        b.extend((e.len() as u32).to_le_bytes());
+        b.extend(e);
+        b
+    }
+
+    #[test]
+    fn flp_pfade_nach_umzug_und_downloads_reparieren() {
+        let root = std::env::temp_dir().join(format!("beatos_pfade_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let song = root.join("Yoghi/No Bleed");
+        let dl = root.join("dl");
+        datei(&song.join("Audio/v.wav"));
+        datei(&root.join("Yoghi/NO BLEED (Prod)/vocals/t1.wav"));
+        datei(&dl.join("no bleed vocals.mp3"));
+        let dl_datei = dl.join("no bleed vocals.mp3").to_string_lossy().to_string();
+        let flp = song.join("No Bleed.flp");
+        fs::write(&flp, flp_mit(&[
+            r"C:\weg\03_ARCHIVE\Yoghi\No Bleed\Audio\v.wav".into(),
+            r"C:\weg\03_ARCHIVE\Yoghi\NO BLEED (Prod)\vocals\t1.wav".into(),
+            r"D:\nirgends\verloren.wav".into(),
+            dl_datei.clone(),
+        ])).unwrap();
+
+        let s = song_lesen(&song);
+        assert_eq!((s.reparierbar, s.fehlend.len()), (2, 1));
+        assert_eq!(s.verweise, vec![dl_datei.clone()], "der Download gehört zum Song, auch ohne passenden Namen");
+
+        // Download holen: verschoben und in der FLP nachgezogen, Umzug-Schäden gleich mit
+        let erg = artist_eingang_fuellen(song.to_string_lossy().to_string(), vec![dl_datei]).unwrap();
+        assert!(erg.iter().all(|e| e.ok), "{erg:?}");
+        let pfade = crate::commands::flp::audio_pfade(&fs::read(&flp).unwrap());
+        assert_eq!(pfade[0], win(song.join("Audio/v.wav")));
+        assert_eq!(pfade[1], win(root.join("Yoghi/NO BLEED (Prod)/vocals/t1.wav")));
+        assert_eq!(pfade[2], r"D:\nirgends\verloren.wav", "nicht Gefundenes bleibt");
+        assert_eq!(pfade[3], win(song.join("Eingang/no bleed vocals.mp3")));
+        assert!(song.join("Backup/No Bleed (vor Pfad-Reparatur).flp").is_file());
+        let s = song_lesen(&song);
+        assert_eq!((s.reparierbar, s.fehlend.len()), (0, 1));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    fn song_lesen(p: &Path) -> ArtistSong { song("No Bleed", p, false) }
+    fn win(p: std::path::PathBuf) -> String { p.to_string_lossy().replace('/', "\\") }
 
     #[test]
     fn fehlender_ordner_ist_leer() {

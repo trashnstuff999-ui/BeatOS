@@ -108,9 +108,111 @@ fn lesen(b: &[u8]) -> Option<Flp> {
     })
 }
 
+// ─── Audio-Pfade (Ereignis 196) ─────────────────────────────────────────────
+//
+// FL speichert je Audio-Clip den vollen Pfad als Ereignis 196 (UTF-16LE mit
+// \0). Gesucht und ersetzt wird per Bytefolge statt per Durchlauf: FL 26
+// schreibt am Anfang ein Ereignis, das nicht ins Längenschema passt — ein
+// Durchlauf gerät dort aus dem Takt (gemessen an Heartbreak Highlights,
+// 18.10.2026). Die Folge „196, Länge, Pfad, \0" ist eindeutig genug.
+
+const PFAD: u8 = 196;
+
+fn varint(mut n: usize) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let b = (n & 0x7f) as u8;
+        n >>= 7;
+        if n == 0 { out.push(b); return out; }
+        out.push(b | 0x80);
+    }
+}
+
+fn pfad_ereignis(pfad: &str) -> Vec<u8> {
+    let daten: Vec<u8> = pfad.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect();
+    let mut e = vec![PFAD];
+    e.extend(varint(daten.len()));
+    e.extend(daten);
+    e
+}
+
+/// Alle Audio-Pfade, die die FLP verwendet (ohne Doppelte, in Reihenfolge).
+pub(crate) fn audio_pfade(b: &[u8]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for i in 0..b.len() {
+        if b[i] != PFAD { continue; }
+        let (mut len, mut p, mut shift) = (0usize, i + 1, 0);
+        while let Some(&c) = b.get(p) {
+            p += 1;
+            len |= ((c & 0x7f) as usize) << shift;
+            shift += 7;
+            if c & 0x80 == 0 || shift > 14 { break; }
+        }
+        if !(8..=4000).contains(&len) || len % 2 != 0 { continue; }
+        let Some(d) = b.get(p..p + len) else { continue };
+        if d[len - 2..] != [0, 0] { continue; }
+        let einheiten: Vec<u16> = d[..len - 2].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let Ok(s) = String::from_utf16(&einheiten) else { continue };
+        let laufwerk = s.as_bytes().get(1..3) == Some(b":\\".as_slice());
+        if (laufwerk || s.starts_with('%')) && !s.chars().any(|c| c.is_control()) && !out.contains(&s) {
+            out.push(s);
+        }
+    }
+    out
+}
+
+/// Pfade austauschen (alt → neu). Gibt die neue Datei und die Zahl der
+/// Ersetzungen zurück; None, wenn die Datei kein FLP-Aufbau hat.
+pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(Vec<u8>, usize)> {
+    if b.get(0..4)? != b"FLhd" { return None; }
+    let kopf = u32::from_le_bytes(b.get(4..8)?.try_into().ok()?) as usize;
+    let dt = 8 + kopf;
+    if b.get(dt..dt + 4)? != b"FLdt" { return None; }
+
+    let mut out = b.to_vec();
+    let mut zahl = 0;
+    for (alt, neu) in ersatz {
+        let (a, n) = (pfad_ereignis(alt), pfad_ereignis(neu));
+        let mut i = dt + 8;
+        while let Some(pos) = out[i..].windows(a.len()).position(|w| w == a.as_slice()) {
+            let start = i + pos;
+            out.splice(start..start + a.len(), n.iter().copied());
+            i = start + n.len();
+            zahl += 1;
+        }
+    }
+    let laenge = u32::try_from(out.len() - dt - 8).ok()?;
+    out[dt + 4..dt + 8].copy_from_slice(&laenge.to_le_bytes());
+    Some((out, zahl))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn audio_pfade_lesen_und_ersetzen() {
+        let mut e = Vec::new();
+        ev_dword(&mut e, 156, 140_000);
+        e.extend(pfad_ereignis(r"D:\Downloads [D]\Feelings feeln vocals.mp3"));
+        ev_word(&mut e, 99, 0);
+        // Ein langer Pfad: Länge braucht zwei Varint-Bytes
+        let lang = format!(r"C:\{}\x.wav", "a".repeat(80));
+        e.extend(pfad_ereignis(&lang));
+        e.extend(pfad_ereignis(r"D:\Downloads [D]\Feelings feeln vocals.mp3"));
+        let alt = flp(e);
+        assert_eq!(audio_pfade(&alt), vec![r"D:\Downloads [D]\Feelings feeln vocals.mp3".to_string(), lang.clone()]);
+
+        let neu_pfad = r"C:\05_ARTISTS\JarnoGm\Fellings Feeln\Eingang\Feelings feeln vocals.mp3".to_string();
+        let (neu, zahl) = pfade_ersetzen(&alt, &[(r"D:\Downloads [D]\Feelings feeln vocals.mp3".into(), neu_pfad.clone())]).unwrap();
+        assert_eq!(zahl, 2);
+        assert_eq!(audio_pfade(&neu), vec![neu_pfad, lang]);
+        // Kopf-Länge stimmt, Tempo und Arrangement sind unberührt
+        let dt_len = u32::from_le_bytes(neu[18..22].try_into().unwrap()) as usize;
+        assert_eq!(dt_len, neu.len() - 22);
+        assert_eq!(lesen(&neu).unwrap().tempo, Some(140.0));
+        assert!(pfade_ersetzen(b"RIFF....", &[]).is_none());
+    }
 
     fn ev_dword(b: &mut Vec<u8>, id: u8, v: u32) { b.push(id); b.extend(v.to_le_bytes()); }
     fn ev_word(b: &mut Vec<u8>, id: u8, v: u16) { b.push(id); b.extend(v.to_le_bytes()); }

@@ -4,6 +4,9 @@
  *  „heartbreak highlights_vocals" sollen sich finden. */
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
+/** Windows-Pfade vergleichbar machen: Groß/klein, „/" oder „\", doppelte Trenner. */
+export const pfadSchluessel = (p: string) => p.toLowerCase().replace(/[\\/]+/g, "\\");
+
 /** Gehört die Datei aus den Downloads zu diesem Song? Der Dateiname enthält
  *  den Songnamen — Künstlernamen stehen in Downloads meist nicht drin. */
 export function passtZumSong(datei: string, song: string): boolean {

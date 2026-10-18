@@ -109,3 +109,18 @@ werden.
 - [x] **7 — Abgabe** (erledigt 18.10.2026; dazu „Wieder öffnen" holt einen Song aus _Fertig zurück): Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
       `<Künstler> - <Song> (Master).wav`, merkt Datum; Song wandert nach
       `<Künstler>/_Fertig/`.
+
+## Verstreute Dateien und FLP-Pfade (18.10.2026)
+
+- Downloads liegen bei Stephan in `D:\Downloads [D]` → Einstellung
+  „Downloads-Ordner" (leer = Windows-Downloads). Keine Altersgrenze mehr.
+- Ein Download gehört zu einem Song, wenn der Name passt **oder** die FLP
+  ihn verwendet („Feelings feeln vocals.mp3" bei „Fellings Feeln").
+- FL speichert Audio mit vollem Pfad (Ereignis 196). Der Umzug aus dem
+  Archiv hat diese Pfade gebrochen (Mindestens 2K: 32 Dateien, No Bleed: 13 …).
+  „Pfade reparieren" sucht die Datei unter dem Künstler-Ordner (letzte
+  Pfadteile, auch Nachbarordner) bzw. per Name im Song und schreibt die
+  neuen Pfade in die FLP — Sicherung vorher in `Backup/… (vor Pfad-Reparatur).flp`.
+  Beim Zuweisen von Downloads passiert das automatisch.
+- FL 26 schreibt ein Ereignis, das nicht ins Längenschema passt → Pfade
+  werden per Bytefolge gesucht/ersetzt, nicht per Durchlauf.

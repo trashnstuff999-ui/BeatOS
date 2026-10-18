@@ -9,7 +9,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
-  Settings as SettingsIcon, FolderTree, Users, Trash2, Plus, History,
+  Settings as SettingsIcon, FolderTree, Users, Trash2, Plus, History, Download,
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
@@ -1190,6 +1190,19 @@ export function Settings() {
                 onBrowse={async () => {
                   const p = await pickFolder("Künstler-Ordner wählen");
                   if (p) update("artistsPath", p);
+                }}
+              />
+              {/* Woher Vocals & Demos kommen: der Künstler-Tab schlägt Dateien
+                  von hier für die Songs vor. Leer = Downloads von Windows. */}
+              <PathInput
+                label="Downloads-Ordner"
+                icon={Download}
+                value={draft.downloadsPath}
+                placeholder="Leer = Downloads von Windows, z.B. D:\Downloads"
+                onChange={v => update("downloadsPath", v)}
+                onBrowse={async () => {
+                  const p = await pickFolder("Downloads-Ordner wählen");
+                  if (p) update("downloadsPath", p);
                 }}
               />
               {/* Zwischenspeicher für Beats von aussen: „Neuer Beat" listet

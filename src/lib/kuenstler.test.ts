@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { passtZumSong } from "./kuenstler";
+import { passtZumSong, pfadSchluessel } from "./kuenstler";
+
+describe("pfadSchluessel", () => {
+  it("gleicht Schreibweisen von Pfaden an", () => {
+    expect(pfadSchluessel(String.raw`D:\Downloads [D]\Feelings feeln vocals.mp3`))
+      .toBe(pfadSchluessel("d:/downloads [d]//Feelings Feeln Vocals.mp3"));
+  });
+});
 
 describe("passtZumSong", () => {
   it("findet Downloads am Songnamen, egal wie geschrieben", () => {

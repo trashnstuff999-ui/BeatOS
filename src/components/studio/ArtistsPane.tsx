@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2 } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
@@ -23,7 +23,7 @@ import { formatRelativeTime, tageRelativ } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
-import { passtZumSong } from "../../lib/kuenstler";
+import { passtZumSong, pfadSchluessel } from "../../lib/kuenstler";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
@@ -66,8 +66,8 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   const [downloads, setDownloads] = useState<Download[]>([]);
   const ladenMitDownloads = useCallback(() => {
     laden();
-    api.artists.downloads().then(setDownloads).catch(() => setDownloads([]));
-  }, [laden]);
+    api.artists.downloads(settings.downloadsPath).then(setDownloads).catch(() => setDownloads([]));
+  }, [laden, settings.downloadsPath]);
 
   useEffect(() => { if (active) ladenMitDownloads(); }, [active, ladenMitDownloads]);
   // Zurück aus dem Explorer oder aus Discord: neu lesen, nur wenn der Tab offen ist.
@@ -384,7 +384,8 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
   // Song steht, aber nicht jede Datei kam mit — dann nur noch „Schließen".
   const [angelegt, setAngelegt] = useState(false);
 
-  useEffect(() => { api.artists.downloads().then(setDownloads).catch(() => setDownloads([])); }, []);
+  const { settings } = useSettings();
+  useEffect(() => { api.artists.downloads(settings.downloadsPath).then(setDownloads).catch(() => setDownloads([])); }, [settings.downloadsPath]);
 
   const gewaehlt = (d: { path: string; name: string }) => vonHand[d.path] ?? passtZumSong(d.name, name);
   // Passendes nach oben, sonst neueste zuerst (so kommt es aus Rust).
@@ -541,8 +542,18 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
   const [abgabeOffen, setAbgabeOffen] = useState(false);
   const [offen, setOffen] = useState(false);
   const istZiel = ziehen?.pfad === s.path;
-  // Neue Downloads mit dem Songnamen, die noch nicht im Eingang liegen.
-  const neue = s.fertig ? [] : downloads.filter(d => passtZumSong(d.name, s.name) && !s.eingang.includes(d.name));
+  // Downloads, die zum Song gehören: der Name passt („heartbreak highlights_vocals")
+  // oder die FLP verwendet die Datei („Feelings feeln vocals" bei „Fellings Feeln").
+  // Was schon im Song liegt, nicht noch einmal.
+  const verwendet = new Set(s.verweise.map(pfadSchluessel));
+  const neue = s.fertig ? [] : downloads.filter(d =>
+    (passtZumSong(d.name, s.name) || verwendet.has(pfadSchluessel(d.path))) && !s.dateien.includes(d.name));
+  const reparieren = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    api.artists.pfadeReparieren(s.path)
+      .then(() => { setFehler(null); onGeaendert(); })
+      .catch(err => { setFehler(String(err)); setOffen(true); });
+  };
   const [notiz, setNotiz] = useState(s.notiz ?? "");
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -592,11 +603,29 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
             ) : neue.length > 0 && (
               <Button
                 variant="secondary" size="sm" icon={FolderInput}
-                title={`In den Eingang verschieben:\n${neue.map(d => d.name).join("\n")}`}
+                title={`Aus den Downloads in den Eingang verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
                 onClick={e => { e.stopPropagation(); uebernehmen(s.path, neue.map(d => d.path)); }}
               >
-                {neue.length === 1 ? "1 neuer Download" : `${neue.length} neue Downloads`}
+                {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}
               </Button>
+            )}
+            {s.reparierbar > 0 && (
+              <Button
+                variant="secondary" size="sm" icon={Wrench}
+                title={"Die FLP sucht Dateien noch am alten Ort (z. B. 03_ARCHIVE). BeatOS hat sie gefunden und trägt die neuen Pfade ein — "
+                  + "die FLP vorher in FL schließen. Eine Sicherung kommt nach Backup/."}
+                onClick={reparieren}
+              >
+                {s.reparierbar === 1 ? "1 Pfad reparieren" : `${s.reparierbar} Pfade reparieren`}
+              </Button>
+            )}
+            {s.fehlend.length > 0 && (
+              <span
+                title={`Die FLP verwendet diese Dateien, BeatOS findet sie nirgends — FL fragt beim Öffnen danach:\n${s.fehlend.map(p => p.split(/[\\/]/).pop()).join("\n")}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 12, color: C.error }}
+              >
+                <AlertTriangle size={12} /> {s.fehlend.length === 1 ? "1 Datei fehlt" : `${s.fehlend.length} Dateien fehlen`}
+              </span>
             )}
           </span>
           {ersteZeile && !offen && (

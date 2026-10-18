@@ -30,6 +30,8 @@ export interface AppSettings {
   uploadDays: string;
   /** Künstler-Projekte (Mix & Master). Leer = 05_ARTISTS neben dem Archiv-Ordner. */
   artistsPath: string;
+  /** Wo Discord & Browser hinladen. Leer = der Downloads-Ordner von Windows. */
+  downloadsPath: string;
 }
 
 export const DEFAULTS: AppSettings = {
@@ -47,6 +49,7 @@ export const DEFAULTS: AppSettings = {
   defaultGenreTags: "",
   uploadDays: "",
   artistsPath: "",
+  downloadsPath: "",
 };
 
 const STORAGE_KEY = "beatos_settings";
@@ -67,6 +70,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   defaultGenreTags: "default_genre_tags",
   uploadDays: "upload_days",
   artistsPath: "artists_path",
+  downloadsPath: "downloads_path",
 };
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {
