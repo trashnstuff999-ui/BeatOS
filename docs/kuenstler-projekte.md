@@ -102,7 +102,7 @@ werden.
       auf den Song ziehen → `Assets/`. Dazu der Downloads-Ordner: neue
       Dateien mit passendem Song (Namensregel „X Vocals" → Song X) werden
       vorgeschlagen, ein Klick verschiebt sie.
-- [ ] **5 — Mein Beat**: Beat aus dem Katalog suchen, im Song vermerken (BPM/Key
+- [x] **5 — Mein Beat** (erledigt 18.10.2026; erkennt den Beat auch an den FLP-Verweisen, z. B. SWEET DREAMS in Heartbreak Highlights; Spalte artist_songs.beat_id): Beat aus dem Katalog suchen, im Song vermerken (BPM/Key
       sichtbar), ungetaggte WAV in Assets/ kopieren — oder für Stems die
       FLP des Beats in FL öffnen.
 - [x] **6 — Altbestand umziehen** (Dialog fertig 18.10.2026, f634371 — Ausführen macht Stephan selbst) (`JarnoGm - Library`, `Yoghi`).

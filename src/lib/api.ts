@@ -286,6 +286,10 @@ export const api = {
     downloads: (dir: string) => invoke<{ name: string; path: string; geaendert: number }[]>("artist_downloads", { dir }),
     /** Fehlende Audio-Pfade in den FLPs des Songs nachziehen; gibt die Zahl zurück. */
     pfadeReparieren: (songPath: string) => invoke<number>("artist_pfade_reparieren", { songPath }),
+    /** „Mein Beat" verknüpfen (null = lösen). Nur im Song vermerkt. */
+    setBeat: (path: string, beatId: string | null) => invoke<void>("set_artist_beat", { path, beatId }),
+    /** Eine Datei des Beats nach 02_ASSETS kopieren (das Archiv bleibt); gibt den neuen Pfad zurück. */
+    beatKopieren: (songPath: string, quelle: string) => invoke<string>("artist_beat_kopieren", { songPath, quelle }),
     /** Songs ins Schema 01_SAVEFILES / 02_ASSETS / 03_VERSIONS bringen, danach FLP-Pfade nachziehen. */
     ordnerAufraeumen: (songs: string[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_ordner_aufraeumen", { songs }),

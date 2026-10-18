@@ -55,6 +55,11 @@ pub struct ArtistSong {
     pub abgegeben: Option<String>,
     /// So viele Dinge liegen noch außerhalb von 01_/02_/03_ — „Ordner aufräumen".
     pub umbau: usize,
+    /// „Mein Beat": der verknüpfte Katalog-Beat (von Hand, artist_songs).
+    pub beat_id: Option<String>,
+    /// Ein Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag
+    /// zum Verknüpfen (Heartbreak Highlights nutzt die WAV von SWEET DREAMS).
+    pub beat_vorschlag: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -86,23 +91,74 @@ pub struct ArtistsScan {
 pub fn scan_artists(root: String) -> Result<ArtistsScan, String> {
     let pfad = Path::new(&root);
     let mut kuenstler = kuenstler_lesen(pfad);
-    // Notiz, Warten, Abgabedatum dazulesen. Ohne Tabelle bleibt es leer.
+    // Notiz, Warten, Abgabedatum, Beat dazulesen. Ohne Tabelle bleibt es leer.
     if let Ok(conn) = open_db() {
-        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben FROM artist_songs") {
-            let zeilen: HashMap<String, (Option<String>, bool, Option<String>)> = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?))))
+        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben, beat_id FROM artist_songs") {
+            type Zeile = (Option<String>, bool, Option<String>, Option<String>);
+            let zeilen: HashMap<String, Zeile> = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?, r.get(4)?))))
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
             for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
-                if let Some((notiz, warten, abgegeben)) = zeilen.get(&s.path) {
+                if let Some((notiz, warten, abgegeben, beat_id)) = zeilen.get(&s.path) {
                     s.notiz = notiz.clone();
                     s.warten = *warten;
                     s.abgegeben = abgegeben.clone();
+                    s.beat_id = beat_id.clone();
                 }
+            }
+        }
+        // Verwendet die FLP Dateien aus einem Beat-Ordner des Katalogs?
+        if let Ok(mut stmt) = conn.prepare("SELECT id, path FROM beats WHERE path IS NOT NULL AND path != ''") {
+            let beats: Vec<(String, String)> = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map(|rows| rows.flatten().collect())
+                .unwrap_or_default();
+            for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
+                s.beat_vorschlag = beat_in_verweisen(&s.verweise, &beats);
+                if s.beat_vorschlag.is_some() || s.beat_id.is_some() { s.beat = true; }
             }
         }
     }
     Ok(ArtistsScan { vorhanden: pfad.is_dir(), kuenstler })
+}
+
+/// Der Katalog-Beat, in dessen Ordner einer der Verweise liegt (Groß/klein
+/// und Trenner egal). Der längste Pfad gewinnt, falls Ordner verschachtelt sind.
+fn beat_in_verweisen(verweise: &[String], beats: &[(String, String)]) -> Option<String> {
+    let norm = |p: &str| p.to_lowercase().replace('/', "\\").trim_end_matches('\\').to_string();
+    let verweise: Vec<String> = verweise.iter().map(|v| norm(v)).collect();
+    beats.iter()
+        .map(|(id, pfad)| (id, format!("{}\\", norm(pfad))))
+        .filter(|(_, ordner)| verweise.iter().any(|v| v.starts_with(ordner.as_str())))
+        .max_by_key(|(_, ordner)| ordner.len())
+        .map(|(id, _)| id.clone())
+}
+
+/// „Mein Beat" setzen oder lösen (None).
+#[tauri::command]
+pub fn set_artist_beat(path: String, beat_id: Option<String>) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO artist_songs (path, beat_id) VALUES (?1, ?2)
+         ON CONFLICT(path) DO UPDATE SET beat_id = excluded.beat_id",
+        rusqlite::params![path, beat_id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Eine Datei des Beats (die WAV) in 02_ASSETS kopieren — kopieren, nicht
+/// verschieben: das Archiv bleibt, wie es ist. Gibt den neuen Pfad zurück.
+#[tauri::command(async)]
+pub fn artist_beat_kopieren(song_path: String, quelle: String) -> Result<String, String> {
+    let quelle = Path::new(&quelle);
+    let name = quelle.file_name().ok_or("Kein Dateiname")?;
+    let ziel_dir = Path::new(&song_path).join(ASSETS);
+    fs::create_dir_all(&ziel_dir).map_err(|e| format!("{ASSETS} ließ sich nicht anlegen: {e}"))?;
+    let ziel = ziel_dir.join(name);
+    if ziel.exists() { return Err(format!("{} liegt schon in {ASSETS}", name.to_string_lossy())); }
+    crate::utils::copy_and_verify(quelle, &ziel)?;
+    Ok(ziel.to_string_lossy().to_string())
 }
 
 /// Notiz und „Warte auf Künstler" für einen Song speichern.
@@ -683,7 +739,9 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     let hat_vocal = |n: &str| n.to_lowercase().contains("vocal");
     // In den Assets ist alles mit dem Songnamen außer der Demo selbst eine
     // Gesangsspur — Jarno schickt auch „Teufelskraut alles.mp3".
-    let ist_asset_vocal = |n: &str| hat_vocal(n) || (vergleich(n).contains(&song_name) && vergleich(n) != song_name);
+    // Demo: heißt wie der Song, oder „Demo" steht im Namen („NO BLEED [DEMO] (Prod. goodbxy)").
+    let ist_demo = |n: &str| !hat_vocal(n) && (vergleich(n) == song_name || n.to_lowercase().contains("demo"));
+    let ist_asset_vocal = |n: &str| hat_vocal(n) || (!ist_demo(n) && vergleich(n).contains(&song_name));
 
     let mut s = ArtistSong {
         name: name.to_string(),
@@ -694,8 +752,8 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     s.flp = saves.iter().chain(&wurzel).any(|(n, _)| is_flp(Path::new(n)));
     s.vocals = assets.iter().any(|(n, _)| ist_audio(n) && ist_asset_vocal(n))
         || aufnahmen.iter().chain(&wurzel).any(|(n, _)| ist_audio(n) && hat_vocal(n));
-    s.demo = assets.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) == song_name);
-    s.beat = assets.iter().any(|(n, _)| ist_audio(n) && !ist_asset_vocal(n) && vergleich(n) != song_name);
+    s.demo = assets.iter().any(|(n, _)| ist_audio(n) && ist_demo(n));
+    s.beat = assets.iter().any(|(n, _)| ist_audio(n) && !ist_asset_vocal(n) && !ist_demo(n));
     s.master = export_quellen.iter().any(|(n, _)| n.to_lowercase().contains("master"));
     s.mix = export_quellen.iter().any(|(n, _)| !hat_vocal(n) && !n.to_lowercase().contains("master"));
     let alle = || wurzel.iter().chain(&saves).chain(&versions).chain(&assets).chain(&aufnahmen);
@@ -942,11 +1000,29 @@ mod tests {
         assert_eq!(pfade[1], win(song_dir.join("02_ASSETS/Teufelskraut alles.mp3")));
         let s = song("Teufelskraut", &song_dir, false);
         assert!(s.vocals && s.beat && s.mix && s.umbau == 0 && s.reparierbar == 0);
+        assert!(s.demo, "TEUFELSKRAUT [DEMO].wav ist die Demo");
         let _ = fs::remove_dir_all(&root);
     }
 
     fn song_lesen(p: &Path) -> ArtistSong { song("No Bleed", p, false) }
     fn win(p: std::path::PathBuf) -> String { p.to_string_lossy().replace('/', "\\") }
+
+    #[test]
+    fn erkennt_den_beat_an_den_flp_verweisen() {
+        let beats = vec![
+            ("0929".to_string(), r"C:\Lib\03_ARCHIVE\2026\09_SEPTEMBER\0929 - SWEET DREAMS [D#m 146]".to_string()),
+            ("0921".to_string(), r"C:\Lib\03_ARCHIVE\2026\09_SEPTEMBER\0921 - NOBODY HERE [C#m 156]".to_string()),
+        ];
+        let verweise = vec![
+            r"C:\Users\x\.Vault\Library\Tags\Tag xP4RA.wav".to_string(),
+            r"c:/lib/03_archive/2026/09_september/0929 - sweet dreams [d#m 146]/SWEET DREAMS [D#m 146]_untagged.wav".to_string(),
+        ];
+        assert_eq!(beat_in_verweisen(&verweise, &beats), Some("0929".into()));
+        assert_eq!(beat_in_verweisen(&verweise[..1], &beats), None);
+        // Ordnername als Präfix eines anderen zählt nicht („…0929 - SWEET" ≠ „…0929 - SWEET DREAMS 2")
+        let fast = vec![r"C:\Lib\03_ARCHIVE\2026\09_SEPTEMBER\0929 - SWEET DREAMS [D#m 146] 2\x.wav".to_string()];
+        assert_eq!(beat_in_verweisen(&fast, &beats), None);
+    }
 
     #[test]
     fn fehlender_ordner_ist_leer() {

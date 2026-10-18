@@ -392,6 +392,9 @@ pub fn init_db() -> Result<(), String> {
                 // Datum der Abgabe (Scheibe 7) kam später — scheitert, wenn
                 // die Spalte schon da ist, und das ist gut so.
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN abgegeben TEXT", []);
+                // „Mein Beat" (Scheibe 5): welcher Katalog-Beat im Song steckt.
+                // Nur hier vermerkt — am Beat im Archiv ändert sich nichts.
+                let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN beat_id TEXT", []);
 
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(

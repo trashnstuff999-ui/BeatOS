@@ -15,8 +15,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2 } from "lucide-react";
+import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime, tageRelativ } from "../../lib/time";
@@ -25,6 +25,8 @@ import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
 import { passtZumSong, pfadSchluessel } from "../../lib/kuenstler";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
+import type { UploadData } from "../../types/upload";
+import type { Beat } from "../../types/browse";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 type Download = { name: string; path: string; geaendert: number };
@@ -39,7 +41,7 @@ const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat
   { key: "flp", label: "FLP", titel: "FL-Projekt in 01_SAVEFILES" },
   { key: "vocals", label: "Vocals", titel: "In 02_ASSETS eine Audiodatei mit „Vocal\" oder dem Songnamen im Namen (z. B. „Teufelskraut alles\") — oder eine Aufnahme mit „Vocal\" in Audio/" },
   { key: "demo", label: "Demo", titel: "In 02_ASSETS eine Audiodatei, die genau wie der Song heißt" },
-  { key: "beat", label: "Beat", titel: "In 02_ASSETS eine weitere Audiodatei (weder Vocals noch Demo)" },
+  { key: "beat", label: "Beat", titel: "In 02_ASSETS eine weitere Audiodatei (weder Vocals noch Demo) — oder ein verknüpfter Beat aus deinem Katalog" },
   { key: "mix", label: "Mix", titel: "Ein Export in 03_VERSIONS oder neben der FLP" },
   { key: "master", label: "Master", titel: "Ein Export mit „Master\" im Namen, in 03_VERSIONS oder neben der FLP" },
 ];
@@ -781,6 +783,7 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
               border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
             }}
           />
+          <MeinBeat song={s} onGeaendert={onGeaendert} />
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {!s.fertig && (
               <Segmented
@@ -817,6 +820,125 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
       {abgabeOffen && (
         <AbgabeDialog song={s} kuenstler={kuenstler} onClose={fertig => { setAbgabeOffen(false); if (fertig) onGeaendert(); }} />
       )}
+    </div>
+  );
+}
+
+/** „Mein Beat": welcher Katalog-Beat im Song steckt — mit BPM und Tonart,
+ *  die WAV in 02_ASSETS kopieren oder für Stems die FLP des Beats öffnen.
+ *  Verwendet die FLP schon Dateien eines Beats, wird er vorgeschlagen. */
+function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () => void }) {
+  const id = s.beat_id ?? null;
+  const [daten, setDaten] = useState<UploadData | null>(null);
+  const [vorschlag, setVorschlag] = useState<UploadData | null>(null);
+  const [suche, setSuche] = useState("");
+  const [treffer, setTreffer] = useState<Beat[]>([]);
+  const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    setDaten(null);
+    if (id) api.upload.getData(id).then(setDaten).catch(() => setDaten(null));
+  }, [id]);
+  useEffect(() => {
+    setVorschlag(null);
+    if (!id && s.beat_vorschlag) api.upload.getData(s.beat_vorschlag).then(setVorschlag).catch(() => {});
+  }, [id, s.beat_vorschlag]);
+  useEffect(() => {
+    if (id || !suche.trim()) { setTreffer([]); return; }
+    let ab = false;
+    const t = setTimeout(() => {
+      api.beats.getAll({ search: suche.trim(), onlyFavs: false, limit: 6, offset: 0 })
+        .then(b => { if (!ab) setTreffer(b); }).catch(() => {});
+    }, 150);
+    return () => { ab = true; clearTimeout(t); };
+  }, [suche, id]);
+
+  const setzen = (beatId: string | null) => {
+    setMeldung(null);
+    setSuche("");
+    api.artists.setBeat(s.path, beatId).then(onGeaendert).catch(e => setMeldung({ ok: false, text: String(e) }));
+  };
+  const info = (b: { name: string; bpm: number | null; key: string | null }) =>
+    [b.name, b.bpm ? `${Math.round(b.bpm)} BPM` : null, b.key].filter(Boolean).join(" · ");
+
+  const zeile: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 };
+  const beschriftung = (
+    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar, width: 80 }}>
+      Mein Beat
+    </span>
+  );
+
+  if (id) {
+    const wav = daten?.assets.wav ?? null;
+    const wavPfad = wav && daten ? `${daten.beat.path.replace(/[\\/]+$/, "")}\\${wav}` : null;
+    const schonDa = !!wav && s.dateien.includes(wav);
+    return (
+      <div style={zeile}>
+        {beschriftung}
+        <Music2 size={13} color={C.primary} />
+        <span style={{ fontWeight: 600, color: C.onSurface }}>{daten ? info(daten.beat) : id}</span>
+        <span style={{ flex: 1 }} />
+        <Button variant="secondary" size="sm" icon={FolderInput} disabled={!wavPfad || schonDa}
+          title={!wav ? "Keine WAV im Beat-Ordner" : schonDa ? `${wav} liegt schon im Song` : `${wav} nach 02_ASSETS kopieren — das Archiv bleibt, wie es ist`}
+          onClick={() => wavPfad && api.artists.beatKopieren(s.path, wavPfad)
+            .then(() => { setMeldung({ ok: true, text: `${wav} kopiert` }); onGeaendert(); })
+            .catch(e => setMeldung({ ok: false, text: String(e) }))}
+        >
+          WAV kopieren
+        </Button>
+        <Button variant="secondary" size="sm" icon={FolderTree} disabled={!daten?.assets.flp_path}
+          title={daten?.assets.flp_path ? "Die FLP des Beats in FL öffnen — für Stems" : "Keine FLP im Beat-Ordner"}
+          onClick={() => daten?.assets.flp_path && openPath(daten.assets.flp_path).catch(e => setMeldung({ ok: false, text: String(e) }))}
+        >
+          FLP öffnen
+        </Button>
+        <IconButton icon={X} size={28} variant="ghost" title="Verknüpfung lösen" onClick={() => setzen(null)} />
+        {meldung && <span style={{ width: "100%", paddingLeft: 88, color: meldung.ok ? C.mint : C.error }}>{meldung.text}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={zeile}>
+        {beschriftung}
+        {vorschlag && (
+          <Button variant="secondary" size="sm" icon={Music2}
+            title="Die FLP verwendet Dateien aus diesem Beat-Ordner"
+            onClick={() => setzen(vorschlag.beat.id)}
+          >
+            {info(vorschlag.beat)} verknüpfen
+          </Button>
+        )}
+        <input
+          value={suche}
+          onChange={e => setSuche(e.target.value)}
+          placeholder={vorschlag ? "… oder einen anderen Beat suchen" : "Beat aus dem Katalog suchen (Name oder Nummer)"}
+          aria-label="Beat suchen"
+          style={{
+            flex: 1, minWidth: 200, padding: "5px 8px", fontSize: 12, fontFamily: "inherit",
+            background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+            border: `1px solid ${C.border20}`, borderRadius: radius.control,
+          }}
+        />
+      </div>
+      {treffer.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", marginLeft: 88, border: `1px solid ${C.border10}`, borderRadius: radius.control }}>
+          {treffer.map(b => (
+            <button key={b.id} onClick={() => setzen(b.id)} style={{
+              display: "flex", gap: 8, padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, color: C.onSurface, textAlign: "left",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ color: C.onSecondaryFixedVar, width: 36 }}>{b.id}</span>
+              {info(b)}
+            </button>
+          ))}
+        </div>
+      )}
+      {meldung && <span style={{ marginLeft: 88, fontSize: 12, color: meldung.ok ? C.mint : C.error }}>{meldung.text}</span>}
     </div>
   );
 }

@@ -68,6 +68,8 @@ use commands::{
     artist_wieder_oeffnen,
     artist_pfade_reparieren,
     artist_ordner_aufraeumen,
+    set_artist_beat,
+    artist_beat_kopieren,
     // Settings commands
     get_settings,
     save_settings,
@@ -254,6 +256,8 @@ pub fn run() {
             artist_wieder_oeffnen,
             artist_pfade_reparieren,
             artist_ordner_aufraeumen,
+            set_artist_beat,
+            artist_beat_kopieren,
             // Settings
             get_settings,
             save_settings,
