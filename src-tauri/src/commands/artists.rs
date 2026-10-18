@@ -6,10 +6,12 @@
 // Jahr/Monat/Beat) und nicht in der Produktion (der Studio-Scan sähe einen
 // Künstlerordner als ein Projekt). Plan: docs/kuenstler-projekte.md.
 //
-// Was in einem Song-Ordner liegt, ergibt seinen Stand — gelesen wird nur,
-// nichts geschrieben. Die Regeln richten sich nach den echten Ordnern
-// (JarnoGm, Yoghi, Stand 18.10.2026): FLP im Song-Ordner, aufgenommene
-// Vocals in Audio/ („…_VOCALS DRY.wav"), Export direkt daneben, Backup/ von FL.
+// Ein Song-Ordner wie im Archiv (Stephans Wahl, 18.10.2026):
+//   01_SAVEFILES/  FLP — FL legt Audio/ (Aufnahmen) und Backup/ daneben
+//   02_ASSETS/     was der Künstler schickt: Vocals, Demo, Beat
+//   03_VERSIONS/   Mixe, Master, Abgaben
+// Ältere Songs haben FLP und Exporte lose im Song-Ordner; der Scan liest
+// beides, „Ordner aufräumen" bringt sie ins Schema.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use crate::db::open_db;
@@ -51,6 +53,8 @@ pub struct ArtistSong {
     pub exporte: Vec<String>,
     /// Datum der Abgabe (JJJJ-MM-TT), aus artist_songs.
     pub abgegeben: Option<String>,
+    /// So viele Dinge liegen noch außerhalb von 01_/02_/03_ — „Ordner aufräumen".
+    pub umbau: usize,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -61,7 +65,9 @@ pub struct Artist {
 }
 
 const FERTIG: &str = "_Fertig";
-const ASSETS: &str = "Assets";
+const SAVES: &str = "01_SAVEFILES";
+const ASSETS: &str = "02_ASSETS";
+const VERSIONS: &str = "03_VERSIONS";
 
 /// Ordner, die kein Song sind: FLs Backup und eigene Unterordner mit „_".
 fn kein_song(name: &str) -> bool {
@@ -123,15 +129,21 @@ pub fn create_artist(root: String, name: String) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
-/// Neuer Song: wie ein Studio-Projekt (Ordner + Template-FLP), dazu `Assets/`
-/// für das, was der Künstler schickt. Gibt den Pfad der FLP zurück.
+/// Neuer Song: Ordner + Template-FLP wie ein Studio-Projekt (Prüfungen von
+/// dort), die FLP dann in 01_SAVEFILES, dazu 02_ASSETS und 03_VERSIONS.
+/// Gibt den Pfad der FLP zurück.
 #[tauri::command]
 pub fn create_artist_song(artist_path: String, name: String, template_flp: String) -> Result<String, String> {
-    let flp = crate::commands::create_project_folder(artist_path, name, template_flp)?;
-    if let Some(dir) = Path::new(&flp).parent() {
-        let _ = fs::create_dir_all(dir.join(ASSETS));
+    let flp = std::path::PathBuf::from(crate::commands::create_project_folder(artist_path, name, template_flp)?);
+    let dir = flp.parent().ok_or("FLP ohne Ordner")?.to_path_buf();
+    let ziel = dir.join(SAVES).join(flp.file_name().ok_or("FLP ohne Namen")?);
+    let angelegt = [SAVES, ASSETS, VERSIONS].iter().try_for_each(|o| fs::create_dir_all(dir.join(o)))
+        .and_then(|_| fs::rename(&flp, &ziel));
+    if let Err(e) = angelegt {
+        let _ = fs::remove_dir_all(&dir);
+        return Err(format!("Song-Ordner ließ sich nicht anlegen: {e}"));
     }
-    Ok(flp)
+    Ok(ziel.to_string_lossy().to_string())
 }
 
 // ─── Abgabe ──────────────────────────────────────────────────────────────────
@@ -175,10 +187,11 @@ fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::Pa
     if kuenstler == FERTIG { return Err("Der Song ist schon abgegeben".into()); }
     let song_name = song.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
 
-    // Nur ein Dateiname direkt im Song-Ordner, kein Pfad.
+    // Nur ein Dateiname, kein Pfad — gesucht, wo Exporte liegen.
     if datei.contains(['/', '\\']) { return Err("Ungültiger Dateiname".into()); }
-    let quelle = song.join(datei);
-    if !quelle.is_file() { return Err(format!("{datei} liegt nicht im Song-Ordner")); }
+    let quelle = [song.join(VERSIONS), song.join(SAVES), song.to_path_buf()].iter()
+        .map(|d| d.join(datei)).find(|p| p.is_file())
+        .ok_or_else(|| format!("{datei} liegt nicht im Song-Ordner"))?;
     let ext = quelle.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "wav".into());
     let neuer_name = format!("{}.{ext}", crate::utils::sanitize_filename_part(&format!("{kuenstler} - {song_name} ({art})")));
 
@@ -186,11 +199,13 @@ fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::Pa
     let ziel_song = fertig_dir.join(&song_name);
     // Erst alles prüfen, dann anfassen.
     if ziel_song.exists() { return Err(format!("In _Fertig gibt es „{song_name}\" schon")); }
-    let umbenannt = song.join(&neuer_name);
-    if !neuer_name.eq_ignore_ascii_case(datei) && umbenannt.exists() {
-        return Err(format!("„{neuer_name}\" gibt es im Song-Ordner schon"));
+    // Die Abgabe landet in 03_VERSIONS, egal wo FL sie hingelegt hat.
+    let umbenannt = song.join(VERSIONS).join(&neuer_name);
+    if umbenannt != quelle && umbenannt.exists() {
+        return Err(format!("„{neuer_name}\" gibt es in {VERSIONS} schon"));
     }
 
+    fs::create_dir_all(song.join(VERSIONS)).map_err(|e| format!("{VERSIONS} ließ sich nicht anlegen: {e}"))?;
     fs::rename(&quelle, &umbenannt).map_err(|e| format!("Umbenennen fehlgeschlagen: {e}"))?;
     fs::create_dir_all(&fertig_dir).map_err(|e| format!("_Fertig ließ sich nicht anlegen: {e}"))?;
     if let Err(e) = fs::rename(song, &ziel_song) {
@@ -198,7 +213,7 @@ fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::Pa
         let _ = fs::rename(&umbenannt, &quelle);
         return Err(format!("Song-Ordner ließ sich nicht verschieben (in FL oder im Explorer offen?): {e}"));
     }
-    Ok((ziel_song.clone(), ziel_song.join(&neuer_name)))
+    Ok((ziel_song.clone(), ziel_song.join(VERSIONS).join(&neuer_name)))
 }
 
 fn wieder_oeffnen_dateien(song: &Path) -> Result<std::path::PathBuf, String> {
@@ -324,9 +339,11 @@ fn pfad_plan(song: &Path) -> PfadPlan {
         Some(p) if p.file_name().is_some_and(|n| n == FERTIG) => p.parent(),
         p => p,
     };
-    let unterordner_song: Vec<std::path::PathBuf> = std::iter::once(song.to_path_buf())
-        .chain(unterordner(song).into_iter().filter(|(n, _)| !n.eq_ignore_ascii_case("backup")).map(|(_, p)| p))
-        .collect();
+    // Song: bis 01_SAVEFILES/Audio hinunter. Künstler: auch Nachbar-Songs
+    // (No Bleed nutzt Takes aus „NO BLEED (Prod. goodbxy)/vocals").
+    let ordner_song = ordner_bis(song, 2);
+    // Erst lesen, wenn etwas fehlt — der Scan läuft bei jedem Fensterwechsel.
+    let ordner_kuenstler = std::cell::OnceCell::new();
     let finden = |fehlt: &str| -> Option<String> {
         let teile: Vec<&str> = fehlt.split(['\\', '/']).filter(|t| !t.is_empty()).collect();
         if let Some(k) = kuenstler_dir {
@@ -338,12 +355,23 @@ fn pfad_plan(song: &Path) -> PfadPlan {
             }
         }
         let name = teile.last()?;
-        unterordner_song.iter().map(|d| d.join(name)).find(|p| p.is_file()).map(|p| p.to_string_lossy().to_string())
+        if let Some(p) = ordner_song.iter().map(|d| d.join(name)).find(|p| p.is_file()) {
+            return Some(p.to_string_lossy().to_string());
+        }
+        // Im ganzen Künstler-Ordner nur, wenn der Name eindeutig ist —
+        // „verse take 1.wav" kann es in zwei Songs geben.
+        let alle: &Vec<std::path::PathBuf> = ordner_kuenstler.get_or_init(|| kuenstler_dir.map(|k| ordner_bis(k, 4)).unwrap_or_default());
+        let mut treffer = alle.iter().map(|d| d.join(name)).filter(|p| p.is_file());
+        match (treffer.next(), treffer.next()) {
+            (Some(p), None) => Some(p.to_string_lossy().to_string()),
+            _ => None,
+        }
     };
 
-    for (n, _) in dateien(song) {
-        if !is_flp(Path::new(&n)) { continue; }
-        let flp = song.join(&n);
+    let flps = [song.to_path_buf(), song.join(SAVES)].into_iter()
+        .flat_map(|d| dateien(&d).into_iter().map(move |(n, _)| d.join(n)))
+        .filter(|p| is_flp(p));
+    for flp in flps {
         let Ok(bytes) = fs::read(&flp) else { continue };
         let mut ersatz = Vec::new();
         for p in crate::commands::flp::audio_pfade(&bytes) {
@@ -373,9 +401,11 @@ fn pfade_reparieren(song: &Path) -> Result<usize, String> {
             .ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
         if zahl == 0 { continue; }
         let stamm = flp.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        let backup = song.join("Backup").join(format!("{stamm} (vor Pfad-Reparatur).flp"));
+        // Neben die FLP, wo FL seine eigenen Backups ablegt.
+        let backup_dir = flp.parent().unwrap_or(song).join("Backup");
+        let backup = backup_dir.join(format!("{stamm} (vor Pfad-Reparatur).flp"));
         if !backup.exists() {
-            fs::create_dir_all(song.join("Backup")).map_err(|e| e.to_string())?;
+            fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
             fs::copy(&flp, &backup).map_err(|e| format!("Sicherung fehlgeschlagen: {e}"))?;
         }
         // Erst daneben schreiben, dann austauschen — nie eine halbe FLP.
@@ -391,6 +421,84 @@ fn pfade_reparieren(song: &Path) -> Result<usize, String> {
 #[tauri::command(async)]
 pub fn artist_pfade_reparieren(song_path: String) -> Result<usize, String> {
     pfade_reparieren(Path::new(&song_path))
+}
+
+// ─── Ordner aufräumen: ins Schema 01_/02_/03_ ────────────────────────────────
+
+/// Ältere Songs ins Schema bringen (Ziele: `ziel_im_schema`). Verschoben wird
+/// nur innerhalb des Song-Ordners, nichts überschrieben — gibt es ein Ziel
+/// schon, bleibt die Datei liegen und steht in der Meldung. Danach die
+/// FLP-Pfade: erst wenn alle Songs fertig sind, denn No Bleed verwendet
+/// Dateien aus einem Nachbar-Song.
+#[tauri::command(async)]
+pub fn artist_ordner_aufraeumen(songs: Vec<String>) -> Result<Vec<UmzugErgebnis>, String> {
+    let mut erg: Vec<UmzugErgebnis> = songs.iter().map(|s| {
+        let (zahl, fehler) = aufraeumen(Path::new(s));
+        let mut meldung = if zahl == 1 { "1 Eintrag verschoben".to_string() } else { format!("{zahl} Einträge verschoben") };
+        if !fehler.is_empty() { meldung.push_str(&format!("; liegen geblieben: {}", fehler.join("; "))); }
+        UmzugErgebnis { pfad: s.clone(), ok: fehler.is_empty(), meldung }
+    }).collect();
+    for (s, e) in songs.iter().zip(erg.iter_mut()) {
+        match pfade_reparieren(Path::new(s)) {
+            Ok(0) => {}
+            Ok(n) => e.meldung.push_str(&format!(", {n} FLP-Pfade nachgezogen")),
+            Err(f) => { e.ok = false; e.meldung.push_str(&format!("; FLP-Pfade: {f}")); }
+        }
+    }
+    Ok(erg)
+}
+
+fn aufraeumen(song: &Path) -> (usize, Vec<String>) {
+    for o in [SAVES, ASSETS, VERSIONS] {
+        if let Err(e) = fs::create_dir_all(song.join(o)) { return (0, vec![format!("{o}: {e}")]); }
+    }
+    // Vor dem Verschieben lesen — danach liegt die FLP schon in 01_SAVEFILES.
+    let verwendet = verwendete_namen(song);
+    let Ok(rd) = fs::read_dir(song) else { return (0, vec!["Song-Ordner nicht lesbar".into()]) };
+    let (mut zahl, mut fehler) = (0, Vec::new());
+    for e in rd.filter_map(|e| e.ok()).collect::<Vec<_>>() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let ist_ordner = e.path().is_dir();
+        let Some(rel) = ziel_im_schema(&name, ist_ordner, &verwendet) else { continue };
+        let ziel = song.join(&rel);
+        if ist_ordner && ziel.is_dir() {
+            // Assets/, Eingang/ → 02_ASSETS; oder Audio/ gibt es in den Saves schon
+            let (z, f) = inhalt_verschieben(&e.path(), &ziel);
+            zahl += z;
+            fehler.extend(f);
+            let _ = fs::remove_dir(e.path()); // nur, wenn er jetzt leer ist
+        } else if ziel.exists() {
+            fehler.push(format!("{name} (gibt es in {} schon)", rel.display()));
+        } else {
+            match fs::rename(e.path(), &ziel) {
+                Ok(()) => zahl += 1,
+                Err(err) => fehler.push(format!("{name} ({err})")),
+            }
+        }
+    }
+    (zahl, fehler)
+}
+
+fn inhalt_verschieben(von: &Path, nach: &Path) -> (usize, Vec<String>) {
+    let Ok(rd) = fs::read_dir(von) else { return (0, vec![format!("{} nicht lesbar", von.display())]) };
+    let (mut zahl, mut fehler) = (0, Vec::new());
+    for e in rd.filter_map(|e| e.ok()).collect::<Vec<_>>() {
+        let ziel = nach.join(e.file_name());
+        if e.path().is_dir() && ziel.is_dir() {
+            let (z, f) = inhalt_verschieben(&e.path(), &ziel);
+            zahl += z;
+            fehler.extend(f);
+            let _ = fs::remove_dir(e.path());
+        } else if ziel.exists() {
+            fehler.push(format!("{} (gibt es schon)", e.file_name().to_string_lossy()));
+        } else {
+            match fs::rename(e.path(), &ziel) {
+                Ok(()) => zahl += 1,
+                Err(err) => fehler.push(format!("{} ({err})", e.file_name().to_string_lossy())),
+            }
+        }
+    }
+    (zahl, fehler)
 }
 
 // ─── Altbestand aus dem Archiv umziehen ─────────────────────────────────────
@@ -477,6 +585,17 @@ fn unterordner(dir: &Path) -> Vec<(String, std::path::PathBuf)> {
         .collect()
 }
 
+/// `dir` und seine Unterordner bis `tiefe` Ebenen, ohne Backup/.
+fn ordner_bis(dir: &Path, tiefe: usize) -> Vec<std::path::PathBuf> {
+    let mut out = vec![dir.to_path_buf()];
+    if tiefe > 0 {
+        for (n, p) in unterordner(dir) {
+            if !n.eq_ignore_ascii_case("backup") { out.extend(ordner_bis(&p, tiefe - 1)); }
+        }
+    }
+    out
+}
+
 fn dateien(dir: &Path) -> Vec<(String, u64)> {
     let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
     rd.filter_map(|e| e.ok())
@@ -500,12 +619,71 @@ fn vergleich(s: &str) -> String {
     stamm.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
+/// Wohin ein Eintrag direkt im Song-Ordner beim Aufräumen gehört — None,
+/// wenn er schon richtig liegt.
+/// Dateinamen (klein), die die FLPs des Songs als Material verwenden. Lose
+/// Audiodateien daneben sind dann Vocals oder Beat, kein Export — bei
+/// Teufelskraut liegen „Teufelskraut alles.mp3" und der Beat neben den Mixen.
+fn verwendete_namen(song: &Path) -> std::collections::HashSet<String> {
+    [song.to_path_buf(), song.join(SAVES)].iter()
+        .flat_map(|d| dateien(d).into_iter().map(move |(n, _)| d.join(n)))
+        .filter(|p| is_flp(p))
+        .filter_map(|p| fs::read(p).ok())
+        .flat_map(|b| crate::commands::flp::audio_pfade(&b))
+        .filter_map(|p| p.rsplit(['\\', '/']).next().map(|n| n.to_lowercase()))
+        .collect()
+}
+
+/// Lose Audiodatei, die Material ist und kein Export: die FLP verwendet sie,
+/// oder sie heißt „Demo" („NO BLEED [DEMO] (Prod. goodbxy).wav").
+fn ist_material(name: &str, verwendet: &std::collections::HashSet<String>) -> bool {
+    let n = name.to_lowercase();
+    verwendet.contains(&n) || n.contains("demo")
+}
+
+fn ziel_im_schema(name: &str, ist_ordner: bool, verwendet: &std::collections::HashSet<String>) -> Option<std::path::PathBuf> {
+    let n = name.to_lowercase();
+    if [SAVES, ASSETS, VERSIONS].iter().any(|s| s.eq_ignore_ascii_case(name)) { return None; }
+    Some(if ist_ordner {
+        match n.as_str() {
+            // FLs eigene Ordner gehören zur FLP
+            "audio" | "backup" => Path::new(SAVES).join(name),
+            // Frühere Namen des Asset-Ordners: Inhalt, nicht Ordner, nach 02_ASSETS
+            "assets" | "eingang" => Path::new(ASSETS).to_path_buf(),
+            _ => Path::new(ASSETS).join(name),
+        }
+    } else if is_flp(Path::new(name)) {
+        Path::new(SAVES).join(name)
+    } else if ist_audio(name) && !ist_material(name, verwendet) {
+        Path::new(VERSIONS).join(name)
+    } else {
+        Path::new(ASSETS).join(name)
+    })
+}
+
 pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     let wurzel = dateien(pfad);
-    let assets = dateien(&pfad.join(ASSETS));
-    let audio_ordner = dateien(&pfad.join("Audio"));
+    let saves = dateien(&pfad.join(SAVES));
+    let versions = dateien(&pfad.join(VERSIONS));
+    // Was die FLP neben sich als Material verwendet, ist ein Asset, kein Export.
+    let verwendet = verwendete_namen(pfad);
+    let lose = || saves.iter().chain(&wurzel).filter(|(n, _)| ist_audio(n));
+    // Bis „Ordner aufräumen" lief, liegen Assets auch noch in Assets/, Eingang/ oder lose.
+    let assets: Vec<(String, u64)> = [ASSETS, "Assets", "Eingang"].iter()
+        .flat_map(|o| dateien(&pfad.join(o)))
+        .chain(lose().filter(|(n, _)| ist_material(n, &verwendet)).cloned())
+        .collect();
+    let aufnahmen: Vec<(String, u64)> = dateien(&pfad.join(SAVES).join("Audio")).into_iter()
+        .chain(dateien(&pfad.join("Audio"))).collect();
+    // Exporte: in 03_VERSIONS, oder wo FL sie hinlegt — neben die FLP.
+    let export_quellen: Vec<&(String, u64)> = versions.iter().filter(|(n, _)| ist_audio(n))
+        .chain(lose().filter(|(n, _)| !ist_material(n, &verwendet)))
+        .collect();
     let song_name = vergleich(name);
-    let hat_vocal = |n: &String| n.to_lowercase().contains("vocal");
+    let hat_vocal = |n: &str| n.to_lowercase().contains("vocal");
+    // In den Assets ist alles mit dem Songnamen außer der Demo selbst eine
+    // Gesangsspur — Jarno schickt auch „Teufelskraut alles.mp3".
+    let ist_asset_vocal = |n: &str| hat_vocal(n) || (vergleich(n).contains(&song_name) && vergleich(n) != song_name);
 
     let mut s = ArtistSong {
         name: name.to_string(),
@@ -513,21 +691,26 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
         fertig,
         ..Default::default()
     };
-    s.flp = wurzel.iter().any(|(n, _)| is_flp(Path::new(n)));
-    s.vocals = wurzel.iter().chain(&assets).chain(&audio_ordner).any(|(n, _)| ist_audio(n) && hat_vocal(n));
-    s.master = wurzel.iter().any(|(n, _)| ist_audio(n) && n.to_lowercase().contains("master"));
-    s.mix = wurzel.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && !n.to_lowercase().contains("master"));
+    s.flp = saves.iter().chain(&wurzel).any(|(n, _)| is_flp(Path::new(n)));
+    s.vocals = assets.iter().any(|(n, _)| ist_audio(n) && ist_asset_vocal(n))
+        || aufnahmen.iter().chain(&wurzel).any(|(n, _)| ist_audio(n) && hat_vocal(n));
     s.demo = assets.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) == song_name);
-    s.beat = assets.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) != song_name);
-    s.geaendert = wurzel.iter().chain(&assets).chain(&audio_ordner).map(|(_, t)| *t).max().unwrap_or(0);
-    s.dateien = wurzel.iter().chain(&assets).chain(&audio_ordner).map(|(n, _)| n.clone()).collect();
+    s.beat = assets.iter().any(|(n, _)| ist_audio(n) && !ist_asset_vocal(n) && vergleich(n) != song_name);
+    s.master = export_quellen.iter().any(|(n, _)| n.to_lowercase().contains("master"));
+    s.mix = export_quellen.iter().any(|(n, _)| !hat_vocal(n) && !n.to_lowercase().contains("master"));
+    let alle = || wurzel.iter().chain(&saves).chain(&versions).chain(&assets).chain(&aufnahmen);
+    s.geaendert = alle().map(|(_, t)| *t).max().unwrap_or(0);
+    s.dateien = alle().map(|(n, _)| n.clone()).collect();
+    s.umbau = fs::read_dir(pfad).map(|rd| rd.filter_map(|e| e.ok())
+        .filter(|e| ziel_im_schema(&e.file_name().to_string_lossy(), e.path().is_dir(), &verwendet).is_some())
+        .count()).unwrap_or(0);
     let plan = pfad_plan(pfad);
     s.verweise = plan.verweise;
     // Verschiedene Dateien zählen — Mindestens 2K, _2, _3 verweisen auf dieselben.
     s.reparierbar = plan.ersatz.iter().flat_map(|(_, e)| e.iter().map(|(alt, _)| alt))
         .collect::<std::collections::HashSet<_>>().len();
     s.fehlend = plan.fehlend;
-    let mut exporte: Vec<&(String, u64)> = wurzel.iter().filter(|(n, _)| ist_audio(n)).collect();
+    let mut exporte = export_quellen;
     exporte.sort_by(|a, b| b.1.cmp(&a.1));
     s.exporte = exporte.into_iter().map(|(n, _)| n.clone()).collect();
     s
@@ -551,12 +734,16 @@ mod tests {
         datei(&root.join("Yoghi/No Bleed/No Bleed.mp3"));
         datei(&root.join("Yoghi/No Bleed/Audio/No Bleed_2026-08-25_VOCALS DRY.wav"));
         datei(&root.join("Yoghi/No Bleed/Backup/No Bleed (autosaved).flp"));
-        // Neues Layout: Assets/ mit Vocals, Demo, Beat; Master daneben
-        datei(&root.join("JarnoGm/Heartbreak Highlights/Heartbreak Highlights.flp"));
-        datei(&root.join("JarnoGm/Heartbreak Highlights/Assets/Heartbreak Highlights Vocals.wav"));
-        datei(&root.join("JarnoGm/Heartbreak Highlights/Assets/Heartbreak Highlights.mp3"));
-        datei(&root.join("JarnoGm/Heartbreak Highlights/Assets/LEFT ALONE [F#m 135].wav"));
-        datei(&root.join("JarnoGm/Heartbreak Highlights/Heartbreak Highlights - Master.wav"));
+        // Schema: 01_SAVEFILES, 02_ASSETS mit Vocals, Demo, Beat; 03_VERSIONS
+        datei(&root.join("JarnoGm/Heartbreak Highlights/01_SAVEFILES/Heartbreak Highlights.flp"));
+        datei(&root.join("JarnoGm/Heartbreak Highlights/02_ASSETS/Heartbreak Highlights Vocals.wav"));
+        datei(&root.join("JarnoGm/Heartbreak Highlights/02_ASSETS/Heartbreak Highlights.mp3"));
+        datei(&root.join("JarnoGm/Heartbreak Highlights/02_ASSETS/LEFT ALONE [F#m 135].wav"));
+        datei(&root.join("JarnoGm/Heartbreak Highlights/03_VERSIONS/Heartbreak Highlights - Master.wav"));
+        // „Teufelskraut alles" sind Vocals, kein Beat; der Mix liegt neben der FLP
+        datei(&root.join("JarnoGm/Teufelskraut/01_SAVEFILES/teufelskraut.flp"));
+        datei(&root.join("JarnoGm/Teufelskraut/01_SAVEFILES/teufelskraut.mp3"));
+        datei(&root.join("JarnoGm/Teufelskraut/02_ASSETS/Teufelskraut alles.mp3"));
         // Abgegeben
         datei(&root.join("JarnoGm/_Fertig/Alt/Alt.flp"));
         // Kein Künstler
@@ -570,8 +757,15 @@ mod tests {
         let nb = &k[1].songs[0];
         assert!(nb.flp && nb.vocals && nb.mix && !nb.master && !nb.demo && !nb.beat && !nb.fertig);
 
+        assert_eq!(nb.umbau, 4, "FLP, Export, Audio/, Backup/ liegen noch lose");
+
         let hh = k[0].songs.iter().find(|s| s.name == "Heartbreak Highlights").unwrap();
         assert!(hh.flp && hh.vocals && hh.demo && hh.beat && hh.master && !hh.mix);
+        assert_eq!(hh.umbau, 0);
+
+        let tk = k[0].songs.iter().find(|s| s.name == "Teufelskraut").unwrap();
+        assert!(tk.flp && tk.vocals && !tk.beat && !tk.demo && tk.mix);
+        assert_eq!(tk.exporte, vec!["teufelskraut.mp3".to_string()]);
 
         let alt = k[0].songs.iter().find(|s| s.name == "Alt").unwrap();
         assert!(alt.fertig && alt.flp);
@@ -594,21 +788,22 @@ mod tests {
         assert!(create_artist(r, "  ".into()).is_err(), "leer");
 
         let flp = create_artist_song(k.clone(), "No Bleed".into(), vorlage.to_string_lossy().to_string()).unwrap();
-        assert!(Path::new(&flp).ends_with("Yoghi/No Bleed/No Bleed.flp"));
-        assert!(Path::new(&k).join("No Bleed/Assets").is_dir());
+        assert!(Path::new(&flp).ends_with("Yoghi/No Bleed/01_SAVEFILES/No Bleed.flp"));
+        assert!(Path::new(&k).join("No Bleed/02_ASSETS").is_dir() && Path::new(&k).join("No Bleed/03_VERSIONS").is_dir());
+        assert!(!Path::new(&k).join("No Bleed/No Bleed.flp").exists());
 
-        // Downloads in Assets/: verschoben, Gleichnamiges übersprungen
+        // Downloads in 02_ASSETS: verschoben, Gleichnamiges übersprungen
         let dl = root.join("dl");
         datei(&dl.join("no bleed_vocals.wav"));
         datei(&dl.join("no bleed.mp3"));
         let song = Path::new(&k).join("No Bleed");
-        datei(&song.join("Assets/no bleed.mp3"));
+        datei(&song.join("02_ASSETS/no bleed.mp3"));
         let erg = artist_assets_fuellen(song.to_string_lossy().to_string(), vec![
             dl.join("no bleed_vocals.wav").to_string_lossy().to_string(),
             dl.join("no bleed.mp3").to_string_lossy().to_string(),
         ]).unwrap();
         assert!(erg[0].ok && !erg[1].ok);
-        assert!(song.join("Assets/no bleed_vocals.wav").is_file() && !dl.join("no bleed_vocals.wav").exists());
+        assert!(song.join("02_ASSETS/no bleed_vocals.wav").is_file() && !dl.join("no bleed_vocals.wav").exists());
         assert!(dl.join("no bleed.mp3").is_file(), "nicht überschrieben, Original bleibt");
         let _ = fs::remove_dir_all(&root);
     }
@@ -618,8 +813,9 @@ mod tests {
         let root = std::env::temp_dir().join(format!("beatos_abgabe_{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let song = root.join("JarnoGm/Mindestens 2K");
-        datei(&song.join("Mindestens 2K.flp"));
-        datei(&song.join("Mindestens 2K_master v3.wav"));
+        datei(&song.join("01_SAVEFILES/Mindestens 2K.flp"));
+        // FL hat den Master neben die FLP exportiert
+        datei(&song.join("01_SAVEFILES/Mindestens 2K_master v3.wav"));
         datei(&root.join("JarnoGm/Finden/Finden.mp3"));
 
         assert!(abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Bounce").is_err(), "nur Master/Mix");
@@ -627,8 +823,8 @@ mod tests {
 
         let (neu, abgabe) = abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Master").unwrap();
         assert_eq!(neu, root.join("JarnoGm/_Fertig/Mindestens 2K"));
-        assert_eq!(abgabe, neu.join("JarnoGm - Mindestens 2K (Master).wav"));
-        assert!(abgabe.is_file() && neu.join("Mindestens 2K.flp").is_file() && !song.exists());
+        assert_eq!(abgabe, neu.join("03_VERSIONS/JarnoGm - Mindestens 2K (Master).wav"));
+        assert!(abgabe.is_file() && neu.join("01_SAVEFILES/Mindestens 2K.flp").is_file() && !song.exists());
         assert!(abgeben_dateien(&neu, "JarnoGm - Mindestens 2K (Master).wav", "Master").is_err(), "schon abgegeben");
 
         // Scan sieht ihn als fertig
@@ -637,7 +833,7 @@ mod tests {
 
         let zurueck = wieder_oeffnen_dateien(&neu).unwrap();
         assert_eq!(zurueck, song);
-        assert!(song.join("JarnoGm - Mindestens 2K (Master).wav").is_file());
+        assert!(song.join("03_VERSIONS/JarnoGm - Mindestens 2K (Master).wav").is_file());
         assert!(wieder_oeffnen_dateien(&song).is_err(), "nicht in _Fertig");
         let _ = fs::remove_dir_all(&root);
     }
@@ -689,10 +885,63 @@ mod tests {
         assert_eq!(pfade[0], win(song.join("Audio/v.wav")));
         assert_eq!(pfade[1], win(root.join("Yoghi/NO BLEED (Prod)/vocals/t1.wav")));
         assert_eq!(pfade[2], r"D:\nirgends\verloren.wav", "nicht Gefundenes bleibt");
-        assert_eq!(pfade[3], win(song.join("Assets/no bleed vocals.mp3")));
+        assert_eq!(pfade[3], win(song.join("02_ASSETS/no bleed vocals.mp3")));
         assert!(song.join("Backup/No Bleed (vor Pfad-Reparatur).flp").is_file());
         let s = song_lesen(&song);
         assert_eq!((s.reparierbar, s.fehlend.len()), (0, 1));
+
+        // Aufräumen: alles ins Schema, beide Songs — No Bleed verwendet einen
+        // Take aus dem Nachbar-Song, der dabei selbst umzieht.
+        datei(&song.join("Eingang/demo.mp3"));
+        datei(&song.join("No Bleed.mp3"));
+        let nachbar = root.join("Yoghi/NO BLEED (Prod)");
+        let erg = artist_ordner_aufraeumen(vec![
+            song.to_string_lossy().to_string(), nachbar.to_string_lossy().to_string(),
+        ]).unwrap();
+        assert!(erg.iter().all(|e| e.ok), "{erg:?}");
+        let flp = song.join("01_SAVEFILES/No Bleed.flp");
+        assert!(flp.is_file() && song.join("01_SAVEFILES/Audio/v.wav").is_file());
+        assert!(song.join("01_SAVEFILES/Backup/No Bleed (vor Pfad-Reparatur).flp").is_file());
+        assert!(song.join("02_ASSETS/demo.mp3").is_file() && !song.join("Eingang").exists());
+        assert!(song.join("03_VERSIONS/No Bleed.mp3").is_file());
+        assert!(nachbar.join("02_ASSETS/vocals/t1.wav").is_file());
+        let pfade = crate::commands::flp::audio_pfade(&fs::read(&flp).unwrap());
+        assert_eq!(pfade[0], win(song.join("01_SAVEFILES/Audio/v.wav")));
+        assert_eq!(pfade[1], win(nachbar.join("02_ASSETS/vocals/t1.wav")));
+        let s = song_lesen(&song);
+        assert_eq!((s.reparierbar, s.fehlend.len(), s.umbau), (0, 1, 0));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Teufelskraut, wie es heute liegt: Beat und Vocals lose neben den Mixen.
+    #[test]
+    fn aufraeumen_trennt_material_von_exporten() {
+        let root = std::env::temp_dir().join(format!("beatos_teufel_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let song_dir = root.join("JarnoGm/Teufelskraut");
+        let beat = song_dir.join("(FREE) Lil Tecca Type Beat — LIFESTYLE.mp3");
+        let alles = song_dir.join("Teufelskraut alles.mp3");
+        for p in [&beat, &alles, &song_dir.join("teufelskraut.mp3"), &song_dir.join("JarnoGm - Teufelskraut.wav"),
+                  &song_dir.join("TEUFELSKRAUT [DEMO].wav")] { datei(p); }
+        fs::write(song_dir.join("teufelskraut.flp"), flp_mit(&[
+            r"C:\weg\JarnoGm - Library\Teufelskraut\(FREE) Lil Tecca Type Beat — LIFESTYLE.mp3".into(),
+            r"C:\weg\JarnoGm - Library\Teufelskraut\Teufelskraut alles.mp3".into(),
+        ])).unwrap();
+
+        let s = song("Teufelskraut", &song_dir, false);
+        assert!(s.vocals && s.beat && s.mix, "Material zählt schon vor dem Aufräumen richtig");
+        assert_eq!(s.exporte.len(), 2, "nur die zwei Mixe: {:?}", s.exporte);
+
+        let erg = artist_ordner_aufraeumen(vec![song_dir.to_string_lossy().to_string()]).unwrap();
+        assert!(erg[0].ok, "{erg:?}");
+        assert!(song_dir.join("02_ASSETS/Teufelskraut alles.mp3").is_file());
+        assert!(song_dir.join("02_ASSETS/(FREE) Lil Tecca Type Beat — LIFESTYLE.mp3").is_file());
+        assert!(song_dir.join("02_ASSETS/TEUFELSKRAUT [DEMO].wav").is_file(), "eine Demo ist kein Export");
+        assert!(song_dir.join("03_VERSIONS/teufelskraut.mp3").is_file() && song_dir.join("03_VERSIONS/JarnoGm - Teufelskraut.wav").is_file());
+        let pfade = crate::commands::flp::audio_pfade(&fs::read(song_dir.join("01_SAVEFILES/teufelskraut.flp")).unwrap());
+        assert_eq!(pfade[1], win(song_dir.join("02_ASSETS/Teufelskraut alles.mp3")));
+        let s = song("Teufelskraut", &song_dir, false);
+        assert!(s.vocals && s.beat && s.mix && s.umbau == 0 && s.reparierbar == 0);
         let _ = fs::remove_dir_all(&root);
     }
 

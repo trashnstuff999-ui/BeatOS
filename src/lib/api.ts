@@ -279,14 +279,17 @@ export const api = {
       invoke<void>("set_artist_song", { path, notiz, warten }),
     /** Neuer Künstler-Ordner; gibt den Pfad zurück. */
     create: (root: string, name: string) => invoke<string>("create_artist", { root, name }),
-    /** Neuer Song: Ordner + Template-FLP + Assets/; gibt den FLP-Pfad zurück. */
+    /** Neuer Song: 01_SAVEFILES mit Template-FLP, 02_ASSETS, 03_VERSIONS; gibt den FLP-Pfad zurück. */
     createSong: (artistPath: string, name: string, templateFlp: string) =>
       invoke<string>("create_artist_song", { artistPath, name, templateFlp }),
     /** Audiodateien im Downloads-Ordner (leer = der von Windows), neueste zuerst. */
     downloads: (dir: string) => invoke<{ name: string; path: string; geaendert: number }[]>("artist_downloads", { dir }),
     /** Fehlende Audio-Pfade in den FLPs des Songs nachziehen; gibt die Zahl zurück. */
     pfadeReparieren: (songPath: string) => invoke<number>("artist_pfade_reparieren", { songPath }),
-    /** Dateien nach <Song>/Assets/ verschieben; Gleichnamiges wird übersprungen. */
+    /** Songs ins Schema 01_SAVEFILES / 02_ASSETS / 03_VERSIONS bringen, danach FLP-Pfade nachziehen. */
+    ordnerAufraeumen: (songs: string[]) =>
+      invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_ordner_aufraeumen", { songs }),
+    /** Dateien nach <Song>/02_ASSETS verschieben; Gleichnamiges wird übersprungen. */
     assetsFuellen: (songPath: string, dateien: string[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_assets_fuellen", { songPath, dateien }),
     /** Export umbenennen („<Künstler> - <Song> (Master).wav"), Song nach _Fertig/; gibt den Dateipfad zurück. */

@@ -9,13 +9,13 @@
 // Scheibe 6: Künstler-Ordner, die noch im Archiv liegen, umziehen — mit
 // Vorschau, verschoben wird erst auf Klick.
 // Scheibe 2: „Neuer Künstler" (Ordner) und „Neuer Song" (Ordner, Template-FLP,
-// Assets/). Scheibe 3: Klick auf einen Song klappt Notiz und Status auf —
+// 02_ASSETS, 03_VERSIONS). Scheibe 3: Klick auf einen Song klappt Notiz und Status auf —
 // „In Arbeit" oder „Warte auf Künstler" (Tabelle artist_songs).
 // Plan und nächste Scheiben: docs/kuenstler-projekte.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle } from "lucide-react";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
@@ -36,18 +36,19 @@ type ZeilenDrop = {
 };
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
-  { key: "flp", label: "FLP", titel: "FL-Projekt im Song-Ordner" },
-  { key: "vocals", label: "Vocals", titel: "Audiodatei mit „Vocal\" im Namen (Assets/, Audio/ oder Song-Ordner)" },
-  { key: "demo", label: "Demo", titel: "In Assets/ eine Audiodatei, die wie der Song heißt" },
-  { key: "beat", label: "Beat", titel: "In Assets/ eine weitere Audiodatei (weder Vocals noch Demo)" },
-  { key: "mix", label: "Mix", titel: "Ein Export im Song-Ordner" },
-  { key: "master", label: "Master", titel: "Eine Audiodatei mit „Master\" im Namen" },
+  { key: "flp", label: "FLP", titel: "FL-Projekt in 01_SAVEFILES" },
+  { key: "vocals", label: "Vocals", titel: "In 02_ASSETS eine Audiodatei mit „Vocal\" oder dem Songnamen im Namen (z. B. „Teufelskraut alles\") — oder eine Aufnahme mit „Vocal\" in Audio/" },
+  { key: "demo", label: "Demo", titel: "In 02_ASSETS eine Audiodatei, die genau wie der Song heißt" },
+  { key: "beat", label: "Beat", titel: "In 02_ASSETS eine weitere Audiodatei (weder Vocals noch Demo)" },
+  { key: "mix", label: "Mix", titel: "Ein Export in 03_VERSIONS oder neben der FLP" },
+  { key: "master", label: "Master", titel: "Ein Export mit „Master\" im Namen, in 03_VERSIONS oder neben der FLP" },
 ];
 
 export function ArtistsPane({ root, archivePath, active }: { root: string; archivePath: string; active: boolean }) {
   const [scan, setScan] = useState<ArtistsScan | null>(null);
   const [altbestand, setAltbestand] = useState<Altbestand[]>([]);
   const [umzugOffen, setUmzugOffen] = useState(false);
+  const [aufraeumenOffen, setAufraeumenOffen] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [legtAn, setLegtAn] = useState(false);
   // Offener Anlege-Dialog.
@@ -73,7 +74,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   // Zurück aus dem Explorer oder aus Discord: neu lesen, nur wenn der Tab offen ist.
   useFocusRefresh(() => { if (active) ladenMitDownloads(); });
 
-  // Dateien in Assets/ — per Ziehen oder per Vorschlag. Was nicht ging, steht oben.
+  // Dateien in 02_ASSETS — per Ziehen oder per Vorschlag. Was nicht ging, steht oben.
   const [meldung, setMeldung] = useState<string | null>(null);
   const uebernehmen = useCallback(async (songPfad: string, pfade: string[]) => {
     try {
@@ -86,7 +87,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   }, [ladenMitDownloads]);
 
   // Aus dem Explorer auf eine Song-Zeile ziehen: die Zeile unter dem Zeiger
-  // (data-song) leuchtet auf, Loslassen verschiebt in ihren Assets-Ordner.
+  // (data-song) leuchtet auf, Loslassen verschiebt in ihren 02_ASSETS.
   const [ziehen, setZiehen] = useState<{ pfad: string | null; anzahl: number } | null>(null);
   useEffect(() => {
     if (!active || !("__TAURI_INTERNALS__" in window)) return;
@@ -138,7 +139,25 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setUmzugOffen(true)}>Umziehen …</Button>
     </div>
   );
-  const dialog = umzugOffen && (
+  // Songs, bei denen noch etwas außerhalb von 01_/02_/03_ liegt.
+  const unaufgeraeumt = (scan?.kuenstler ?? []).flatMap(k => k.songs.filter(s => s.umbau > 0).map(s => ({ kuenstler: k.name, song: s })));
+  const aufraeumHinweis = unaufgeraeumt.length > 0 && (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
+      padding: "10px 14px", borderRadius: radius.control,
+      background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
+      fontSize: 12, color: C.onSurface,
+    }}>
+      <FolderTree size={14} color={C.primary} />
+      {unaufgeraeumt.length === 1 ? "1 Song liegt" : `${unaufgeraeumt.length} Songs liegen`} noch nicht in 01_SAVEFILES / 02_ASSETS / 03_VERSIONS
+      <span style={{ flex: 1 }} />
+      <Button variant="secondary" size="sm" icon={FolderTree} onClick={() => setAufraeumenOffen(true)}>Ordner aufräumen …</Button>
+    </div>
+  );
+
+  const dialog = aufraeumenOffen && (
+    <AufraeumDialog songs={unaufgeraeumt} onClose={() => { setAufraeumenOffen(false); laden(); }} />
+  ) || umzugOffen && (
     <UmzugDialog
       altbestand={altbestand}
       archivePath={archivePath}
@@ -211,7 +230,91 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     );
   }
 
-  return <div>{hinweis}{inhalt}{dialog}</div>;
+  return <div>{hinweis}{aufraeumHinweis}{inhalt}{dialog}</div>;
+}
+
+/** Ältere Songs ins Schema bringen. Was wohin kommt, steht oben — verschoben
+ *  wird erst beim Klick, nur innerhalb des Song-Ordners, nichts überschrieben. */
+function AufraeumDialog({ songs, onClose }: {
+  songs: { kuenstler: string; song: ArtistSong }[];
+  onClose: () => void;
+}) {
+  const [an, setAn] = useState<Record<string, boolean>>({});
+  const [laeuft, setLaeuft] = useState(false);
+  const [ergebnis, setErgebnis] = useState<{ pfad: string; ok: boolean; meldung: string }[] | null>(null);
+  const gewaehlt = songs.filter(s => an[s.song.path] ?? true);
+
+  const los = async () => {
+    setLaeuft(true);
+    try { setErgebnis(await api.artists.ordnerAufraeumen(gewaehlt.map(s => s.song.path))); }
+    catch (e) { setErgebnis([{ pfad: "", ok: false, meldung: String(e) }]); }
+    finally { setLaeuft(false); }
+  };
+
+  const regeln: [string, string][] = [
+    ["FLP, Audio/, Backup/", "01_SAVEFILES"],
+    ["Assets/, Eingang/ und andere Ordner, sonstige Dateien", "02_ASSETS"],
+    ["Exporte (Audio direkt im Song-Ordner)", "03_VERSIONS"],
+  ];
+
+  return (
+    <Modal
+      icon={FolderTree}
+      title="Song-Ordner aufräumen"
+      subtitle="Danach zieht BeatOS die Pfade in den FLPs nach — die FLPs vorher in FL schließen"
+      width={640}
+      onClose={onClose}
+      closeOnBackdrop={!laeuft}
+      footer={ergebnis ? (
+        <Button variant="primary" onClick={onClose}>Schließen</Button>
+      ) : (
+        <>
+          <Button variant="ghost" onClick={onClose}>Abbrechen</Button>
+          <Button variant="primary" icon={FolderTree} loading={laeuft} disabled={gewaehlt.length === 0} onClick={los}>
+            {gewaehlt.length === 1 ? "1 Song aufräumen" : `${gewaehlt.length} Songs aufräumen`}
+          </Button>
+        </>
+      )}
+    >
+      {!ergebnis ? (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 14px auto", gap: "6px 10px", alignItems: "center", fontSize: 12, marginBottom: 14 }}>
+            {regeln.map(([was, wohin]) => (
+              <Fragment key={wohin}>
+                <span style={{ color: C.onSurfaceVariant }}>{was}</span>
+                <ArrowRight size={12} color={C.onSecondaryFixedVar} />
+                <code style={{ color: C.onSurface }}>{wohin}</code>
+              </Fragment>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 300, overflowY: "auto" }}>
+            {songs.map(({ kuenstler, song: s }) => (
+              <label key={s.path} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", cursor: "pointer",
+                borderRadius: radius.control, background: C.surfaceContainerLow, fontSize: 12,
+              }}>
+                <input type="checkbox" checked={an[s.path] ?? true} style={{ accentColor: C.primary }}
+                  onChange={e => setAn(v => ({ ...v, [s.path]: e.target.checked }))} />
+                <span style={{ color: C.onSecondaryFixedVar }}>{kuenstler}</span>
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                <span style={{ color: C.onSecondaryFixedVar }}>{s.umbau === 1 ? "1 Eintrag" : `${s.umbau} Einträge`}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0" }}>
+          {ergebnis.map(e => (
+            <div key={e.pfad + e.meldung} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: e.ok ? C.mint : C.error }}>
+              {e.ok ? <Check size={13} /> : <X size={13} />}
+              <span style={{ color: C.onSurface, flexShrink: 0 }}>{e.pfad.split(/[\\/]/).pop()}</span>
+              <span>{e.meldung}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
 }
 
 /** Vorschau und Bestätigung: welche Archiv-Ordner wohin wandern. Verschoben
@@ -431,7 +534,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
     <Modal
       icon={FolderPlus}
       title="Neuer Song"
-      subtitle="Legt den Song-Ordner an, darin die Template-FLP und Assets/ für das, was der Künstler schickt."
+      subtitle="Legt den Song-Ordner an, darin 01_SAVEFILES mit der Template-FLP, 02_ASSETS für das, was der Künstler schickt, und 03_VERSIONS."
       width={560}
       onClose={() => onClose(angelegt)}
       footer={angelegt ? (
@@ -458,7 +561,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <span style={beschriftung}>Aus den Downloads in Assets/</span>
+        <span style={beschriftung}>Aus den Downloads in 02_ASSETS</span>
         {downloads.length === 0 ? (
           <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Keine Audiodateien aus den letzten 30 Tagen.</div>
         ) : (
@@ -598,12 +701,12 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
             )}
             {istZiel ? (
               <span style={{ fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>
-                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → Assets
+                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → 02_ASSETS
               </span>
             ) : neue.length > 0 && (
               <Button
                 variant="secondary" size="sm" icon={FolderInput}
-                title={`Aus den Downloads in Assets/ verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
+                title={`Aus den Downloads in 02_ASSETS verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
                 onClick={e => { e.stopPropagation(); uebernehmen(s.path, neue.map(d => d.path)); }}
               >
                 {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}
@@ -751,7 +854,7 @@ function AbgabeDialog({ song: s, kuenstler, onClose }: {
     <Modal
       icon={Send}
       title={`${s.name} abgeben`}
-      subtitle="Der Export bekommt den Abgabe-Namen, der Song wandert nach _Fertig."
+      subtitle="Der Export bekommt den Abgabe-Namen und landet in 03_VERSIONS, der Song wandert nach _Fertig."
       width={560}
       onClose={() => onClose(false)}
       footer={<>

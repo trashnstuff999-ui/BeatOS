@@ -67,6 +67,7 @@ use commands::{
     artist_abgeben,
     artist_wieder_oeffnen,
     artist_pfade_reparieren,
+    artist_ordner_aufraeumen,
     // Settings commands
     get_settings,
     save_settings,
@@ -252,6 +253,7 @@ pub fn run() {
             artist_abgeben,
             artist_wieder_oeffnen,
             artist_pfade_reparieren,
+            artist_ordner_aufraeumen,
             // Settings
             get_settings,
             save_settings,

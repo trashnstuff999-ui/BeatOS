@@ -126,3 +126,21 @@ werden.
   werden per Bytefolge gesucht/ersetzt, nicht per Durchlauf.
 
 - 18.10.2026: Der Ordner für Vocals/Demo/Beat heißt **Assets/** statt Eingang/ (Stephans Wunsch: „dort sollen die ganzen Assets für die Songs hin").
+
+## Song-Ordner wie im Archiv (18.10.2026)
+
+```
+<Song>/
+  01_SAVEFILES/   FLP — FL legt Audio/ und Backup/ daneben
+  02_ASSETS/      Vocals, Demo, Beat vom Künstler
+  03_VERSIONS/    Mixe, Master, Abgaben
+```
+
+- „Neuer Song" legt das so an; Zuweisen/Reinziehen → 02_ASSETS;
+  Abgeben verschiebt die Datei mit Abgabe-Namen nach 03_VERSIONS.
+- „Ordner aufräumen …" bringt ältere Songs ins Schema: FLP, Audio/,
+  Backup/ → 01; Assets/, Eingang/, andere Ordner, Sonstiges → 02; lose
+  Audiodateien → 03, **außer** die FLP verwendet sie als Material oder
+  sie heißen „Demo" → 02. Danach werden die FLP-Pfade nachgezogen.
+- Vocals: in 02_ASSETS auch alles mit dem Songnamen außer der Demo selbst
+  (Jarno schickt „Teufelskraut alles.mp3").
