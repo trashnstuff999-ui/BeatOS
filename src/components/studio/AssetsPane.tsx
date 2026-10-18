@@ -308,7 +308,7 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
         overflow: "hidden", position: "relative",
       }}>
         {asset.kind === "image"
-          ? <AssetImage path={asset.path} />
+          ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`} />
           : <AssetVideo path={asset.path} />}
 
         {hovered && auswahl === null && (
@@ -392,6 +392,7 @@ function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
 
   // Unsichere Paare sind Vorschläge — standardmäßig aus.
   const gewaehlt = (plan ?? []).filter(u => an[u.pfad] ?? !u.unsicher);
+  const standVon = (pfad: string) => { const b = bilder.find(x => x.path === pfad); return b ? `${b.modified_secs}-${b.size}` : undefined; };
 
   const umbenennen = async () => {
     setLaeuft(true);
@@ -435,7 +436,7 @@ function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
               <input type="checkbox" checked={an[u.pfad] ?? !u.unsicher} style={{ accentColor: C.primary }}
                 onChange={e => setAn(v => ({ ...v, [u.pfad]: e.target.checked }))} />
               <span style={{ width: 44, height: 28, borderRadius: 4, overflow: "hidden", background: C.surfaceContainerHigh }}>
-                <AssetImage path={u.pfad} fit="cover" />
+                <AssetImage path={u.pfad} fit="cover" stand={standVon(u.pfad)} />
               </span>
               <span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.alt}</span>
               <ArrowRight size={12} color={C.onSecondaryFixedVar} />

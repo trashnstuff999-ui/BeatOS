@@ -201,7 +201,7 @@ function FileCard({ asset, aspect, busy, onAssign }: {
         overflow: "hidden",
       }}>
         {asset.kind === "image"
-          ? <AssetImage path={asset.path} />
+          ? <AssetImage path={asset.path} stand={`${asset.modified_secs}-${asset.size}`} />
           : <AssetVideo path={asset.path} />
         }
       </div>
@@ -219,8 +219,15 @@ function FileCard({ asset, aspect, busy, onAssign }: {
 /** Image via asset protocol, base64 fallback. Standard: ganz sichtbar
  *  (contain) — zum Aussuchen. Die Slots füllen randlos (cover).
  *  Auch von der Studio-Inbox genutzt. */
-export function AssetImage({ path, fit = "contain" }: { path: string; fit?: "contain" | "cover" }) {
-  const [src, setSrc] = useState<string>(() => convertFileSrc(path.replace(/\\/g, "/")));
+export function AssetImage({ path, fit = "contain", stand }: {
+  path: string;
+  fit?: "contain" | "cover";
+  /** Stand der Datei (z. B. Änderungszeit + Größe). Liegt unter demselben
+   *  Namen eine andere Datei — nach „Nummerieren" wird aus cover9 Cover_2 —,
+   *  zeigte die WebView sonst das alte Bild aus ihrem Cache. */
+  stand?: string;
+}) {
+  const [src, setSrc] = useState<string>(() => convertFileSrc(path.replace(/\\/g, "/")) + (stand ? `?v=${encodeURIComponent(stand)}` : ""));
   const [failed, setFailed] = useState(false);
   const triedBase64 = useRef(false);
 

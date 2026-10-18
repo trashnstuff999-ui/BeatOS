@@ -130,7 +130,7 @@ export function AssignToProjectDialog({
         }}>
           {isVideo
             ? <Film size={28} color={C.onSecondaryFixedVar} strokeWidth={1.25} />
-            : <AssetImage path={file.path} />}
+            : <AssetImage path={file.path} stand={`${file.modified_secs}-${file.size}`} />}
         </div>
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
