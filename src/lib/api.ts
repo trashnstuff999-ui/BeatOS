@@ -282,6 +282,11 @@ export const api = {
     /** Neuer Song: Ordner + Template-FLP + Eingang/; gibt den FLP-Pfad zurück. */
     createSong: (artistPath: string, name: string, templateFlp: string) =>
       invoke<string>("create_artist_song", { artistPath, name, templateFlp }),
+    /** Audiodateien im Downloads-Ordner der letzten 30 Tage, neueste zuerst. */
+    downloads: () => invoke<{ name: string; path: string; geaendert: number }[]>("artist_downloads"),
+    /** Dateien nach <Song>/Eingang/ verschieben; Gleichnamiges wird übersprungen. */
+    eingangFuellen: (songPath: string, dateien: string[]) =>
+      invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_eingang_fuellen", { songPath, dateien }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────

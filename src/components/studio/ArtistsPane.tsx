@@ -22,7 +22,8 @@ import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
-import { EmptyState, Button, IconButton, Modal, Segmented } from "../ui";
+import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
+import { passtZumSong } from "../../lib/kuenstler";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
@@ -40,8 +41,8 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   const [umzugOffen, setUmzugOffen] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [legtAn, setLegtAn] = useState(false);
-  // Namensdialog: neuer Künstler (ohne Ziel) oder neuer Song bei diesem Künstler.
-  const [neu, setNeu] = useState<{ kuenstler: Artist | null } | null>(null);
+  // Offener Anlege-Dialog.
+  const [neu, setNeu] = useState<"kuenstler" | "song" | null>(null);
   const { settings } = useSettings();
 
   const laden = useCallback(() => {
@@ -89,18 +90,17 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       root={root}
       onClose={() => { setUmzugOffen(false); laden(); }}
     />
-  ) || neu && (
+  ) || neu === "kuenstler" && (
     <NameDialog
-      titel={neu.kuenstler ? `Neuer Song für ${neu.kuenstler.name}` : "Neuer Künstler"}
-      hinweis={neu.kuenstler
-        ? "Legt den Song-Ordner an, darin die Template-FLP und Eingang/ für das, was der Künstler schickt."
-        : "Legt einen Ordner für den Künstler an."}
-      anlegen={async name => {
-        if (!neu.kuenstler) { await api.artists.create(root, name); return; }
-        const vorlage = settings.flpTemplatePath.trim();
-        if (!vorlage) throw new Error("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen.");
-        await api.artists.createSong(neu.kuenstler.path, name, vorlage);
-      }}
+      titel="Neuer Künstler"
+      hinweis="Legt einen Ordner für den Künstler an."
+      anlegen={async name => { await api.artists.create(root, name); }}
+      onClose={angelegt => { setNeu(null); if (angelegt) laden(); }}
+    />
+  ) || neu === "song" && scan && (
+    <SongDialog
+      kuenstler={scan.kuenstler}
+      vorlage={settings.flpTemplatePath.trim()}
       onClose={angelegt => { setNeu(null); if (angelegt) laden(); }}
     />
   );
@@ -132,17 +132,18 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
         icon={Users}
         title="Noch keine Künstler"
         description="Je Künstler ein Ordner, darin je Song einer."
-        action={<Button variant="primary" icon={UserPlus} onClick={() => setNeu({ kuenstler: null })}>Neuer Künstler</Button>}
+        action={<Button variant="primary" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Künstler</Button>}
       />
     );
   } else {
     inhalt = (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -12 }}>
-          <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setNeu({ kuenstler: null })}>Neuer Künstler</Button>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: -12 }}>
+          <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Künstler</Button>
+          <Button variant="primary" size="sm" icon={Plus} onClick={() => setNeu("song")}>Neuer Song</Button>
         </div>
         {scan.kuenstler.map(k => (
-          <KuenstlerBlock key={k.path} kuenstler={k} onNeuerSong={() => setNeu({ kuenstler: k })} onGeaendert={laden} />
+          <KuenstlerBlock key={k.path} kuenstler={k} onGeaendert={laden} />
         ))}
       </div>
     );
@@ -304,9 +305,123 @@ function NameDialog({ titel, hinweis, anlegen, onClose }: {
   );
 }
 
-function KuenstlerBlock({ kuenstler: k, onNeuerSong, onGeaendert }: {
+/** Neuer Song: Künstler wählen, Namen eingeben, dazu Dateien aus den
+ *  Downloads. Was zum Namen passt („heartbreak highlights_vocals"), ist
+ *  vorausgewählt; von Hand An- oder Abgewähltes gilt vor dem Vorschlag. */
+function SongDialog({ kuenstler, vorlage, onClose }: {
+  kuenstler: Artist[];
+  vorlage: string;
+  onClose: (angelegt: boolean) => void;
+}) {
+  const [wer, setWer] = useState(kuenstler[0]?.path ?? "");
+  const [name, setName] = useState("");
+  const [downloads, setDownloads] = useState<{ name: string; path: string; geaendert: number }[]>([]);
+  const [vonHand, setVonHand] = useState<Record<string, boolean>>({});
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  // Song steht, aber nicht jede Datei kam mit — dann nur noch „Schließen".
+  const [angelegt, setAngelegt] = useState(false);
+
+  useEffect(() => { api.artists.downloads().then(setDownloads).catch(() => setDownloads([])); }, []);
+
+  const gewaehlt = (d: { path: string; name: string }) => vonHand[d.path] ?? passtZumSong(d.name, name);
+  // Passendes nach oben, sonst neueste zuerst (so kommt es aus Rust).
+  const liste = [...downloads].sort((a, b) => Number(passtZumSong(b.name, name)) - Number(passtZumSong(a.name, name)));
+  const mit = downloads.filter(gewaehlt);
+
+  const los = async () => {
+    if (!name.trim() || !wer || laeuft) return;
+    if (!vorlage) { setFehler("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen."); return; }
+    setLaeuft(true);
+    setFehler(null);
+    try {
+      const flp = await api.artists.createSong(wer, name.trim(), vorlage);
+      if (mit.length > 0) {
+        const songPfad = flp.replace(/[\\/][^\\/]+$/, "");
+        const erg = await api.artists.eingangFuellen(songPfad, mit.map(d => d.path));
+        const schief = erg.filter(e => !e.ok);
+        if (schief.length > 0) {
+          setFehler(`Song angelegt, aber: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`).join("; ")}`);
+          setAngelegt(true);
+          setLaeuft(false);
+          return;
+        }
+      }
+      onClose(true);
+    } catch (e) {
+      setFehler(String(e));
+      setLaeuft(false);
+    }
+  };
+
+  const feld: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", fontSize: 13, fontFamily: "inherit",
+    background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+    border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
+  };
+  const beschriftung: React.CSSProperties = {
+    display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700,
+    letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar,
+  };
+
+  return (
+    <Modal
+      icon={FolderPlus}
+      title="Neuer Song"
+      subtitle="Legt den Song-Ordner an, darin die Template-FLP und Eingang/ für das, was der Künstler schickt."
+      width={560}
+      onClose={() => onClose(angelegt)}
+      footer={angelegt ? (
+        <Button variant="primary" onClick={() => onClose(true)}>Schließen</Button>
+      ) : <>
+        <Button variant="ghost" onClick={() => onClose(false)}>Abbrechen</Button>
+        <Button variant="primary" icon={FolderPlus} loading={laeuft} disabled={!name.trim() || !wer} onClick={los}>
+          {mit.length === 0 ? "Anlegen" : mit.length === 1 ? "Anlegen + 1 Datei" : `Anlegen + ${mit.length} Dateien`}
+        </Button>
+      </>}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: 12 }}>
+        <label>
+          <span style={beschriftung}>Künstler</span>
+          <Select value={wer} onChange={setWer} options={kuenstler.map(k => ({ value: k.path, label: k.name }))}
+            panelWidth={180} triggerStyle={{ width: "100%", height: 36 }} />
+        </label>
+        <label>
+          <span style={beschriftung}>Song</span>
+          <input autoFocus value={name} placeholder="Name" style={feld}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") los(); }} />
+        </label>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <span style={beschriftung}>Aus den Downloads in den Eingang</span>
+        {downloads.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Keine Audiodateien aus den letzten 30 Tagen.</div>
+        ) : (
+          <div style={{ maxHeight: 240, overflowY: "auto", border: `1px solid ${C.border10}`, borderRadius: radius.control }}>
+            {liste.map(d => (
+              <label key={d.path} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", cursor: "pointer",
+                borderTop: `1px solid ${C.border10}`, fontSize: 12,
+                background: gewaehlt(d) ? alpha(C.primary, 0.06) : "transparent",
+              }}>
+                <input type="checkbox" checked={gewaehlt(d)} style={{ accentColor: C.primary }}
+                  onChange={e => setVonHand(v => ({ ...v, [d.path]: e.target.checked }))} />
+                <span style={{ flex: 1, minWidth: 0, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                <span style={{ color: C.onSecondaryFixedVar, flexShrink: 0 }}>{formatRelativeTime(d.geaendert)}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+      {fehler && <div style={{ marginTop: 10, fontSize: 12, color: C.error }}>{fehler}</div>}
+    </Modal>
+  );
+}
+
+function KuenstlerBlock({ kuenstler: k, onGeaendert }: {
   kuenstler: Artist;
-  onNeuerSong: () => void;
   onGeaendert: () => void;
 }) {
   const [fertigOffen, setFertigOffen] = useState(false);
@@ -326,7 +441,6 @@ function KuenstlerBlock({ kuenstler: k, onNeuerSong, onGeaendert }: {
           {fertig.length > 0 && ` · ${fertig.length} abgegeben`}
         </span>
         <span style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon={Plus} onClick={onNeuerSong}>Neuer Song</Button>
         <IconButton icon={FolderOpen} size={28} variant="secondary" title="Künstler-Ordner öffnen"
           onClick={() => revealItemInDir(k.path).catch(() => {})} />
       </div>

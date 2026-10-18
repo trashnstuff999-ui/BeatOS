@@ -144,6 +144,55 @@ pub fn create_artists_root(root: String) -> Result<(), String> {
     fs::create_dir_all(&root).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))
 }
 
+// ─── Downloads in den Eingang ───────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct Download {
+    pub name: String,
+    pub path: String,
+    pub geaendert: u64,
+}
+
+/// Audiodateien im Downloads-Ordner der letzten 30 Tage, neueste zuerst —
+/// zum Auswählen beim Anlegen eines Songs. Welche zum Song passen, entscheidet
+/// das Frontend am Namen („heartbreak highlights_vocals").
+#[tauri::command(async)]
+pub fn artist_downloads(app: tauri::AppHandle) -> Result<Vec<Download>, String> {
+    use tauri::Manager;
+    let dir = app.path().download_dir().map_err(|e| format!("Downloads-Ordner nicht gefunden: {e}"))?;
+    let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let mut out: Vec<Download> = dateien(&dir).into_iter()
+        .filter(|(n, t)| ist_audio(n) && *t + 30 * 86_400 >= jetzt)
+        .map(|(name, geaendert)| Download { path: dir.join(&name).to_string_lossy().to_string(), name, geaendert })
+        .collect();
+    out.sort_by(|a, b| b.geaendert.cmp(&a.geaendert));
+    Ok(out)
+}
+
+/// Dateien in `<Song>/Eingang/` verschieben. Liegt dort schon eine gleichnamige
+/// Datei, wird übersprungen statt überschrieben.
+#[tauri::command(async)]
+pub fn artist_eingang_fuellen(song_path: String, dateien: Vec<String>) -> Result<Vec<UmzugErgebnis>, String> {
+    let eingang = Path::new(&song_path).join(EINGANG);
+    fs::create_dir_all(&eingang).map_err(|e| format!("Eingang ließ sich nicht anlegen: {e}"))?;
+    Ok(dateien.into_iter().map(|d| {
+        let ergebnis = |ok: bool, meldung: String| UmzugErgebnis { pfad: d.clone(), ok, meldung };
+        let quelle = Path::new(&d);
+        let Some(name) = quelle.file_name() else { return ergebnis(false, "Kein Dateiname".into()) };
+        let ziel = eingang.join(name);
+        if ziel.exists() { return ergebnis(false, "liegt schon im Eingang — übersprungen".into()); }
+        // rename klappt nur auf demselben Laufwerk; sonst kopieren, prüfen, löschen.
+        let verschoben = fs::rename(quelle, &ziel).map_err(|e| e.to_string()).or_else(|_| {
+            crate::utils::copy_and_verify(quelle, &ziel)?;
+            fs::remove_file(quelle).map_err(|e| format!("kopiert, Original blieb liegen: {e}"))
+        });
+        match verschoben {
+            Ok(()) => ergebnis(true, "→ Eingang".into()),
+            Err(e) => ergebnis(false, e),
+        }
+    }).collect())
+}
+
 // ─── Altbestand aus dem Archiv umziehen ─────────────────────────────────────
 
 /// Ein Ordner im Archiv, der kein Jahresordner ist — früher wurden
@@ -337,6 +386,20 @@ mod tests {
         let flp = create_artist_song(k.clone(), "No Bleed".into(), vorlage.to_string_lossy().to_string()).unwrap();
         assert!(Path::new(&flp).ends_with("Yoghi/No Bleed/No Bleed.flp"));
         assert!(Path::new(&k).join("No Bleed/Eingang").is_dir());
+
+        // Downloads in den Eingang: verschoben, Gleichnamiges übersprungen
+        let dl = root.join("dl");
+        datei(&dl.join("no bleed_vocals.wav"));
+        datei(&dl.join("no bleed.mp3"));
+        let song = Path::new(&k).join("No Bleed");
+        datei(&song.join("Eingang/no bleed.mp3"));
+        let erg = artist_eingang_fuellen(song.to_string_lossy().to_string(), vec![
+            dl.join("no bleed_vocals.wav").to_string_lossy().to_string(),
+            dl.join("no bleed.mp3").to_string_lossy().to_string(),
+        ]).unwrap();
+        assert!(erg[0].ok && !erg[1].ok);
+        assert!(song.join("Eingang/no bleed_vocals.wav").is_file() && !dl.join("no bleed_vocals.wav").exists());
+        assert!(dl.join("no bleed.mp3").is_file(), "nicht überschrieben, Original bleibt");
         let _ = fs::remove_dir_all(&root);
     }
 
