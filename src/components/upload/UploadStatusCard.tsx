@@ -324,6 +324,9 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
   const [urlDraft, setUrlDraft] = useState(row.url ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** Nur flach: aufgeklappt? Beim Beat-Wechsel wieder zu. */
+  const [offen, setOffen] = useState(false);
+  useEffect(() => setOffen(false), [beatId]);
 
   const persist = async (patch: Partial<UploadPlatformRow>) => {
     setIsSaving(true);
@@ -391,94 +394,8 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
     }
   };
 
-  return (
-    <div style={{
-      ...(flach
-        // Flach: keine eigene Flaeche, keine Kontur ausser der Haarlinie.
-        // Den Zustand traegt hier allein die Zustandsleiste — sie ist das
-        // Bedienelement dafuer und sagt es ohnehin im Klartext.
-        ? {
-            padding: "12px 0",
-            borderTop: trennlinie ? `1px solid ${C.border10}` : undefined,
-          }
-        : {
-            // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe
-            // ueber der Karte, nicht darunter.
-            padding: "14px 15px",
-            borderRadius: radius.card,
-            background: C.surfaceContainer,
-            // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu
-            // viel: drei Kacheln nebeneinander mit farbigem Rahmen UND
-            // farbiger Schrift ergeben eine bunte Reihe, in der nichts mehr
-            // heraussticht.
-            //
-            // Farbe traegt nur die Beschriftung — welche Plattform, und ob
-            // sie im Spiel ist. Den Zustand traegt die Linienart:
-            // durchgezogen steht, gestrichelt ist vorgemerkt.
-            border: geplant
-              ? `1px dashed ${C.border20}`
-              : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
-          }),
-      // Abstand 0: den zwischen Kopfzeile und aufklappendem Teil traegt der
-      // Block selbst als paddingTop — als Luecke hier waere er sofort da,
-      // waehrend der Rest noch aufklappt.
-      display: "flex", flexDirection: "column", gap: 0,
-    }}>
-      {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
-          es zusammen gelesen wird. Vorher standen der Name oben und der
-          Zustand zwei Zeilen tiefer.
-          `flexWrap`: im Upload-Tab ist die Kachel breit genug fuer eine Zeile,
-          im 380px-Panel des Archivs nicht — dort fehlen rund 100px. Ohne
-          Umbruch quetscht der Name auf null und die Rakete liegt darauf.
-          Umbrechen statt quetschen, dieselbe Regel fuer beide Breiten. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 10 }}>
-        {/* Die drei Namen sind bekannt und kurz — sie duerfen nicht schrumpfen,
-            sonst bleibt alles einzeilig und "SoundCloud" wird zu "Sou…". */}
-        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {/* Sobald die Plattform im Spiel ist — geplant oder hochgeladen —
-              tragen Symbol und Name ihre Markenfarbe. Im Entwurf bleiben sie
-              grau: sonst leuchtete alles von Anfang an, und das Aufleuchten
-              waere keine Nachricht mehr. */}
-          <PlatIcon
-            size={15}
-            color={imSpiel ? meta.color : C.onSurfaceVariant}
-            strokeWidth={1.75}
-            style={{ transition: "color 0.15s", flexShrink: 0 }}
-          />
-          <span style={{
-            fontSize: 13, fontWeight: 600,
-            color: imSpiel ? meta.color : C.onSurface,
-            transition: "color 0.15s",
-            whiteSpace: "nowrap",
-          }}>
-            {meta.label}
-          </span>
-        </span>
-
-        <span style={{ flex: 1 }} />
-
-        {/* Zustand in der Kopfzeile: „welche Plattform" und „wie weit"
-            gehoeren nebeneinander. Derselbe Umschalter wie ueberall. Entwurf
-            bleibt neutral; Geplant und Hochgeladen tragen ihre Farbe. */}
-        <Segmented
-          label={`${meta.label}: Upload-Zustand`}
-          value={row.status}
-          onChange={setStatus}
-          disabled={isSaving}
-          options={STATUS_ORDER.map(s => ({
-            value: s,
-            label: UPLOAD_STATUS_CONFIG[s].label,
-            color: s === "draft" ? undefined : UPLOAD_STATUS_CONFIG[s].color,
-            title: `Auf „${UPLOAD_STATUS_CONFIG[s].label}" setzen`,
-          }))}
-        />
-      </div>
-
-      {/* Alles ab "Geplant" in EINEM aufklappenden Block. Getrennt animiert
-          klappten zwei Elemente nebeneinander auf, und der Abstand zwischen
-          ihnen erschien trotzdem schlagartig — der Abstand gehoert deshalb
-          nach innen, und der aeussere Zeilen-Abstand ist 0. */}
-      {row.status !== "draft" && (
+  /** Link und Datum — erst ab „Geplant". Klappt auf statt zu springen. */
+  const felder = row.status !== "draft" && (
       <div className="beatos-aufklappen">
       <div>
       <div style={{
@@ -596,7 +513,155 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
       </div>
       </div>
       </div>
-      )}
+  );
+
+  const segmented = (
+    <Segmented
+      label={`${meta.label}: Upload-Zustand`}
+      value={row.status}
+      onChange={setStatus}
+      disabled={isSaving}
+      full={flach}
+      options={STATUS_ORDER.map(s => ({
+        value: s,
+        label: UPLOAD_STATUS_CONFIG[s].label,
+        color: s === "draft" ? undefined : UPLOAD_STATUS_CONFIG[s].color,
+        title: `Auf „${UPLOAD_STATUS_CONFIG[s].label}" setzen`,
+      }))}
+    />
+  );
+
+  // Flach (Archiv-Panel): eine ruhige Zeile pro Plattform — Name, Stand,
+  // Datum. Bearbeitet wird aufgeklappt. Vorher standen drei Zustandsleisten,
+  // drei Linkfelder und drei Datumszeilen dauerhaft offen untereinander, und
+  // im schmalen Panel brach die Kopfzeile je nach Namenslänge mal um, mal nicht.
+  if (flach) {
+    const st = UPLOAD_STATUS_CONFIG[row.status];
+    const hatLink = /^https?:\/\//i.test((row.url ?? "").trim());
+    return (
+      <div style={{ borderTop: trennlinie ? `1px solid ${C.border10}` : undefined }}>
+        <style>{ROW_CSS}</style>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            className="ue-zeile"
+            onClick={() => setOffen(o => !o)}
+            aria-expanded={offen}
+            title={offen ? "Zuklappen" : `${meta.label}: Zustand, Link und Datum bearbeiten`}
+            style={{
+              flex: 1, minWidth: 0,
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 8px", margin: "0 0 0 -8px",
+              border: "none", cursor: "pointer", font: "inherit", textAlign: "left",
+            }}
+          >
+            <PlatIcon size={15} color={imSpiel ? meta.color : C.onSurfaceVariant} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: imSpiel ? meta.color : C.onSurface, whiteSpace: "nowrap" }}>
+              {meta.label}
+            </span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 12, color: imSpiel ? C.onSurfaceVariant : C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>
+              <span style={{ color: row.status === "draft" ? undefined : st.color, fontWeight: 600 }}>{st.label}</span>
+              {dateValue && ` · ${datumDeutsch(dateValue)}`}
+            </span>
+            {offen
+              ? <ChevronUp size={14} color={C.onSurfaceVariant} style={{ flexShrink: 0 }} />
+              : <ChevronDown size={14} color={C.onSurfaceVariant} style={{ flexShrink: 0 }} />}
+          </button>
+          {!offen && hatLink && (
+            <IconButton
+              icon={ExternalLink} size={28} variant="ghost"
+              onClick={() => linkOeffnen(row.url!)}
+              title={`Auf ${meta.label} öffnen\n${row.url}`}
+            />
+          )}
+        </div>
+        {offen && (
+          <div style={{ display: "flex", flexDirection: "column", padding: "2px 0 14px" }}>
+            {segmented}
+            {felder}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      ...(flach
+        // Flach: keine eigene Flaeche, keine Kontur ausser der Haarlinie.
+        // Den Zustand traegt hier allein die Zustandsleiste — sie ist das
+        // Bedienelement dafuer und sagt es ohnehin im Klartext.
+        ? {
+            padding: "12px 0",
+            borderTop: trennlinie ? `1px solid ${C.border10}` : undefined,
+          }
+        : {
+            // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe
+            // ueber der Karte, nicht darunter.
+            padding: "14px 15px",
+            borderRadius: radius.card,
+            background: C.surfaceContainer,
+            // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu
+            // viel: drei Kacheln nebeneinander mit farbigem Rahmen UND
+            // farbiger Schrift ergeben eine bunte Reihe, in der nichts mehr
+            // heraussticht.
+            //
+            // Farbe traegt nur die Beschriftung — welche Plattform, und ob
+            // sie im Spiel ist. Den Zustand traegt die Linienart:
+            // durchgezogen steht, gestrichelt ist vorgemerkt.
+            border: geplant
+              ? `1px dashed ${C.border20}`
+              : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
+          }),
+      // Abstand 0: den zwischen Kopfzeile und aufklappendem Teil traegt der
+      // Block selbst als paddingTop — als Luecke hier waere er sofort da,
+      // waehrend der Rest noch aufklappt.
+      display: "flex", flexDirection: "column", gap: 0,
+    }}>
+      {/* Kopfzeile: WAS links, WIE WEIT rechts — beides auf einer Linie, weil
+          es zusammen gelesen wird. Vorher standen der Name oben und der
+          Zustand zwei Zeilen tiefer.
+          `flexWrap`: im Upload-Tab ist die Kachel breit genug fuer eine Zeile,
+          im 380px-Panel des Archivs nicht — dort fehlen rund 100px. Ohne
+          Umbruch quetscht der Name auf null und die Rakete liegt darauf.
+          Umbrechen statt quetschen, dieselbe Regel fuer beide Breiten. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 10 }}>
+        {/* Die drei Namen sind bekannt und kurz — sie duerfen nicht schrumpfen,
+            sonst bleibt alles einzeilig und "SoundCloud" wird zu "Sou…". */}
+        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {/* Sobald die Plattform im Spiel ist — geplant oder hochgeladen —
+              tragen Symbol und Name ihre Markenfarbe. Im Entwurf bleiben sie
+              grau: sonst leuchtete alles von Anfang an, und das Aufleuchten
+              waere keine Nachricht mehr. */}
+          <PlatIcon
+            size={15}
+            color={imSpiel ? meta.color : C.onSurfaceVariant}
+            strokeWidth={1.75}
+            style={{ transition: "color 0.15s", flexShrink: 0 }}
+          />
+          <span style={{
+            fontSize: 13, fontWeight: 600,
+            color: imSpiel ? meta.color : C.onSurface,
+            transition: "color 0.15s",
+            whiteSpace: "nowrap",
+          }}>
+            {meta.label}
+          </span>
+        </span>
+
+        <span style={{ flex: 1 }} />
+
+        {/* Zustand in der Kopfzeile: „welche Plattform" und „wie weit"
+            gehoeren nebeneinander. Derselbe Umschalter wie ueberall. Entwurf
+            bleibt neutral; Geplant und Hochgeladen tragen ihre Farbe. */}
+        {segmented}
+      </div>
+
+      {/* Alles ab "Geplant" in EINEM aufklappenden Block. Getrennt animiert
+          klappten zwei Elemente nebeneinander auf, und der Abstand zwischen
+          ihnen erschien trotzdem schlagartig — der Abstand gehoert deshalb
+          nach innen, und der aeussere Zeilen-Abstand ist 0. */}
+      {felder}
     </div>
   );
 }

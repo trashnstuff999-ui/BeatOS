@@ -89,6 +89,12 @@ const SOUNDCLOUD_GEPLANT = {
       : u),
 };
 
+/** Im Panel steht pro Plattform eine zugeklappte Zeile — bearbeitet wird
+ *  aufgeklappt. Nur diese Zeilen tragen aria-expanded. */
+async function alleAufklappen() {
+  for (const b of screen.getAllByRole("button", { expanded: false })) await userEvent.click(b);
+}
+
 function uploadDaten(antwort: unknown) {
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === "get_upload_data") return antwort;
@@ -112,6 +118,7 @@ describe("Uploads im Side-Panel", () => {
   it("schreibt den Klick durch und stempelt das Datum", async () => {
     const onUploadsChanged = panelRendern();
     await screen.findByText("YouTube");
+    await alleAufklappen();
 
     // Drei Plattformen, jede mit derselben Zustandsleiste — die dritte
     // gehört zu YouTube.
@@ -138,6 +145,7 @@ describe("Uploads im Side-Panel", () => {
   it("Entwurf zeigt weder Datum noch Linkzeile", async () => {
     panelRendern();
     await screen.findByText("Beatstars");
+    await alleAufklappen();
 
     // Drei Entwuerfe — die Zeile ist dann nur Name und Zustandsleiste.
     expect(document.querySelectorAll('input[type="date"]')).toHaveLength(0);
@@ -157,6 +165,9 @@ describe("Uploads im Side-Panel", () => {
     uploadDaten(SOUNDCLOUD_GEPLANT);
     panelRendern();
     await screen.findByText("SoundCloud");
+    // Zugeklappt steht der Stand mit Datum in der Zeile.
+    expect(screen.getByText("· 12.09.2026", { exact: false })).toBeInTheDocument();
+    await alleAufklappen();
 
     // Genau eine der drei Plattformen ist ueber den Entwurf hinaus.
     const daten = document.querySelectorAll<HTMLInputElement>('input[type="date"]');
@@ -173,6 +184,7 @@ describe("Uploads im Side-Panel", () => {
     uploadDaten(SOUNDCLOUD_GEPLANT);
     panelRendern();
     await screen.findByText("SoundCloud");
+    await alleAufklappen();
 
     await userEvent.click(screen.getAllByTitle('Auf „Entwurf" setzen')[1]);
 
@@ -205,6 +217,7 @@ describe("Uploads im Side-Panel", () => {
 
     panelRendern();
     await screen.findByText("SoundCloud");
+    await alleAufklappen();
 
     await userEvent.click(screen.getAllByTitle('Auf „Hochgeladen" setzen')[1]);
     await waitFor(() => expect(aufrufe).toBe(2));   // Nachladen laeuft gerade

@@ -69,7 +69,8 @@ export function BeatGrid({
           die Karte springt: 200 Karten, die sich beim Durchfahren heben,
           machen das Raster unruhig. */}
       <style>{`
-        .beatos-karte:hover .beatos-fav { opacity: 1 !important; }
+        .beatos-karte:hover .beatos-fav, .beatos-karte:hover .beatos-play,
+        .beatos-play:focus-visible { opacity: 1 !important; }
         .beatos-cover { transition: transform 0.28s ease; }
         .beatos-karte:hover .beatos-cover { transform: scale(1.05); }
         @media (prefers-reduced-motion: reduce) {
@@ -203,10 +204,16 @@ const GridCard = memo(function GridCard({
           </div>
         )}
 
-        {/* Play overlay */}
+        {/* Play: wie der Favorit nur beim Ueberfahren — und dauerhaft am
+            laufenden und am ausgewaehlten Beat. Vierzig Knoepfe auf einmal
+            machten das Raster unruhig. */}
         <button
+          className="beatos-play"
           onClick={handlePlay}
+          title={isThisPlaying ? "Pause" : "Abspielen"}
           style={{
+            opacity: isCurrentBeat || isSelected ? 1 : 0,
+            transition: "opacity 0.15s",
             position: "absolute", right: 8, bottom: 8,
             width: 34, height: 34, borderRadius: "50%",
             background: isCurrentBeat ? C.primary : "rgba(0,0,0,0.65)",

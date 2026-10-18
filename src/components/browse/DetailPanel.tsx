@@ -578,9 +578,9 @@ export function DetailPanel({
                 </div>}
           </div>
 
-          {/* Tags — das „+" ist so groß wie eine Pille und steht am Ende der
-              Reihe. Vorher stand dort „Tags verwalten" als Textpille, die man
-              für einen Tag hielt oder ganz übersah. */}
+          {/* Tags — das „+" steht als Pille am Ende der Reihe. Ohne Tags sagt
+              es dazu, was es tut; ein einzelnes „+" unter „Tags" las sich wie
+              ein Rest. */}
           <div>
             <div style={labelStyle}>Tags</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
@@ -588,16 +588,19 @@ export function DetailPanel({
                 <TagPill key={tag} tag={tag} size="sm" removable onRemove={() => handleRemoveTag(tag)} />
               ))}
               <button
+                className="ue-hell"
                 onClick={handleOpenTagManager}
                 title="Tags verwalten"
                 style={{
-                  width: 26, height: 22, borderRadius: radius.full,
+                  height: 22, padding: localTags.length ? "0 7px" : "0 10px 0 7px",
+                  borderRadius: radius.full,
                   border: `1px dashed ${C.border30}`,
                   background: "transparent", cursor: "pointer",
-                  color: C.onSurfaceVariant,
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: C.onSurfaceVariant, fontSize: 12, font: "inherit",
+                  display: "flex", alignItems: "center", gap: 4,
                 }}>
                 <Plus size={13} strokeWidth={2} />
+                {localTags.length === 0 && <span style={{ fontSize: 12 }}>Tag hinzufügen</span>}
               </button>
             </div>
           </div>
@@ -611,9 +614,10 @@ export function DetailPanel({
               value={form.notes}
               onChange={e => setFeld("notes", e.target.value)}
               onKeyDown={tastatur}
-              rows={3}
+              rows={1}
               placeholder="Plugins, Inspiration, verwendete Samples …"
-              style={{ fontSize: 12, lineHeight: 1.6, resize: "vertical" }}
+              // Wächst mit dem Text statt leer drei Zeilen zu belegen.
+              style={{ fontSize: 12, lineHeight: 1.6, resize: "none", fieldSizing: "content", maxHeight: 240 } as React.CSSProperties}
             />
           </div>
         </div>
