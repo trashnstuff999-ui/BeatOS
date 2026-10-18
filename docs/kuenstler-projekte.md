@@ -91,7 +91,7 @@ werden.
 ## Scheiben
 
 - [x] **0 — Prüfen**: keine Schein-Beats im Katalog (18.10.2026).
-- [ ] **1 — Künstler-Ordner + Ansicht** (nur lesen): Einstellung
+- [x] **1 — Künstler-Ordner + Ansicht** (nur lesen; erledigt 18.10.2026, e84e705): Einstellung
       `05_ARTISTS`, Studio-Tab „Künstler": pro Künstler die Songs, je Zeile
       Häkchen Vocals/Demo/Beat/FLP/Mix/Master + erste Notizzeile.
 - [ ] **2 — Anlegen**: „Neuer Künstler" und „Neuer Song" (Ordner + `Eingang/`
@@ -105,7 +105,7 @@ werden.
 - [ ] **5 — Mein Beat**: Beat aus dem Katalog suchen, im Song vermerken (BPM/Key
       sichtbar), ungetaggte WAV in den Eingang kopieren — oder für Stems die
       FLP des Beats in FL öffnen.
-- [ ] **6 — Altbestand umziehen** (`JarnoGm - Library`, `Yoghi`).
+- [x] **6 — Altbestand umziehen** (Dialog fertig 18.10.2026, f634371 — Ausführen macht Stephan selbst) (`JarnoGm - Library`, `Yoghi`).
 - [ ] **7 — Abgabe**: Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
       `<Künstler> - <Song> (Master).wav`, merkt Datum; Song wandert nach
       `<Künstler>/_Fertig/`.
