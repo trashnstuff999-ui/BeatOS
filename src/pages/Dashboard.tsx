@@ -1,495 +1,14 @@
-// src/pages/Dashboard.tsx — Aktionszentrale: "Was steht heute an?" + Analytics
+// src/pages/Dashboard.tsx — Übersicht: Heute (was ansteht) und Statistik.
+// Die Inhalte liegen in components/dashboard/, hier nur Laden und Kopf.
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  RefreshCw, Archive, Sparkles, Piano, Star, Music,
-  CalendarClock, Disc3, ArrowRight, Upload as UploadIcon, LayoutGrid,
-  ListTodo, ChartColumn,
-} from "lucide-react";
+import { RefreshCw, LayoutGrid, ListTodo, ChartColumn } from "lucide-react";
 import { api } from "../lib/api";
 import type { Stats, DashboardActions } from "../types/stats";
-import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
-import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS, alpha, radius } from "../lib/theme";
-import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
-import { Select, Button, PageHeader, PageBody, Segmented } from "../components/ui";
+import { C, alpha, radius } from "../lib/theme";
+import { Button, PageHeader, PageBody, Segmented } from "../components/ui";
 import { Heute } from "../components/dashboard/Heute";
-
-/**
- * Anklickbarer Text und anklickbare Balken auf der Uebersicht.
- *
- * Es waren zehn `<span onClick>` und `<div onClick>` — mit der Maus bedienbar,
- * mit der Tastatur gar nicht: kein Tab, kein Enter, kein Fokusring. Die
- * Uebersicht ist aber der Startpunkt, von dem aus man in jeden anderen Tab
- * abbiegt.
- *
- * Ein `<button>`, dem die Knopf-Optik ausgetrieben ist: er erbt Schrift und
- * Farbe vom Text drumherum und bringt Tab, Enter und Leertaste mit.
- */
-function Klickbar({ style, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...rest}
-      style={{
-        background: "none", border: "none", padding: 0, margin: 0,
-        font: "inherit", color: "inherit", textAlign: "inherit",
-        cursor: "pointer",
-        ...style,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── Pipeline-Funnel: Studio → Archiv → Geplant → Live ────────────────────────
-// 'discard' fehlt hier mit Absicht: was zum Loeschen vorgemerkt ist, ist keine
-// Pipeline mehr und darf die Studio-Zahl nicht aufblaehen. Es steht leise
-// hinter der Aufschluesselung.
-const STUDIO_STAGES = ["idea", "wip", "exported", "ready"] as const;
-
-function PipelineFunnel({ stats, actions, onNavigate, onFilter }: {
-  stats: Stats;
-  actions: DashboardActions;
-  onNavigate: (path: string) => void;
-  onFilter: (filter: object) => void;
-}) {
-  // Summe und Aufschluesselung aus derselben Quelle — sonst passt die grosse Zahl
-  // nicht zur Zeile darunter, sobald ein weiterer Studio-Status dazukommt.
-  const studioCounts = STUDIO_STAGES.map(s => actions.studio_by_status[s] ?? 0);
-  const studioTotal = studioCounts.reduce((a, b) => a + b, 0);
-  const discardCount = actions.studio_by_status.discard ?? 0;
-
-  const stages: Array<{ label: string; value: number; detail: React.ReactNode; icon: React.ReactNode; color: string; path: string }> = [
-    {
-      label: "Studio", value: studioTotal,
-      detail: (
-        <>
-          {/* Der groesste Posten fett. Die Zeile war eine gleichfoermige Kette
-              aus fuenf Zahlen — dabei ist genau einer davon die Nachricht:
-              wo der Bestand liegt. Bewertet wird nichts, nur lesbar gemacht. */}
-          {STUDIO_STAGES.map((s, i) => {
-            const groesster = studioCounts[i] === Math.max(...studioCounts) && studioCounts[i] > 0;
-            return (
-              <span key={s}>
-                {i > 0 && " · "}
-                <span style={groesster ? { color: C.onSurfaceVariant, fontWeight: 700 } : undefined}>
-                  {studioCounts[i]} {STUDIO_STATUS_CONFIG[s].label}
-                </span>
-              </span>
-            );
-          })}
-          {discardCount > 0 && (
-            <Klickbar
-              onClick={e => { e.stopPropagation(); onNavigate("/studio"); }}
-              title="Im Studio ansehen"
-              style={{ color: STUDIO_STATUS_CONFIG.discard.color }}
-            >
-              {" · "}{discardCount} kann weg
-            </Klickbar>
-          )}
-        </>
-      ),
-      icon: <Disc3 size={15} />, color: C.tertiary, path: "/studio",
-    },
-    {
-      label: "Archiv", value: stats.total,
-      detail: (
-        <>
-          {stats.this_month} neu diesen Monat ·{" "}
-          <Klickbar
-            onClick={e => { e.stopPropagation(); onFilter({ onlyFavs: true }); }}
-            title="Nur Favoriten zeigen"
-            style={{ color: C.error, fontWeight: 700 }}
-          >
-            {stats.favorites} Favoriten
-          </Klickbar>
-        </>
-      ),
-      icon: <Archive size={15} />, color: C.primary, path: "/browse",
-    },
-    {
-      label: "Geplant", value: actions.scheduled_total,
-      detail: `${actions.scheduled_next_7} in den nächsten 7 Tagen`,
-      icon: <CalendarClock size={15} />, color: C.primary, path: "/upload",
-    },
-    {
-      label: "Veröffentlicht", value: actions.published_beats,
-      detail: "Beats mit mind. 1 Upload",
-      icon: <UploadIcon size={15} />, color: C.mint, path: "/upload",
-    },
-  ];
-
-  return (
-    <div style={{
-      ...commonStyles.card,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-      padding: "18px 24px",
-      display: "flex", alignItems: "center", gap: 10,
-    }}>
-      {stages.map((stage, i) => (
-        <div key={stage.label} style={{ display: "contents" }}>
-          {i > 0 && <ArrowRight size={16} color={C.onSecondaryFixedVar} style={{ flexShrink: 0, opacity: 0.5 }} />}
-          <button
-            onClick={() => onNavigate(stage.path)}
-            style={{
-              flex: 1, textAlign: "left",
-              background: "transparent", border: "none",
-              cursor: "pointer", padding: "6px 10px", borderRadius: radius.control,
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 7, color: stage.color, marginBottom: 6 }}>
-              {stage.icon}
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
-                {stage.label}
-              </span>
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.onSurface, lineHeight: 1 }}>{stage.value}</div>
-            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 5 }}>{stage.detail}</div>
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Status-Verteilung ─────────────────────────────────────────────────────────
-function StatusBreakdown({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  // Labels und Farben aus STATUS_CONFIG — dieselbe Quelle wie die Status-Pillen
-  // in Browse und in "Zuletzt hinzugefuegt". Vorher stand "Sold" hier auf
-  // #ff7351, die Pille daneben auf #ff7351.
-  const bars = STATUS_ITEMS.map(s => ({
-    ...s,
-    count: stats.by_status[s.key as keyof Stats["by_status"]] ?? 0,
-  }));
-  // Nenner = Summe der gezeigten Balken. stats.total zaehlt auch Beats mit
-  // unbekanntem Status — damit haetten die Prozente nie 100 % ergeben.
-  const total = bars.reduce((sum, b) => sum + b.count, 0) || 1;
-  return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", display: "flex", flexDirection: "column" }} {...commonStyles.cardHoverHandlers}>
-      <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface, marginBottom: 18, flexShrink: 0 }}>Status-Verteilung</h4>
-
-      {/* EIN gestapelter Balken statt vier einzelner. Vier Balken brauchten die
-          vierfache Hoehe und zeigten dabei vor allem leere Strecke; gestapelt
-          sieht man zusaetzlich die Verhaeltnisse zueinander, was bei einer
-          Verteilung ohnehin die interessantere Frage ist. */}
-      <div style={{
-        display: "flex", height: 14, borderRadius: radius.full, overflow: "hidden",
-        background: C.surfaceContainerHighest, marginBottom: 16, flexShrink: 0,
-      }}>
-        {bars.filter(b => b.count > 0).map(({ key, label, color, count }) => (
-          <Klickbar
-            key={key}
-            title={`${label}: ${count} — im Archiv zeigen`}
-            onClick={() => onNavigate({ status: key })}
-            style={{
-              // Mindestbreite, sonst verschwindet „Verkauft" mit 2 von 212 zu
-              // einem unsichtbaren Splitter.
-              width: `${Math.max((count / total) * 100, 1.5)}%`,
-              background: color,
-              transition: "width 0.6s ease, filter 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-            onMouseLeave={e => (e.currentTarget.style.filter = "none")}
-          />
-        ))}
-      </div>
-
-      {/* Legende: Punkt, Wort, Zahl — in einer Zeile pro Status, aber ohne
-          eigenen Balken. */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
-        {bars.map(({ key, label, color, count }) => (
-          <Klickbar
-            key={key}
-            onClick={() => onNavigate({ status: key })}
-            title={`${label} im Archiv zeigen`}
-            style={{
-              display: "flex", alignItems: "center", gap: 7,
-              fontSize: 12, color: C.onSurfaceVariant,
-              opacity: count === 0 ? 0.45 : 1,
-            }}
-          >
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            {label}
-            <strong style={{ color: C.onSurface, fontVariantNumeric: "tabular-nums" }}>{count}</strong>
-          </Klickbar>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Tonarten ──────────────────────────────────────────────────────────────────
-// Welche Tonarten es gibt, steht in types/browse.ts — dieselbe Liste, die der
-// Browse-Filter anbietet. Hier nur die chromatische Reihenfolge fuers Diagramm.
-const CHROMATIC_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const byChromatic = (a: string, b: string) =>
-  CHROMATIC_ROOTS.indexOf(a.replace(/m$/, "")) - CHROMATIC_ROOTS.indexOf(b.replace(/m$/, ""));
-
-const MAJOR_CHROMATIC = [...MAJOR_KEYS].sort(byChromatic);
-const MINOR_CHROMATIC = [...MINOR_KEYS].sort(byChromatic);
-
-/** "Others" ist die Gegenmenge: alles, was in keiner der beiden Listen steht.
- *  Dadurch kann kein Wert mehr lautlos verschwinden — frueher fielen Eintraege
- *  wie "Db" durch alle drei Ansichten, weil sie als Dur galten, aber in der
- *  Kreuz-Liste fehlten. */
-const CANONICAL_KEYS = new Set<string>([...MAJOR_KEYS, ...MINOR_KEYS]);
-
-/** Ein Farbton, Helligkeit nach Haeufigkeit: die Farbe kodiert damit die Zahl
- *  statt nur die Position. Vorher lagen hier zwoelf willkuerliche Farbtoene —
- *  Cm war nicht "oranger" als Dm, die Farbe trug schlicht keine Information. */
-function keyShade(ratio: number): string {
-  const t = 0.35 + 0.65 * ratio;                       // nie bis zur Unsichtbarkeit
-  const mix = (fg: number) => Math.round(38 + (fg - 38) * t);   // 38 = Kartenraster
-  return `rgb(${mix(253)}, ${mix(161)}, ${mix(36)})`;  // Ziel: C.primary ${C.primary}
-}
-
-// ── Balkendiagramm ────────────────────────────────────────────────────────────
-// Gemeinsame Basis fuer "Top Keys" und "Beats pro Monat": Zahl ueber dem Balken,
-// Beschriftung darunter, Balken auf 0 bleiben als Stummel sichtbar.
-// Die Hoehen sind Prozent der Zeile — das setzt voraus, dass der Eltern-Container
-// eine aufgeloeste Hoehe hat (hier ueber flex: 1).
-
-export interface Bar {
-  /** Stabiler React-Key und Nutzlast fuers Klicken. */
-  key: string;
-  label: string;
-  count: number;
-}
-
-/** Damit zwei Balken nicht den halben Kartenbreite einnehmen. Bei zwoelf
- *  Balken greift die Grenze nicht — die sind ohnehin schmaler. */
-const BAR_MAX_WIDTH = 120;
-
-function BarChart({ data, color, onBarClick }: {
-  data: Bar[];
-  /** Ein String faerbt alle Balken gleich, eine Funktion je Balken. */
-  color: string | ((bar: Bar, index: number) => string);
-  onBarClick?: (bar: Bar) => void;
-}) {
-  const [hov, setHov] = useState<number | null>(null);
-  const max = Math.max(...data.map(d => d.count), 1);
-  const colorAt = (bar: Bar, i: number) => (typeof color === "string" ? color : color(bar, i));
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 4, flex: 1, marginBottom: 8 }}>
-        {data.map((bar, i) => {
-          const c         = colorAt(bar, i);
-          const isEmpty   = bar.count === 0;
-          const isHov     = hov === i;
-          const clickable = !!onBarClick && !isEmpty;
-          return (
-            <Klickbar key={bar.key}
-              title={`${bar.label}: ${bar.count}`}
-              disabled={!clickable}
-              style={{ flex: 1, maxWidth: BAR_MAX_WIDTH, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, padding: "0 2px", cursor: clickable ? "pointer" : "default" }}
-              onMouseEnter={() => !isEmpty && setHov(i)}
-              onMouseLeave={() => setHov(null)}
-              onClick={() => clickable && onBarClick(bar)}
-            >
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: isHov ? c : C.onSurfaceVariant, opacity: isEmpty ? 0 : 1, transition: "all 0.15s", lineHeight: 1 }}>
-                {bar.count}
-              </span>
-              <div style={{
-                width: "100%",
-                height: isEmpty ? "2%" : `${Math.max((bar.count / max) * 100, 3)}%`,
-                background: isEmpty ? C.surfaceContainerHighest : c,
-                borderRadius: "3px 3px 0 0",
-                opacity: isEmpty ? 0.4 : isHov ? 1 : 0.75,
-                transition: "opacity 0.15s, box-shadow 0.15s",
-                boxShadow: isHov ? `0 0 12px ${c}70` : "none",
-              }} />
-            </Klickbar>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 4, flexShrink: 0 }}>
-        {data.map((bar, i) => (
-          <span key={bar.key} style={{
-            flex: 1, maxWidth: BAR_MAX_WIDTH, textAlign: "center", fontSize: 11, fontWeight: 700,
-            color: hov === i ? colorAt(bar, i) : bar.count === 0 ? C.onSecondaryFixedVar : C.onSurfaceVariant,
-            transition: "color 0.15s", lineHeight: 1.2, overflow: "hidden",
-          }}>
-            {bar.label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Tonarten ──────────────────────────────────────────────────────────────────
-const KEY_MODES = [
-  { value: "major",  label: "Dur" },
-  { value: "minor",  label: "Moll" },
-  { value: "others", label: "Sonstige" },
-] as const;
-
-function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  const [keyMode, setKeyMode] = useState<(typeof KEY_MODES)[number]["value"]>("minor");
-
-  // Dur/Moll: alle 12 Balken, Luecken mit 0 gefuellt. Sonstige: die Gegenmenge.
-  const bars: Bar[] =
-    keyMode === "others"
-      ? stats.top_keys
-          .filter(k => !CANONICAL_KEYS.has(k.key))
-          .map(k => ({ key: k.key, label: k.key, count: k.count }))
-      : (keyMode === "major" ? MAJOR_CHROMATIC : MINOR_CHROMATIC)
-          .map(k => ({ key: k, label: k, count: stats.top_keys.find(x => x.key === k)?.count ?? 0 }));
-
-  return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: "16px 20px", transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden",
-      // Die Karte erbte ihre Hoehe von der Status-Karte daneben (~110 px) —
-      // die Balken blieben ein 15-px-Streifen, 7 sah aus wie 16.
-      minHeight: 260, boxSizing: "border-box" }} {...commonStyles.cardHoverHandlers}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Tonarten</h4>
-        <Select value={keyMode} options={KEY_MODES} onChange={setKeyMode} />
-      </div>
-
-      {bars.length === 0 ? (
-        <p style={{ color: C.onSecondaryFixedVar, fontSize: 12, textAlign: "center", padding: "20px 0" }}>
-          Keine Beats in dieser Gruppe
-        </p>
-      ) : (
-        <BarChart
-          key={keyMode}                       /* Hover-Zustand beim Wechsel zuruecksetzen */
-          data={bars}
-          color={bar => keyShade(bar.count / Math.max(...bars.map(b => b.count), 1))}
-          onBarClick={bar => onNavigate({ keys: [bar.key] })}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Beats pro Monat ───────────────────────────────────────────────────────────
-const MONTHS = ["JAN","FEB","MÄR","APR","MAI","JUN","JUL","AUG","SEP","OKT","NOV","DEZ"];
-
-function BeatsPerMonth({ stats, onYearChange }: {
-  stats: Stats;
-  onYearChange: (year: number) => void;
-}) {
-  // "2026-03" → "MÄR"
-  const bars: Bar[] = stats.beats_per_month.map(({ month, count }) => ({
-    key: month,
-    label: MONTHS[parseInt(month.split("-")[1] ?? "1") - 1] ?? month,
-    count,
-  }));
-
-  const years = stats.available_years.map(y => ({ value: String(y), label: String(y) }));
-
-  return (
-    <div style={{
-      ...commonStyles.card, background: C.surfaceContainer, padding: 24,
-      transition: "border-color 0.2s",
-      minHeight: 360, display: "flex", flexDirection: "column", boxSizing: "border-box",
-    }} {...commonStyles.cardHoverHandlers}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexShrink: 0 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Beats pro Monat</h4>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
-          <Select
-            value={String(stats.selected_year)}
-            options={years}
-            onChange={v => onYearChange(parseInt(v))}
-          />
-        </div>
-      </div>
-
-      <BarChart data={bars} color={C.primary} />
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Top Tags — Category rows with icons, like Create tab
-// ══════════════════════════════════════════════════════════════════════════════
-const TAG_ROW_ORDER = ["genre", "vibe", "instrument", "other"] as const;
-type TagRow = (typeof TAG_ROW_ORDER)[number];
-
-// "custom" wird beim Gruppieren auf "other" gemappt — hier stehen nur die Zeilen, die wirklich rendern.
-// Namen aus CATEGORY_LABELS, damit Dashboard und Tag-Dialog dieselben zeigen.
-const TAG_ROW_META: Record<TagRow, { label: string; icon: React.ReactNode }> = {
-  genre:      { label: CATEGORY_LABELS.genre,      icon: <Music size={11} /> },
-  vibe:       { label: CATEGORY_LABELS.vibe,       icon: <Sparkles size={11} /> },
-  instrument: { label: CATEGORY_LABELS.instrument, icon: <Piano size={11} /> },
-  other:      { label: CATEGORY_LABELS.other,      icon: <Star size={11} /> },
-};
-
-function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: object) => void }) {
-  const grouped = Object.fromEntries(TAG_ROW_ORDER.map(cat => [cat, [] as typeof stats.top_tags])) as Record<TagRow, typeof stats.top_tags>;
-  for (const item of stats.top_tags) {
-    const cat: TagCategory = getTagCategoryFromDb(item.tag) ?? "custom";
-    grouped[cat === "custom" ? "other" : cat].push(item);
-  }
-  TAG_ROW_ORDER.forEach(cat => grouped[cat].sort((a, b) => b.count - a.count));
-
-  return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, transition: "border-color 0.2s", minHeight: 360, boxSizing: "border-box" }} {...commonStyles.cardHoverHandlers}>
-      <div style={{ marginBottom: 18 }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Top-Tags</h4>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {TAG_ROW_ORDER.map(cat => {
-          const row = grouped[cat].slice(0, 5);
-          if (row.length === 0) return null;
-          const colors = TAG_COLORS[cat];
-          const meta = TAG_ROW_META[cat];
-          return (
-            <div key={cat}>
-              {/* Category label with icon */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: colors.text }}>
-                {meta.icon}
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  {meta.label}
-                </span>
-              </div>
-              {/* Tag pills — nowrap, overflow hidden, # prefix, uppercase */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
-                {row.map(({ tag }) => (
-                  <Klickbar
-                    key={tag}
-                    onClick={() => onNavigate({ search: tag })}
-                    title={`Nach „${tag}“ suchen`}
-                    style={{
-                      padding: "4px 12px",
-                      // Neutral statt vier Kategoriefarben. Welche Kategorie es
-                      // ist, steht als Ueberschrift direkt darueber — die Farbe
-                      // wiederholte nur das Wort und brachte dafuer Orange,
-                      // Blau, Gruen und Lila gleichzeitig auf die Seite.
-                      background: C.surfaceContainerHigh,
-                      borderRadius: radius.full,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: C.onSurfaceVariant,
-                      border: `1px solid ${C.border15}`,
-                      cursor: "pointer",
-                      transition: "filter 0.15s, transform 0.15s",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.3)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; e.currentTarget.style.transform = "translateY(0)"; }}
-                  >
-                    #{tag}
-                  </Klickbar>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+import { Statistik } from "../components/dashboard/Statistik";
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -509,25 +28,23 @@ export default function Dashboard() {
   // Klicken eine aeltere Antwort die neuere ueberschreiben.
   const reqId = useRef(0);
 
-  /** `yearOnly`: nur die jahresabhaengigen Zahlen nachladen. Die Aktions-Kacheln
-   *  haengen nicht vom Jahr ab und bleiben beim Jahreswechsel unangetastet. */
-  const load = useCallback(async (year: number | null, yearOnly = false) => {
+  const load = useCallback(async () => {
     const id = ++reqId.current;
     setBusy(true); setError(null);
     try {
       const [s, a] = await Promise.all([
-        api.stats.get(year),
-        yearOnly ? null : api.stats.getDashboardActions(),
+        api.stats.get(null),
+        api.stats.getDashboardActions(),
       ]);
       if (id !== reqId.current) return;   // eine neuere Anfrage hat uebernommen
       setStats(s);
-      if (a) setActions(a);
+      setActions(a);
     }
     catch (e) { if (id === reqId.current) setError(String(e)); }
     finally  { if (id === reqId.current) setBusy(false); }
   }, []);
 
-  useEffect(() => { load(null); }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   // Vollbild-Spinner nur, solange ueberhaupt nichts da ist. Beim Nachladen
   // bleiben die Zahlen stehen — sonst flackert die ganze Seite beim Jahreswechsel.
@@ -547,7 +64,7 @@ export default function Dashboard() {
       <div style={{ textAlign: "center", maxWidth: 400 }}>
         <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Datenbankfehler</p>
         <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: radius.control }}>{error}</p>
-        <Button variant="primary" onClick={() => load(null)}>Erneut versuchen</Button>
+        <Button variant="primary" onClick={() => load()}>Erneut versuchen</Button>
       </div>
     </div>
   );
@@ -582,7 +99,7 @@ export default function Dashboard() {
               size="sm"
               icon={RefreshCw}
               loading={busy}
-              onClick={() => { load(stats.selected_year); setRefreshKey(k => k + 1); }}
+              onClick={() => { load(); setRefreshKey(k => k + 1); }}
             >
               Aktualisieren
             </Button>
@@ -605,29 +122,9 @@ export default function Dashboard() {
             <Heute actions={actions} recent={stats.recent_beats} refreshKey={refreshKey} />
           )}
 
-          {tab === "statistik" && <>
-          {/* Pipeline: der ganze Workflow auf einen Blick — trägt auch Total, Neu, Favoriten, Live */}
-          {actions && (
-            <PipelineFunnel
-              stats={stats}
-              actions={actions}
-              onNavigate={(p) => navigate(p)}
-              onFilter={handleNavigate}
-            />
+          {tab === "statistik" && actions && (
+            <Statistik stats={stats} actions={actions} refreshKey={refreshKey} onFilter={handleNavigate} />
           )}
-
-          {/* Analytics Row 1 */}
-          <section style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, alignItems: "stretch" }}>
-            <StatusBreakdown stats={stats} onNavigate={handleNavigate} />
-            <TopKeys stats={stats} onNavigate={handleNavigate} />
-          </section>
-
-          {/* Analytics Row 2 */}
-          <section style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
-            <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr, true)} />
-            <TopTags stats={stats} onNavigate={handleNavigate} />
-          </section>
-          </>}
 
       </PageBody>
     </div>

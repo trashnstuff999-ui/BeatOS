@@ -68,3 +68,13 @@ Genres/BPM/Wochentage ziehen. Voraussetzung: Uploads nacherfasst.
 4. Alle vier Ideen: Liegengeblieben, Diese Woche geschafft, Serie in Gefahr,
    Künstler.
 5. „Zuletzt hinzugefügt" fällt ersatzlos weg.
+
+## Stand 18.10.2026
+
+- [x] Unter-Tabs Heute/Statistik
+- [x] Heute: Aussage, Woche, Als Nächstes, Startlöcher, drei Listen (`components/dashboard/Heute.tsx`)
+- [x] Statistik als Jahresbericht (`components/dashboard/Statistik.tsx`, `get_stats_details`):
+      Kennzahlen-Zeile, Upload-Jahr, Quintenzirkel, Tempo, Weg der Beats (Studio + Archiv),
+      Upload-Wochentage, Vom Archiv zum Upload, Archiv-Wachstum, Neue Beats, Tags
+- Studio-Bestand pro Jahr geht nicht: `studio_projects` hat kein echtes Anlegedatum.
+- [ ] Analyse — eigener Plan

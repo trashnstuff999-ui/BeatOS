@@ -39,3 +39,17 @@ export interface Stats {
   available_years: number[];
   selected_year: number;
 }
+
+/** Übersicht → Statistik: Paare als [Wert, Anzahl] */
+export interface StatsDetails {
+  /** [JJJJ-MM-TT, Beats] mit Uploads in den letzten 53 Wochen */
+  upload_tage: [string, number][];
+  /** Erster Upload je Beat nach Wochentag, 0 = So … 6 = Sa */
+  wochentage: number[];
+  /** [BPM auf Zehner, Beats] */
+  bpm: [number, number][];
+  /** [JJJJ-MM, neue Beats] über alle Jahre */
+  monate: [string, number][];
+  /** Tage vom Archivieren bis zum ersten Upload, je hochgeladenem Beat */
+  durchlauf_tage: number[];
+}

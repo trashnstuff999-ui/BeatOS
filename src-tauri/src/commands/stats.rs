@@ -266,3 +266,66 @@ pub fn get_dashboard_actions() -> Result<DashboardActions, String> {
     })
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Übersicht → Statistik: was die Kennzahlen-Karten nicht hergeben
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, serde::Serialize)]
+pub struct StatsDetails {
+    /// (Tag, Beats) mit Uploads in den letzten 53 Wochen — für die Jahres-Heatmap.
+    pub upload_tage: Vec<(String, i64)>,
+    /// Erster Upload je Beat nach Wochentag, 0 = So … 6 = Sa.
+    pub wochentage: Vec<i64>,
+    /// (BPM auf Zehner abgerundet, Beats).
+    pub bpm: Vec<(i64, i64)>,
+    /// (JJJJ-MM, neue Beats) über alle Jahre — Wachstum und Monate.
+    pub monate: Vec<(String, i64)>,
+    /// Tage vom Archivieren bis zum ersten Upload, je hochgeladenem Beat.
+    pub durchlauf_tage: Vec<i64>,
+}
+
+#[tauri::command]
+pub fn get_stats_details() -> Result<StatsDetails, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    fn paare<T: rusqlite::types::FromSql>(conn: &rusqlite::Connection, sql: &str) -> Result<Vec<(T, i64)>, String> {
+        let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(rows)
+    }
+
+    let upload_tage = paare(&conn,
+        "SELECT substr(uploaded_at, 1, 10) AS d, COUNT(DISTINCT beat_id) FROM beat_uploads
+         WHERE status = 'uploaded' AND uploaded_at >= date('now', 'localtime', '-371 days')
+         GROUP BY d ORDER BY d")?;
+
+    let mut wochentage = vec![0i64; 7];
+    for (tag, n) in paare::<i64>(&conn,
+        "SELECT w, COUNT(*) FROM (
+           SELECT CAST(strftime('%w', MIN(substr(uploaded_at, 1, 10))) AS INTEGER) AS w
+           FROM beat_uploads WHERE status = 'uploaded' AND COALESCE(uploaded_at, '') != ''
+           GROUP BY beat_id)
+         WHERE w IS NOT NULL GROUP BY w")? {
+        if let Some(z) = wochentage.get_mut(tag as usize) { *z = n; }
+    }
+
+    let bpm = paare(&conn,
+        "SELECT CAST(bpm / 10 AS INTEGER) * 10 AS b, COUNT(*) FROM beats WHERE bpm > 0 GROUP BY b ORDER BY b")?;
+
+    let monate = paare(&conn,
+        "SELECT strftime('%Y-%m', created_date) AS m, COUNT(*) FROM beats
+         WHERE COALESCE(created_date, '') != '' AND m IS NOT NULL GROUP BY m ORDER BY m")?;
+
+    // Negative Werte (Upload vor dem Archivieren: Beat später neu archiviert)
+    // fallen weg — die Zeit dazwischen ist dann nicht messbar.
+    let durchlauf_tage = paare::<i64>(&conn,
+        "SELECT CAST(julianday(MIN(substr(u.uploaded_at, 1, 10))) - julianday(substr(b.created_date, 1, 10)) AS INTEGER), 0
+         FROM beat_uploads u JOIN beats b ON b.id = u.beat_id
+         WHERE u.status = 'uploaded' AND COALESCE(u.uploaded_at, '') != '' AND COALESCE(b.created_date, '') != ''
+         GROUP BY b.id")?
+        .into_iter().map(|(t, _)| t).filter(|t| *t >= 0).collect();
+
+    Ok(StatsDetails { upload_tage, wochentage, bpm, monate, durchlauf_tage })
+}

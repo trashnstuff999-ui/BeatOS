@@ -18,7 +18,7 @@ use commands::{
     // Stats commands
     get_stats,
     get_beat_count,
-    get_dashboard_actions,
+    get_dashboard_actions, get_stats_details,
     // Beat CRUD commands
     get_beats,
     get_beats_paginated,
@@ -218,6 +218,7 @@ pub fn run() {
             get_stats,
             get_beat_count,
             get_dashboard_actions,
+            get_stats_details,
             // Beat CRUD
             get_beats,
             get_beats_paginated,

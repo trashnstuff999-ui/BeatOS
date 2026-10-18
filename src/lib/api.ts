@@ -16,7 +16,7 @@ import type {
 import type { CustomTag } from "./tags";
 import type { RelocatePlan, RelocateResult, RelocateStatus } from "../types/relocate";
 import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
-import type { Stats, DashboardActions } from "../types/stats";
+import type { Stats, DashboardActions, StatsDetails } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
 import type { ArtistsScan, Altbestand } from "../types/artists";
@@ -113,6 +113,10 @@ export const api = {
     /** Aktions-Zahlen + Upload-Rhythmus fürs Dashboard */
     getDashboardActions: () =>
       invoke<DashboardActions>("get_dashboard_actions"),
+
+    /** Heatmap, Wochentage, Tempo, Monate und Durchlaufzeit für die Statistik */
+    getDetails: () =>
+      invoke<StatsDetails>("get_stats_details"),
   },
 
   // ─── Beats ───────────────────────────────────────────────────────────────
