@@ -30,7 +30,7 @@ import { useTagManager } from "../contexts/TagManagerContext";
 // ─── Lib Imports ────────────────────────────────────────────────────────────
 import { FolderPlus, Info, FolderOpen, RefreshCw } from "lucide-react";
 import { C, alpha, radius } from "../lib/theme";
-import { EmptyState, Button } from "../components/ui";
+import { EmptyState, Button, IconButton } from "../components/ui";
 import { selectBeatFolder, getYearMonthFolder } from "../lib/archive";
 
 // ─── Type Imports ───────────────────────────────────────────────────────────
@@ -532,17 +532,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
         }}>
           Aus dem Übergabe-Ordner
         </span>
-        <button
-          onClick={laden}
-          title="Neu einlesen"
-          style={{
-            display: "flex", padding: 4, borderRadius: radius.control,
-            background: "transparent", border: `1px solid ${C.border15}`,
-            color: C.onSurfaceVariant, cursor: "pointer",
-          }}
-        >
-          <RefreshCw size={11} strokeWidth={2} />
-        </button>
+        <IconButton icon={RefreshCw} size={24} variant="secondary" title="Neu einlesen" onClick={laden} />
       </div>
 
       {fehler && (

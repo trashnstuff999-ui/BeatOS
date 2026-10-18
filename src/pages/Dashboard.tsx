@@ -644,12 +644,7 @@ function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) =>
     <section style={{ ...commonStyles.card, background: C.surfaceContainer, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px", borderBottom: `1px solid ${C.border10}` }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
-        <button
-          onClick={() => onOpen()}
-          style={{ fontSize: 12, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer" }}
-        >
-          Alle anzeigen ›
-        </button>
+        <Button size="sm" variant="ghost" onClick={() => onOpen()}>Alle anzeigen</Button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSecondaryFixedVar }}>
         <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
@@ -762,7 +757,7 @@ export default function Dashboard() {
       <div style={{ textAlign: "center", maxWidth: 400 }}>
         <p style={{ fontSize: 14, color: C.error, marginBottom: 8, fontWeight: 700 }}>Datenbankfehler</p>
         <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginBottom: 24, fontFamily: "monospace", background: C.surfaceContainerLow, padding: 16, borderRadius: radius.control }}>{error}</p>
-        <button onClick={() => load(null)} style={{ padding: "8px 24px", background: C.primary, color: C.onPrimary, border: "none", borderRadius: radius.control, fontWeight: 700, cursor: "pointer" }}>Erneut versuchen</button>
+        <Button variant="primary" onClick={() => load(null)}>Erneut versuchen</Button>
       </div>
     </div>
   );

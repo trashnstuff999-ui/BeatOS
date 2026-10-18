@@ -35,7 +35,7 @@ import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus, EditFormState, UpdateBeatParams } from "../../types/browse";
 import { parseTags, isFavorite, beatToEditForm } from "../../types/browse";
 import { STATUS_CONFIG, STATUS_ITEMS } from "../../lib/theme";
-import { Segmented } from "../ui";
+import { Segmented, Button, IconButton } from "../ui";
 import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
 import { useTagManager } from "../../contexts/TagManagerContext";
 import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
@@ -524,20 +524,10 @@ export function DetailPanel({
                 {ordnerZiel}
               </div>
             </div>
-            <button
-              onClick={angleichen}
-              disabled={angleichBusy}
-              title="Ordner- und Dateinamen dieses Beats auf das Schema ziehen"
-              style={{
-                flexShrink: 0, padding: "7px 12px", borderRadius: radius.control,
-                background: alpha(C.primary, 0.15),
-                border: `1px solid ${alpha(C.primary, 0.35)}`,
-                cursor: angleichBusy ? "wait" : "pointer",
-                fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.primary,
-              }}
-            >
-              {angleichBusy ? "läuft …" : "Angleichen"}
-            </button>
+            <Button size="sm" variant="secondary" loading={angleichBusy} style={{ flexShrink: 0 }}
+              title="Ordner- und Dateinamen dieses Beats auf das Schema ziehen" onClick={angleichen}>
+              Angleichen
+            </Button>
           </div>
         )}
         {angleichFehler && <Fehler text={angleichFehler} />}
@@ -642,31 +632,8 @@ export function DetailPanel({
           <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.primary }}>
             ● Ungespeichert
           </span>
-          <button
-            onClick={verwerfen}
-            disabled={isSaving}
-            style={{
-              padding: "8px 12px", borderRadius: radius.control,
-              background: "transparent", border: `1px solid ${C.border20}`,
-              cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit",
-              color: C.onSurfaceVariant,
-            }}
-          >
-            Verwerfen
-          </button>
-          <button
-            onClick={speichern}
-            disabled={isSaving}
-            style={{
-              padding: "8px 14px", borderRadius: radius.control,
-              background: C.primary, border: "none",
-              cursor: isSaving ? "wait" : "pointer",
-              fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onPrimary,
-              opacity: isSaving ? 0.7 : 1,
-            }}
-          >
-            {isSaving ? "Speichern …" : "Speichern"}
-          </button>
+          <Button size="sm" variant="ghost" disabled={isSaving} onClick={verwerfen}>Verwerfen</Button>
+          <Button size="sm" variant="primary" loading={isSaving} onClick={speichern}>Speichern</Button>
         </div>
       )}
 
@@ -677,24 +644,16 @@ export function DetailPanel({
         borderTop: `1px solid ${C.border10}`,
         background: C.background,
       }}>
-        <button
-          onClick={() => flpPath && openPath(flpPath).catch(() => {})}
-          disabled={!flpPath}
+        <Button variant="secondary" icon={FileMusic} disabled={!flpPath} style={{ flex: 1, minWidth: 0 }}
           title={flpPath ? `${flpPath.split(/[/\\]/).pop()} — in FL Studio öffnen` : "Keine FLP im Beat-Ordner"}
-          style={flButtonStyle(Boolean(flpPath))}
-        >
-          <FileMusic size={14} strokeWidth={1.5} />
+          onClick={() => flpPath && openPath(flpPath).catch(() => {})}>
           In FL öffnen
-        </button>
-        <button
-          onClick={handleNewVersion}
-          disabled={!flpPath || versionBusy}
+        </Button>
+        <Button variant="secondary" icon={CopyPlus} disabled={!flpPath} loading={versionBusy} style={{ flex: 1, minWidth: 0 }}
           title={flpPath ? "Neues Studio-Projekt mit dieser FLP als Vorlage — für Remixe und neue Fassungen" : "Keine FLP im Beat-Ordner"}
-          style={flButtonStyle(Boolean(flpPath) && !versionBusy)}
-        >
-          <CopyPlus size={14} strokeWidth={1.5} />
-          {versionBusy ? "Lege an …" : "Neue Version"}
-        </button>
+          onClick={handleNewVersion}>
+          Neue Version
+        </Button>
       </div>
 
       {/* ── Fuß: ein Weg nach vorn, ein Weg zur Platte, ein Papierkorb ──────── */}
@@ -704,56 +663,21 @@ export function DetailPanel({
         padding: "8px 20px 12px",
         background: C.background,
       }}>
-        <button
-          onClick={() => onOpenInUpload?.(beat)}
-          disabled={!onOpenInUpload}
+        <Button variant="primary" icon={UploadIcon} disabled={!onOpenInUpload} style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap" }}
           title="Im Upload-Tab öffnen — Beschreibungen, Type-Beat, Assets"
-          style={{
-            flex: 1, minWidth: 0, padding: "11px 12px",
-            borderRadius: radius.card, background: C.primary, border: "none",
-            cursor: onOpenInUpload ? "pointer" : "default",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-            fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onPrimary,
-            whiteSpace: "nowrap",
-            opacity: onOpenInUpload ? 1 : 0.4,
-          }}
-        >
-          <UploadIcon size={14} strokeWidth={1.75} />
+          onClick={() => onOpenInUpload?.(beat)}>
           Im Upload öffnen
-        </button>
+        </Button>
 
-        <button
-          onClick={handleOpenFolder}
-          title="Beat-Ordner im Explorer zeigen"
-          style={{
-            padding: "11px 14px",
-            borderRadius: radius.card, background: C.surfaceContainerHigh,
-            border: `1px solid ${C.border20}`, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 7,
-            fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onSurface,
-            whiteSpace: "nowrap",
-          }}
-        >
-          <FolderOpen size={14} strokeWidth={1.5} />
+        <Button variant="secondary" icon={FolderOpen} style={{ whiteSpace: "nowrap" }}
+          title="Beat-Ordner im Explorer zeigen" onClick={handleOpenFolder}>
           Ordner
-        </button>
+        </Button>
 
         {/* Selten und zerstörend: klein, aber auffindbar — nicht als
             gleichbreiter Balken neben „Ordner öffnen". */}
         {onDelete && (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            title="Beat löschen"
-            style={{
-              width: 42, flexShrink: 0,
-              borderRadius: radius.card, background: "transparent",
-              border: `1px solid ${DELETE_BORDER}`, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: DELETE_COLOR,
-            }}
-          >
-            <Trash2 size={15} strokeWidth={1.75} />
-          </button>
+          <IconButton icon={Trash2} size={40} variant="danger" title="Beat löschen" onClick={() => setConfirmDelete(true)} />
         )}
       </div>
 
@@ -827,38 +751,12 @@ export function DetailPanel({
             )}
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                disabled={isDeleting}
-                style={{
-                  flex: 1, padding: "10px 12px",
-                  borderRadius: radius.control,
-                  background: C.surfaceContainerHigh,
-                  border: `1px solid ${C.border20}`,
-                  cursor: isDeleting ? "not-allowed" : "pointer",
-                  fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onSurface,
-                  opacity: isDeleting ? 0.5 : 1,
-                }}
-              >
+              <Button variant="secondary" disabled={isDeleting} style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
                 Abbrechen
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                disabled={isDeleting}
-                style={{
-                  flex: 1, padding: "10px 12px",
-                  borderRadius: radius.control,
-                  background: DELETE_COLOR,
-                  border: "none",
-                  cursor: isDeleting ? "wait" : "pointer",
-                  fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: "#fff",
-                  opacity: isDeleting ? 0.7 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                }}
-              >
-                <Trash2 size={13} strokeWidth={2} />
-                {isDeleting ? "Wird gelöscht …" : "In den Papierkorb"}
-              </button>
+              </Button>
+              <Button variant="danger" icon={Trash2} loading={isDeleting} style={{ flex: 1 }} onClick={handleDeleteConfirm}>
+                In den Papierkorb
+              </Button>
             </div>
           </div>
         </div>
@@ -917,15 +815,3 @@ const miniLabel: React.CSSProperties = {
   color: C.onSecondaryFixedVar,
   flexShrink: 0,
 };
-
-function flButtonStyle(aktiv: boolean): React.CSSProperties {
-  return {
-    flex: 1, minWidth: 0, padding: "11px 12px",
-    borderRadius: radius.card, background: C.surfaceContainerHigh,
-    border: `1px solid ${C.border20}`, cursor: aktiv ? "pointer" : "default",
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-    fontSize: 12, fontWeight: 700, fontFamily: "inherit", color: C.onSurface,
-    whiteSpace: "nowrap",
-    opacity: aktiv ? 1 : 0.4,
-  };
-}

@@ -327,24 +327,10 @@ export default function Browse() {
                     ]}
                   />
 
-                  <button
-                    onClick={handleRandomBeat}
-                    disabled={pagination.totalCount === 0}
-                    title="Zufälligen Beat aus allen Treffern abspielen"
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                      padding: "6px 12px", borderRadius: radius.control,
-                      background: "transparent",
-                      border: `1px solid ${C.border15}`,
-                      color: C.onSurfaceVariant,
-                      cursor: pagination.totalCount === 0 ? "not-allowed" : "pointer",
-                      fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                      opacity: pagination.totalCount === 0 ? 0.5 : 1,
-                    }}
-                  >
-                    <Shuffle size={12} strokeWidth={2} />
+                  <Button size="sm" variant="secondary" icon={Shuffle} disabled={pagination.totalCount === 0}
+                    title="Zufälligen Beat aus allen Treffern abspielen" style={{ flexShrink: 0 }} onClick={handleRandomBeat}>
                     Zufall
-                  </button>
+                  </Button>
                 </>
               )}
             />

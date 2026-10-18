@@ -8,11 +8,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
-  Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, Loader2, FileText,
+  Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, FileText,
   Settings as SettingsIcon, FolderTree, Users, Trash2, Plus, History, Download,
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../lib/theme";
-import { PageHeader, PageBody, Button } from "../components/ui";
+import { PageHeader, PageBody, Button, IconButton } from "../components/ui";
 import { useSettings, parseProductionPaths, DEFAULTS, kuenstlerOrdner } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
@@ -125,31 +125,9 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
           />
           {hasValue && <CheckCircle size={14} color={C.mint} />}
         </div>
-        <button
-          onClick={onBrowse}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "0 16px", borderRadius: radius.control,
-            fontSize: 12, fontWeight: 600, letterSpacing: "0.05em",
-            background: C.surfaceContainerHighest,
-            border: `1px solid ${C.border20}`,
-            color: C.onSurfaceVariant,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-            transition: "all 0.15s",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = C.surfaceContainerHigh;
-            e.currentTarget.style.color = C.onSurface;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = C.surfaceContainerHighest;
-            e.currentTarget.style.color = C.onSurfaceVariant;
-          }}
-        >
-          <FolderOpen size={13} strokeWidth={1.5} />
+        <Button variant="secondary" icon={FolderOpen} onClick={onBrowse} style={{ whiteSpace: "nowrap" }}>
           Durchsuchen
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -193,16 +171,7 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
             <span style={{ flex: 1, fontSize: 12, fontFamily: "monospace", color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {p}
             </span>
-            <button
-              onClick={() => removeAt(i)}
-              title="Pfad entfernen"
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: C.onSurfaceVariant, display: "flex", padding: 2,
-              }}
-            >
-              <X size={13} />
-            </button>
+            <IconButton icon={X} size={24} title="Pfad entfernen" onClick={() => removeAt(i)} />
           </div>
         ))}
         <button
@@ -419,27 +388,11 @@ function SampleProducersCard() {
                 {[p.instagram_url, p.beatstars_url, p.soundcloud_url, p.youtube_url].filter(Boolean).length} Links
                 {p.use_count > 0 && ` · ${p.use_count}× genannt`}
               </span>
-              <button
-                onClick={() => { setDraft(p); setError(null); }}
-                style={{
-                  marginLeft: "auto", padding: "4px 10px", borderRadius: radius.control,
-                  background: "transparent", border: `1px solid ${C.border15}`,
-                  color: C.onSurfaceVariant, cursor: "pointer", fontSize: 11, fontWeight: 600,
-                }}
-              >
+              <Button size="sm" variant="secondary" style={{ marginLeft: "auto" }}
+                onClick={() => { setDraft(p); setError(null); }}>
                 Bearbeiten
-              </button>
-              <button
-                onClick={() => loeschen(p)}
-                title="Löschen"
-                style={{
-                  padding: "4px 6px", borderRadius: radius.control, display: "flex",
-                  background: "transparent", border: `1px solid ${C.border15}`,
-                  color: C.error, cursor: "pointer",
-                }}
-              >
-                <Trash2 size={12} strokeWidth={2} />
-              </button>
+              </Button>
+              <IconButton icon={Trash2} size={28} variant="danger" title="Löschen" onClick={() => loeschen(p)} />
             </div>
           ))}
         </div>
@@ -468,26 +421,8 @@ function SampleProducersCard() {
             Leere Felder werden in der Beschreibung weggelassen.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={speichern}
-              style={{
-                padding: "8px 16px", borderRadius: radius.control, background: C.mint,
-                border: "none", color: C.onMint, cursor: "pointer",
-                fontSize: 12, fontWeight: 700,
-              }}
-            >
-              Speichern
-            </button>
-            <button
-              onClick={() => { setDraft(null); setError(null); }}
-              style={{
-                padding: "8px 16px", borderRadius: radius.control, background: "transparent",
-                border: `1px solid ${C.border15}`, color: C.onSurfaceVariant,
-                cursor: "pointer", fontSize: 12, fontWeight: 600,
-              }}
-            >
-              Abbrechen
-            </button>
+            <Button variant="primary" onClick={speichern}>Speichern</Button>
+            <Button variant="ghost" onClick={() => { setDraft(null); setError(null); }}>Abbrechen</Button>
           </div>
         </div>
       )}
@@ -497,18 +432,9 @@ function SampleProducersCard() {
       )}
 
       {!draft && (
-        <button
-          onClick={() => { setDraft({ ...LEERER_PRODUZENT }); setError(null); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: radius.control,
-            background: C.surfaceContainer, border: `1px solid ${C.border15}`,
-            color: C.onSurface, cursor: "pointer", fontSize: 12, fontWeight: 700,
-          }}
-        >
-          <Plus size={12} strokeWidth={2} />
+        <Button variant="secondary" icon={Plus} onClick={() => { setDraft({ ...LEERER_PRODUZENT }); setError(null); }}>
           Sample-Produzent hinzufügen
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -674,49 +600,18 @@ function RelocateCard() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          onClick={handlePick}
-          disabled={busy}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 16px", borderRadius: radius.control,
-            background: C.surfaceContainer, border: `1px solid ${C.border15}`,
-            color: C.onSurface, cursor: busy ? "wait" : "pointer",
-            fontSize: 12, fontWeight: 700,
-          }}
-        >
-          {busy ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <FolderOpen size={12} strokeWidth={2} />}
+        <Button variant="secondary" icon={FolderOpen} loading={busy} onClick={handlePick}>
           {plan ? "Anderen Ordner wählen" : "Neuen Ordner wählen"}
-        </button>
+        </Button>
 
         {plan && plan.total > 0 && (
-          <button
-            onClick={handleApply}
-            disabled={busy}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", borderRadius: radius.control,
-              background: C.mint, border: "none",
-              color: C.onMint, cursor: busy ? "wait" : "pointer",
-              fontSize: 12, fontWeight: 700,
-            }}
-          >
-            <CheckCircle size={12} strokeWidth={2} />
+          <Button variant="primary" icon={CheckCircle} disabled={busy} onClick={handleApply}>
             {plan.total} Pfade übernehmen
-          </button>
+          </Button>
         )}
 
         {done && (
-          <button
-            onClick={() => location.reload()}
-            style={{
-              padding: "8px 16px", borderRadius: radius.control,
-              background: C.mint, border: "none",
-              color: C.onMint, cursor: "pointer", fontSize: 12, fontWeight: 700,
-            }}
-          >
-            App neu laden
-          </button>
+          <Button variant="primary" onClick={() => location.reload()}>App neu laden</Button>
         )}
       </div>
 
@@ -874,20 +769,9 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             <div style={row}><span style={rowLabel}>Sicherung →</span><span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{info?.backup_path ?? "…"}</span></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              onClick={handleBackup}
-              disabled={busy !== null}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 16px", borderRadius: radius.control,
-                background: C.mint, border: "none",
-                color: C.onMint, cursor: busy ? "wait" : "pointer",
-                fontSize: 12, fontWeight: 700,
-              }}
-            >
-              {busy === "backup" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <DatabaseBackup size={12} strokeWidth={2} />}
+            <Button variant="primary" icon={DatabaseBackup} loading={busy === "backup"} disabled={busy !== null} onClick={handleBackup}>
               Jetzt sichern
-            </button>
+            </Button>
             {message && <span style={{ fontSize: 12, color: message.includes("✓") ? C.mint : C.error }}>{message}</span>}
           </div>
           <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
@@ -913,21 +797,11 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             Importiert Beats, die im Archiv-Ordner liegen, aber in der Datenbank fehlen,
             und liest alle Erstell-Daten aus den FLP-Dateien neu.
           </div>
-          <button
-            onClick={handleRepair}
-            disabled={busy !== null || !archivePath}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", borderRadius: radius.control,
-              background: alpha(C.error, 0.12),
-              border: `1px solid ${alpha(C.error, 0.35)}`,
-              color: C.error, cursor: busy ? "wait" : "pointer",
-              fontSize: 12, fontWeight: 700,
-            }}
-          >
-            {busy === "repair" ? <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <Wrench size={12} strokeWidth={2} />}
+          {/* secondary, nicht danger: die Reparatur importiert und liest neu,
+              sie löscht nichts. */}
+          <Button variant="secondary" icon={Wrench} loading={busy === "repair"} disabled={busy !== null || !archivePath} onClick={handleRepair}>
             Reparatur starten
-          </button>
+          </Button>
         </div>
 
         {/* Ordner-Abgleich */}
@@ -1012,19 +886,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
               beatstars / soundcloud / youtube .template — Änderungen wirken beim nächsten Re-Render
             </div>
           </div>
-          <button
-            onClick={handleOpenTemplates}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", borderRadius: radius.control,
-              background: "transparent", border: `1px solid ${C.border20}`,
-              color: C.onSurfaceVariant, cursor: "pointer",
-              fontSize: 12, fontWeight: 600,
-            }}
-          >
-            <FolderOpen size={12} strokeWidth={1.75} />
-            Ordner öffnen
-          </button>
+          <Button variant="secondary" icon={FolderOpen} onClick={handleOpenTemplates}>Ordner öffnen</Button>
         </div>
       </div>
     </Section>
