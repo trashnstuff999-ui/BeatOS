@@ -14,7 +14,7 @@ use std::path::Path;
 
 #[derive(Debug, Serialize)]
 pub struct ScheduleEntry {
-    pub date: String,       // YYYY-MM-DD (scheduled_at)
+    pub date: String,       // YYYY-MM-DD (scheduled_at, sonst uploaded_at)
     pub platform: String,   // beatstars | soundcloud | youtube
     pub status: String,     // scheduled | uploaded
     pub beat_id: String,
@@ -41,16 +41,20 @@ pub fn promote_past_scheduled(conn: &rusqlite::Connection) -> rusqlite::Result<u
 
 /// All scheduled/uploaded platform entries between two dates (inclusive).
 /// Dates are YYYY-MM-DD strings, so a plain string BETWEEN is correct.
+///
+/// Der Tag ist der geplante, sonst der Upload-Tag: zwei Drittel der Uploads
+/// werden ohne Termin direkt eingetragen und fehlten sonst in der Woche.
 #[tauri::command(async)]
 pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<ScheduleEntry>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT u.scheduled_at, u.platform, u.status, b.id, b.name, b.path
-         FROM beat_uploads u JOIN beats b ON b.id = u.beat_id
-         WHERE u.scheduled_at IS NOT NULL AND u.scheduled_at != ''
-           AND u.scheduled_at BETWEEN ?1 AND ?2
-         ORDER BY u.scheduled_at, u.platform",
+        "SELECT tag, platform, status, id, name, path FROM (
+           SELECT COALESCE(NULLIF(u.scheduled_at, ''), substr(u.uploaded_at, 1, 10)) AS tag,
+                  u.platform, u.status, b.id, b.name, b.path
+           FROM beat_uploads u JOIN beats b ON b.id = u.beat_id)
+         WHERE tag BETWEEN ?1 AND ?2
+         ORDER BY tag, platform",
     ).map_err(|e| e.to_string())?;
 
     let entries: Vec<ScheduleEntry> = stmt
@@ -81,6 +85,9 @@ pub struct QueueBeat {
     pub id: String,
     pub name: String,
     pub cover: Option<String>,
+    pub key: Option<String>,
+    pub bpm: Option<f64>,
+    pub created_date: Option<String>,
     /// Was vor dem Upload noch fehlt ("Infos", "Audio", "Cover") — leer = bereit.
     pub fehlt: Vec<String>,
 }
@@ -103,7 +110,7 @@ pub fn get_upload_queue() -> Result<Vec<QueueBeat>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
     promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT b.id, b.name, b.path,
+        "SELECT b.id, b.name, b.path, b.key, b.bpm, b.created_date,
                 TRIM(COALESCE(b.type_beat_main, '')) != '' AND TRIM(COALESCE(b.genre_tags, '')) != ''
          FROM beats b
          WHERE b.path IS NOT NULL
@@ -113,22 +120,23 @@ pub fn get_upload_queue() -> Result<Vec<QueueBeat>, String> {
                AND ((u.scheduled_at IS NOT NULL AND u.scheduled_at != '') OR u.status = 'uploaded'))
          ORDER BY b.created_date DESC",
     ).map_err(|e| e.to_string())?;
-    let zeilen: Vec<(String, String, String, bool)> = stmt
+    type Zeile = (String, String, String, Option<String>, Option<f64>, Option<String>, bool);
+    let zeilen: Vec<Zeile> = stmt
         .query_map(rusqlite::params![format!("-{WARTESCHLANGE_TAGE} days")],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
 
     Ok(zeilen.into_iter()
-        .map(|(id, name, path, infos)| {
+        .map(|(id, name, path, key, bpm, created_date, infos)| {
             let a = scan_beat_assets(Path::new(&path));
             let mut fehlt = Vec::new();
             if !infos { fehlt.push("Infos".to_string()); }
             if a.mp3.is_none() && a.wav.is_none() { fehlt.push("Audio".to_string()); }
             if a.cover.is_none() { fehlt.push("Cover".to_string()); }
             QueueBeat {
-                id, name, fehlt,
+                id, name, fehlt, key, bpm, created_date,
                 cover: crate::commands::get_beat_cover_path(path).ok().flatten(),
             }
         })

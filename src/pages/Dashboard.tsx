@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, Archive, Sparkles, Piano, Star, Music,
-  CalendarClock, Disc3, Flame, ArrowRight, Upload as UploadIcon, LayoutGrid,
+  CalendarClock, Disc3, ArrowRight, Upload as UploadIcon, LayoutGrid,
   ListTodo, ChartColumn,
 } from "lucide-react";
 import { api } from "../lib/api";
@@ -12,6 +12,7 @@ import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
 import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS, alpha, radius } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
 import { Select, Button, PageHeader, PageBody, Segmented } from "../components/ui";
+import { Heute } from "../components/dashboard/Heute";
 
 /**
  * Anklickbarer Text und anklickbare Balken auf der Uebersicht.
@@ -38,141 +39,6 @@ function Klickbar({ style, children, ...rest }: React.ButtonHTMLAttributes<HTMLB
     >
       {children}
     </button>
-  );
-}
-
-// ── Upload-Rhythmus: 8-Wochen-Balken + Serie ─────────────────────────────────
-/** Der naechste Schritt — eine Karte statt vier.
- *
- *  Vorher standen hier vier gleich grosse Kacheln, von denen typischerweise
- *  drei auf null stehen. Ein Dashboard, dessen Aktionsreihe aus Nullen
- *  besteht, beantwortet die Frage nicht, fuer die man es aufmacht.
- *
- *  Ausserdem wiederholten drei davon, was die Pipeline-Zeile darunter ohnehin
- *  sagt („Diese Woche geplant 0" gegen „Geplant · 0 in den naechsten 7 Tagen",
- *  wortgleich). Uebrig bleibt das, was wirklich ansteht — gross, mit dem Weg
- *  dorthin. Die uebrigen Zahlen stehen als Nebensatz daneben.
- */
-function NaechsterSchritt({ actions, onNavigate, onFilter }: {
-  actions: DashboardActions;
-  onNavigate: (path: string) => void;
-  onFilter: (filter: object) => void;
-}) {
-  // Reihenfolge = Dringlichkeit. Der erste Treffer gewinnt.
-  const kandidaten = [
-    {
-      wenn: actions.scheduled_next_7 > 0,
-      zahl: actions.scheduled_next_7,
-      titel: actions.scheduled_next_7 === 1 ? "Upload steht diese Woche an" : "Uploads stehen diese Woche an",
-      knopf: "Zum Upload-Tab",
-      tun: () => onNavigate("/upload"),
-    },
-    {
-      wenn: actions.finished_unscheduled > 0,
-      zahl: actions.finished_unscheduled,
-      titel: actions.finished_unscheduled === 1 ? "fertiger Beat wartet auf einen Termin" : "fertige Beats warten auf einen Termin",
-      knopf: "Im Archiv zeigen",
-      tun: () => onFilter({ status: "finished", unpublishedOnly: true }),
-    },
-    {
-      wenn: actions.studio_ready > 0,
-      zahl: actions.studio_ready,
-      titel: actions.studio_ready === 1 ? "Projekt ist bereit zum Archivieren" : "Projekte sind bereit zum Archivieren",
-      knopf: "Zum Studio",
-      tun: () => onNavigate("/studio"),
-    },
-  ];
-  const schritt = kandidaten.find(k => k.wenn) ?? null;
-
-  return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
-        Was ansteht
-      </h4>
-
-      {schritt ? (
-        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, color: C.primary, letterSpacing: "-0.02em" }}>
-            {schritt.zahl}
-          </span>
-          <span style={{ fontSize: 14, color: C.onSurface, fontWeight: 600 }}>{schritt.titel}</span>
-          <span style={{ flex: 1 }} />
-          <Button variant="primary" size="sm" onClick={schritt.tun}>{schritt.knopf}</Button>
-        </div>
-      ) : (
-        <div style={{ fontSize: 14, color: C.onSurfaceVariant }}>
-          Nichts offen — alles geplant oder schon draußen.
-        </div>
-      )}
-
-      {/* Die uebrigen Zahlen als Nebensatz, nicht als eigene Kacheln. */}
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: C.onSecondaryFixedVar }}>
-        <Klickbar
-          onClick={() => onFilter({ status: "finished", unpublishedOnly: true })}
-          title="Im Archiv zeigen"
-        >
-          <strong style={{ color: C.onSurfaceVariant }}>{actions.finished_unscheduled}</strong> fertig ohne Termin
-        </Klickbar>
-        <Klickbar onClick={() => onNavigate("/upload")} title="Zum Upload-Tab">
-          <strong style={{ color: C.onSurfaceVariant }}>{actions.scheduled_next_7}</strong> diese Woche geplant
-        </Klickbar>
-        <Klickbar onClick={() => onNavigate("/studio")} title="Zum Studio">
-          <strong style={{ color: C.onSurfaceVariant }}>{actions.studio_ready}</strong> Studio-Projekte bereit
-        </Klickbar>
-      </div>
-    </div>
-  );
-}
-
-function RhythmCard({ actions }: { actions: DashboardActions }) {
-  const weeks = actions.uploads_per_week;
-  const max = Math.max(1, ...weeks.map(w => w.count));
-  return (
-    <div style={{
-      ...commonStyles.card, padding: 18,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-      display: "flex", flexDirection: "column",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Flame size={14} color={actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar} />
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>
-          Upload-Rhythmus
-        </span>
-        <span style={{
-          marginLeft: "auto",
-          fontSize: 11, fontWeight: 700,
-          color: actions.current_streak_weeks > 0 ? C.primary : C.onSecondaryFixedVar,
-        }}>
-          {actions.current_streak_weeks > 0
-            ? `${actions.current_streak_weeks} ${actions.current_streak_weeks === 1 ? "Woche" : "Wochen"} Serie`
-            : "keine Serie"}
-        </span>
-      </div>
-      {/* Hoehen in Prozent statt fester Pixel — so fuellen die Balken die Karte,
-          statt in einem 44px-Streifen zu kleben. */}
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 5, minHeight: 56 }}>
-        {weeks.map((w, i) => {
-          const isCurrent = i === weeks.length - 1;
-          const h = w.count === 0 ? "6%" : `${Math.max((w.count / max) * 100, 14)}%`;
-          return (
-            <div
-              key={w.week_start}
-              title={`Woche ab ${w.week_start}: ${w.count} Upload${w.count === 1 ? "" : "s"}`}
-              style={{
-                flex: 1, height: h, borderRadius: 3,
-                background: w.count === 0
-                  ? "rgba(255,255,255,0.06)"
-                  : isCurrent ? C.primary : alpha(C.primary, 0.45),
-                transition: "height 0.2s",
-              }}
-            />
-          );
-        })}
-      </div>
-      <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 6 }}>
-        letzte 8 Wochen · aktuelle Woche rechts
-      </div>
-    </div>
   );
 }
 
@@ -632,6 +498,7 @@ export default function Dashboard() {
   const [busy, setBusy]       = useState(true);
   const [error, setError]     = useState<string | null>(null);
   // Wie im Studio: ein Starttab mit dem, was ansteht, die Zahlen daneben.
+  const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab]         = useState<"heute" | "statistik">("heute");
   const navigate = useNavigate();
   const handleNavigate = useCallback((filter: object) => {
@@ -715,7 +582,7 @@ export default function Dashboard() {
               size="sm"
               icon={RefreshCw}
               loading={busy}
-              onClick={() => load(stats.selected_year)}
+              onClick={() => { load(stats.selected_year); setRefreshKey(k => k + 1); }}
             >
               Aktualisieren
             </Button>
@@ -734,19 +601,8 @@ export default function Dashboard() {
       </PageHeader>
 
       <PageBody>
-          {/* Was ansteht — eine Fokus-Karte statt vier Kacheln, daneben der
-              Rhythmus. Die drei Zahlen, die vorher eigene Kacheln hatten,
-              stehen jetzt als Nebensatz in der Karte; die Pipeline-Zeile
-              darunter trug sie ohnehin schon einmal. */}
           {tab === "heute" && actions && (
-            <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
-              <NaechsterSchritt
-                actions={actions}
-                onNavigate={(pfad) => navigate(pfad)}
-                onFilter={handleNavigate}
-              />
-              <RhythmCard actions={actions} />
-            </section>
+            <Heute actions={actions} recent={stats.recent_beats} refreshKey={refreshKey} />
           )}
 
           {tab === "statistik" && <>

@@ -58,7 +58,7 @@ export interface UploadData {
 
 /** One scheduled/uploaded platform entry — for the planner strip / calendar. */
 export interface ScheduleEntry {
-  date: string;              // YYYY-MM-DD (scheduled_at)
+  date: string;              // YYYY-MM-DD (scheduled_at, sonst uploaded_at)
   platform: UploadPlatform;
   status: UploadStatus;
   beat_id: string;
@@ -198,6 +198,9 @@ export interface QueueBeat {
   id: string;
   name: string;
   cover: string | null;
+  key: string | null;
+  bpm: number | null;
+  created_date: string | null;
   /** Was vor dem Upload noch fehlt ("Infos", "Audio", "Cover") — leer = bereit. */
   fehlt: string[];
 }
