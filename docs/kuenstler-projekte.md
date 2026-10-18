@@ -98,7 +98,7 @@ werden.
       + leere FLP wie `create_project_folder`).
 - [x] **3 — Notiz + Status** (erledigt 18.10.2026) — Klick auf den Song klappt sie auf; eigene Tabelle `artist_songs` statt `studio_projects` (deren Status kennt kein „Warten" und zählt in die Studio-Statistik):
       eine Notiz pro Song, Status „Warte auf Künstler" / „In Arbeit".
-- [ ] **4 — Dateien reinziehen + Downloads vorschlagen** (Teil 1 erledigt 18.10.2026: „Neuer Song" ist ein Knopf mit Künstlerauswahl und bietet Audio aus den Downloads der letzten 30 Tage an; Treffer am Songnamen, z. B. „heartbreak highlights_vocals", sind vorausgewählt. Offen: auf bestehende Songs ziehen): Vocals/Demo/Beat
+- [x] **4 — Dateien reinziehen + Downloads vorschlagen** (erledigt 18.10.2026: Ziehen auf eine Song-Zeile → Eingang/, an bestehenden Songs Knopf „n neue Downloads"; „Neuer Song" ist ein Knopf mit Künstlerauswahl und bietet Audio aus den Downloads der letzten 30 Tage an; Treffer am Songnamen, z. B. „heartbreak highlights_vocals", sind vorausgewählt. ): Vocals/Demo/Beat
       auf den Song ziehen → `Eingang/`. Dazu der Downloads-Ordner: neue
       Dateien mit passendem Song (Namensregel „X Vocals" → Song X) werden
       vorgeschlagen, ein Klick verschiebt sie.

@@ -25,6 +25,15 @@ import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
 import { passtZumSong } from "../../lib/kuenstler";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+
+type Download = { name: string; path: string; geaendert: number };
+/** Was jede Song-Zeile fürs Reinziehen und die Download-Vorschläge braucht. */
+type ZeilenDrop = {
+  downloads: Download[];
+  ziehen: { pfad: string | null; anzahl: number } | null;
+  uebernehmen: (songPfad: string, pfade: string[]) => void;
+};
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
   { key: "flp", label: "FLP", titel: "FL-Projekt im Song-Ordner" },
@@ -53,9 +62,55 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     if (archivePath) api.artists.altbestand(archivePath).then(setAltbestand).catch(() => setAltbestand([]));
   }, [root, archivePath]);
 
-  useEffect(() => { if (active) laden(); }, [active, laden]);
+  // Downloads für die Vorschläge an bestehenden Songs; mit jedem Laden neu.
+  const [downloads, setDownloads] = useState<Download[]>([]);
+  const ladenMitDownloads = useCallback(() => {
+    laden();
+    api.artists.downloads().then(setDownloads).catch(() => setDownloads([]));
+  }, [laden]);
+
+  useEffect(() => { if (active) ladenMitDownloads(); }, [active, ladenMitDownloads]);
   // Zurück aus dem Explorer oder aus Discord: neu lesen, nur wenn der Tab offen ist.
-  useFocusRefresh(() => { if (active) laden(); });
+  useFocusRefresh(() => { if (active) ladenMitDownloads(); });
+
+  // Dateien in Eingang/ — per Ziehen oder per Vorschlag. Was nicht ging, steht oben.
+  const [meldung, setMeldung] = useState<string | null>(null);
+  const uebernehmen = useCallback(async (songPfad: string, pfade: string[]) => {
+    try {
+      const schief = (await api.artists.eingangFuellen(songPfad, pfade)).filter(e => !e.ok);
+      setMeldung(schief.length ? `Nicht übernommen: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`).join("; ")}` : null);
+    } catch (e) {
+      setMeldung(String(e));
+    }
+    ladenMitDownloads();
+  }, [ladenMitDownloads]);
+
+  // Aus dem Explorer auf eine Song-Zeile ziehen: die Zeile unter dem Zeiger
+  // (data-song) leuchtet auf, Loslassen verschiebt in ihren Eingang.
+  const [ziehen, setZiehen] = useState<{ pfad: string | null; anzahl: number } | null>(null);
+  useEffect(() => {
+    if (!active || !("__TAURI_INTERNALS__" in window)) return;
+    let stop: (() => void) | undefined;
+    let entfernt = false;
+    let pfade: string[] = [];
+    const songUnter = (pos: { x: number; y: number }) => {
+      const r = window.devicePixelRatio || 1;
+      return document.elementFromPoint(pos.x / r, pos.y / r)?.closest<HTMLElement>("[data-song]")?.dataset.song ?? null;
+    };
+    getCurrentWebview().onDragDropEvent(event => {
+      const p = event.payload;
+      if (p.type === "enter") { pfade = p.paths; setZiehen({ pfad: songUnter(p.position), anzahl: pfade.length }); }
+      else if (p.type === "over") setZiehen({ pfad: songUnter(p.position), anzahl: pfade.length });
+      else if (p.type === "leave") setZiehen(null);
+      else if (p.type === "drop") {
+        setZiehen(null);
+        const ziel = songUnter(p.position);
+        if (ziel && p.paths.length) uebernehmen(ziel, p.paths);
+      }
+    }).then(un => { if (entfernt) un(); else stop = un; })
+      .catch(e => console.error("[Künstler] Drag & Drop nicht verfügbar:", e));
+    return () => { entfernt = true; stop?.(); };
+  }, [active, uebernehmen]);
 
   if (!root) {
     return (
@@ -142,8 +197,15 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
           <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Künstler</Button>
           <Button variant="primary" size="sm" icon={Plus} onClick={() => setNeu("song")}>Neuer Song</Button>
         </div>
+        {meldung && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.error }}>
+            <X size={13} /> <span style={{ flex: 1 }}>{meldung}</span>
+            <IconButton icon={X} size={24} variant="ghost" title="Ausblenden" onClick={() => setMeldung(null)} />
+          </div>
+        )}
         {scan.kuenstler.map(k => (
-          <KuenstlerBlock key={k.path} kuenstler={k} onGeaendert={laden} />
+          <KuenstlerBlock key={k.path} kuenstler={k} onGeaendert={laden}
+            zeile={{ downloads, ziehen, uebernehmen }} />
         ))}
       </div>
     );
@@ -420,9 +482,10 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
   );
 }
 
-function KuenstlerBlock({ kuenstler: k, onGeaendert }: {
+function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
   kuenstler: Artist;
   onGeaendert: () => void;
+  zeile: ZeilenDrop;
 }) {
   const [fertigOffen, setFertigOffen] = useState(false);
   const offen = k.songs.filter(s => !s.fertig);
@@ -448,7 +511,7 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert }: {
       {offen.length === 0 && (
         <div style={{ padding: "12px 18px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
       )}
-      {offen.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} />)}
+      {offen.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} {...zeile} />)}
 
       {fertig.length > 0 && (
         <>
@@ -465,7 +528,7 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert }: {
             <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: fertigOffen ? "rotate(180deg)" : "none" }} />
             Abgegeben ({fertig.length})
           </button>
-          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} />)}
+          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} {...zeile} />)}
         </>
       )}
     </section>
@@ -474,8 +537,11 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert }: {
 
 /** Eine Song-Zeile. Klick klappt Notiz und Status auf; gespeichert wird beim
  *  Verlassen des Felds bzw. beim Umschalten. */
-function SongZeile({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () => void }) {
+function SongZeile({ song: s, onGeaendert, downloads, ziehen, uebernehmen }: { song: ArtistSong; onGeaendert: () => void } & ZeilenDrop) {
   const [offen, setOffen] = useState(false);
+  const istZiel = ziehen?.pfad === s.path;
+  // Neue Downloads mit dem Songnamen, die noch nicht im Eingang liegen.
+  const neue = s.fertig ? [] : downloads.filter(d => passtZumSong(d.name, s.name) && !s.eingang.includes(d.name));
   const [notiz, setNotiz] = useState(s.notiz ?? "");
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -488,7 +554,11 @@ function SongZeile({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: ()
   const ersteZeile = s.notiz?.split("\n")[0];
 
   return (
-    <div style={{ borderTop: `1px solid ${C.border10}`, background: offen ? C.surfaceContainer : "transparent" }}>
+    <div data-song={s.path} style={{
+      borderTop: `1px solid ${C.border10}`,
+      background: istZiel ? alpha(C.primary, 0.1) : offen ? C.surfaceContainer : "transparent",
+      boxShadow: istZiel ? `inset 0 0 0 1px ${alpha(C.primary, 0.6)}` : "none",
+    }}>
       <div
         onClick={() => setOffen(o => !o)}
         title={offen ? "Zuklappen" : "Notiz und Status"}
@@ -513,6 +583,19 @@ function SongZeile({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: ()
               }}>
                 <Hourglass size={10} /> Warte auf Künstler
               </span>
+            )}
+            {istZiel ? (
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>
+                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → Eingang
+              </span>
+            ) : neue.length > 0 && (
+              <Button
+                variant="secondary" size="sm" icon={FolderInput}
+                title={`In den Eingang verschieben:\n${neue.map(d => d.name).join("\n")}`}
+                onClick={e => { e.stopPropagation(); uebernehmen(s.path, neue.map(d => d.path)); }}
+              >
+                {neue.length === 1 ? "1 neuer Download" : `${neue.length} neue Downloads`}
+              </Button>
             )}
           </span>
           {ersteZeile && !offen && (

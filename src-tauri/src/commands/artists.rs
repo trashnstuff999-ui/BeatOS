@@ -36,6 +36,9 @@ pub struct ArtistSong {
     /// Von Hand, aus artist_songs: eine Notiz und „Warte auf Künstler".
     pub notiz: Option<String>,
     pub warten: bool,
+    /// Dateinamen in Eingang/ — damit Downloads, die schon da sind, nicht
+    /// noch einmal vorgeschlagen werden.
+    pub eingang: Vec<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -320,6 +323,7 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     s.demo = eingang.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) == song_name);
     s.beat = eingang.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) != song_name);
     s.geaendert = wurzel.iter().chain(&eingang).chain(&audio_ordner).map(|(_, t)| *t).max().unwrap_or(0);
+    s.eingang = eingang.iter().map(|(n, _)| n.clone()).collect();
     s
 }
 

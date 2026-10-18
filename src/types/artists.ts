@@ -16,6 +16,8 @@ export interface ArtistSong {
   /** Von Hand: eine Notiz und „Warte auf Künstler". */
   notiz: string | null;
   warten: boolean;
+  /** Dateinamen in Eingang/. */
+  eingang: string[];
 }
 
 export interface Artist {
