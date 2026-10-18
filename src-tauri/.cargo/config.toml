@@ -10,3 +10,9 @@
 # Thread-Erzeugung ("Allocation failed").
 [env]
 RUST_MIN_STACK = "16777216"
+
+# Build-Ordner außerhalb von OneDrive. In src-tauri/target waren es 35 GB
+# Zwischenstände, die OneDrive ständig hochgeladen hat (18.10.2026).
+# CARGO_TARGET_DIR in der Umgebung geht weiterhin vor.
+[build]
+target-dir = "C:/Users/kismo/AppData/Local/BeatOS-build/target"
