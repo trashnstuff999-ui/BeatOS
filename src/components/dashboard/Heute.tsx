@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Flame } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { api } from "../../lib/api";
 import { C, alpha, radius } from "../../lib/theme";
 import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../../contexts/SettingsContext";
@@ -38,10 +39,18 @@ const ueberschrift: React.CSSProperties = {
   margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase",
   letterSpacing: "0.08em", color: C.onSurfaceVariant,
 };
-const zeile: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0",
-  borderTop: `1px solid ${C.border10}`, fontSize: 14,
-};
+/** Listenzeile als Knopf: der Hover-Hintergrund ragt 8 px über den Text hinaus. */
+function Zeile({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button type="button" className="ue-zeile" onClick={onClick} title={title} style={{
+      display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 8px", margin: "0 -8px",
+      width: "calc(100% + 16px)", border: 0, borderTop: `1px solid ${C.border10}`, borderRadius: 0,
+      font: "inherit", fontSize: 14, color: "inherit", textAlign: "left", cursor: "pointer",
+    }}>
+      {children}
+    </button>
+  );
+}
 
 export function Heute({ actions, recent, refreshKey }: {
   actions: DashboardActions;
@@ -139,12 +148,12 @@ export function Heute({ actions, recent, refreshKey }: {
         ? { text: "Für nächste Woche ist noch nichts geplant", gut: false }
         : { text: "Serie gesichert", gut: true };
 
-  const einplanen = async () => {
-    if (!held || !freierTag) return;
+  const einplanen = async (tag = freierTag) => {
+    if (!held || !tag) return;
     setPlanen(true);
     try {
-      await api.upload.scheduleRelease(held.id, freierTag);
-      if (freierTag >= toISO(naechsterMontag)) setAnsicht("naechste");
+      await api.upload.scheduleRelease(held.id, tag);
+      if (tag >= toISO(naechsterMontag)) setAnsicht("naechste");
       setNeuLaden(k => k + 1);
     } catch (e) { setFehler(String(e)); }
     finally { setPlanen(false); }
@@ -153,10 +162,10 @@ export function Heute({ actions, recent, refreshKey }: {
 
   // ── Diese Woche geschafft ──
   const geschafft = [
-    ...diese.flatMap(t => t.beats.filter(b => b.hochgeladen).map(b => ({ key: `u${b.id}`, art: "hoch" as const, name: b.name, wann: LANG[t.wochentag] }))),
+    ...diese.flatMap(t => t.beats.filter(b => b.hochgeladen).map(b => ({ key: `u${b.id}`, id: b.id, art: "hoch" as const, name: b.name, wann: LANG[t.wochentag] }))),
     ...recent
       .filter(b => (b.created_date ?? "") >= toISO(montag))
-      .map(b => ({ key: `a${b.id}`, art: "archiv" as const, name: b.name, wann: LANG[new Date(`${b.created_date!.slice(0, 10)}T12:00:00`).getDay()] })),
+      .map(b => ({ key: `a${b.id}`, id: b.id, art: "archiv" as const, name: b.name, wann: LANG[new Date(`${b.created_date!.slice(0, 10)}T12:00:00`).getDay()] })),
   ];
 
   const jetzt = Math.floor(Date.now() / 1000);
@@ -207,7 +216,9 @@ export function Heute({ actions, recent, refreshKey }: {
             />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12, borderTop: `1px solid ${C.border10}`, paddingTop: 16 }}>
-            {(ansicht === "diese" ? diese : naechste).map(t => <Tag key={t.iso} tag={t} onOpen={zumUpload} />)}
+            {(ansicht === "diese" ? diese : naechste).map(t => (
+              <Tag key={t.iso} tag={t} onOpen={zumUpload} planName={held?.name ?? null} onPlan={iso => einplanen(iso)} />
+            ))}
           </div>
         </section>
       )}
@@ -250,7 +261,7 @@ export function Heute({ actions, recent, refreshKey }: {
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
                 {freierTag && (
-                  <Button variant="primary" loading={planen} onClick={einplanen}>Auf {tagMonat(freierTag)} planen</Button>
+                  <Button variant="primary" loading={planen} onClick={() => einplanen()}>Auf {tagMonat(freierTag)} planen</Button>
                 )}
                 <Button variant="secondary" onClick={() => zumUpload(held.id)}>Zum Upload</Button>
               </div>
@@ -269,7 +280,7 @@ export function Heute({ actions, recent, refreshKey }: {
           {regal.length > 0 && (
             <div style={{ display: "flex", gap: 20, overflowX: "auto", paddingBottom: 8 }}>
               {regal.map(q => (
-                <button key={q.id} onClick={() => zumUpload(q.id)} title={`${q.name} im Upload-Tab öffnen`}
+                <button key={q.id} className="ue-hebt" onClick={() => zumUpload(q.id)} title={`${q.name} im Upload-Tab öffnen`}
                   style={{ flex: "0 0 150px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}>
                   {q.cover
                     ? <img src={bild(q.cover)} alt="" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 8, display: "block" }} />
@@ -298,10 +309,10 @@ export function Heute({ actions, recent, refreshKey }: {
           {liegen === null && <Leise>Studio wird gelesen …</Leise>}
           {liegen?.length === 0 && <Leise>Nichts — alles in Arbeit ist frisch.</Leise>}
           {liegen?.slice(0, 3).map(p => (
-            <div key={p.path} style={zeile}>
+            <Zeile key={p.path} onClick={() => p.newest_flp && openPath(p.newest_flp)} title={p.newest_flp ? "In FL Studio öffnen" : "Keine FLP gefunden"}>
               <span style={{ fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.song_name ?? p.parsed_name ?? p.name}</span>
               <span style={{ color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>seit {Math.floor((jetzt - p.modified_secs) / 86400)} Tagen</span>
-            </div>
+            </Zeile>
           ))}
           {liegen && liegen.length > 3 && <Leise>+ {liegen.length - 3} weitere seit über 30 Tagen in Arbeit</Leise>}
         </div>
@@ -311,7 +322,7 @@ export function Heute({ actions, recent, refreshKey }: {
           {songs === null && <Leise>Künstler werden gelesen …</Leise>}
           {songs?.length === 0 && <Leise>Alles abgegeben.</Leise>}
           {songs?.slice(0, 3).map(({ kuenstler, song }) => (
-            <div key={song.path} style={zeile}>
+            <Zeile key={song.path} onClick={() => navigate("/studio", { state: { tab: "artists" } })} title="Im Studio unter Künstler öffnen">
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={{ color: C.onSecondaryFixedVar }}>{kuenstler} · </span>
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{song.name}</span>
@@ -319,7 +330,7 @@ export function Heute({ actions, recent, refreshKey }: {
               <span style={{ color: song.warten ? C.onSecondaryFixedVar : C.primary, whiteSpace: "nowrap" }}>
                 {song.warten ? "wartet auf Künstler" : song.master ? "nicht abgegeben" : "Master fehlt"}
               </span>
-            </div>
+            </Zeile>
           ))}
           {songs && songs.length > 3 && <Leise>+ {songs.length - 3} weitere offene Songs</Leise>}
         </div>
@@ -328,13 +339,13 @@ export function Heute({ actions, recent, refreshKey }: {
           <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Diese Woche geschafft</h2>
           {geschafft.length === 0 && <Leise>Noch nichts — die Woche ist jung.</Leise>}
           {geschafft.map(g => (
-            <div key={g.key} style={zeile}>
+            <Zeile key={g.key} onClick={() => zumUpload(g.id)} title={`${g.name} im Upload-Tab öffnen`}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={{ color: g.art === "hoch" ? C.mint : C.primary }}>{g.art === "hoch" ? "↑ " : "+ "}</span>
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{g.name}</span>
               </span>
               <span style={{ color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>{g.art === "hoch" ? "hochgeladen" : "archiviert"} · {g.wann}</span>
-            </div>
+            </Zeile>
           ))}
         </div>
       </section>
@@ -342,7 +353,13 @@ export function Heute({ actions, recent, refreshKey }: {
   );
 }
 
-function Tag({ tag, onOpen }: { tag: TagZelle; onOpen: (beatId: string) => void }) {
+function Tag({ tag, onOpen, planName, onPlan }: {
+  tag: TagZelle;
+  onOpen: (beatId: string) => void;
+  /** Der Beat aus „Als Nächstes" — ein freier Upload-Tag plant ihn per Klick ein. */
+  planName: string | null;
+  onPlan: (iso: string) => void;
+}) {
   const beat = tag.beats[0];
   const quadrat: React.CSSProperties = {
     aspectRatio: "1", borderRadius: 8, boxSizing: "border-box", display: "flex",
@@ -358,7 +375,7 @@ function Tag({ tag, onOpen }: { tag: TagZelle; onOpen: (beatId: string) => void 
         {KURZ[tag.wochentag]} <span style={{ fontWeight: 500, color: C.onSecondaryFixedVar }}>{Number(tag.iso.slice(8, 10))}.</span>
       </div>
       {beat ? (
-        <button onClick={() => onOpen(beat.id)} title={`${beat.name} im Upload-Tab öffnen`}
+        <button className="ue-hebt" onClick={() => onOpen(beat.id)} title={`${beat.name} im Upload-Tab öffnen`}
           style={{ background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           {beat.cover
             ? <img src={bild(beat.cover)} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, display: "block" }} />
@@ -369,6 +386,13 @@ function Tag({ tag, onOpen }: { tag: TagZelle; onOpen: (beatId: string) => void 
           <span style={{ fontSize: 12, fontWeight: 600, color: beat.hochgeladen ? C.mint : C.primary }}>
             {beat.hochgeladen ? "✓ hochgeladen" : "geplant"}
           </span>
+        </button>
+      ) : tag.uploadTag && !tag.vorbei && planName ? (
+        <button className="ue-hell" onClick={() => onPlan(tag.iso)} title={`${planName} an diesem Tag planen`} style={{
+          ...quadrat, width: "100%", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600,
+          border: `1.5px dashed ${alpha(C.primary, 0.55)}`, color: C.primary, background: alpha(C.primary, 0.05),
+        }}>
+          Upload-Tag · frei
         </button>
       ) : tag.uploadTag ? (
         <div style={{

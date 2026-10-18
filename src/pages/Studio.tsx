@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, Users } from "lucide-react";
 import { C } from "../lib/theme";
 import { PageHeader, PageBody, Segmented } from "../components/ui";
@@ -23,7 +24,9 @@ type StudioTab = "projects" | "cleanup" | "assets" | "artists";
 
 export default function Studio() {
   const { settings } = useSettings();
-  const [tab, setTab] = useState<StudioTab>("projects");
+  // Die Übersicht springt direkt in einen Bereich, z. B. „Künstler".
+  const startTab = (useLocation().state as { tab?: StudioTab } | null)?.tab;
+  const [tab, setTab] = useState<StudioTab>(startTab ?? "projects");
   // Der letzte Scan — der Assets-Tab braucht ihn als Zielliste beim Zuweisen.
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);

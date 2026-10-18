@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { C, alpha, radius, STATUS_ITEMS, STUDIO_STATUS_CONFIG } from "../../lib/theme";
 import { heatmap, zirkel, durchlauf, wachstum, DUR_ZIRKEL, MOLL_ZIRKEL } from "../../lib/statistik";
@@ -28,7 +29,7 @@ const zahl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: C.onSu
 
 /** Knopf ohne Knopf-Optik: erbt Schrift und Farbe, bringt Tab und Enter mit. */
 function Klick({ style, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button type="button" {...rest} style={{ background: "none", border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit", textAlign: "inherit", cursor: "pointer", ...style }} />;
+  return <button type="button" {...rest} style={{ border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit", textAlign: "inherit", cursor: "pointer", ...style }} />;
 }
 
 export function Statistik({ stats, actions, refreshKey, onFilter }: {
@@ -37,6 +38,7 @@ export function Statistik({ stats, actions, refreshKey, onFilter }: {
   refreshKey: number;
   onFilter: (filter: object) => void;
 }) {
+  const navigate = useNavigate();
   const [details, setDetails] = useState<StatsDetails | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -52,11 +54,11 @@ export function Statistik({ stats, actions, refreshKey, onFilter }: {
   const studioSumme = ["idea", "wip", "exported", "ready"].reduce((s, k) => s + (studio[k] ?? 0), 0);
 
   const kennzahlen = [
-    { wert: stats.total, label: "Beats im Archiv", unter: `${stats.this_month} neu diesen Monat` },
-    { wert: actions.published_beats, label: "veröffentlicht", unter: "mit mind. 1 Upload" },
-    { wert: stats.by_status.finished, label: "fertig", unter: `${actions.finished_unscheduled} noch ohne Termin` },
-    { wert: actions.current_streak_weeks, label: "Wochen Serie", unter: "jede Woche ein Upload" },
-    { wert: studioSumme, label: "Studio-Projekte", unter: `davon ${studio.idea ?? 0} Ideen` },
+    { wert: stats.total, label: "Beats im Archiv", unter: `${stats.this_month} neu diesen Monat`, ziel: () => navigate("/browse") },
+    { wert: actions.published_beats, label: "veröffentlicht", unter: "mit mind. 1 Upload", ziel: () => navigate("/upload") },
+    { wert: stats.by_status.finished, label: "fertig", unter: `${actions.finished_unscheduled} noch ohne Termin`, ziel: () => onFilter({ status: "finished" }) },
+    { wert: actions.current_streak_weeks, label: "Wochen Serie", unter: "jede Woche ein Upload", ziel: null },
+    { wert: studioSumme, label: "Studio-Projekte", unter: `davon ${studio.idea ?? 0} Ideen`, ziel: () => navigate("/studio") },
   ];
 
   return (
@@ -64,10 +66,13 @@ export function Statistik({ stats, actions, refreshKey, onFilter }: {
       {/* ── Kennzahlen als Zeile ── */}
       <section style={{ display: "flex", flexWrap: "wrap", rowGap: 24, padding: "24px 0 44px", borderBottom: `1px solid ${C.border10}` }}>
         {kennzahlen.map((k, i) => (
-          <div key={k.label} style={{ flex: "1 1 160px", padding: i ? "0 28px" : "0 28px 0 0", borderLeft: i ? `1px solid ${C.border10}` : undefined, boxSizing: "border-box" }}>
+          <div key={k.label} style={{ flex: "1 1 160px", padding: i ? "0 20px" : "0 20px 0 0", borderLeft: i ? `1px solid ${C.border10}` : undefined, boxSizing: "border-box" }}>
+            <Klick className={k.ziel ? "ue-zeile" : undefined} onClick={k.ziel ?? undefined} disabled={!k.ziel}
+              style={{ display: "block", width: "100%", padding: 8, cursor: k.ziel ? "pointer" : "default" }}>
             <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: C.onSurface, fontVariantNumeric: "tabular-nums" }}>{k.wert}</div>
             <div style={{ fontSize: 13, color: C.onSurfaceVariant, marginTop: 8 }}>{k.label}</div>
             <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, marginTop: 3 }}>{k.unter}</div>
+            </Klick>
           </div>
         ))}
       </section>
@@ -132,7 +137,7 @@ function UploadJahr({ details }: { details: StatsDetails }) {
           </div>
           <div style={{ display: "grid", gridAutoFlow: "column", gridTemplateRows: `repeat(7, ${Z}px)`, gridAutoColumns: Z, gap: L }}>
             {zellen.map(z => (
-              <span key={z.iso}
+              <span key={z.iso} className={z.zukunft ? undefined : "ue-zelle"}
                 title={`${Number(z.iso.slice(8, 10))}. ${MONATE[Number(z.iso.slice(5, 7)) - 1]} ${z.iso.slice(0, 4)}: ${z.anzahl ? `${z.anzahl} Upload${z.anzahl > 1 ? "s" : ""}` : "kein Upload"}`}
                 style={{
                   width: Z, height: Z, borderRadius: 3,
@@ -178,7 +183,7 @@ function Tonarten({ stats, onFilter }: { stats: Stats; onFilter: (f: object) => 
             const anteil = r.anzahl / max;
             const an = r.name === sel.name;
             return (
-              <path key={r.name} d={bogen(r.r0, r.r1, r.i)}
+              <path key={r.name} className="ue-hell" d={bogen(r.r0, r.r1, r.i)}
                 fill={r.anzahl === 0 ? C.surfaceContainerHigh : alpha(C.primary, 0.16 + 0.84 * anteil)}
                 stroke={an ? C.onSurface : C.background} strokeWidth={an ? 2.5 : 2}
                 style={{ cursor: "pointer" }} onClick={() => setWahl(r.name)}>
@@ -210,7 +215,7 @@ function Tonarten({ stats, onFilter }: { stats: Stats; onFilter: (f: object) => 
           </div>
           {ohne > 0 && <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{ohne} Beats ohne lesbare Tonart</div>}
           {sel.anzahl > 0 && (
-            <Klick onClick={() => onFilter({ keys: [sel.name] })} style={{ fontSize: 13, fontWeight: 600, color: C.primary, marginTop: 6, alignSelf: "flex-start" }}>
+            <Klick className="ue-link" onClick={() => onFilter({ keys: [sel.name] })} style={{ fontSize: 13, fontWeight: 600, color: C.primary, marginTop: 6, alignSelf: "flex-start" }}>
               Im Archiv zeigen →
             </Klick>
           )}
@@ -246,7 +251,7 @@ function Tempo({ bpm }: { bpm: [number, number][] }) {
       </p>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${stufen.length}, minmax(0, 1fr))`, gap: 5, alignItems: "end", height: 200 }}>
         {stufen.map((s, i) => (
-          <div key={s.b} title={`${s.b}–${s.b + 9} BPM: ${s.n}`} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 5, height: "100%" }}>
+          <div key={s.b} className="ue-hell" title={`${s.b}–${s.b + 9} BPM: ${s.n} Beats`} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 5, height: "100%" }}>
             <span style={zahl}>{s.n || ""}</span>
             <div style={{ width: "100%", borderRadius: "4px 4px 0 0", height: Math.max((s.n / max) * 160, s.n ? 4 : 2), background: kern(i) ? C.primary : s.n ? C.outlineVariant : C.surfaceContainerHigh }} />
           </div>
@@ -266,7 +271,7 @@ function Strecke({ teile }: { teile: { key: string; label: string; anzahl: numbe
     <>
       <div style={{ display: "flex", height: 10, borderRadius: radius.full, overflow: "hidden", gap: 3 }}>
         {teile.filter(t => t.anzahl > 0).map(t => (
-          <div key={t.key} title={`${t.label}: ${t.anzahl}`} style={{ width: `${(t.anzahl / summe) * 100}%`, minWidth: 6, background: t.farbe }} />
+          <div key={t.key} className="ue-hell" title={`${t.label}: ${t.anzahl}`} style={{ width: `${(t.anzahl / summe) * 100}%`, minWidth: 6, background: t.farbe }} />
         ))}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "12px 40px", marginTop: 16, alignItems: "baseline" }}>
@@ -280,7 +285,7 @@ function Strecke({ teile }: { teile: { key: string; label: string; anzahl: numbe
           return (
             <span key={t.key} style={{ display: "contents" }}>
               {i > 0 && <span aria-hidden style={{ color: C.outlineVariant }}>→</span>}
-              {t.onClick ? <Klick onClick={t.onClick} title={`${t.label} im Archiv zeigen`}>{inhalt}</Klick> : <span>{inhalt}</span>}
+              {t.onClick ? <Klick className="ue-hell" onClick={t.onClick} title={`${t.label} im Archiv zeigen`}>{inhalt}</Klick> : <span>{inhalt}</span>}
             </span>
           );
         })}
@@ -321,7 +326,7 @@ function Wochentage({ werte }: { werte: number[] }) {
       <h2 style={ueberschrift}>Upload-Wochentage</h2>
       <p style={{ ...unterzeile, marginBottom: 20 }}>An welchem Tag ein Beat zum ersten Mal rausging · {summe} Beats</p>
       {MO_ZUERST.map(t => (
-        <div key={t} style={{ display: "grid", gridTemplateColumns: "28px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 0", fontSize: 13 }}>
+        <div key={t} className="ue-zeile" title={`${WOCHENTAGE[t]}: ${werte[t]} Beats`} style={{ display: "grid", gridTemplateColumns: "28px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 8px", margin: "0 -8px", fontSize: 13 }}>
           <span style={{ fontWeight: 600, color: C.onSurfaceVariant }}>{WOCHENTAGE[t]}</span>
           <span style={{ height: 8, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
             <span style={{ display: "block", height: "100%", width: `${(werte[t] / max) * 100}%`, borderRadius: radius.full, background: werte[t] / max > 0.5 ? C.primary : C.outlineVariant }} />
@@ -345,7 +350,7 @@ function Durchlauf({ tage }: { tage: number[] }) {
           : `Meist ${median <= 1 ? "nach einem Tag" : `nach ${Math.round(median)} Tagen`} draußen (Median) · ${tage.length} Beats`}
       </p>
       {stufen.map(s => (
-        <div key={s.label} style={{ display: "grid", gridTemplateColumns: "170px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 0", fontSize: 13 }}>
+        <div key={s.label} className="ue-zeile" title={`${s.label}: ${s.anzahl} Beats`} style={{ display: "grid", gridTemplateColumns: "170px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 8px", margin: "0 -8px", fontSize: 13 }}>
           <span style={{ color: C.onSurfaceVariant }}>{s.label}</span>
           <span style={{ height: 8, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
             <span style={{ display: "block", height: "100%", width: `${(s.anzahl / max) * 100}%`, borderRadius: radius.full, background: C.primary }} />
@@ -376,6 +381,14 @@ function Wachstum({ monate }: { monate: [string, number][] }) {
         <path d={`${linie} L${B} ${H} L0 ${H} Z`} fill={alpha(C.primary, 0.12)} />
         <path d={linie} fill="none" stroke={C.primary} strokeWidth={2.5} strokeLinejoin="round" />
         <line x1={0} x2={B} y1={H} y2={H} stroke={C.border10} />
+        {reihe.map((r, i) => (
+          <g key={r.monat} className="ue-punkt">
+            <title>{`${MONATE[Number(r.monat.slice(5, 7)) - 1]} ${r.monat.slice(0, 4)}: ${r.summe} Beats (+${r.neu})`}</title>
+            <rect x={x(i) - B / reihe.length / 2} y={0} width={B / reihe.length} height={H} fill="transparent" />
+            <line x1={x(i)} x2={x(i)} y1={y(r.summe)} y2={H} stroke={C.primary} strokeWidth={1} opacity={0} />
+            <circle cx={x(i)} cy={y(r.summe)} r={4.5} fill={C.primary} stroke={C.background} strokeWidth={2} />
+          </g>
+        ))}
         {jahre.map(j => (
           <g key={j.jahr}>
             <line x1={x(j.i)} x2={x(j.i)} y1={0} y2={H} stroke={C.border10} strokeDasharray="2 4" />
@@ -403,7 +416,7 @@ function NeueBeats({ monate }: { monate: [string, number][] }) {
       <p style={{ ...unterzeile, marginBottom: 20 }}>{summe} bisher{summe > 0 && ` · am meisten im ${["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"][spitze]}`}</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 6, alignItems: "end", height: 130 }}>
         {werte.map((n, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 5, height: "100%" }}>
+          <div key={i} className="ue-hell" title={`${MONATE[i]} ${jahr}: ${n} neue Beats`} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 5, height: "100%" }}>
             <span style={zahl}>{n || ""}</span>
             <div style={{ width: "100%", borderRadius: "3px 3px 0 0", height: Math.max((n / max) * 100, 2), background: n === 0 ? C.surfaceContainerHigh : i === jetzt ? alpha(C.primary, 0.5) : C.outlineVariant }} />
           </div>
@@ -427,8 +440,8 @@ function Tags({ stats, onFilter }: { stats: Stats; onFilter: (f: object) => void
       <p style={{ ...unterzeile, marginBottom: 18 }}>Klick sucht im Archiv</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", columnGap: 56 }}>
         {tags.map(t => (
-          <Klick key={t.tag} onClick={() => onFilter({ search: t.tag })} title={`Nach „${t.tag}“ suchen`}
-            style={{ display: "grid", gridTemplateColumns: "150px 1fr 28px", alignItems: "center", gap: 12, padding: "7px 0", fontSize: 13 }}>
+          <Klick key={t.tag} className="ue-zeile" onClick={() => onFilter({ search: t.tag })} title={`Nach „${t.tag}“ suchen`}
+            style={{ display: "grid", gridTemplateColumns: "150px 1fr 28px", alignItems: "center", gap: 12, padding: "7px 8px", margin: "0 -8px", fontSize: 13 }}>
             <span style={{ fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>#{t.tag}</span>
             <span style={{ height: 6, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
               <span style={{ display: "block", height: "100%", width: `${(t.count / max) * 100}%`, borderRadius: radius.full, background: C.primary }} />

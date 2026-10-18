@@ -58,3 +58,18 @@ html, body, #root {
 
 /* Seitenpanel gleitet von rechts herein (Studio-Inspector). */
 @keyframes panelIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+/* ── Übersicht: Hover per Klasse statt Maus-Handler an jedem Element ──
+   Gleich bei Tastatur-Fokus, damit Tab dasselbe zeigt wie die Maus. */
+.ue-hebt { transition: transform .15s, filter .15s; }
+.ue-hebt:hover, .ue-hebt:focus-visible { transform: translateY(-3px); filter: brightness(1.12); }
+.ue-zeile { transition: background .15s; border-radius: 6px; }
+.ue-zeile:hover, .ue-zeile:focus-visible { background: #201f1f; }
+.ue-hell { transition: filter .15s, opacity .15s; }
+.ue-hell:hover, .ue-hell:focus-visible { filter: brightness(1.35); }
+.ue-link:hover, .ue-link:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.ue-zelle:hover { outline: 1.5px solid #ffffff; outline-offset: 1px; }
+.ue-punkt circle { opacity: 0; transition: opacity .1s; }
+.ue-punkt:hover circle { opacity: 1; }
+.ue-punkt:hover line { opacity: 1; }
+.ue-zeile { background: transparent; }
