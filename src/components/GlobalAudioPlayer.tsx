@@ -28,7 +28,8 @@ export const PLAYER_HEIGHT = 68;
  *  3px Linie plus Griffbereich darunter. */
 const LEISTE_OBEN = 15;
 
-export function GlobalAudioPlayer() {
+/** `versteckt`: nach unten weggefahren (Übersicht) — Tasten wirken weiter. */
+export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }) {
   const {
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
@@ -99,7 +100,14 @@ export function GlobalAudioPlayer() {
       background: C.surfaceContainerLowest,
       borderTop: `1px solid ${C.border15}`,
       zIndex: 100,
-    }}>
+      transform: versteckt ? "translateY(100%)" : "translateY(0)",
+      visibility: versteckt ? "hidden" : "visible",
+      // visibility erst nach dem Wegfahren umschalten, beim Reinfahren sofort.
+      transitionProperty: "transform, visibility",
+      transitionDuration: "0.3s, 0s",
+      transitionTimingFunction: "ease",
+      transitionDelay: versteckt ? "0s, 0.3s" : "0s",
+    }} aria-hidden={versteckt}>
       {/* ── Fortschritt, ganze Breite, an der Oberkante ──────────────────────
           Der Griffbereich reicht nach unten in die Leiste hinein, nicht nach
           oben aus ihr heraus — sonst finge er Klicks ab, die dem Inhalt

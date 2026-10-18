@@ -98,7 +98,10 @@ function AppContent() {
   const beatCount = useBeatCount();
   const studioCounts = useStudioCounts();
   const { currentBeat } = useAudioPlayerContext();
-  const playerVisible = !!currentBeat;
+  // Die Übersicht hat ihren eigenen Player in „Als Nächstes" — die Leiste
+  // taucht ab und fährt wieder rein, sobald man den Tab verlässt.
+  const playerVersteckt = useLocation().pathname === "/";
+  const playerVisible = !!currentBeat && !playerVersteckt;
 
   return (
     <div style={{ height: "100vh", width: "100vw", overflow: "hidden", background: C.background }}>
@@ -108,11 +111,12 @@ function AppContent() {
         height: "100vh",
         overflow: "hidden",
         paddingBottom: playerVisible ? PLAYER_HEIGHT : 0,
+        transition: "padding-bottom 0.3s ease",
         boxSizing: "border-box",
       }}>
         <AppRoutes />
       </main>
-      <GlobalAudioPlayer />
+      <GlobalAudioPlayer versteckt={playerVersteckt} />
       <GlobalTagManager />
       <Schnellsuche />
     </div>
