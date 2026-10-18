@@ -200,8 +200,13 @@ function UmzugDialog({ altbestand, archivePath, root, onClose }: {
                     border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
                   }}
                 />
-                <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  → {root}{sep}{z.kuenstler.trim() || "…"}
+                {/* Nur das Ende des Pfads — der Anfang ist immer derselbe,
+                    und abgeschnitten wurde sonst genau das Wichtige. */}
+                <div
+                  title={`${root}${sep}${z.kuenstler.trim()}`}
+                  style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                >
+                  → {root.split(/[\\/]/).filter(Boolean).pop()}{sep}{z.kuenstler.trim() || "…"}
                 </div>
               </div>
             </div>
