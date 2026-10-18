@@ -6,7 +6,7 @@ auftaucht.
 
 ---
 
-## Archivmonat in der Create-Maske änderbar machen
+## Archivmonat in der Create-Maske änderbar machen — erledigt 17.10.2026 (154ebbb)
 
 **Warum.** Der Archivmonat wird aus dem *Erstelldatum der ältesten FLP*
 berechnet (`src-tauri/src/commands/create.rs`, `year_month_from_secs` auf
@@ -24,11 +24,11 @@ nur, wenn ein Beat am Monatsende liegen bleibt.
 dem geparsten Ordner gesetzt (Zeile ~234). Es gibt keinen Regler dafür — der
 Wert wird nur angezeigt und dann so archiviert.
 
-- [ ] `yearMonth` in der Create-Maske editierbar, Vorbelegung bleibt der
+- [x] `yearMonth` in der Create-Maske editierbar, Vorbelegung bleibt der
       geparste Wert
-- [ ] Sichtbar machen, wenn der Wert aus dem Dateisystem statt aus einer FLP
+- [x] Sichtbar machen, wenn der Wert aus dem Dateisystem statt aus einer FLP
       stammt — dann ist er geraten und nicht gemessen
-- [ ] Format bleibt `JJJJ/MM_MONAT` wie in `MONTH_NAMES`
+- [x] Format bleibt `JJJJ/MM_MONAT` wie in `MONTH_NAMES`
       (`src-tauri/src/utils/date.rs`), sonst passt der Ordner nicht ins Archiv
 
 **Aufwand.** Klein, kein Backend — `year_month` kommt schon als Feld aus
@@ -64,34 +64,35 @@ Warteschlange „Ohne Termin" + Ziehen auf Tage gibt es schon.
       den eigenen Videos die meisten Aufrufe bringen
 - Voraussetzung: Uploads sind nacherfasst (sonst fehlen 2024/25)
 
-### Studio → Assets: nummerieren, Cover ↔ Thumbnail abgleichen, löschen
+### Studio → Assets: nummerieren, Cover ↔ Thumbnail abgleichen, löschen — erledigt 18.10.2026
 Gewünscht am 18.10.2026, Fragen am selben Tag geklärt.
+Gebaut als Knopf „Nummerieren …“ mit Vorschau statt still im Hintergrund (Regel: lib/assetNummern.ts, Befehle rename_assets/trash_assets). Löschen: Papierkorb pro Kachel + „Auswählen“.
 
 **Nummerieren.** Covers und Thumbnails im Asset-Ordner werden automatisch
 fortlaufend nummeriert und **wirklich umbenannt**: `Cover_1.png`,
 `Thumbnail_1.png`, `Cover_2.png` … Die Nummer ist nur dafür da, zu sehen,
 was zusammengehört — gehören Cover und Thumbnail zum selben Motiv, tragen
 sie dieselbe Nummer.
-- [ ] Nummern stabil: vergebene Nummern ändern sich nie, Neues bekommt die
+- [x] Nummern stabil: vergebene Nummern ändern sich nie, Neues bekommt die
       nächste freie (max + 1); beim ersten Durchlauf nach Änderungsdatum
-- [ ] Abgleich per Bildvergleich: beide verkleinern (z. B. dHash), beim
+- [x] Abgleich per Bildvergleich: beide verkleinern (z. B. dHash), beim
       Thumbnail den mittleren quadratischen Ausschnitt; ähnlich genug →
       gleiche Nummer. Zweites Signal: Exportzeit liegt nah beieinander
-- [ ] Thumbnail ohne passendes Cover → eigene Nummer; unsichere Treffer
+- [x] Thumbnail ohne passendes Cover → eigene Nummer; unsichere Treffer
       vorschlagen statt still umbenennen
-- [ ] **Videos nicht nummerieren** — sie heißen schon wie der Song
+- [x] **Videos nicht nummerieren** — sie heißen schon wie der Song
       (z. B. `home again_video.mp4`)
-- [ ] Beim Zuweisen an ein Projekt gilt wie bisher das Namensschema des
+- [x] Beim Zuweisen an ein Projekt gilt wie bisher das Namensschema des
       Beats; die Nummer hat dann ihren Zweck erfüllt (Annahme — beim Bauen
       kurz bestätigen lassen)
 
 **Löschen.** Bilder und Videos im Assets-Tab löschen können, wenn man sie
 nicht braucht — die Datei verschwindet aus dem Asset-Ordner.
-- [ ] Löschen in den **Windows-Papierkorb**, wie schon bei Projekten und
+- [x] Löschen in den **Windows-Papierkorb**, wie schon bei Projekten und
       Beats (`trash::delete`, Crate `trash` ist vorhanden): weg aus dem
       Ordner, nach einem Fehlklick aber wiederholbar
-- [ ] Ein Klick pro Kachel, dazu Mehrfachauswahl zum Aufräumen in einem Rutsch
-- [ ] Nach dem Löschen eines Covers/Thumbnails: Partner mit derselben Nummer
+- [x] Ein Klick pro Kachel, dazu Mehrfachauswahl zum Aufräumen in einem Rutsch
+- [x] Nach dem Löschen eines Covers/Thumbnails: Partner mit derselben Nummer
       behält seine Nummer (keine Lücke schließen — Nummern bleiben stabil)
 
 Bausteine: `scan_asset_inbox` (`guessed_role` cover/thumbnail/video) in

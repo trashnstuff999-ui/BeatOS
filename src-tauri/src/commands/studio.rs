@@ -1563,6 +1563,68 @@ fn scan_asset_inbox_blocking(path: &str) -> Result<Vec<AssetFile>, String> {
     Ok(out)
 }
 
+/// Ergebnis je Datei beim Umbenennen/Löschen im Asset-Ordner.
+#[derive(Debug, Serialize)]
+pub struct AssetErgebnis {
+    pub pfad: String,
+    pub ok: bool,
+    pub meldung: String,
+}
+
+/// Liegt `pfad` als Datei im Asset-Ordner (oder einem Unterordner davon)?
+/// Schutz für Umbenennen und Löschen — nichts außerhalb anfassen.
+fn im_asset_ordner(asset_root: &str, pfad: &str) -> Result<PathBuf, String> {
+    let root = Path::new(asset_root).canonicalize().map_err(|_| "Asset-Ordner nicht gefunden".to_string())?;
+    let p = Path::new(pfad).canonicalize().map_err(|_| "Datei nicht gefunden".to_string())?;
+    if !p.is_file() || !p.starts_with(&root) || p == root {
+        return Err("Liegt nicht im Asset-Ordner".into());
+    }
+    Ok(p)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssetUmbenennung {
+    pub pfad: String,
+    /// Nur der neue Dateiname — die Datei bleibt in ihrem Ordner.
+    pub neu: String,
+}
+
+/// Covers/Thumbnails umbenennen („Nummerieren"). Ein vorhandenes Ziel wird nie
+/// überschrieben; der Plan entsteht im Frontend (lib/assetNummern.ts).
+#[tauri::command]
+pub fn rename_assets(asset_root: String, umbenennungen: Vec<AssetUmbenennung>) -> Vec<AssetErgebnis> {
+    umbenennungen.into_iter().map(|u| {
+        let ergebnis = |ok: bool, meldung: String| AssetErgebnis { pfad: u.pfad.clone(), ok, meldung };
+        let quelle = match im_asset_ordner(&asset_root, &u.pfad) { Ok(p) => p, Err(e) => return ergebnis(false, e) };
+        let neu = sanitize_filename_part(u.neu.trim());
+        if neu.is_empty() || neu.contains(['/', '\\']) { return ergebnis(false, "Ungültiger Name".into()); }
+        let ziel = quelle.with_file_name(&neu);
+        // Nur Groß/klein anders („cover_9" → „Cover_9") ist dieselbe Datei — erlaubt.
+        let selbe = ziel.to_string_lossy().eq_ignore_ascii_case(&quelle.to_string_lossy());
+        if ziel.exists() && !selbe { return ergebnis(false, format!("{neu} gibt es schon")); }
+        match std::fs::rename(&quelle, &ziel) {
+            Ok(()) => ergebnis(true, neu),
+            Err(e) => ergebnis(false, format!("Umbenennen fehlgeschlagen: {e}")),
+        }
+    }).collect()
+}
+
+/// Bilder/Videos aus dem Asset-Ordner in den Windows-Papierkorb — weg aus dem
+/// Ordner, nach einem Fehlklick aber wiederholbar.
+#[tauri::command]
+pub fn trash_assets(asset_root: String, pfade: Vec<String>) -> Vec<AssetErgebnis> {
+    pfade.into_iter().map(|pfad| {
+        let ergebnis = |ok: bool, meldung: String| AssetErgebnis { pfad: pfad.clone(), ok, meldung };
+        match im_asset_ordner(&asset_root, &pfad) {
+            Ok(p) => match trash::delete(&p) {
+                Ok(()) => ergebnis(true, "im Papierkorb".into()),
+                Err(e) => ergebnis(false, format!("Papierkorb fehlgeschlagen: {e}")),
+            },
+            Err(e) => ergebnis(false, e),
+        }
+    }).collect()
+}
+
 /// Move an asset from the inbox into a project folder root (where the
 /// Create-tab parser will pick it up and archive it with the beat).
 #[tauri::command]
@@ -2838,3 +2900,34 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod asset_tests {
+    use super::*;
+
+    #[test]
+    fn assets_umbenennen_nur_im_ordner_und_ohne_ueberschreiben() {
+        let basis = std::env::temp_dir().join(format!("beatos_assets_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&basis);
+        let media = basis.join("MEDIA");
+        std::fs::create_dir_all(&media).unwrap();
+        for n in ["cover9.png", "thumbnail9.png", "Cover_2.png", "x.png"] { std::fs::write(media.join(n), b"x").unwrap(); }
+        std::fs::write(basis.join("draussen.png"), b"x").unwrap();
+        let p = |n: &str| media.join(n).to_string_lossy().to_string();
+        let u = |pfad: String, neu: &str| AssetUmbenennung { pfad, neu: neu.into() };
+
+        let erg = rename_assets(media.to_string_lossy().to_string(), vec![
+            u(p("cover9.png"), "Cover_9.png"),
+            u(p("x.png"), "Cover_2.png"),
+            u(basis.join("draussen.png").to_string_lossy().to_string(), "Cover_3.png"),
+            u(p("thumbnail9.png"), r"..\weg.png"),
+        ]);
+        assert!(erg[0].ok && media.join("Cover_9.png").is_file());
+        assert!(!erg[1].ok && media.join("x.png").is_file(), "vorhandenes Ziel bleibt");
+        assert!(!erg[2].ok && basis.join("draussen.png").is_file(), "außerhalb wird nichts angefasst");
+        // Trenner werden entfernt — die Datei bleibt in MEDIA, nichts landet darüber
+        assert!(!basis.join("weg.png").exists() && !media.join("thumbnail9.png").exists());
+        assert!(std::fs::read_dir(&media).unwrap().count() == 4, "{erg:?}");
+        let _ = std::fs::remove_dir_all(&basis);
+    }
+}

@@ -375,6 +375,14 @@ export const api = {
     scanAssetInbox: (path: string) =>
       invoke<AssetFile[]>("scan_asset_inbox", { path }),
 
+    /** Im Asset-Ordner umbenennen (Nummerieren); vorhandene Ziele bleiben unberührt. */
+    renameAssets: (assetRoot: string, umbenennungen: { pfad: string; neu: string }[]) =>
+      invoke<{ pfad: string; ok: boolean; meldung: string }[]>("rename_assets", { assetRoot, umbenennungen }),
+
+    /** Dateien aus dem Asset-Ordner in den Windows-Papierkorb. */
+    trashAssets: (assetRoot: string, pfade: string[]) =>
+      invoke<{ pfad: string; ok: boolean; meldung: string }[]>("trash_assets", { assetRoot, pfade }),
+
     /** Moves the asset into the project folder root (collision-safe).
      *  `slot` ergänzt fehlende Namensmarker, damit der Zielordner die Datei
      *  danach im gewählten Slot wiederfindet. */
