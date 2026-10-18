@@ -76,6 +76,11 @@ pub struct FlpVersion {
 pub struct Artist {
     pub name: String,
     pub path: String,
+    /// Profilbild `_profil_<zeit>.<ext>` im Künstler-Ordner.
+    pub bild: Option<String>,
+    /// Plattform → Link (spotify, soundcloud, youtube, instagram, discord),
+    /// aus `_kuenstler.json` im Künstler-Ordner.
+    pub links: std::collections::BTreeMap<String, String>,
     pub songs: Vec<ArtistSong>,
 }
 
@@ -304,11 +309,127 @@ fn kuenstler_lesen(root: &Path) -> Vec<Artist> {
                 .filter(|(n, _)| !kein_song(n))
                 .map(|(n, p)| song(&n, &p, true)));
             songs.sort_by(|a, b| a.fertig.cmp(&b.fertig).then(b.geaendert.cmp(&a.geaendert)));
-            Artist { name, path: pfad.to_string_lossy().to_string(), songs }
+            Artist { bild: profilbild(&pfad), links: links_lesen(&pfad), name, path: pfad.to_string_lossy().to_string(), songs }
         })
         .collect();
     kuenstler.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     kuenstler
+}
+
+// ─── Profil: Bild und Links, beides im Künstler-Ordner ──────────────────────
+//
+// Liegt beim Künstler statt in der Datenbank: zieht beim Umbenennen oder
+// Umziehen des Ordners mit. Das Bild trägt die Zeit im Namen, damit die
+// Ansicht ein neues Bild nicht aus dem Cache zeigt.
+
+const PROFIL: &str = "_profil";
+const PROFIL_JSON: &str = "_kuenstler.json";
+const PLATTFORMEN: [&str; 5] = ["spotify", "soundcloud", "youtube", "instagram", "discord"];
+
+fn profilbild(dir: &Path) -> Option<String> {
+    dateien(dir).into_iter()
+        .filter(|(n, _)| n.to_lowercase().starts_with(PROFIL) && ist_bild(n))
+        .max_by_key(|(_, t)| *t)
+        .map(|(n, _)| dir.join(n).to_string_lossy().to_string())
+}
+
+fn ist_bild(name: &str) -> bool {
+    Path::new(name).extension().map(|e| crate::utils::is_image_extension(&e.to_string_lossy().to_lowercase())).unwrap_or(false)
+}
+
+#[derive(serde::Deserialize, Serialize, Default)]
+struct ProfilDatei {
+    #[serde(default)]
+    links: std::collections::BTreeMap<String, String>,
+}
+
+fn links_lesen(dir: &Path) -> std::collections::BTreeMap<String, String> {
+    fs::read_to_string(dir.join(PROFIL_JSON)).ok()
+        .and_then(|s| serde_json::from_str::<ProfilDatei>(&s).ok())
+        .map(|p| p.links).unwrap_or_default()
+}
+
+/// Links speichern; leere Felder fallen weg, nur bekannte Plattformen.
+#[tauri::command]
+pub fn set_artist_links(artist_path: String, links: std::collections::BTreeMap<String, String>) -> Result<(), String> {
+    let dir = Path::new(&artist_path);
+    if !dir.is_dir() { return Err("Künstler-Ordner nicht gefunden".into()); }
+    let links = links.into_iter()
+        .map(|(k, v)| (k.to_lowercase(), v.trim().to_string()))
+        .filter(|(k, v)| PLATTFORMEN.contains(&k.as_str()) && !v.is_empty())
+        .collect();
+    let json = serde_json::to_string_pretty(&ProfilDatei { links }).map_err(|e| e.to_string())?;
+    fs::write(dir.join(PROFIL_JSON), json).map_err(|e| format!("{PROFIL_JSON} ließ sich nicht schreiben: {e}"))
+}
+
+/// Ein Bild als Profilbild übernehmen (kopiert, die Quelle bleibt). Ältere
+/// Profilbilder des Künstlers fallen weg. Gibt den neuen Pfad zurück.
+#[tauri::command]
+pub fn set_artist_bild(artist_path: String, quelle: String) -> Result<String, String> {
+    bild_uebernehmen(Path::new(&artist_path), Path::new(&quelle))
+}
+
+fn bild_uebernehmen(dir: &Path, quelle: &Path) -> Result<String, String> {
+    let ext = quelle.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !crate::utils::is_image_extension(&ext) { return Err("Das ist kein Bild".into()); }
+    let ziel = dir.join(format!("{PROFIL}_{}.{ext}", crate::utils::current_secs()));
+    let alte: Vec<String> = dateien(dir).into_iter()
+        .filter(|(n, _)| n.to_lowercase().starts_with(PROFIL) && ist_bild(n)).map(|(n, _)| n).collect();
+    fs::copy(quelle, &ziel).map_err(|e| format!("Bild ließ sich nicht kopieren: {e}"))?;
+    for n in alte { if dir.join(&n) != ziel { let _ = fs::remove_file(dir.join(n)); } }
+    Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Profilbild von einer Profilseite holen (Spotify, SoundCloud, YouTube,
+/// Instagram): Jede dieser Seiten nennt ihr Bild als `og:image` — gemessen
+/// am 18.10.2026, ohne Konto oder Schlüssel. Geladen wird mit dem curl,
+/// das Windows mitbringt.
+#[tauri::command(async)]
+pub fn artist_bild_holen(artist_path: String, url: String) -> Result<String, String> {
+    let url = url.trim();
+    if !url.starts_with("https://") && !url.starts_with("http://") { return Err("Das ist kein Link".into()); }
+    let seite = curl(&["-sL", "--max-time", "20", "-A", "Mozilla/5.0", url])?;
+    let seite = String::from_utf8_lossy(&seite);
+    let bild = og_image(&seite).ok_or("Auf der Seite ist kein Profilbild zu finden")?;
+    if !bild.starts_with("https://") { return Err("Unerwartete Bild-Adresse".into()); }
+    let daten = curl(&["-sL", "--max-time", "30", "-A", "Mozilla/5.0", &bild])?;
+    let ext = bildtyp(&daten).ok_or("Die Seite liefert kein Bild")?;
+    let tmp = std::env::temp_dir().join(format!("beatos_profil_{}.{ext}", std::process::id()));
+    fs::write(&tmp, &daten).map_err(|e| e.to_string())?;
+    let erg = bild_uebernehmen(Path::new(&artist_path), &tmp);
+    let _ = fs::remove_file(&tmp);
+    erg
+}
+
+fn curl(args: &[&str]) -> Result<Vec<u8>, String> {
+    let mut c = std::process::Command::new("curl");
+    c.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let out = c.output().map_err(|e| format!("curl ließ sich nicht starten: {e}"))?;
+    if !out.status.success() { return Err("Die Seite ließ sich nicht laden".into()); }
+    Ok(out.stdout)
+}
+
+/// `<meta property="og:image" content="…">` — Reihenfolge der Attribute egal.
+fn og_image(html: &str) -> Option<String> {
+    html.split("<meta").skip(1).find_map(|tag| {
+        let tag = &tag[..tag.find('>')?];
+        if !tag.contains("og:image\"") { return None; }
+        let rest = &tag[tag.find("content=\"")? + 9..];
+        Some(rest[..rest.find('"')?].replace("&amp;", "&"))
+    })
+}
+
+/// Bildformat an den ersten Bytes — die Adressen tragen oft keine Endung.
+fn bildtyp(b: &[u8]) -> Option<&'static str> {
+    if b.starts_with(&[0xFF, 0xD8, 0xFF]) { Some("jpg") }
+    else if b.starts_with(b"\x89PNG") { Some("png") }
+    else if b.len() > 12 && &b[0..4] == b"RIFF" && &b[8..12] == b"WEBP" { Some("webp") }
+    else { None }
 }
 
 /// Den Wurzelordner anlegen (leerer Zustand: „05_ARTISTS anlegen").
@@ -1039,6 +1160,40 @@ mod tests {
         // Ordnername als Präfix eines anderen zählt nicht („…0929 - SWEET" ≠ „…0929 - SWEET DREAMS 2")
         let fast = vec![r"C:\Lib\03_ARCHIVE\2026\09_SEPTEMBER\0929 - SWEET DREAMS [D#m 146] 2\x.wav".to_string()];
         assert_eq!(beat_in_verweisen(&fast, &beats), None);
+    }
+
+    #[test]
+    fn profil_bild_und_links() {
+        // So sehen die Seiten aus (gekürzt, 18.10.2026)
+        assert_eq!(og_image(r#"<head><meta name="x" content="y"><meta property="og:image" content="https://i1.sndcdn.com/avatars-1-t500x500.jpg"></head>"#).as_deref(),
+            Some("https://i1.sndcdn.com/avatars-1-t500x500.jpg"));
+        assert_eq!(og_image(r#"<meta content="https://a.b/c.jpg?x=1&amp;y=2" property="og:image"/>"#).as_deref(), Some("https://a.b/c.jpg?x=1&y=2"));
+        assert_eq!(og_image("<meta property=\"og:title\" content=\"x\">"), None);
+        assert_eq!(bildtyp(&[0xFF, 0xD8, 0xFF, 0xE0]), Some("jpg"));
+        assert_eq!(bildtyp(b"<html>"), None);
+
+        let root = std::env::temp_dir().join(format!("beatos_profil_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let k = root.join("JarnoGm");
+        datei(&k.join("Song/01_SAVEFILES/Song.flp"));
+        let quelle = root.join("bild.png");
+        fs::write(&quelle, b"\x89PNG").unwrap();
+        datei(&k.join("_profil_1.jpg")); // ein altes Bild
+        let neu = set_artist_bild(k.to_string_lossy().to_string(), quelle.to_string_lossy().to_string()).unwrap();
+        assert!(Path::new(&neu).is_file() && !k.join("_profil_1.jpg").exists() && quelle.is_file());
+        assert!(set_artist_bild(k.to_string_lossy().to_string(), k.join("Song/01_SAVEFILES/Song.flp").to_string_lossy().to_string()).is_err());
+
+        let mut links = std::collections::BTreeMap::new();
+        links.insert("Spotify".to_string(), " https://open.spotify.com/artist/x ".to_string());
+        links.insert("youtube".to_string(), "".to_string());
+        links.insert("myspace".to_string(), "https://x".to_string());
+        set_artist_links(k.to_string_lossy().to_string(), links).unwrap();
+
+        let a = &kuenstler_lesen(&root)[0];
+        assert_eq!(a.bild.as_deref(), Some(neu.as_str()));
+        assert_eq!(a.links.iter().collect::<Vec<_>>(), vec![(&"spotify".to_string(), &"https://open.spotify.com/artist/x".to_string())]);
+        assert_eq!(a.songs.len(), 1, "Profil-Dateien sind keine Songs");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

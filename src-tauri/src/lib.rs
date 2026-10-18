@@ -70,6 +70,9 @@ use commands::{
     artist_ordner_aufraeumen,
     set_artist_beat,
     artist_beat_kopieren,
+    set_artist_links,
+    set_artist_bild,
+    artist_bild_holen,
     // Settings commands
     get_settings,
     save_settings,
@@ -193,6 +196,12 @@ pub fn run() {
                             dirs.push(asset.trim().to_string());
                         }
                     }
+                    // Künstler-Ordner (Profilbilder): eigener Pfad oder
+                    // 05_ARTISTS neben dem Archiv — wie kuenstlerOrdner() im Frontend.
+                    let kuenstler = settings.get("artists_path").map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+                        .or_else(|| settings.get("archive_path")
+                            .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("05_ARTISTS").to_string_lossy().to_string())));
+                    dirs.extend(kuenstler);
                     for dir in dirs {
                         if let Err(e) = scope.allow_directory(&dir, true) {
                             eprintln!("WARNING: cannot extend asset scope for {}: {}", dir, e);
@@ -258,6 +267,9 @@ pub fn run() {
             artist_ordner_aufraeumen,
             set_artist_beat,
             artist_beat_kopieren,
+            set_artist_links,
+            set_artist_bild,
+            artist_bild_holen,
             // Settings
             get_settings,
             save_settings,

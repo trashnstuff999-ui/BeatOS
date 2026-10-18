@@ -42,6 +42,10 @@ export interface Artist {
   name: string;
   path: string;
   songs: ArtistSong[];
+  /** Profilbild im Künstler-Ordner. */
+  bild: string | null;
+  /** Plattform → Link (spotify, soundcloud, youtube, instagram, discord). */
+  links: Record<string, string>;
 }
 
 export interface ArtistsScan {

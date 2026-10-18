@@ -15,8 +15,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2, Play } from "lucide-react";
-import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2, Play, Cloud, Youtube, Instagram, MessageCircle, Download, Image as ImageIcon } from "lucide-react";
+import { revealItemInDir, openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { AssetImage } from "../AssetPickerDialog";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime, tageRelativ } from "../../lib/time";
@@ -33,7 +35,7 @@ type Download = { name: string; path: string; geaendert: number };
 /** Was jede Song-Zeile fürs Reinziehen und die Download-Vorschläge braucht. */
 type ZeilenDrop = {
   downloads: Download[];
-  ziehen: { pfad: string | null; anzahl: number } | null;
+  ziehen: { pfad: string | null; anzahl: number; kuenstler: string | null } | null;
   uebernehmen: (songPfad: string, pfade: string[]) => void;
 };
 
@@ -93,30 +95,42 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
 
   // Aus dem Explorer auf eine Song-Zeile ziehen: die Zeile unter dem Zeiger
   // (data-song) leuchtet auf, Loslassen verschiebt in ihren 02_ASSETS.
-  const [ziehen, setZiehen] = useState<{ pfad: string | null; anzahl: number } | null>(null);
+  // Ein Bild auf dem Profilbild eines Künstlers (data-kuenstler) wird sein Profilbild.
+  const [ziehen, setZiehen] = useState<{ pfad: string | null; anzahl: number; kuenstler: string | null } | null>(null);
   useEffect(() => {
     if (!active || !("__TAURI_INTERNALS__" in window)) return;
     let stop: (() => void) | undefined;
     let entfernt = false;
     let pfade: string[] = [];
-    const songUnter = (pos: { x: number; y: number }) => {
+    const unter = (pos: { x: number; y: number }) => {
       const r = window.devicePixelRatio || 1;
-      return document.elementFromPoint(pos.x / r, pos.y / r)?.closest<HTMLElement>("[data-song]")?.dataset.song ?? null;
+      const el = document.elementFromPoint(pos.x / r, pos.y / r);
+      const bild = pfade.find(p => /\.(png|jpe?g|webp|gif)$/i.test(p));
+      return {
+        pfad: el?.closest<HTMLElement>("[data-song]")?.dataset.song ?? null,
+        kuenstler: bild ? el?.closest<HTMLElement>("[data-kuenstler]")?.dataset.kuenstler ?? null : null,
+        bild,
+      };
     };
     getCurrentWebview().onDragDropEvent(event => {
       const p = event.payload;
-      if (p.type === "enter") { pfade = p.paths; setZiehen({ pfad: songUnter(p.position), anzahl: pfade.length }); }
-      else if (p.type === "over") setZiehen({ pfad: songUnter(p.position), anzahl: pfade.length });
+      if (p.type === "enter" || p.type === "over") {
+        if (p.type === "enter") pfade = p.paths;
+        const u = unter(p.position);
+        setZiehen({ pfad: u.kuenstler ? null : u.pfad, kuenstler: u.kuenstler, anzahl: pfade.length });
+      }
       else if (p.type === "leave") setZiehen(null);
       else if (p.type === "drop") {
         setZiehen(null);
-        const ziel = songUnter(p.position);
-        if (ziel && p.paths.length) uebernehmen(ziel, p.paths);
+        const u = unter(p.position);
+        if (u.kuenstler && u.bild) {
+          api.artists.setBild(u.kuenstler, u.bild).then(() => laden()).catch(e => setMeldung(String(e)));
+        } else if (u.pfad && p.paths.length) uebernehmen(u.pfad, p.paths);
       }
     }).then(un => { if (entfernt) un(); else stop = un; })
       .catch(e => console.error("[Künstler] Drag & Drop nicht verfügbar:", e));
     return () => { entfernt = true; stop?.(); };
-  }, [active, uebernehmen]);
+  }, [active, uebernehmen, laden]);
 
   if (!root) {
     return (
@@ -234,7 +248,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {scan.kuenstler.map(k => (
               <KuenstlerBlock key={k.path} kuenstler={k} auswahl={gewaehlt?.s.path ?? null}
-                onWaehlen={setAuswahl} downloads={downloads} ziehen={ziehen} />
+                onWaehlen={setAuswahl} downloads={downloads} ziehen={ziehen} onGeaendert={laden} />
             ))}
           </div>
           {gewaehlt ? (
@@ -618,15 +632,43 @@ const STAND_FARBE = { fertig: C.mint, warten: C.tertiary, offen: C.onSurfaceVari
 
 /** Links: ein Künstler mit seinen Songs als ruhige Liste. Abgegebene stehen
  *  zugeklappt darunter. */
-function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen }: {
+/** Die Plattformen im Profil — Reihenfolge = Reihenfolge der Symbole. */
+const PLATTFORMEN: { key: string; label: string; icon: React.ElementType; platzhalter: string }[] = [
+  { key: "spotify", label: "Spotify", icon: Music2, platzhalter: "https://open.spotify.com/artist/…" },
+  { key: "soundcloud", label: "SoundCloud", icon: Cloud, platzhalter: "https://soundcloud.com/…" },
+  { key: "youtube", label: "YouTube", icon: Youtube, platzhalter: "https://www.youtube.com/@…" },
+  { key: "instagram", label: "Instagram", icon: Instagram, platzhalter: "https://www.instagram.com/…" },
+  { key: "discord", label: "Discord", icon: MessageCircle, platzhalter: "Name auf Discord" },
+];
+
+/** Profilbild rund; ohne Bild die Initialen. */
+function Avatar({ kuenstler: k, groesse, hervorgehoben = false }: { kuenstler: Artist; groesse: number; hervorgehoben?: boolean }) {
+  const initialen = k.name.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
+  return (
+    <span style={{
+      width: groesse, height: groesse, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      background: alpha(C.primary, 0.14), color: C.primary, fontWeight: 700, fontSize: groesse * 0.36,
+      boxShadow: hervorgehoben ? `0 0 0 2px ${C.primary}` : `0 0 0 1px ${C.border20}`,
+    }}>
+      {k.bild ? <AssetImage key={k.bild} path={k.bild} fit="cover" /> : initialen}
+    </span>
+  );
+}
+
+function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen, onGeaendert }: {
   kuenstler: Artist;
   auswahl: string | null;
   onWaehlen: (pfad: string) => void;
   downloads: Download[];
   ziehen: ZeilenDrop["ziehen"];
+  onGeaendert: () => void;
 }) {
   const offen = k.songs.filter(s => !s.fertig);
   const fertig = k.songs.filter(s => s.fertig);
+  const [profilOffen, setProfilOffen] = useState(false);
+  const letzteAbgabe = fertig.map(s => s.abgegeben).filter((d): d is string => !!d).sort().pop();
+  const links = PLATTFORMEN.filter(p => k.links[p.key]);
   // Ist der gewählte Song abgegeben, steht die Liste offen.
   const [fertigOffen, setFertigOffen] = useState(() => fertig.some(s => s.path === auswahl));
   const zeile = (s: ArtistSong) => (
@@ -637,17 +679,36 @@ function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen }:
 
   return (
     <section style={{ background: C.surfaceContainerLow, border: `1px solid ${C.border10}`, borderRadius: radius.card, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${C.border10}` }}>
-        <Mic2 size={15} color={C.primary} strokeWidth={1.75} />
-        <span style={{ fontSize: 15, fontWeight: 700, color: C.onSurface }}>{k.name}</span>
-        <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
-          {offen.length === 1 ? "1 offen" : `${offen.length} offen`}
-          {fertig.length > 0 && ` · ${fertig.length} abgegeben`}
-        </span>
-        <span style={{ flex: 1 }} />
-        <IconButton icon={FolderOpen} size={28} variant="ghost" title="Künstler-Ordner öffnen"
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px", borderBottom: `1px solid ${C.border10}` }}>
+        <button
+          data-kuenstler={k.path}
+          onClick={() => setProfilOffen(true)}
+          title="Profil bearbeiten — oder ein Bild aus dem Explorer hierher ziehen"
+          style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer", borderRadius: "50%" }}
+        >
+          <Avatar kuenstler={k} groesse={44} hervorgehoben={ziehen?.kuenstler === k.path} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.name}</div>
+          <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
+            {ziehen?.kuenstler === k.path ? <span style={{ color: C.primary, fontWeight: 600 }}>Loslassen → neues Profilbild</span> : <>
+              {offen.length === 1 ? "1 offen" : `${offen.length} offen`}
+              {fertig.length > 0 && ` · ${fertig.length} abgegeben`}
+              {letzteAbgabe && ` · zuletzt ${tageRelativ(letzteAbgabe)}`}
+            </>}
+          </div>
+        </div>
+        {links.map(p => (
+          <IconButton key={p.key} icon={p.icon} size={26} variant="ghost"
+            title={p.key === "discord" ? `Discord: ${k.links.discord} — Klick kopiert den Namen` : `${p.label} öffnen`}
+            onClick={() => p.key === "discord"
+              ? navigator.clipboard?.writeText(k.links.discord).catch(() => {})
+              : openUrl(k.links[p.key]).catch(() => {})} />
+        ))}
+        <IconButton icon={FolderOpen} size={26} variant="ghost" title="Künstler-Ordner öffnen"
           onClick={() => revealItemInDir(k.path).catch(() => {})} />
       </div>
+      {profilOffen && <ProfilDialog kuenstler={k} onClose={geaendert => { setProfilOffen(false); if (geaendert) onGeaendert(); }} />}
       {offen.length === 0 && (
         <div style={{ padding: "10px 14px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
       )}
@@ -671,6 +732,84 @@ function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen }:
         </>
       )}
     </section>
+  );
+}
+
+/** Profil eines Künstlers: Bild (wählen oder von einer Profilseite holen)
+ *  und die Links. Bild-Aktionen wirken sofort, die Links beim Speichern. */
+function ProfilDialog({ kuenstler: k, onClose }: { kuenstler: Artist; onClose: (geaendert: boolean) => void }) {
+  const [links, setLinks] = useState<Record<string, string>>({ ...k.links });
+  const [bild, setBild] = useState<string | null>(k.bild);
+  const [laeuft, setLaeuft] = useState<string | null>(null);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [geaendert, setGeaendert] = useState(false);
+
+  const bildSetzen = async (art: string, f: () => Promise<string>) => {
+    setLaeuft(art);
+    setFehler(null);
+    try { setBild(await f()); setGeaendert(true); }
+    catch (e) { setFehler(String(e)); }
+    finally { setLaeuft(null); }
+  };
+  const waehlen = async () => {
+    const datei = await openDialog({ multiple: false, title: "Profilbild wählen", filters: [{ name: "Bilder", extensions: ["jpg", "jpeg", "png", "webp"] }] }).catch(() => null);
+    if (typeof datei === "string") bildSetzen("waehlen", () => api.artists.setBild(k.path, datei));
+  };
+  const speichern = async () => {
+    setLaeuft("speichern");
+    try { await api.artists.setLinks(k.path, links); onClose(true); }
+    catch (e) { setFehler(String(e)); setLaeuft(null); }
+  };
+
+  return (
+    <Modal
+      icon={Mic2}
+      title={k.name}
+      subtitle="Profilbild und Links — liegen im Künstler-Ordner"
+      width={560}
+      onClose={() => onClose(geaendert)}
+      footer={<>
+        <Button variant="ghost" onClick={() => onClose(geaendert)}>Abbrechen</Button>
+        <Button variant="primary" loading={laeuft === "speichern"} onClick={speichern}>Speichern</Button>
+      </>}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
+        <Avatar kuenstler={{ ...k, bild }} groesse={80} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: C.onSecondaryFixedVar }}>
+          <Button variant="secondary" size="sm" icon={ImageIcon} loading={laeuft === "waehlen"} onClick={waehlen}>Bild wählen …</Button>
+          <span>… oder ein Bild auf das Profilbild in der Liste ziehen, oder unten bei einem Link holen.</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {PLATTFORMEN.map(p => {
+          const wert = links[p.key] ?? "";
+          return (
+            <div key={p.key} style={{ display: "grid", gridTemplateColumns: "20px 96px minmax(0, 1fr) 32px", alignItems: "center", gap: 8 }}>
+              <p.icon size={15} color={C.onSecondaryFixedVar} />
+              <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{p.label}</span>
+              <input
+                value={wert}
+                placeholder={p.platzhalter}
+                aria-label={p.label}
+                onChange={e => setLinks(l => ({ ...l, [p.key]: e.target.value }))}
+                style={{
+                  width: "100%", padding: "6px 8px", fontSize: 12, fontFamily: "inherit", boxSizing: "border-box",
+                  background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+                  border: `1px solid ${C.border20}`, borderRadius: radius.control,
+                }}
+              />
+              {p.key !== "discord" && (
+                <IconButton icon={Download} size={28} variant="secondary" disabled={!/^https?:\/\//.test(wert.trim()) || laeuft !== null}
+                  title={`Profilbild von ${p.label} holen`}
+                  onClick={() => bildSetzen(p.key, () => api.artists.bildHolen(k.path, wert.trim()))} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {laeuft && laeuft !== "speichern" && laeuft !== "waehlen" && <div style={{ marginTop: 10, fontSize: 12, color: C.onSecondaryFixedVar }}>Hole das Bild …</div>}
+      {fehler && <div style={{ marginTop: 10, fontSize: 12, color: C.error }}>{fehler}</div>}
+    </Modal>
   );
 }
 

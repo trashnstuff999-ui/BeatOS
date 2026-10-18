@@ -286,6 +286,13 @@ export const api = {
     downloads: (dir: string) => invoke<{ name: string; path: string; geaendert: number }[]>("artist_downloads", { dir }),
     /** Fehlende Audio-Pfade in den FLPs des Songs nachziehen; gibt die Zahl zurück. */
     pfadeReparieren: (songPath: string) => invoke<number>("artist_pfade_reparieren", { songPath }),
+    /** Plattform-Links des Künstlers speichern (in _kuenstler.json im Ordner). */
+    setLinks: (artistPath: string, links: Record<string, string>) =>
+      invoke<void>("set_artist_links", { artistPath, links }),
+    /** Ein Bild als Profilbild übernehmen (kopiert); gibt den neuen Pfad zurück. */
+    setBild: (artistPath: string, quelle: string) => invoke<string>("set_artist_bild", { artistPath, quelle }),
+    /** Profilbild von einer Profilseite holen (og:image). */
+    bildHolen: (artistPath: string, url: string) => invoke<string>("artist_bild_holen", { artistPath, url }),
     /** „Mein Beat" verknüpfen (null = lösen). Nur im Song vermerkt. */
     setBeat: (path: string, beatId: string | null) => invoke<void>("set_artist_beat", { path, beatId }),
     /** Eine Datei des Beats nach 02_ASSETS kopieren (das Archiv bleibt); gibt den neuen Pfad zurück. */
