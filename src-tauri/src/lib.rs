@@ -55,6 +55,8 @@ use commands::{
     kanal_liste,
     upload_daten,
     upload_nacherfassen,
+    scan_artists,
+    create_artists_root,
     // Settings commands
     get_settings,
     save_settings,
@@ -228,6 +230,8 @@ pub fn run() {
             kanal_liste,
             upload_daten,
             upload_nacherfassen,
+            scan_artists,
+            create_artists_root,
             // Settings
             get_settings,
             save_settings,

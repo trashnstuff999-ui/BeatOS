@@ -28,6 +28,8 @@ export interface AppSettings {
   defaultGenreTags: string;
   /** Upload-Rhythmus: Wochentage als Zahlen (0 = So … 6 = Sa), z. B. "1,3,5". Leer = kein Rhythmus. */
   uploadDays: string;
+  /** Künstler-Projekte (Mix & Master). Leer = 05_ARTISTS neben dem Archiv-Ordner. */
+  artistsPath: string;
 }
 
 export const DEFAULTS: AppSettings = {
@@ -44,6 +46,7 @@ export const DEFAULTS: AppSettings = {
   beatstarsUrl: "",
   defaultGenreTags: "",
   uploadDays: "",
+  artistsPath: "",
 };
 
 const STORAGE_KEY = "beatos_settings";
@@ -63,6 +66,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   beatstarsUrl: "beatstars_url",
   defaultGenreTags: "default_genre_tags",
   uploadDays: "upload_days",
+  artistsPath: "artists_path",
 };
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {
@@ -93,6 +97,17 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Wo die Künstler-Projekte liegen: die Einstellung, sonst 05_ARTISTS neben
+ *  dem Archiv-Ordner (beide liegen in derselben Bibliothek). */
+export function kuenstlerOrdner(s: Pick<AppSettings, "artistsPath" | "archivePath">): string {
+  if (s.artistsPath.trim()) return s.artistsPath.trim();
+  const archiv = s.archivePath.trim().replace(/[\\/]+$/, "");
+  if (!archiv) return "";
+  const sep = archiv.includes("\\") ? "\\" : "/";
+  const i = archiv.lastIndexOf(sep);
+  return i > 0 ? `${archiv.slice(0, i)}${sep}05_ARTISTS` : "";
+}
 
 /** productionPath stores MULTIPLE roots, one per line (legacy single path = 1 line).
  *

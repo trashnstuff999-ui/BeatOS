@@ -19,6 +19,7 @@ import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
 import type { Stats, DashboardActions } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
+import type { ArtistsScan } from "../types/artists";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -259,6 +260,15 @@ export const api = {
     /** Upload nachtragen, ohne Vorhandenes zu überschreiben. */
     nacherfassen: (beatId: string, platform: string, url: string, datum: string | null) =>
       invoke<void>("upload_nacherfassen", { beatId, platform, url, datum }),
+  },
+
+  // ─── Künstler-Projekte (Mix & Master) ─────────────────────────────────────
+
+  artists: {
+    /** Künstler und ihre Songs mit dem Stand aus den Dateien — nur lesen. */
+    scan: (root: string) => invoke<ArtistsScan>("scan_artists", { root }),
+    /** Den Wurzelordner anlegen. */
+    createRoot: (root: string) => invoke<void>("create_artists_root", { root }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────

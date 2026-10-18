@@ -9,16 +9,17 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo } from "react";
-import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon } from "lucide-react";
+import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, Users } from "lucide-react";
 import { C, radius } from "../lib/theme";
 import { PageHeader, PageBody } from "../components/ui";
-import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
+import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../contexts/SettingsContext";
+import { ArtistsPane } from "../components/studio/ArtistsPane";
 import { ProjectsPane } from "../components/studio/ProjectsPane";
 import { AssetsPane } from "../components/studio/AssetsPane";
 import { INSPECTOR_WIDTH } from "../components/studio/ProjectInspector";
 import type { StudioProject } from "../types/studio";
 
-type StudioTab = "projects" | "cleanup" | "assets";
+type StudioTab = "projects" | "cleanup" | "assets" | "artists";
 
 export default function Studio() {
   const { settings } = useSettings();
@@ -69,6 +70,12 @@ export default function Studio() {
             active={tab === "assets"}
             onClick={() => setTab("assets")}
           />
+          <TabBtn
+            icon={Users}
+            label="Künstler"
+            active={tab === "artists"}
+            onClick={() => setTab("artists")}
+          />
         </div>
       </PageHeader>
 
@@ -78,7 +85,7 @@ export default function Studio() {
           Liste zu („Sc…", „In den Papierko…"). */}
       <div style={{
         flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-        paddingRight: tab !== "assets" && inspectorOpen ? INSPECTOR_WIDTH : 0,
+        paddingRight: (tab === "projects" || tab === "cleanup") && inspectorOpen ? INSPECTOR_WIDTH : 0,
         transition: "padding-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
       }}>
       {/* Das Inbox-Raster nutzt die ganze Breite — mehr Kacheln pro Reihe.
@@ -86,7 +93,7 @@ export default function Studio() {
       <PageBody width={tab === "assets" ? "full" : "wide"}>
         {/* Beide Panes bleiben montiert: der Assets-Tab braucht die Projektliste
             beim Zuweisen, und ein Tabwechsel darf keinen Scan wegwerfen. */}
-        <div style={{ display: tab !== "assets" ? "block" : "none" }}>
+        <div style={{ display: tab === "projects" || tab === "cleanup" ? "block" : "none" }}>
           <ProjectsPane
             productionPaths={productionPaths}
             refreshKey={refreshKey}
@@ -103,6 +110,10 @@ export default function Studio() {
             onAssigned={() => setRefreshKey(k => k + 1)}
           />
         </div>
+        {/* Künstler-Projekte (Mix & Master) — eigener Ordner, eigene Liste. */}
+        {tab === "artists" && (
+          <ArtistsPane root={kuenstlerOrdner(settings)} active={tab === "artists"} />
+        )}
         <div style={{ height: 40 }} />
       </PageBody>
       </div>

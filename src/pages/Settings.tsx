@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../lib/theme";
 import { PageHeader, PageBody, Button } from "../components/ui";
-import { useSettings, parseProductionPaths, DEFAULTS } from "../contexts/SettingsContext";
+import { useSettings, parseProductionPaths, DEFAULTS, kuenstlerOrdner } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/time";
@@ -1177,6 +1177,19 @@ export function Settings() {
                 onBrowse={async () => {
                   const p = await pickFolder("Asset-Ordner wählen");
                   if (p) update("assetPath", p);
+                }}
+              />
+              {/* Künstler-Projekte (Mix & Master). Leer = 05_ARTISTS neben dem
+                  Archiv-Ordner — der Platzhalter zeigt, was dann gilt. */}
+              <PathInput
+                label="Künstler-Ordner"
+                icon={Users}
+                value={draft.artistsPath}
+                placeholder={kuenstlerOrdner({ artistsPath: "", archivePath: draft.archivePath }) || "z.B. D:\\Beat Library\\05_ARTISTS"}
+                onChange={v => update("artistsPath", v)}
+                onBrowse={async () => {
+                  const p = await pickFolder("Künstler-Ordner wählen");
+                  if (p) update("artistsPath", p);
                 }}
               />
               {/* Zwischenspeicher für Beats von aussen: „Neuer Beat" listet
