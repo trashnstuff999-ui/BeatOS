@@ -51,8 +51,8 @@ wurde aber nur der Upload-Tab.
 Im Upload-Tab gibt es jetzt `ui/Segmented` (ein Umschalter) und die
 Knopf-Familie (`Button`/`IconButton`). Archiv, Studio und Create haben noch
 eigene Bauarten.
-- [ ] Umschalter auf `Segmented` umstellen, Tab für Tab
-- [ ] Selbstgestylte `<button>` auf `Button`/`IconButton`, außer Sonderformen
+- [x] Umschalter auf `Segmented` umstellen, Tab für Tab (18.10.2026)
+- [x] Selbstgestylte `<button>` auf `Button`/`IconButton`, außer Sonderformen (18.10.2026)
 
 ### Monatskalender in der Planung (QoL-Fahrplan Nr. 5)
 Wird eingebaut, sobald der Rest gut läuft. Baut auf der Planungs-Leiste auf:

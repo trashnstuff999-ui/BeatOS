@@ -1,10 +1,12 @@
 // src/components/create/StatusCard.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
 // Production Status Card - Idea/WIP/Finished/Sold
+// Derselbe Umschalter wie der Status im Archiv-Detail.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { C, STATUS_ITEMS, radius } from "../../lib/theme";
+import { STATUS_ITEMS } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { Segmented } from "../ui";
 import { Flag } from "lucide-react";
 
 interface StatusCardProps {
@@ -15,28 +17,13 @@ interface StatusCardProps {
 export function StatusCard({ status, setStatus }: StatusCardProps) {
   return (
     <SectionCard icon={Flag} title="Status">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-        {STATUS_ITEMS.map((item) => {
-          const isActive = status === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => setStatus(item.key)}
-              style={{
-                padding: "12px 8px", borderRadius: radius.control,
-                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                border: "none", borderBottom: `2px solid ${isActive ? item.color : "transparent"}`,
-                background: isActive ? C.surfaceContainerHighest : C.surfaceContainer,
-                color: isActive ? item.color : C.onSurfaceVariant,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+      <Segmented
+        full
+        label="Status"
+        value={status}
+        onChange={setStatus}
+        options={STATUS_ITEMS.map(item => ({ value: item.key, label: item.label, color: item.color }))}
+      />
     </SectionCard>
   );
 }

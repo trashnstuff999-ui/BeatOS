@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Images, Film, Plus, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { C, alpha, radius } from "../lib/theme";
-import { SectionCard } from "./ui/SectionCard";
+import { SectionCard, SectionIconBtn } from "./ui/SectionCard";
 import { AssetPickerDialog, AssetVideo, type AssetSlotKind } from "./AssetPickerDialog";
 import type { FolderAssets } from "../hooks/useFolderAssets";
 
@@ -47,24 +47,8 @@ export function BeatAssetsCard({
       title={title}
       style={style}
       actions={
-        <button
-          onClick={onRefresh}
-          disabled={noFolder || isRefreshing}
-          title="Ordner neu einlesen"
-          style={{
-            width: 26, height: 26, borderRadius: radius.control,
-            background: "transparent",
-            border: `1px solid ${C.border15}`,
-            cursor: noFolder ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: C.onSurfaceVariant,
-            opacity: noFolder ? 0.5 : 1,
-          }}
-        >
-          {isRefreshing
-            ? <Loader2 size={13} style={{ animation: "spin 0.8s linear infinite" }} />
-            : <RefreshCw size={13} strokeWidth={1.75} />}
-        </button>
+        <SectionIconBtn icon={isRefreshing ? Loader2 : RefreshCw} title="Ordner neu einlesen"
+          disabled={noFolder || isRefreshing} onClick={onRefresh} />
       }
     >
       {/* Warnhinweis, solange kein Cover da ist (nur im Create-Flow) */}

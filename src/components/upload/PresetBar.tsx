@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ChevronDown, Youtube, Music2, Bookmark } from "lucide-react";
 import { C, PLATFORM_CONFIG, radius } from "../../lib/theme";
-import { Button } from "../ui";
+import { Button, IconButton } from "../ui";
 import { api } from "../../lib/api";
 import { useDialog } from "../../contexts/DialogContext";
 import type { TypeBeatPreset } from "../../types/upload";
@@ -211,21 +211,7 @@ export function PresetBar({
                     </div>
                   )}
                 </button>
-                <button
-                  onClick={(e) => handleDelete(e, p.id)}
-                  title="Preset löschen"
-                  style={{
-                    flexShrink: 0,
-                    width: 22, height: 22, borderRadius: radius.control,
-                    background: "transparent", border: "none",
-                    cursor: "pointer", color: C.onSecondaryFixedVar,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.color = C.error; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = C.onSecondaryFixedVar; }}
-                >
-                  <Trash2 size={12} />
-                </button>
+                <IconButton icon={Trash2} size={24} title="Preset löschen" onClick={e => handleDelete(e, p.id)} />
               </div>
             ))}
           </div>

@@ -10,7 +10,7 @@ import {
   Plus, Trash2, Check, MoveRight,
 } from "lucide-react";
 import { C, commonStyles, alpha, radius } from "../../../lib/theme";
-import { Button, Segmented, useEscapeStack } from "../../ui";
+import { Button, IconButton, Segmented, useEscapeStack } from "../../ui";
 import { CATEGORY_LABELS } from "../../../lib/tags";
 import { useDialog } from "../../../contexts/DialogContext";
 import {
@@ -651,17 +651,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
           )}
 
           {/* Close */}
-          <button
-            onClick={onClose}
-            style={{
-              width: 32, height: 32, borderRadius: radius.control, flexShrink: 0,
-              background: C.surfaceContainerHighest, border: `1px solid ${C.border20}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: C.onSurfaceVariant,
-            }}
-          >
-            <X size={15} />
-          </button>
+          <IconButton icon={X} size={32} variant="secondary" title="Schließen" onClick={onClose} />
         </div>
 
         {/* ═══ COLUMNS ═══ */}
@@ -711,18 +701,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             {/* Move staged to category */}
             {editMode && stagedCount > 0 && (
               <div style={{ position: "relative" }} ref={moveMenuRef}>
-                <button
-                  onClick={() => setShowMoveMenu(v => !v)}
-                  style={{
-                    padding: "7px 14px", borderRadius: radius.control,
-                    fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                    background: C.surfaceContainerHighest, border: `1px solid ${C.border30}`,
-                    color: C.onSurfaceVariant, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <MoveRight size={13} /> Verschieben
-                </button>
+                <Button variant="secondary" icon={MoveRight} onClick={() => setShowMoveMenu(v => !v)}>Verschieben</Button>
                 {showMoveMenu && (
                   <div style={{
                     position: "absolute", bottom: "calc(100% + 6px)", left: 0,
@@ -763,22 +742,9 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
 
             {/* Delete staged from DB */}
             {editMode && stagedCount > 0 && (
-              <button
-                onClick={handleTrashStaged}
-                title="Vorgemerkte Tags aus der Datenbank löschen"
-                style={{
-                  padding: "7px 14px", borderRadius: radius.control,
-                  fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                  background: alpha(C.error, 0.08), border: `1px solid ${alpha(C.error, 0.25)}`,
-                  color: C.error, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
-                  transition: "all 0.13s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = alpha(C.error, 0.18); }}
-                onMouseLeave={e => { e.currentTarget.style.background = alpha(C.error, 0.08); }}
-              >
-                <Trash2 size={13} /> Delete
-              </button>
+              <Button variant="danger" icon={Trash2} title="Vorgemerkte Tags aus der Datenbank löschen" onClick={handleTrashStaged}>
+                Löschen
+              </Button>
             )}
 
             {/* Apply to Beat */}
@@ -787,18 +753,8 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
             </Button>
 
             {/* Clear all changes */}
-            <button
-              onClick={() => { setStaged(new Set()); setInternalSelected(initialSelected); }}
-              title="Änderungen verwerfen"
-              style={{
-                width: 30, height: 30, borderRadius: radius.control, flexShrink: 0,
-                background: "transparent", border: `1px solid ${C.border20}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: C.onSecondaryFixedVar,
-              }}
-            >
-              <X size={13} />
-            </button>
+            <IconButton icon={X} size={32} variant="secondary" title="Änderungen verwerfen"
+              onClick={() => { setStaged(new Set()); setInternalSelected(initialSelected); }} />
           </div>
         )}
       </div>

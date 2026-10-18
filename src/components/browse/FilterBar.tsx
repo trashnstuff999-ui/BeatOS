@@ -13,7 +13,7 @@
 import React, { useState, useEffect } from "react";
 import { Filter, RotateCcw, Heart, ChevronDown, X, UploadCloud } from "lucide-react";
 import { C, radius, STATUS_CONFIG, alpha } from "../../lib/theme";
-import { Dropdown, Select } from "../ui";
+import { Dropdown, Select, Button } from "../ui";
 import type { FilterState, BeatStatus } from "../../types/browse";
 import { MINOR_KEYS, MAJOR_KEYS } from "../../types/browse";
 
@@ -148,20 +148,9 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
         </span>
 
         {chips.length > 0 && (
-          <button
-            onClick={onReset}
-            title="Alle Filter zurücksetzen"
-            style={{
-              display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-              fontSize: 12, fontWeight: 600,
-              color: C.onSurfaceVariant, background: "none", border: "none", cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = C.onSurface)}
-            onMouseLeave={e => (e.currentTarget.style.color = C.onSurfaceVariant)}
-          >
-            <RotateCcw size={12} /> Zurücksetzen
-          </button>
+          <Button size="sm" variant="ghost" icon={RotateCcw} title="Alle Filter zurücksetzen" style={{ flexShrink: 0 }} onClick={onReset}>
+            Zurücksetzen
+          </Button>
         )}
 
         <div style={{ flex: 1, minWidth: 0 }} />
@@ -228,20 +217,10 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
               {() => (
                 <>
                   {filters.keys.length > 0 && (
-                    <button
-                      onClick={() => updateFilter("keys", [])}
-                      style={{
-                        width: "100%", padding: "7px 12px", marginBottom: 12,
-                        background: alpha(C.error, 0.10),
-                        border: `1px solid ${alpha(C.error, 0.30)}`,
-                        borderRadius: radius.control,
-                        color: C.error, fontSize: 11, fontWeight: 700,
-                        cursor: "pointer", fontFamily: "inherit",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                      }}
-                    >
-                      <X size={12} /> Auswahl leeren ({filters.keys.length})
-                    </button>
+                    <Button size="sm" variant="secondary" icon={X} style={{ width: "100%", marginBottom: 12 }}
+                      onClick={() => updateFilter("keys", [])}>
+                      Auswahl leeren ({filters.keys.length})
+                    </Button>
                   )}
 
                   {([["Moll", MINOR_KEYS, C.tertiary], ["Dur", MAJOR_KEYS, C.primary]] as const).map(([titel, keys, farbe]) => (

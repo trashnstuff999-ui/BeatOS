@@ -23,7 +23,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useNavigate } from "react-router-dom";
 import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Button, PAGE_HEADER_HEIGHT } from "../ui";
+import { Button, IconButton, PAGE_HEADER_HEIGHT } from "../ui";
 import { formatRelativeTime } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -332,12 +332,7 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
         >
           <Star size={16} color={p.priority ? C.primary : C.onSecondaryFixedVar} fill={p.priority ? C.primary : "none"} strokeWidth={1.75} />
         </button>
-        <button
-          onClick={onClose}
-          style={{ background: "none", border: "none", cursor: "pointer", color: C.onSurfaceVariant, display: "flex", padding: 2 }}
-        >
-          <X size={16} />
-        </button>
+        <IconButton icon={X} size={28} title="Schließen" onClick={onClose} />
       </div>
 
       {/* Aktionen — alle beschriftet, direkt unter dem Titel. Vorher standen

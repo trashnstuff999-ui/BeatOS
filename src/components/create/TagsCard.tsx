@@ -5,9 +5,10 @@
 
 import { useState, useMemo } from "react";
 import { Grid3X3, Search, Tag } from "lucide-react";
-import { C, commonStyles, radius } from "../../lib/theme";
+import { C, commonStyles } from "../../lib/theme";
 import { sortTagsByCategory, type CustomTag } from "../../lib/tags";
 import { SectionCard } from "../ui/SectionCard";
+import { Button } from "../ui";
 import { TagPill, TagCategoryRow } from "../Tagpill";
 
 interface TagsHook {
@@ -65,30 +66,7 @@ export function TagsCard({ tagsHook, onShowAllTags }: TagsCardProps) {
         <span style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
           {tags.length > 0 ? `${tags.length} ausgewählt` : "Noch keine Tags"}
         </span>
-        <button
-          onClick={onShowAllTags}
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "4px 10px", borderRadius: radius.control,
-            fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
-            background: C.surfaceContainerHighest,
-            border: `1px solid ${C.border20}`,
-            color: C.onSurfaceVariant,
-            cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = C.surfaceContainer;
-            e.currentTarget.style.color = C.primary;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = C.surfaceContainerHighest;
-            e.currentTarget.style.color = C.onSurfaceVariant;
-          }}
-        >
-          <Grid3X3 size={10} />
-          Tags verwalten
-        </button>
+        <Button size="sm" variant="secondary" icon={Grid3X3} onClick={onShowAllTags}>Tags verwalten</Button>
       </div>
 
       {/* Selected Tags */}

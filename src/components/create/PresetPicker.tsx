@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from "react";
 import { Bookmark, ChevronDown, X, Youtube, Music2 } from "lucide-react";
 import { C, PLATFORM_CONFIG, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
+import { IconButton } from "../ui";
 import { api } from "../../lib/api";
 import type { TypeBeatPreset } from "../../types/upload";
 
@@ -59,13 +60,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
           </span>
           {selected.soundcloud_tags && <Music2 size={10} color={PLATFORM_CONFIG.soundcloud.color} />}
           {selected.youtube_tags && <Youtube size={10} color={PLATFORM_CONFIG.youtube.color} />}
-          <button
-            onClick={() => onSelect(null)}
-            title="Preset abwählen"
-            style={{ background: "none", border: "none", cursor: "pointer", color: C.onSurfaceVariant, display: "flex", padding: 2 }}
-          >
-            <X size={12} />
-          </button>
+          <IconButton icon={X} size={22} title="Preset abwählen" onClick={() => onSelect(null)} />
         </div>
       ) : (
         <button
