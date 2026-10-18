@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Images, RefreshCw, Loader2, FolderOpen, Settings, Trash2, ListOrdered, CheckSquare, Check, X, ArrowRight } from "lucide-react";
+import { Images, Play, RefreshCw, Loader2, FolderOpen, Settings, Trash2, ListOrdered, CheckSquare, Check, X, ArrowRight } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useNavigate } from "react-router-dom";
 import { C, radius } from "../../lib/theme";
@@ -218,6 +218,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
           gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
           gap: 12,
           padding: 16,
+          alignItems: "start",
         }}>
           {visible.map(a => (
             <AssetCard
@@ -282,11 +283,10 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
         transition: "border-color 0.15s, transform 0.12s",
       }}
     >
-      {/* 16:9: so liegen die meisten Dateien (Thumbnails, Videos) — vorher
-          quadratisch, mit grauem Streifen über und unter jedem Bild. Ein Cover
-          bekommt seitliche Balken, bleibt aber ganz sichtbar. */}
+      {/* Cover quadratisch, Thumbnails und Videos 16:9. Bilder ohne „cover“/
+          „thumb“ im Namen bleiben 16:9 und bekommen notfalls Balken. */}
       <div style={{
-        aspectRatio: "16 / 9",
+        aspectRatio: asset.guessed_role === "cover" ? "1 / 1" : "16 / 9",
         background: C.surfaceContainerHigh,
         display: "flex", alignItems: "center", justifyContent: "center",
         overflow: "hidden", position: "relative",
@@ -294,6 +294,17 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
         {asset.kind === "image"
           ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`} />
           : <AssetVideo path={asset.path} />}
+
+        {asset.kind === "video" && (
+          <span style={{
+            position: "absolute", inset: 0, margin: "auto", width: 44, height: 44, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)",
+            border: "1px solid rgba(255,255,255,0.35)", pointerEvents: "none",
+          }}>
+            <Play size={18} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
+          </span>
+        )}
 
         {hovered && auswahl === null && (
           <div style={{
