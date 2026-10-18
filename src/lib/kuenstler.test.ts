@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { passtZumSong, pfadSchluessel } from "./kuenstler";
+import { passtZumSong, pfadSchluessel, songStand } from "./kuenstler";
+
+describe("songStand", () => {
+  const s = { fertig: false, warten: false, vocals: false, mix: false, master: false };
+  it("nennt den nächsten Schritt", () => {
+    expect(songStand(s)).toEqual({ text: "Vocals fehlen", schritt: 0, ton: "offen" });
+    expect(songStand({ ...s, vocals: true }).text).toBe("Mix offen");
+    expect(songStand({ ...s, vocals: true, mix: true })).toEqual({ text: "Master offen", schritt: 2, ton: "offen" });
+    expect(songStand({ ...s, vocals: true, mix: true, master: true }).ton).toBe("bereit");
+    expect(songStand({ ...s, vocals: true, warten: true })).toEqual({ text: "Warte auf Künstler", schritt: 1, ton: "warten" });
+    expect(songStand({ ...s, fertig: true, warten: true })).toEqual({ text: "Abgegeben", schritt: 4, ton: "fertig" });
+  });
+});
 
 describe("pfadSchluessel", () => {
   it("gleicht Schreibweisen von Pfaden an", () => {

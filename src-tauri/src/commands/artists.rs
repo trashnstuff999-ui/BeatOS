@@ -55,11 +55,21 @@ pub struct ArtistSong {
     pub abgegeben: Option<String>,
     /// So viele Dinge liegen noch außerhalb von 01_/02_/03_ — „Ordner aufräumen".
     pub umbau: usize,
+    /// Die FLPs des Songs (01_SAVEFILES oder lose), neueste zuerst — zum
+    /// Öffnen in FL, mit Auswahl der Version.
+    pub flps: Vec<FlpVersion>,
     /// „Mein Beat": der verknüpfte Katalog-Beat (von Hand, artist_songs).
     pub beat_id: Option<String>,
     /// Ein Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag
     /// zum Verknüpfen (Heartbreak Highlights nutzt die WAV von SWEET DREAMS).
     pub beat_vorschlag: Option<String>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct FlpVersion {
+    pub name: String,
+    pub path: String,
+    pub geaendert: u64,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -749,7 +759,12 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
         fertig,
         ..Default::default()
     };
-    s.flp = saves.iter().chain(&wurzel).any(|(n, _)| is_flp(Path::new(n)));
+    s.flps = [(SAVES, &saves), ("", &wurzel)].iter()
+        .flat_map(|(ordner, liste)| liste.iter().filter(|(n, _)| is_flp(Path::new(n)))
+            .map(move |(n, t)| FlpVersion { name: n.clone(), path: pfad.join(ordner).join(n).to_string_lossy().to_string(), geaendert: *t }))
+        .collect();
+    s.flps.sort_by(|a, b| b.geaendert.cmp(&a.geaendert));
+    s.flp = !s.flps.is_empty();
     s.vocals = assets.iter().any(|(n, _)| ist_audio(n) && ist_asset_vocal(n))
         || aufnahmen.iter().chain(&wurzel).any(|(n, _)| ist_audio(n) && hat_vocal(n));
     s.demo = assets.iter().any(|(n, _)| ist_audio(n) && ist_demo(n));
@@ -824,6 +839,8 @@ mod tests {
         let tk = k[0].songs.iter().find(|s| s.name == "Teufelskraut").unwrap();
         assert!(tk.flp && tk.vocals && !tk.beat && !tk.demo && tk.mix);
         assert_eq!(tk.exporte, vec!["teufelskraut.mp3".to_string()]);
+        assert_eq!(tk.flps.len(), 1);
+        assert!(Path::new(&tk.flps[0].path).ends_with("Teufelskraut/01_SAVEFILES/teufelskraut.flp"));
 
         let alt = k[0].songs.iter().find(|s| s.name == "Alt").unwrap();
         assert!(alt.fertig && alt.flp);

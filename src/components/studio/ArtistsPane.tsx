@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2 } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2, Wrench, AlertTriangle, FolderTree, Music2, Play } from "lucide-react";
 import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
@@ -23,7 +23,7 @@ import { formatRelativeTime, tageRelativ } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
-import { passtZumSong, pfadSchluessel } from "../../lib/kuenstler";
+import { passtZumSong, pfadSchluessel, songStand } from "../../lib/kuenstler";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 import type { UploadData } from "../../types/upload";
 import type { Beat } from "../../types/browse";
@@ -51,6 +51,9 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   const [altbestand, setAltbestand] = useState<Altbestand[]>([]);
   const [umzugOffen, setUmzugOffen] = useState(false);
   const [aufraeumenOffen, setAufraeumenOffen] = useState(false);
+  // Der rechts gezeigte Song (Pfad). Nach Abgeben/Wieder öffnen ändert sich der
+  // Pfad — dann fällt die Wahl auf den ersten offenen Song zurück.
+  const [auswahl, setAuswahl] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [legtAn, setLegtAn] = useState(false);
   // Offener Anlege-Dialog.
@@ -212,9 +215,12 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       />
     );
   } else {
+    // Gewählt ist immer genau ein Song; ohne Wahl der erste offene.
+    const alle = scan.kuenstler.flatMap(k => k.songs.map(s => ({ k, s })));
+    const gewaehlt = alle.find(x => x.s.path === auswahl) ?? alle.find(x => !x.s.fertig) ?? alle[0];
     inhalt = (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: -12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Künstler</Button>
           <Button variant="primary" size="sm" icon={Plus} onClick={() => setNeu("song")}>Neuer Song</Button>
         </div>
@@ -224,10 +230,20 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
             <IconButton icon={X} size={24} variant="ghost" title="Ausblenden" onClick={() => setMeldung(null)} />
           </div>
         )}
-        {scan.kuenstler.map(k => (
-          <KuenstlerBlock key={k.path} kuenstler={k} onGeaendert={laden}
-            zeile={{ downloads, ziehen, uebernehmen }} />
-        ))}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 400px) minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {scan.kuenstler.map(k => (
+              <KuenstlerBlock key={k.path} kuenstler={k} auswahl={gewaehlt?.s.path ?? null}
+                onWaehlen={setAuswahl} downloads={downloads} ziehen={ziehen} />
+            ))}
+          </div>
+          {gewaehlt ? (
+            <SongDetail key={gewaehlt.s.path} song={gewaehlt.s} kuenstler={gewaehlt.k.name}
+              onGeaendert={laden} downloads={downloads} uebernehmen={uebernehmen} />
+          ) : (
+            <EmptyState icon={Mic2} title="Noch keine Songs" description="Mit „Neuer Song“ oben rechts anlegen." />
+          )}
+        </div>
       </div>
     );
   }
@@ -588,44 +604,61 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
   );
 }
 
-function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
+/** Downloads, die zum Song gehören: der Name passt („heartbreak highlights_vocals")
+ *  oder die FLP verwendet die Datei („Feelings feeln vocals" bei „Fellings Feeln").
+ *  Was schon im Song liegt, nicht noch einmal. */
+function neueDownloads(s: ArtistSong, downloads: Download[]): Download[] {
+  if (s.fertig) return [];
+  const verwendet = new Set(s.verweise.map(pfadSchluessel));
+  return downloads.filter(d =>
+    (passtZumSong(d.name, s.name) || verwendet.has(pfadSchluessel(d.path))) && !s.dateien.includes(d.name));
+}
+
+const STAND_FARBE = { fertig: C.mint, warten: C.tertiary, offen: C.onSurfaceVariant, bereit: C.primary } as const;
+
+/** Links: ein Künstler mit seinen Songs als ruhige Liste. Abgegebene stehen
+ *  zugeklappt darunter. */
+function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen }: {
   kuenstler: Artist;
-  onGeaendert: () => void;
-  zeile: ZeilenDrop;
+  auswahl: string | null;
+  onWaehlen: (pfad: string) => void;
+  downloads: Download[];
+  ziehen: ZeilenDrop["ziehen"];
 }) {
-  const [fertigOffen, setFertigOffen] = useState(false);
   const offen = k.songs.filter(s => !s.fertig);
   const fertig = k.songs.filter(s => s.fertig);
+  // Ist der gewählte Song abgegeben, steht die Liste offen.
+  const [fertigOffen, setFertigOffen] = useState(() => fertig.some(s => s.path === auswahl));
+  const zeile = (s: ArtistSong) => (
+    <SongZeile key={s.path} song={s} gewaehlt={s.path === auswahl} onWaehlen={() => onWaehlen(s.path)}
+      zuTun={neueDownloads(s, downloads).length + s.reparierbar + s.fehlend.length > 0}
+      ziel={ziehen?.pfad === s.path ? ziehen.anzahl : null} />
+  );
 
   return (
-    <section style={{
-      background: C.surfaceContainerLow, border: `1px solid ${C.border10}`,
-      borderRadius: radius.card, overflow: "hidden",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: `1px solid ${C.border10}` }}>
+    <section style={{ background: C.surfaceContainerLow, border: `1px solid ${C.border10}`, borderRadius: radius.card, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${C.border10}` }}>
         <Mic2 size={15} color={C.primary} strokeWidth={1.75} />
         <span style={{ fontSize: 15, fontWeight: 700, color: C.onSurface }}>{k.name}</span>
         <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
-          {offen.length === 1 ? "1 Song offen" : `${offen.length} Songs offen`}
+          {offen.length === 1 ? "1 offen" : `${offen.length} offen`}
           {fertig.length > 0 && ` · ${fertig.length} abgegeben`}
         </span>
         <span style={{ flex: 1 }} />
-        <IconButton icon={FolderOpen} size={28} variant="secondary" title="Künstler-Ordner öffnen"
+        <IconButton icon={FolderOpen} size={28} variant="ghost" title="Künstler-Ordner öffnen"
           onClick={() => revealItemInDir(k.path).catch(() => {})} />
       </div>
-
       {offen.length === 0 && (
-        <div style={{ padding: "12px 18px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
+        <div style={{ padding: "10px 14px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
       )}
-      {offen.map(s => <SongZeile key={s.path} song={s} kuenstler={k.name} onGeaendert={onGeaendert} {...zeile} />)}
-
+      {offen.map(zeile)}
       {fertig.length > 0 && (
         <>
           <button
             onClick={() => setFertigOffen(o => !o)}
             style={{
               width: "100%", display: "flex", alignItems: "center", gap: 6,
-              padding: "10px 18px", border: "none", borderTop: `1px solid ${C.border10}`,
+              padding: "9px 14px", border: "none", borderTop: `1px solid ${C.border10}`,
               background: "transparent", cursor: "pointer", fontFamily: "inherit",
               fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
               color: C.onSecondaryFixedVar,
@@ -634,193 +667,226 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
             <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: fertigOffen ? "rotate(180deg)" : "none" }} />
             Abgegeben ({fertig.length})
           </button>
-          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} kuenstler={k.name} onGeaendert={onGeaendert} {...zeile} />)}
+          {fertigOffen && fertig.map(zeile)}
         </>
       )}
     </section>
   );
 }
 
-/** Eine Song-Zeile. Klick klappt Notiz und Status auf; gespeichert wird beim
- *  Verlassen des Felds bzw. beim Umschalten. */
-function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, uebernehmen }: { song: ArtistSong; kuenstler: string; onGeaendert: () => void } & ZeilenDrop) {
+/** Eine Zeile links: Name, Stand in Worten, ein schmaler Balken für die vier
+ *  Etappen. Ein Punkt sagt „hier ist etwas zu tun" (Downloads, Pfade). */
+function SongZeile({ song: s, gewaehlt, onWaehlen, zuTun, ziel }: {
+  song: ArtistSong;
+  gewaehlt: boolean;
+  onWaehlen: () => void;
+  zuTun: boolean;
+  /** Beim Ziehen aus dem Explorer: so viele Dateien landen hier. */
+  ziel: number | null;
+}) {
+  const stand = songStand(s);
+  const farbe = STAND_FARBE[stand.ton];
+  return (
+    <div
+      data-song={s.path}
+      onClick={onWaehlen}
+      style={{
+        padding: "10px 14px", borderTop: `1px solid ${C.border10}`, cursor: "pointer",
+        background: ziel !== null ? alpha(C.primary, 0.1) : gewaehlt ? alpha(C.primary, 0.07) : "transparent",
+        boxShadow: ziel !== null ? `inset 0 0 0 1px ${alpha(C.primary, 0.6)}` : gewaehlt ? `inset 3px 0 0 ${C.primary}` : "none",
+      }}
+      onMouseEnter={e => { if (!gewaehlt && ziel === null) e.currentTarget.style.background = C.surfaceContainer; }}
+      onMouseLeave={e => { if (!gewaehlt && ziel === null) e.currentTarget.style.background = "transparent"; }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {s.name}
+        </span>
+        {zuTun && ziel === null && (
+          <span title="Hier ist etwas zu tun — Downloads oder FLP-Pfade" style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
+        )}
+        <span style={{ fontSize: 12, fontWeight: 600, color: ziel !== null ? C.primary : farbe, flexShrink: 0 }}>
+          {ziel !== null ? `${ziel === 1 ? "1 Datei" : `${ziel} Dateien`} → 02_ASSETS` : stand.text}
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
+        <span style={{ flex: 1, display: "flex", gap: 3 }}>
+          {[0, 1, 2, 3].map(i => (
+            <span key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < stand.schritt ? farbe : C.border20 }} />
+          ))}
+        </span>
+        <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, width: 92, textAlign: "right", flexShrink: 0 }}>
+          {s.fertig && s.abgegeben ? tageRelativ(s.abgegeben) : s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Rechts: der gewählte Song mit allem, was man an ihm tut. */
+function SongDetail({ song: s, kuenstler, onGeaendert, downloads, uebernehmen }: {
+  song: ArtistSong;
+  kuenstler: string;
+  onGeaendert: () => void;
+  downloads: Download[];
+  uebernehmen: ZeilenDrop["uebernehmen"];
+}) {
   const [abgabeOffen, setAbgabeOffen] = useState(false);
-  const [offen, setOffen] = useState(false);
-  const istZiel = ziehen?.pfad === s.path;
-  // Downloads, die zum Song gehören: der Name passt („heartbreak highlights_vocals")
-  // oder die FLP verwendet die Datei („Feelings feeln vocals" bei „Fellings Feeln").
-  // Was schon im Song liegt, nicht noch einmal.
-  const verwendet = new Set(s.verweise.map(pfadSchluessel));
-  const neue = s.fertig ? [] : downloads.filter(d =>
-    (passtZumSong(d.name, s.name) || verwendet.has(pfadSchluessel(d.path))) && !s.dateien.includes(d.name));
-  const reparieren = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    api.artists.pfadeReparieren(s.path)
-      .then(() => { setFehler(null); onGeaendert(); })
-      .catch(err => { setFehler(String(err)); setOffen(true); });
-  };
   const [notiz, setNotiz] = useState(s.notiz ?? "");
   const [fehler, setFehler] = useState<string | null>(null);
+  // Standard: die neueste FLP. Neuer Song gewählt → wieder die neueste.
+  const [flp, setFlp] = useState(s.flps[0]?.path ?? "");
+  useEffect(() => { setNotiz(s.notiz ?? ""); setFehler(null); setFlp(s.flps[0]?.path ?? ""); }, [s.path]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const stand = songStand(s);
+  const neue = neueDownloads(s, downloads);
   const speichern = (n: string, warten: boolean) => {
     if (n === (s.notiz ?? "") && warten === s.warten) return;
     api.artists.setSong(s.path, n, warten)
       .then(() => { setFehler(null); onGeaendert(); })
       .catch(e => setFehler(String(e)));
   };
-  const ersteZeile = s.notiz?.split("\n")[0];
+  const reparieren = () => api.artists.pfadeReparieren(s.path)
+    .then(() => { setFehler(null); onGeaendert(); })
+    .catch(err => setFehler(String(err)));
+  const datum = (t: number) => new Date(t * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const beschriftung: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar,
+  };
 
   return (
-    <div data-song={s.path} style={{
-      borderTop: `1px solid ${C.border10}`,
-      background: istZiel ? alpha(C.primary, 0.1) : offen ? C.surfaceContainer : "transparent",
-      boxShadow: istZiel ? `inset 0 0 0 1px ${alpha(C.primary, 0.6)}` : "none",
+    <section data-song={s.path} style={{
+      position: "sticky", top: 0,
+      background: C.surfaceContainerLow, border: `1px solid ${C.border10}`, borderRadius: radius.card,
+      padding: 20, display: "flex", flexDirection: "column", gap: 16,
     }}>
-      <div
-        onClick={() => setOffen(o => !o)}
-        title={offen ? "Zuklappen" : "Notiz und Status"}
-        style={{
-          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 140px 14px", alignItems: "center", gap: 16,
-          padding: "11px 18px", cursor: "pointer",
-          opacity: s.fertig ? 0.7 : 1,
-        }}
-        onMouseEnter={e => { if (!offen) e.currentTarget.style.background = C.surfaceContainer; }}
-        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-      >
-        <span style={{ minWidth: 0 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {s.name}
-            </span>
-            {s.warten && !s.fertig && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
-                padding: "1px 7px", borderRadius: radius.full, fontSize: 11, fontWeight: 600,
-                background: alpha(C.tertiary, 0.12), color: C.tertiary,
-              }}>
-                <Hourglass size={10} /> Warte auf Künstler
-              </span>
-            )}
-            {istZiel ? (
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>
-                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → 02_ASSETS
-              </span>
-            ) : neue.length > 0 && (
-              <Button
-                variant="secondary" size="sm" icon={FolderInput}
-                title={`Aus den Downloads in 02_ASSETS verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
-                onClick={e => { e.stopPropagation(); uebernehmen(s.path, neue.map(d => d.path)); }}
-              >
-                {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}
-              </Button>
-            )}
-            {s.reparierbar > 0 && (
-              <Button
-                variant="secondary" size="sm" icon={Wrench}
-                title={"Die FLP sucht Dateien noch am alten Ort (z. B. 03_ARCHIVE). BeatOS hat sie gefunden und trägt die neuen Pfade ein — "
-                  + "die FLP vorher in FL schließen. Eine Sicherung kommt nach Backup/."}
-                onClick={reparieren}
-              >
-                {s.reparierbar === 1 ? "1 Pfad reparieren" : `${s.reparierbar} Pfade reparieren`}
-              </Button>
-            )}
-            {s.fehlend.length > 0 && (
-              <span
-                title={`Die FLP verwendet diese Dateien, BeatOS findet sie nirgends — FL fragt beim Öffnen danach:\n${s.fehlend.map(p => p.split(/[\\/]/).pop()).join("\n")}`}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 12, color: C.error }}
-              >
-                <AlertTriangle size={12} /> {s.fehlend.length === 1 ? "1 Datei fehlt" : `${s.fehlend.length} Dateien fehlen`}
-              </span>
-            )}
-          </span>
-          {ersteZeile && !offen && (
-            <span style={{ display: "block", marginTop: 2, fontSize: 12, color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {ersteZeile}
-            </span>
-          )}
-        </span>
-        <span style={{ display: "flex", gap: 4 }}>
-          {BAUSTEINE.map(b => {
-            const da = s[b.key];
-            return (
-              <span
-                key={b.key}
-                title={`${b.label}: ${da ? "vorhanden" : "fehlt"} — ${b.titel}`}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "2px 8px", borderRadius: radius.full,
-                  fontSize: 11, fontWeight: 600,
-                  background: da ? alpha(C.mint, 0.12) : "transparent",
-                  border: `1px ${da ? "solid" : "dashed"} ${da ? alpha(C.mint, 0.35) : C.border20}`,
-                  color: da ? C.mint : C.onSecondaryFixedVar,
-                }}
-              >
-                {da && <Check size={10} strokeWidth={2.5} />}
-                {b.label}
-              </span>
-            );
-          })}
-        </span>
-        <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, textAlign: "right" }}>
-          {s.fertig && s.abgegeben ? `abgegeben ${tageRelativ(s.abgegeben)}` : s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
-        </span>
-        <ChevronDown size={14} color={C.onSecondaryFixedVar} style={{ transition: "transform 0.15s", transform: offen ? "rotate(180deg)" : "none" }} />
+      {/* Kopf: wer, was, wo es steht — und die FLP */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{kuenstler}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: STAND_FARBE[stand.ton], marginTop: 2 }}>{stand.text}</div>
+        </div>
+        <IconButton icon={FolderOpen} size={32} variant="secondary" title="Song-Ordner öffnen" onClick={() => revealItemInDir(s.path).catch(() => {})} />
       </div>
 
-      {offen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 18px 14px" }}>
-          <textarea
-            autoFocus
-            value={notiz}
-            aria-label={`Notiz zu ${s.name}`}
-            placeholder="Notiz — was fehlt, was der Künstler wollte, wo es hakt …"
-            rows={3}
-            onChange={e => setNotiz(e.target.value)}
-            onBlur={() => speichern(notiz, s.warten)}
-            style={{
-              width: "100%", padding: "8px 10px", fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", resize: "vertical",
-              background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
-              border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
-            }}
-          />
-          <MeinBeat song={s} onGeaendert={onGeaendert} />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {!s.fertig && (
-              <Segmented
-                label="Status"
-                value={s.warten ? "warten" : "arbeit"}
-                onChange={v => speichern(notiz, v === "warten")}
-                options={[
-                  { value: "arbeit", label: "In Arbeit" },
-                  { value: "warten", label: "Warte auf Künstler", icon: Hourglass, color: C.tertiary },
-                ]}
-              />
-            )}
-            {fehler && <span style={{ fontSize: 12, color: C.error }}>{fehler}</span>}
-            <span style={{ flex: 1 }} />
-            <Button variant="secondary" size="sm" icon={FolderOpen} onClick={() => revealItemInDir(s.path).catch(() => {})}>Ordner öffnen</Button>
-            {s.fertig ? (
-              <Button variant="secondary" size="sm" icon={Undo2}
-                title="Zurück aus _Fertig — wenn der Künstler nach der Abgabe noch etwas will"
-                onClick={() => api.artists.wiederOeffnen(s.path).then(onGeaendert).catch(e => setFehler(String(e)))}
-              >
-                Wieder öffnen
-              </Button>
-            ) : (
-              <Button variant="primary" size="sm" icon={Send} disabled={s.exporte.length === 0}
-                title={s.exporte.length === 0 ? "Noch kein Export im Song-Ordner" : "Export benennen und den Song nach _Fertig schieben"}
-                onClick={() => setAbgabeOffen(true)}
-              >
-                Abgeben …
-              </Button>
-            )}
-          </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Button variant="primary" icon={Play} disabled={!flp}
+          title={flp ? "Diese FLP in FL Studio öffnen" : "Keine FLP im Song"}
+          onClick={() => openPath(flp).catch(e => setFehler(`FLP ließ sich nicht öffnen: ${String(e)}`))}
+        >
+          In FL öffnen
+        </Button>
+        {s.flps.length > 1 && (
+          <Select value={flp} onChange={setFlp} title="Version"
+            options={s.flps.map((f, i) => ({ value: f.path, label: `${f.name.replace(/\.flp$/i, "")} · ${datum(f.geaendert)}${i === 0 ? " · neueste" : ""}` }))}
+            panelWidth={320} triggerStyle={{ height: 36 }} />
+        )}
+      </div>
+
+      {/* Was zu tun ist */}
+      {(neue.length > 0 || s.reparierbar > 0 || s.fehlend.length > 0) && (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          {neue.length > 0 && (
+            <Button variant="secondary" size="sm" icon={FolderInput}
+              title={`Aus den Downloads in 02_ASSETS verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
+              onClick={() => uebernehmen(s.path, neue.map(d => d.path))}
+            >
+              {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}
+            </Button>
+          )}
+          {s.reparierbar > 0 && (
+            <Button variant="secondary" size="sm" icon={Wrench}
+              title={"Die FLP sucht Dateien noch am alten Ort. BeatOS hat sie gefunden und trägt die neuen Pfade ein — "
+                + "die FLP vorher in FL schließen. Eine Sicherung kommt nach Backup/."}
+              onClick={reparieren}
+            >
+              {s.reparierbar === 1 ? "1 Pfad reparieren" : `${s.reparierbar} Pfade reparieren`}
+            </Button>
+          )}
+          {s.fehlend.length > 0 && (
+            <span
+              title={`Die FLP verwendet diese Dateien, BeatOS findet sie nirgends — FL fragt beim Öffnen danach:\n${s.fehlend.map(p => p.split(/[\\/]/).pop()).join("\n")}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: C.error }}
+            >
+              <AlertTriangle size={12} /> {s.fehlend.length === 1 ? "1 Datei fehlt" : `${s.fehlend.length} Dateien fehlen`}
+            </span>
+          )}
         </div>
       )}
+
+      {/* Bausteine */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {BAUSTEINE.map(b => {
+          const da = s[b.key];
+          return (
+            <span key={b.key} title={`${b.label}: ${da ? "vorhanden" : "fehlt"} — ${b.titel}`} style={{
+              display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: radius.full,
+              fontSize: 11, fontWeight: 600,
+              background: da ? alpha(C.mint, 0.12) : "transparent",
+              border: `1px ${da ? "solid" : "dashed"} ${da ? alpha(C.mint, 0.35) : C.border20}`,
+              color: da ? C.mint : C.onSecondaryFixedVar,
+            }}>
+              {da && <Check size={10} strokeWidth={2.5} />}
+              {b.label}
+            </span>
+          );
+        })}
+      </div>
+
+      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={beschriftung}>Notiz</span>
+        <textarea
+          value={notiz}
+          aria-label={`Notiz zu ${s.name}`}
+          placeholder="Was fehlt, was der Künstler wollte, wo es hakt …"
+          rows={4}
+          onChange={e => setNotiz(e.target.value)}
+          onBlur={() => speichern(notiz, s.warten)}
+          style={{
+            width: "100%", padding: "8px 10px", fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", resize: "vertical",
+            background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+            border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
+          }}
+        />
+      </label>
+
+      <MeinBeat song={s} onGeaendert={onGeaendert} />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", paddingTop: 4, borderTop: `1px solid ${C.border10}` }}>
+        {!s.fertig && (
+          <Segmented
+            label="Status"
+            value={s.warten ? "warten" : "arbeit"}
+            onChange={v => speichern(notiz, v === "warten")}
+            options={[
+              { value: "arbeit", label: "In Arbeit" },
+              { value: "warten", label: "Warte auf Künstler", icon: Hourglass, color: C.tertiary },
+            ]}
+          />
+        )}
+        <span style={{ flex: 1 }} />
+        {s.fertig ? (
+          <Button variant="secondary" size="sm" icon={Undo2}
+            title="Zurück aus _Fertig — wenn der Künstler nach der Abgabe noch etwas will"
+            onClick={() => api.artists.wiederOeffnen(s.path).then(onGeaendert).catch(e => setFehler(String(e)))}
+          >
+            Wieder öffnen
+          </Button>
+        ) : (
+          <Button variant="primary" size="sm" icon={Send} disabled={s.exporte.length === 0}
+            title={s.exporte.length === 0 ? "Noch kein Export im Song-Ordner" : "Export benennen und den Song nach _Fertig schieben"}
+            onClick={() => setAbgabeOffen(true)}
+          >
+            Abgeben …
+          </Button>
+        )}
+      </div>
+      {fehler && <div style={{ fontSize: 12, color: C.error }}>{fehler}</div>}
       {abgabeOffen && (
         <AbgabeDialog song={s} kuenstler={kuenstler} onClose={fertig => { setAbgabeOffen(false); if (fertig) onGeaendert(); }} />
       )}
-    </div>
+    </section>
   );
 }
 

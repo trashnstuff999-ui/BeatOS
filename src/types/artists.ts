@@ -30,6 +30,8 @@ export interface ArtistSong {
   abgegeben: string | null;
   /** So viele Einträge liegen noch außerhalb von 01_/02_/03_ — „Ordner aufräumen". */
   umbau: number;
+  /** FLPs des Songs (01_SAVEFILES oder lose), neueste zuerst. */
+  flps: { name: string; path: string; geaendert: number }[];
   /** „Mein Beat": der verknüpfte Katalog-Beat. */
   beat_id: string | null;
   /** Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag. */
