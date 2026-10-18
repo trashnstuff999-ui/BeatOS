@@ -64,27 +64,39 @@ Warteschlange „Ohne Termin" + Ziehen auf Tage gibt es schon.
       den eigenen Videos die meisten Aufrufe bringen
 - Voraussetzung: Uploads sind nacherfasst (sonst fehlen 2024/25)
 
-### Assets automatisch nummerieren, Cover ↔ Thumbnail abgleichen (Studio → Assets)
-Gewünscht am 18.10.2026. Covers und Thumbnails im Asset-Ordner bekommen
-automatisch fortlaufende Nummern (`Cover_12.png`, `Thumbnail_12.png`).
-Gehören Cover und Thumbnail zusammen (gleiches Motiv), tragen sie dieselbe
-Nummer — dann ist auf einen Blick klar, was zusammengehört.
+### Studio → Assets: nummerieren, Cover ↔ Thumbnail abgleichen, löschen
+Gewünscht am 18.10.2026, Fragen am selben Tag geklärt.
+
+**Nummerieren.** Covers und Thumbnails im Asset-Ordner werden automatisch
+fortlaufend nummeriert und **wirklich umbenannt**: `Cover_1.png`,
+`Thumbnail_1.png`, `Cover_2.png` … Die Nummer ist nur dafür da, zu sehen,
+was zusammengehört — gehören Cover und Thumbnail zum selben Motiv, tragen
+sie dieselbe Nummer.
 - [ ] Nummern stabil: vergebene Nummern ändern sich nie, Neues bekommt die
       nächste freie (max + 1); beim ersten Durchlauf nach Änderungsdatum
 - [ ] Abgleich per Bildvergleich: beide verkleinern (z. B. dHash), beim
-      Thumbnail den mittleren quadratischen Ausschnitt nehmen; ähnlich genug
-      → gleiche Nummer. Zweites Signal: Exportzeit liegt nah beieinander
+      Thumbnail den mittleren quadratischen Ausschnitt; ähnlich genug →
+      gleiche Nummer. Zweites Signal: Exportzeit liegt nah beieinander
 - [ ] Thumbnail ohne passendes Cover → eigene Nummer; unsichere Treffer
       vorschlagen statt still umbenennen
-- [ ] Bausteine: `scan_asset_inbox` (`guessed_role` cover/thumbnail) in
-      `commands/studio.rs`, Raster in `src/components/studio/AssetsPane.tsx`
-- Offen vor dem Bauen:
-  1. Sollen die Dateien im Asset-Ordner wirklich umbenannt werden, oder
-     reicht die Nummer als Anzeige in BeatOS?
-  2. Genaues Namensschema (`Cover_12.png`? mit Datum? Großschreibung?)
-  3. Videos mitnummerieren?
-  4. Beim Zuweisen an ein Projekt: behält die Datei die Nummer, oder gilt
-     dort wie bisher das Namensschema des Beats?
+- [ ] **Videos nicht nummerieren** — sie heißen schon wie der Song
+      (z. B. `home again_video.mp4`)
+- [ ] Beim Zuweisen an ein Projekt gilt wie bisher das Namensschema des
+      Beats; die Nummer hat dann ihren Zweck erfüllt (Annahme — beim Bauen
+      kurz bestätigen lassen)
+
+**Löschen.** Bilder und Videos im Assets-Tab löschen können, wenn man sie
+nicht braucht — die Datei verschwindet aus dem Asset-Ordner.
+- [ ] Löschen in den **Windows-Papierkorb**, wie schon bei Projekten und
+      Beats (`trash::delete`, Crate `trash` ist vorhanden): weg aus dem
+      Ordner, nach einem Fehlklick aber wiederholbar
+- [ ] Ein Klick pro Kachel, dazu Mehrfachauswahl zum Aufräumen in einem Rutsch
+- [ ] Nach dem Löschen eines Covers/Thumbnails: Partner mit derselben Nummer
+      behält seine Nummer (keine Lücke schließen — Nummern bleiben stabil)
+
+Bausteine: `scan_asset_inbox` (`guessed_role` cover/thumbnail/video) in
+`src-tauri/src/commands/studio.rs`, Raster in
+`src/components/studio/AssetsPane.tsx`.
 
 ### Lautheit/Clipping prüfen (später, nicht dringend)
 ffmpeg misst LUFS und Spitzen beim Laden des Beats, Anzeige in der
