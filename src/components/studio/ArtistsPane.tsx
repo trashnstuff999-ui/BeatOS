@@ -8,17 +8,21 @@
 // Songs (<Künstler>/_Fertig/) stehen zugeklappt darunter.
 // Scheibe 6: Künstler-Ordner, die noch im Archiv liegen, umziehen — mit
 // Vorschau, verschoben wird erst auf Klick.
+// Scheibe 2: „Neuer Künstler" (Ordner) und „Neuer Song" (Ordner, Template-FLP,
+// Eingang/). Scheibe 3: Klick auf einen Song klappt Notiz und Status auf —
+// „In Arbeit" oder „Warte auf Künstler" (Tabelle artist_songs).
 // Plan und nächste Scheiben: docs/kuenstler-projekte.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { EmptyState, Button, IconButton, Modal } from "../ui";
+import { useSettings } from "../../contexts/SettingsContext";
+import { EmptyState, Button, IconButton, Modal, Segmented } from "../ui";
 import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
@@ -36,6 +40,9 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   const [umzugOffen, setUmzugOffen] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [legtAn, setLegtAn] = useState(false);
+  // Namensdialog: neuer Künstler (ohne Ziel) oder neuer Song bei diesem Künstler.
+  const [neu, setNeu] = useState<{ kuenstler: Artist | null } | null>(null);
+  const { settings } = useSettings();
 
   const laden = useCallback(() => {
     if (!root) return;
@@ -82,6 +89,20 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       root={root}
       onClose={() => { setUmzugOffen(false); laden(); }}
     />
+  ) || neu && (
+    <NameDialog
+      titel={neu.kuenstler ? `Neuer Song für ${neu.kuenstler.name}` : "Neuer Künstler"}
+      hinweis={neu.kuenstler
+        ? "Legt den Song-Ordner an, darin die Template-FLP und Eingang/ für das, was der Künstler schickt."
+        : "Legt einen Ordner für den Künstler an."}
+      anlegen={async name => {
+        if (!neu.kuenstler) { await api.artists.create(root, name); return; }
+        const vorlage = settings.flpTemplatePath.trim();
+        if (!vorlage) throw new Error("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen.");
+        await api.artists.createSong(neu.kuenstler.path, name, vorlage);
+      }}
+      onClose={angelegt => { setNeu(null); if (angelegt) laden(); }}
+    />
   );
 
   let inhalt: React.ReactNode;
@@ -110,14 +131,19 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       <EmptyState
         icon={Users}
         title="Noch keine Künstler"
-        description="Im Künstler-Ordner je Künstler einen Unterordner anlegen, darin je Song einen Ordner."
-        action={<Button variant="secondary" icon={FolderOpen} onClick={() => revealItemInDir(root).catch(() => {})}>Ordner öffnen</Button>}
+        description="Je Künstler ein Ordner, darin je Song einer."
+        action={<Button variant="primary" icon={UserPlus} onClick={() => setNeu({ kuenstler: null })}>Neuer Künstler</Button>}
       />
     );
   } else {
     inhalt = (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {scan.kuenstler.map(k => <KuenstlerBlock key={k.path} kuenstler={k} />)}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -12 }}>
+          <Button variant="secondary" size="sm" icon={UserPlus} onClick={() => setNeu({ kuenstler: null })}>Neuer Künstler</Button>
+        </div>
+        {scan.kuenstler.map(k => (
+          <KuenstlerBlock key={k.path} kuenstler={k} onNeuerSong={() => setNeu({ kuenstler: k })} onGeaendert={laden} />
+        ))}
       </div>
     );
   }
@@ -228,7 +254,61 @@ function UmzugDialog({ altbestand, archivePath, root, onClose }: {
   );
 }
 
-function KuenstlerBlock({ kuenstler: k }: { kuenstler: Artist }) {
+/** Einen Namen abfragen und anlegen. Fehler (Name schon da, keine
+ *  Template-FLP) stehen im Dialog, der Name bleibt stehen. */
+function NameDialog({ titel, hinweis, anlegen, onClose }: {
+  titel: string;
+  hinweis: string;
+  anlegen: (name: string) => Promise<void>;
+  onClose: (angelegt: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  const los = async () => {
+    if (!name.trim() || laeuft) return;
+    setLaeuft(true);
+    setFehler(null);
+    try { await anlegen(name.trim()); onClose(true); }
+    catch (e) { setFehler(e instanceof Error ? e.message : String(e)); setLaeuft(false); }
+  };
+
+  return (
+    <Modal
+      icon={FolderPlus}
+      title={titel}
+      subtitle={hinweis}
+      width={460}
+      onClose={() => onClose(false)}
+      footer={<>
+        <Button variant="ghost" onClick={() => onClose(false)}>Abbrechen</Button>
+        <Button variant="primary" icon={FolderPlus} loading={laeuft} disabled={!name.trim()} onClick={los}>Anlegen</Button>
+      </>}
+    >
+      <input
+        autoFocus
+        value={name}
+        aria-label="Name"
+        placeholder="Name"
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") los(); }}
+        style={{
+          width: "100%", padding: "8px 10px", fontSize: 13, fontFamily: "inherit",
+          background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+          border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
+        }}
+      />
+      {fehler && <div style={{ marginTop: 8, fontSize: 12, color: C.error }}>{fehler}</div>}
+    </Modal>
+  );
+}
+
+function KuenstlerBlock({ kuenstler: k, onNeuerSong, onGeaendert }: {
+  kuenstler: Artist;
+  onNeuerSong: () => void;
+  onGeaendert: () => void;
+}) {
   const [fertigOffen, setFertigOffen] = useState(false);
   const offen = k.songs.filter(s => !s.fertig);
   const fertig = k.songs.filter(s => s.fertig);
@@ -246,6 +326,7 @@ function KuenstlerBlock({ kuenstler: k }: { kuenstler: Artist }) {
           {fertig.length > 0 && ` · ${fertig.length} abgegeben`}
         </span>
         <span style={{ flex: 1 }} />
+        <Button variant="secondary" size="sm" icon={Plus} onClick={onNeuerSong}>Neuer Song</Button>
         <IconButton icon={FolderOpen} size={28} variant="secondary" title="Künstler-Ordner öffnen"
           onClick={() => revealItemInDir(k.path).catch(() => {})} />
       </div>
@@ -253,7 +334,7 @@ function KuenstlerBlock({ kuenstler: k }: { kuenstler: Artist }) {
       {offen.length === 0 && (
         <div style={{ padding: "12px 18px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
       )}
-      {offen.map(s => <SongZeile key={s.path} song={s} />)}
+      {offen.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} />)}
 
       {fertig.length > 0 && (
         <>
@@ -270,54 +351,124 @@ function KuenstlerBlock({ kuenstler: k }: { kuenstler: Artist }) {
             <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: fertigOffen ? "rotate(180deg)" : "none" }} />
             Abgegeben ({fertig.length})
           </button>
-          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} />)}
+          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} />)}
         </>
       )}
     </section>
   );
 }
 
-function SongZeile({ song: s }: { song: ArtistSong }) {
+/** Eine Song-Zeile. Klick klappt Notiz und Status auf; gespeichert wird beim
+ *  Verlassen des Felds bzw. beim Umschalten. */
+function SongZeile({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () => void }) {
+  const [offen, setOffen] = useState(false);
+  const [notiz, setNotiz] = useState(s.notiz ?? "");
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  const speichern = (n: string, warten: boolean) => {
+    if (n === (s.notiz ?? "") && warten === s.warten) return;
+    api.artists.setSong(s.path, n, warten)
+      .then(() => { setFehler(null); onGeaendert(); })
+      .catch(e => setFehler(String(e)));
+  };
+  const ersteZeile = s.notiz?.split("\n")[0];
+
   return (
-    <div
-      onClick={() => revealItemInDir(s.path).catch(() => {})}
-      title="Song-Ordner öffnen"
-      style={{
-        display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 110px", alignItems: "center", gap: 16,
-        padding: "11px 18px", borderTop: `1px solid ${C.border10}`, cursor: "pointer",
-        opacity: s.fertig ? 0.7 : 1,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainer; }}
-      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-    >
-      <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {s.name}
-      </span>
-      <span style={{ display: "flex", gap: 4 }}>
-        {BAUSTEINE.map(b => {
-          const da = s[b.key];
-          return (
-            <span
-              key={b.key}
-              title={`${b.label}: ${da ? "vorhanden" : "fehlt"} — ${b.titel}`}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                padding: "2px 8px", borderRadius: radius.full,
-                fontSize: 11, fontWeight: 600,
-                background: da ? alpha(C.mint, 0.12) : "transparent",
-                border: `1px ${da ? "solid" : "dashed"} ${da ? alpha(C.mint, 0.35) : C.border20}`,
-                color: da ? C.mint : C.onSecondaryFixedVar,
-              }}
-            >
-              {da && <Check size={10} strokeWidth={2.5} />}
-              {b.label}
+    <div style={{ borderTop: `1px solid ${C.border10}`, background: offen ? C.surfaceContainer : "transparent" }}>
+      <div
+        onClick={() => setOffen(o => !o)}
+        title={offen ? "Zuklappen" : "Notiz und Status"}
+        style={{
+          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 110px 14px", alignItems: "center", gap: 16,
+          padding: "11px 18px", cursor: "pointer",
+          opacity: s.fertig ? 0.7 : 1,
+        }}
+        onMouseEnter={e => { if (!offen) e.currentTarget.style.background = C.surfaceContainer; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      >
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {s.name}
             </span>
-          );
-        })}
-      </span>
-      <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, textAlign: "right" }}>
-        {s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
-      </span>
+            {s.warten && !s.fertig && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+                padding: "1px 7px", borderRadius: radius.full, fontSize: 11, fontWeight: 600,
+                background: alpha(C.tertiary, 0.12), color: C.tertiary,
+              }}>
+                <Hourglass size={10} /> Warte auf Künstler
+              </span>
+            )}
+          </span>
+          {ersteZeile && !offen && (
+            <span style={{ display: "block", marginTop: 2, fontSize: 12, color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {ersteZeile}
+            </span>
+          )}
+        </span>
+        <span style={{ display: "flex", gap: 4 }}>
+          {BAUSTEINE.map(b => {
+            const da = s[b.key];
+            return (
+              <span
+                key={b.key}
+                title={`${b.label}: ${da ? "vorhanden" : "fehlt"} — ${b.titel}`}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "2px 8px", borderRadius: radius.full,
+                  fontSize: 11, fontWeight: 600,
+                  background: da ? alpha(C.mint, 0.12) : "transparent",
+                  border: `1px ${da ? "solid" : "dashed"} ${da ? alpha(C.mint, 0.35) : C.border20}`,
+                  color: da ? C.mint : C.onSecondaryFixedVar,
+                }}
+              >
+                {da && <Check size={10} strokeWidth={2.5} />}
+                {b.label}
+              </span>
+            );
+          })}
+        </span>
+        <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, textAlign: "right" }}>
+          {s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
+        </span>
+        <ChevronDown size={14} color={C.onSecondaryFixedVar} style={{ transition: "transform 0.15s", transform: offen ? "rotate(180deg)" : "none" }} />
+      </div>
+
+      {offen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 18px 14px" }}>
+          <textarea
+            autoFocus
+            value={notiz}
+            aria-label={`Notiz zu ${s.name}`}
+            placeholder="Notiz — was fehlt, was der Künstler wollte, wo es hakt …"
+            rows={3}
+            onChange={e => setNotiz(e.target.value)}
+            onBlur={() => speichern(notiz, s.warten)}
+            style={{
+              width: "100%", padding: "8px 10px", fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", resize: "vertical",
+              background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+              border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {!s.fertig && (
+              <Segmented
+                label="Status"
+                value={s.warten ? "warten" : "arbeit"}
+                onChange={v => speichern(notiz, v === "warten")}
+                options={[
+                  { value: "arbeit", label: "In Arbeit" },
+                  { value: "warten", label: "Warte auf Künstler", icon: Hourglass, color: C.tertiary },
+                ]}
+              />
+            )}
+            {fehler && <span style={{ fontSize: 12, color: C.error }}>{fehler}</span>}
+            <span style={{ flex: 1 }} />
+            <Button variant="secondary" size="sm" icon={FolderOpen} onClick={() => revealItemInDir(s.path).catch(() => {})}>Ordner öffnen</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

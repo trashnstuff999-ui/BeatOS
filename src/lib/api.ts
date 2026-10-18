@@ -274,6 +274,14 @@ export const api = {
     /** Ganze Ordner nach <Künstler-Ordner>/<Künstler> verschieben; Ziel vorhanden → übersprungen. */
     umziehen: (archiveRoot: string, artistsRoot: string, umzuege: { pfad: string; kuenstler: string }[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artists_umziehen", { archiveRoot, artistsRoot, umzuege }),
+    /** Notiz und „Warte auf Künstler" für einen Song. */
+    setSong: (path: string, notiz: string | null, warten: boolean) =>
+      invoke<void>("set_artist_song", { path, notiz, warten }),
+    /** Neuer Künstler-Ordner; gibt den Pfad zurück. */
+    create: (root: string, name: string) => invoke<string>("create_artist", { root, name }),
+    /** Neuer Song: Ordner + Template-FLP + Eingang/; gibt den FLP-Pfad zurück. */
+    createSong: (artistPath: string, name: string, templateFlp: string) =>
+      invoke<string>("create_artist_song", { artistPath, name, templateFlp }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────

@@ -13,6 +13,9 @@ export interface ArtistSong {
   master: boolean;
   /** Jüngste Änderung (Sekunden). */
   geaendert: number;
+  /** Von Hand: eine Notiz und „Warte auf Künstler". */
+  notiz: string | null;
+  warten: boolean;
 }
 
 export interface Artist {

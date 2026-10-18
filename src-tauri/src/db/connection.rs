@@ -375,6 +375,21 @@ pub fn init_db() -> Result<(), String> {
                     init_error = Some(format!("Failed to create beat_description_overrides table: {}", e));
                 }
 
+                // Künstler-Songs: eine Notiz und „Warte auf Künstler", am
+                // Song-Ordner. Eigene Tabelle statt studio_projects: deren
+                // Status (idea/wip/ready …) kennt kein „Warten" und zählt in
+                // die Studio-Statistik.
+                if let Err(e) = conn.execute(
+                    "CREATE TABLE IF NOT EXISTS artist_songs (
+                        path   TEXT PRIMARY KEY,
+                        notiz  TEXT,
+                        warten INTEGER NOT NULL DEFAULT 0
+                    )",
+                    [],
+                ) {
+                    init_error = Some(format!("Failed to create artist_songs table: {}", e));
+                }
+
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(
                     "CREATE TABLE IF NOT EXISTS studio_projects (

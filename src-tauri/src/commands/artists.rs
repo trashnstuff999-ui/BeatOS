@@ -12,7 +12,9 @@
 // Vocals in Audio/ („…_VOCALS DRY.wav"), Export direkt daneben, Backup/ von FL.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+use crate::db::open_db;
 use crate::utils::{is_audio_extension, is_flp};
+use std::collections::HashMap;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
@@ -31,6 +33,9 @@ pub struct ArtistSong {
     pub master: bool,
     /// Jüngste Änderung im Song (Sekunden) — zum Sortieren.
     pub geaendert: u64,
+    /// Von Hand, aus artist_songs: eine Notiz und „Warte auf Künstler".
+    pub notiz: Option<String>,
+    pub warten: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -59,7 +64,58 @@ pub struct ArtistsScan {
 #[tauri::command(async)]
 pub fn scan_artists(root: String) -> Result<ArtistsScan, String> {
     let pfad = Path::new(&root);
-    Ok(ArtistsScan { vorhanden: pfad.is_dir(), kuenstler: kuenstler_lesen(pfad) })
+    let mut kuenstler = kuenstler_lesen(pfad);
+    // Notiz + Warten dazulesen. Ohne Tabelle bleibt es leer.
+    if let Ok(conn) = open_db() {
+        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten FROM artist_songs") {
+            let zeilen: HashMap<String, (Option<String>, bool)> = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0))))
+                .map(|rows| rows.flatten().collect())
+                .unwrap_or_default();
+            for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
+                if let Some((notiz, warten)) = zeilen.get(&s.path) {
+                    s.notiz = notiz.clone();
+                    s.warten = *warten;
+                }
+            }
+        }
+    }
+    Ok(ArtistsScan { vorhanden: pfad.is_dir(), kuenstler })
+}
+
+/// Notiz und „Warte auf Künstler" für einen Song speichern.
+#[tauri::command]
+pub fn set_artist_song(path: String, notiz: Option<String>, warten: bool) -> Result<(), String> {
+    let notiz = notiz.filter(|n| !n.trim().is_empty());
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO artist_songs (path, notiz, warten) VALUES (?1, ?2, ?3)
+         ON CONFLICT(path) DO UPDATE SET notiz = excluded.notiz, warten = excluded.warten",
+        rusqlite::params![path, notiz, warten as i64],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Neuer Künstler: nur ein Ordner. Gibt den Pfad zurück.
+#[tauri::command]
+pub fn create_artist(root: String, name: String) -> Result<String, String> {
+    let name = crate::utils::sanitize_filename_part(name.trim());
+    if name.is_empty() { return Err("Bitte einen Namen eingeben".into()); }
+    let dir = Path::new(&root).join(&name);
+    if dir.exists() { return Err(format!("„{name}\" gibt es schon")); }
+    fs::create_dir_all(&dir).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+/// Neuer Song: wie ein Studio-Projekt (Ordner + Template-FLP), dazu `Eingang/`
+/// für das, was der Künstler schickt. Gibt den Pfad der FLP zurück.
+#[tauri::command]
+pub fn create_artist_song(artist_path: String, name: String, template_flp: String) -> Result<String, String> {
+    let flp = crate::commands::create_project_folder(artist_path, name, template_flp)?;
+    if let Some(dir) = Path::new(&flp).parent() {
+        let _ = fs::create_dir_all(dir.join(EINGANG));
+    }
+    Ok(flp)
 }
 
 fn kuenstler_lesen(root: &Path) -> Vec<Artist> {
@@ -262,6 +318,25 @@ mod tests {
         assert!(alt.fertig && alt.flp);
         assert_eq!(k[0].songs.last().unwrap().name, "Alt", "Fertiges steht unten");
 
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn kuenstler_und_song_anlegen() {
+        let root = std::env::temp_dir().join(format!("beatos_anlegen_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let vorlage = root.join("vorlage.flp");
+        fs::write(&vorlage, b"FLhd").unwrap();
+        let r = root.to_string_lossy().to_string();
+
+        let k = create_artist(r.clone(), " Yoghi ".into()).unwrap();
+        assert!(create_artist(r.clone(), "Yoghi".into()).is_err(), "doppelt");
+        assert!(create_artist(r, "  ".into()).is_err(), "leer");
+
+        let flp = create_artist_song(k.clone(), "No Bleed".into(), vorlage.to_string_lossy().to_string()).unwrap();
+        assert!(Path::new(&flp).ends_with("Yoghi/No Bleed/No Bleed.flp"));
+        assert!(Path::new(&k).join("No Bleed/Eingang").is_dir());
         let _ = fs::remove_dir_all(&root);
     }
 

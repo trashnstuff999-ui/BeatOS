@@ -59,6 +59,9 @@ use commands::{
     create_artists_root,
     artists_altbestand,
     artists_umziehen,
+    set_artist_song,
+    create_artist,
+    create_artist_song,
     // Settings commands
     get_settings,
     save_settings,
@@ -236,6 +239,9 @@ pub fn run() {
             create_artists_root,
             artists_altbestand,
             artists_umziehen,
+            set_artist_song,
+            create_artist,
+            create_artist_song,
             // Settings
             get_settings,
             save_settings,

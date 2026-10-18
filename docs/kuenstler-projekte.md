@@ -94,9 +94,9 @@ werden.
 - [x] **1 — Künstler-Ordner + Ansicht** (nur lesen; erledigt 18.10.2026, e84e705): Einstellung
       `05_ARTISTS`, Studio-Tab „Künstler": pro Künstler die Songs, je Zeile
       Häkchen Vocals/Demo/Beat/FLP/Mix/Master + erste Notizzeile.
-- [ ] **2 — Anlegen**: „Neuer Künstler" und „Neuer Song" (Ordner + `Eingang/`
+- [x] **2 — Anlegen** (erledigt 18.10.2026): „Neuer Künstler" und „Neuer Song" (Ordner + `Eingang/`
       + leere FLP wie `create_project_folder`).
-- [ ] **3 — Notiz + Status** im Detailpanel (wiederverwendet `studio_projects`):
+- [x] **3 — Notiz + Status** (erledigt 18.10.2026) — Klick auf den Song klappt sie auf; eigene Tabelle `artist_songs` statt `studio_projects` (deren Status kennt kein „Warten" und zählt in die Studio-Statistik):
       eine Notiz pro Song, Status „Warte auf Künstler" / „In Arbeit".
 - [ ] **4 — Dateien reinziehen + Downloads vorschlagen**: Vocals/Demo/Beat
       auf den Song ziehen → `Eingang/`. Dazu der Downloads-Ordner: neue
