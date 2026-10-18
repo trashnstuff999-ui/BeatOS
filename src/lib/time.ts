@@ -64,3 +64,9 @@ export function tageRelativ(iso: string, heute: Date = new Date()): string {
     : `${Math.floor(n / 365)} Jahren`;
   return tage > 0 ? `in ${text}` : `vor ${text}`;
 }
+
+/** Sekunden als „m:ss" — Player-Zeit, Videolänge. */
+export function zeitText(sek: number): string {
+  if (!Number.isFinite(sek) || sek < 0) return "0:00";
+  return `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, "0")}`;
+}

@@ -14,7 +14,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useNavigate } from "react-router-dom";
 import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { formatRelativeTime } from "../../lib/time";
+import { formatRelativeTime, zeitText } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { EmptyState, Button, IconButton, Modal, Segmented } from "../ui";
 import { bildHash, nummerAusName, planeNummern, rolleAusMassen, rolleAusName, type Bild, type Umbenennung } from "../../lib/assetNummern";
@@ -27,6 +27,13 @@ type KindFilter = "all" | "image" | "video";
 const KIND_LABEL: Record<KindFilter, string> = {
   all: "Alle", image: "Bilder", video: "Videos",
 };
+
+const ABSCHNITTE: { rolle: AssetFile["guessed_role"]; titel: string; format: string; breite: number }[] = [
+  { rolle: "cover",     titel: "Cover",          format: "1:1",  breite: 200 },
+  { rolle: "thumbnail", titel: "Thumbnails",     format: "16:9", breite: 300 },
+  { rolle: "video",     titel: "Videos",         format: "16:9", breite: 300 },
+  { rolle: "image",     titel: "Weitere Bilder", format: "ohne cover/thumb im Namen", breite: 300 },
+];
 
 interface AssetsPaneProps {
   assetPath: string;
@@ -212,25 +219,35 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
         />
       )}
 
+      {/* Nach Art getrennt: jeder Abschnitt hat ein Format, so bleiben die
+          Reihen gleich hoch. Bilder ohne „cover“/„thumb“ stehen unter Weitere. */}
       {!error && visible.length > 0 && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-          gap: 12,
-          padding: 16,
-          alignItems: "start",
-        }}>
-          {visible.map(a => (
-            <AssetCard
-              key={a.path}
-              asset={a}
-              auswahl={auswahl ? auswahl.has(a.path) : null}
-              onClick={() => auswahl
-                ? setAuswahl(s => { const n = new Set(s); if (n.has(a.path)) n.delete(a.path); else n.add(a.path); return n; })
-                : setPicked(a)}
-              onLoeschen={() => loeschen([a.path])}
-            />
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 16 }}>
+          {ABSCHNITTE.map(({ rolle, titel, format, breite }) => {
+            const liste = visible.filter(a => a.guessed_role === rolle);
+            if (liste.length === 0) return null;
+            return (
+              <section key={rolle} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
+                  <span style={{ color: C.onSurface }}>{titel}</span>
+                  <span>{liste.length} · {format}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${breite}px, 1fr))`, gap: 12 }}>
+                  {liste.map(a => (
+                    <AssetCard
+                      key={a.path}
+                      asset={a}
+                      auswahl={auswahl ? auswahl.has(a.path) : null}
+                      onClick={() => auswahl
+                        ? setAuswahl(s => { const n = new Set(s); if (n.has(a.path)) n.delete(a.path); else n.add(a.path); return n; })
+                        : setPicked(a)}
+                      onLoeschen={() => loeschen([a.path])}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -261,6 +278,7 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
   onLoeschen: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [dauer, setDauer] = useState<number | null>(null);
   const markiert = auswahl === true;
 
   return (
@@ -293,16 +311,18 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
       }}>
         {asset.kind === "image"
           ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`} />
-          : <AssetVideo path={asset.path} />}
+          : <AssetVideo path={asset.path} onDauer={setDauer} />}
 
+        {/* Abzeichen unten rechts wie bei YouTube — verdeckt keinen Titel im Bild */}
         {asset.kind === "video" && (
           <span style={{
-            position: "absolute", inset: 0, margin: "auto", width: 44, height: 44, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)",
-            border: "1px solid rgba(255,255,255,0.35)", pointerEvents: "none",
+            position: "absolute", right: 8, bottom: 8,
+            display: "flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 6px",
+            borderRadius: 6, background: "rgba(0,0,0,0.75)",
+            fontSize: 12, fontWeight: 700, color: "#fff", pointerEvents: "none",
           }}>
-            <Play size={18} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
+            <Play size={10} color="#fff" fill="#fff" />
+            {dauer != null ? zeitText(dauer) : "Video"}
           </span>
         )}
 

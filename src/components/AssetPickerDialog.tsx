@@ -259,7 +259,7 @@ export function AssetImage({ path, fit = "contain", stand }: {
 /** Erstes Bild eines Videos statt eines Film-Symbols. Lädt nur die Metadaten;
  *  `#t=1` springt hinter das Schwarzbild, mit dem viele Videos anfangen. Kann der
  *  WebView das Format nicht (manche .mov), bleibt das Symbol. */
-export function AssetVideo({ path, fit = "contain" }: { path: string; fit?: "contain" | "cover" }) {
+export function AssetVideo({ path, fit = "contain", onDauer }: { path: string; fit?: "contain" | "cover"; onDauer?: (sek: number) => void }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return <Film size={26} color={C.onSecondaryFixedVar} strokeWidth={1.25} />;
@@ -271,6 +271,7 @@ export function AssetVideo({ path, fit = "contain" }: { path: string; fit?: "con
       muted
       playsInline
       onError={() => setFailed(true)}
+      onLoadedMetadata={e => onDauer?.(e.currentTarget.duration)}
       style={{ width: "100%", height: "100%", objectFit: fit, display: "block", pointerEvents: "none" }}
     />
   );

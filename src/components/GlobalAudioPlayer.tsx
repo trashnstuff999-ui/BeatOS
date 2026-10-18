@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { C, alpha } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
+import { zeitText } from "../lib/time";
 import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
 import { isStudioBeatId } from "../types/studio";
 
@@ -274,11 +275,6 @@ function Zeit({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
-}
-
-function zeitText(sek: number): string {
-  if (!Number.isFinite(sek) || sek < 0) return "0:00";
-  return `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, "0")}`;
 }
 
 /** Drei hüpfende Balken neben dem Namen, solange Musik läuft. */
