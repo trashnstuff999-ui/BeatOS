@@ -5,8 +5,7 @@ Jede Scheibe einzeln bauen und ansehen. Ergänzungen und Klärungen sind
 ausdrücklich erwünscht — Plan wächst mit.
 
 **Entschieden:** Wurzelordner heißt `05_ARTISTS`.
-**Offen:** Antworten auf „Was wir noch vergessen könnten" 1–9 — beim
-nächsten Mal zuerst abfragen, dann mit Scheibe 0 starten.
+**Geklärt am 18.10.2026:** alle Fragen unten beantwortet (siehe „Antworten").
 
 ## So läuft es heute (Stephans Worte)
 
@@ -67,19 +66,46 @@ Von Hand dazu: „Warte auf Künstler", „Abgegeben".
 9. **Discord-Downloads**: landen im Downloads-Ordner → BeatOS sortiert sie per
    Namensregel (`X Vocals` → Song X) in den richtigen Eingang.
 
+## Antworten (18.10.2026)
+
+1. **Korrekturrunden** → nur **eine Notiz pro Song**, keine Versionsverfolgung.
+   Versionen erkennt man an den Dateinamen.
+2. **Abgabe** → **ja, mit Namensschema**: Knopf „Abgeben" benennt die Datei
+   (`<Künstler> - <Song> (Master).wav`), merkt Datum und Art (Mix/Master).
+3. **Mein Beat** → **nur im Song** vermerken, welcher Beat es ist. Im Archiv
+   ändert sich nichts.
+4. **Beat-Daten** → BPM/Key des Beats im Song sehen (ohne Frage, klar).
+5. **Stems** → **je nachdem**: Stereo-WAV kopieren *oder* Stems — beides
+   anbieten (Stems kommen aus der FLP, BeatOS öffnet sie dafür in FL).
+6. **Geld** → **nein**, kein Preis, kein „bezahlt".
+7. **Fertige Songs** → wandern nach `05_ARTISTS/<Künstler>/_Fertig/`.
+8. **Altbestand** → **umziehen**: BeatOS zeigt vorher, was wohin wandert,
+   verschoben wird erst nach Bestätigung.
+9. **Discord-Downloads** → **vorschlagen**: neue Downloads mit passendem
+   Song anzeigen, ein Klick verschiebt sie in den `Eingang/`.
+
+**Befund Scheibe 0 (18.10.2026):** `JarnoGm - Library` und `Yoghi` stehen
+**nicht** als Schein-Beats im Katalog — der Archiv-Scan muss nicht repariert
+werden.
+
 ## Scheiben
 
-- [ ] **0 — Prüfen**: Stehen `JarnoGm - Library`/`Yoghi` als Schein-Beats im
-      Katalog? Wenn ja, Archiv-Scan reparieren.
+- [x] **0 — Prüfen**: keine Schein-Beats im Katalog (18.10.2026).
 - [ ] **1 — Künstler-Ordner + Ansicht** (nur lesen): Einstellung
       `05_ARTISTS`, Studio-Tab „Künstler": pro Künstler die Songs, je Zeile
       Häkchen Vocals/Demo/Beat/FLP/Mix/Master + erste Notizzeile.
 - [ ] **2 — Anlegen**: „Neuer Künstler" und „Neuer Song" (Ordner + `Eingang/`
       + leere FLP wie `create_project_folder`).
-- [ ] **3 — Notizen + Status** im Detailpanel (wiederverwendet `studio_projects`).
-- [ ] **4 — Dateien reinziehen**: Vocals/Demo/Beat auf den Song ziehen → landen
-      im `Eingang/`, Song wird per Namensregel erkannt.
-- [ ] **5 — Mein Beat**: Beat aus dem Katalog suchen, WAV in den Eingang
-      kopieren, Verknüpfung merken.
+- [ ] **3 — Notiz + Status** im Detailpanel (wiederverwendet `studio_projects`):
+      eine Notiz pro Song, Status „Warte auf Künstler" / „In Arbeit".
+- [ ] **4 — Dateien reinziehen + Downloads vorschlagen**: Vocals/Demo/Beat
+      auf den Song ziehen → `Eingang/`. Dazu der Downloads-Ordner: neue
+      Dateien mit passendem Song (Namensregel „X Vocals" → Song X) werden
+      vorgeschlagen, ein Klick verschiebt sie.
+- [ ] **5 — Mein Beat**: Beat aus dem Katalog suchen, im Song vermerken (BPM/Key
+      sichtbar), ungetaggte WAV in den Eingang kopieren — oder für Stems die
+      FLP des Beats in FL öffnen.
 - [ ] **6 — Altbestand umziehen** (`JarnoGm - Library`, `Yoghi`).
-- [ ] **7 — Versionen/Abgabe** (je nach Antwort zu Punkt 1–2 oben).
+- [ ] **7 — Abgabe**: Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
+      `<Künstler> - <Song> (Master).wav`, merkt Datum; Song wandert nach
+      `<Künstler>/_Fertig/`.
