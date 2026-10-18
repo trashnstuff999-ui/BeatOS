@@ -278,7 +278,9 @@ export function Heute({ actions, recent, refreshKey }: {
             <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>archiviert, noch ohne Termin</span>
           </div>
           {regal.length > 0 && (
-            <div style={{ display: "flex", gap: 20, overflowX: "auto", paddingBottom: 8 }}>
+            <div style={{ display: "flex", gap: 20, overflowX: "auto", padding: "8px 0", marginTop: -8 }}>
+              {/* Scrollt waagerecht und schneidet damit auch oben ab — der Rand
+                  oben gibt dem Anheben beim Hover Platz. */}
               {regal.map(q => (
                 <button key={q.id} className="ue-hebt" onClick={() => zumUpload(q.id)} title={`${q.name} im Upload-Tab öffnen`}
                   style={{ flex: "0 0 150px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}>

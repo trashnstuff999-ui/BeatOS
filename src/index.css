@@ -73,3 +73,4 @@ html, body, #root {
 .ue-punkt:hover circle { opacity: 1; }
 .ue-punkt:hover line { opacity: 1; }
 .ue-zeile { background: transparent; }
+.ue-klick { background: transparent; }

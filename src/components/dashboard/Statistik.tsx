@@ -27,9 +27,11 @@ const unterzeile: React.CSSProperties = { margin: "6px 0 0", fontSize: 13, color
 const abschnitt: React.CSSProperties = { padding: "44px 0", borderBottom: `1px solid ${C.border10}` };
 const zahl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, fontFamily: "monospace", lineHeight: 1 };
 
-/** Knopf ohne Knopf-Optik: erbt Schrift und Farbe, bringt Tab und Enter mit. */
-function Klick({ style, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button type="button" {...rest} style={{ border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit", textAlign: "inherit", cursor: "pointer", ...style }} />;
+/** Knopf ohne Knopf-Optik: erbt Schrift und Farbe, bringt Tab und Enter mit.
+ *  Der durchsichtige Hintergrund kommt aus der Klasse ue-klick, nicht inline —
+ *  sonst überdeckt er den Hover von ue-zeile. */
+function Klick({ style, className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button type="button" {...rest} className={className ? `ue-klick ${className}` : "ue-klick"} style={{ border: 0, padding: 0, margin: 0, font: "inherit", color: "inherit", textAlign: "inherit", cursor: "pointer", ...style }} />;
 }
 
 export function Statistik({ stats, actions, refreshKey, onFilter }: {
