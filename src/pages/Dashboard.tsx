@@ -2,18 +2,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  RefreshCw, Archive, Play, Sparkles, Piano, Star, Music,
+  RefreshCw, Archive, Sparkles, Piano, Star, Music,
   CalendarClock, Disc3, Flame, ArrowRight, Upload as UploadIcon, LayoutGrid,
+  ListTodo, ChartColumn,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Stats, DashboardActions } from "../types/stats";
 import { MAJOR_KEYS, MINOR_KEYS } from "../types/browse";
-import type { Beat } from "../types/browse";
-import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
 import { C, commonStyles, STUDIO_STATUS_CONFIG, STATUS_ITEMS, alpha, radius } from "../lib/theme";
 import { getTagCategoryFromDb, TAG_COLORS, CATEGORY_LABELS, type TagCategory } from "../lib/tags";
-import { StatusPill } from "../components/Tagpill";
-import { Select, Button, PageHeader, PageBody, EmptyState } from "../components/ui";
+import { Select, Button, PageHeader, PageBody, Segmented } from "../components/ui";
 
 /**
  * Anklickbarer Text und anklickbare Balken auf der Uebersicht.
@@ -478,7 +476,10 @@ function TopKeys({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
           .map(k => ({ key: k, label: k, count: stats.top_keys.find(x => x.key === k)?.count ?? 0 }));
 
   return (
-    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: "16px 20px", transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden" }} {...commonStyles.cardHoverHandlers}>
+    <div style={{ ...commonStyles.card, background: C.surfaceContainer, padding: "16px 20px", transition: "border-color 0.2s", display: "flex", flexDirection: "column", overflow: "hidden",
+      // Die Karte erbte ihre Hoehe von der Status-Karte daneben (~110 px) —
+      // die Balken blieben ein 15-px-Streifen, 7 sah aus wie 16.
+      minHeight: 260, boxSizing: "border-box" }} {...commonStyles.cardHoverHandlers}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Tonarten</h4>
         <Select value={keyMode} options={KEY_MODES} onChange={setKeyMode} />
@@ -624,92 +625,14 @@ function TopTags({ stats, onNavigate }: { stats: Stats; onNavigate: (filter: obj
   );
 }
 
-// ── Zuletzt hinzugefuegt ─────────────────────────────────────────────────────
-/** `onOpen()` ohne Beat oeffnet das Archiv ungefiltert. */
-function LatestBeats({ stats, onOpen }: { stats: Stats; onOpen: (beat?: Beat) => void }) {
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
-  const { playBeat, setQueue, currentBeat } = useAudioPlayerContext();
-  const beats = stats.recent_beats;
-  // Der Name bekommt eine Obergrenze und die letzte Spalte schluckt den Rest —
-  // sonst schob "1fr" die Metadaten auf breiten Monitoren ans andere Ende des
-  // Bildschirms und man musste fuer eine Zeile quer ueber den Schirm lesen.
-  const grid  = "44px minmax(180px, 520px) 80px 70px 110px 110px 1fr";
-
-  const play = (beat: Beat) => {
-    setQueue(beats);          // weiter/zurueck bleibt in dieser Liste
-    playBeat(beat);
-  };
-
-  return (
-    <section style={{ ...commonStyles.card, background: C.surfaceContainer, overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px", borderBottom: `1px solid ${C.border10}` }}>
-        <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurface }}>Zuletzt hinzugefügt</h4>
-        <Button size="sm" variant="ghost" onClick={() => onOpen()}>Alle anzeigen</Button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: grid, padding: "8px 24px", background: alpha(C.surfaceContainerLow, 0.5), fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSecondaryFixedVar }}>
-        <span /><span>Name</span><span>Tonart</span><span>BPM</span><span>Status</span><span style={{ textAlign: "right" }}>Datum</span><span />
-      </div>
-      {beats.map((beat, i) => {
-        const isCurrent = currentBeat?.id === beat.id;
-        const active = hoveredRow === i || isCurrent;
-        return (
-          <div key={beat.id}
-            style={{
-              display: "grid", gridTemplateColumns: grid, padding: "14px 24px",
-              alignItems: "center",
-              borderTop: i > 0 ? `1px solid ${alpha(C.outlineVariant, 0.05)}` : undefined,
-              background: hoveredRow === i ? C.surfaceContainerHigh : "transparent",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={() => setHoveredRow(i)} onMouseLeave={() => setHoveredRow(null)}>
-            <button
-              onClick={e => { e.stopPropagation(); play(beat); }}
-              title={`${beat.name} abspielen`}
-              style={{
-                width: 28, height: 28, borderRadius: "50%", padding: 0,
-                background: isCurrent ? C.primary : C.surfaceContainerHighest,
-                border: "none", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "background 0.15s",
-              }}
-            >
-              <Play size={10}
-                fill={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant}
-                color={isCurrent ? C.onPrimary : active ? C.onSurface : C.onSurfaceVariant} />
-            </button>
-            {/* Der Name traegt den Klick, nicht die ganze Zeile: die Zeile hat
-                schon den Play-Knopf, und ein <button> um einen <button> ist
-                ungueltig. So sind Abspielen und Oeffnen beide mit Tab erreichbar. */}
-            <Klickbar
-              onClick={() => onOpen(beat)}
-              title="Im Archiv öffnen"
-              style={{ fontSize: 13, fontWeight: 600, color: isCurrent ? C.primary : C.onSurface, paddingRight: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
-            >
-              {beat.name}
-            </Klickbar>
-            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.key ?? "–"}</span>
-            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{beat.bpm ?? "–"}</span>
-            {/* Nur die AUSNAHME zeigen — dieselbe Regel wie im Archiv-Raster.
-                "Fertig" stand auf jeder Zeile und sagte damit nichts mehr. */}
-            <span>{(beat.status ?? "idea") !== "finished" && <StatusPill status={beat.status ?? "idea"} />}</span>
-            <span style={{ fontSize: 12, color: C.onSurfaceVariant, textAlign: "right", fontFamily: "monospace" }}>{(beat.created_date ?? "").slice(0, 10)}</span>
-            <span />
-          </div>
-        );
-      })}
-      {beats.length === 0 && (
-        <EmptyState variant="inline" title="Noch keine Beats im Archiv" />
-      )}
-    </section>
-  );
-}
-
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [stats, setStats]     = useState<Stats | null>(null);
   const [actions, setActions] = useState<DashboardActions | null>(null);
   const [busy, setBusy]       = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  // Wie im Studio: ein Starttab mit dem, was ansteht, die Zahlen daneben.
+  const [tab, setTab]         = useState<"heute" | "statistik">("heute");
   const navigate = useNavigate();
   const handleNavigate = useCallback((filter: object) => {
     navigate("/browse", { state: { initialFilters: filter } });
@@ -798,14 +721,24 @@ export default function Dashboard() {
             </Button>
           </>
         }
-      />
+      >
+        <Segmented
+          label="Bereich der Übersicht"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "heute", label: "Heute", icon: ListTodo },
+            { value: "statistik", label: "Statistik", icon: ChartColumn },
+          ]}
+        />
+      </PageHeader>
 
       <PageBody>
           {/* Was ansteht — eine Fokus-Karte statt vier Kacheln, daneben der
               Rhythmus. Die drei Zahlen, die vorher eigene Kacheln hatten,
               stehen jetzt als Nebensatz in der Karte; die Pipeline-Zeile
               darunter trug sie ohnehin schon einmal. */}
-          {actions && (
+          {tab === "heute" && actions && (
             <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
               <NaechsterSchritt
                 actions={actions}
@@ -816,6 +749,7 @@ export default function Dashboard() {
             </section>
           )}
 
+          {tab === "statistik" && <>
           {/* Pipeline: der ganze Workflow auf einen Blick — trägt auch Total, Neu, Favoriten, Live */}
           {actions && (
             <PipelineFunnel
@@ -837,18 +771,8 @@ export default function Dashboard() {
             <BeatsPerMonth stats={stats} onYearChange={(yr) => load(yr, true)} />
             <TopTags stats={stats} onNavigate={handleNavigate} />
           </section>
+          </>}
 
-          {/* Zuletzt hinzugefügt */}
-          <LatestBeats
-            stats={stats}
-            // Der Beat wird im Archiv ausgewaehlt, nicht bloss gesucht: der
-            // Knopf heisst „Im Archiv oeffnen", und Suchen ist nicht Oeffnen.
-            // Die Namenssuche bleibt als Filter dabei — sonst muesste die
-            // Liste erst auf die Seite blaettern, auf der der Beat steht.
-            onOpen={(beat) => beat
-              ? navigate("/browse", { state: { initialFilters: { search: beat.name }, initialBeatId: beat.id } })
-              : navigate("/browse")}
-          />
       </PageBody>
     </div>
   );
