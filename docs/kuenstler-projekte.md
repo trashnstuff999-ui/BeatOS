@@ -155,4 +155,3 @@ werden.
   SoundCloud, YouTube, Instagram — ohne Konto); Bild aufs Profil ziehen.
 - **E+F** Reinhören (je Rolle die neueste Datei, im Player der App) und
   Verlauf (erste Vocals, erster Mix, erster Master, Abgabe).
-- Offen (TODO): **G** „veröffentlicht"-Erkennung über die Plattform-Links.
