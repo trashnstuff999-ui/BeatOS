@@ -9,7 +9,7 @@
 // Scheibe 6: Künstler-Ordner, die noch im Archiv liegen, umziehen — mit
 // Vorschau, verschoben wird erst auf Klick.
 // Scheibe 2: „Neuer Künstler" (Ordner) und „Neuer Song" (Ordner, Template-FLP,
-// Eingang/). Scheibe 3: Klick auf einen Song klappt Notiz und Status auf —
+// Assets/). Scheibe 3: Klick auf einen Song klappt Notiz und Status auf —
 // „In Arbeit" oder „Warte auf Künstler" (Tabelle artist_songs).
 // Plan und nächste Scheiben: docs/kuenstler-projekte.md.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -37,9 +37,9 @@ type ZeilenDrop = {
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
   { key: "flp", label: "FLP", titel: "FL-Projekt im Song-Ordner" },
-  { key: "vocals", label: "Vocals", titel: "Audiodatei mit „Vocal\" im Namen (Eingang, Audio/ oder Song-Ordner)" },
-  { key: "demo", label: "Demo", titel: "Im Eingang eine Audiodatei, die wie der Song heißt" },
-  { key: "beat", label: "Beat", titel: "Im Eingang eine weitere Audiodatei (weder Vocals noch Demo)" },
+  { key: "vocals", label: "Vocals", titel: "Audiodatei mit „Vocal\" im Namen (Assets/, Audio/ oder Song-Ordner)" },
+  { key: "demo", label: "Demo", titel: "In Assets/ eine Audiodatei, die wie der Song heißt" },
+  { key: "beat", label: "Beat", titel: "In Assets/ eine weitere Audiodatei (weder Vocals noch Demo)" },
   { key: "mix", label: "Mix", titel: "Ein Export im Song-Ordner" },
   { key: "master", label: "Master", titel: "Eine Audiodatei mit „Master\" im Namen" },
 ];
@@ -73,11 +73,11 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   // Zurück aus dem Explorer oder aus Discord: neu lesen, nur wenn der Tab offen ist.
   useFocusRefresh(() => { if (active) ladenMitDownloads(); });
 
-  // Dateien in Eingang/ — per Ziehen oder per Vorschlag. Was nicht ging, steht oben.
+  // Dateien in Assets/ — per Ziehen oder per Vorschlag. Was nicht ging, steht oben.
   const [meldung, setMeldung] = useState<string | null>(null);
   const uebernehmen = useCallback(async (songPfad: string, pfade: string[]) => {
     try {
-      const schief = (await api.artists.eingangFuellen(songPfad, pfade)).filter(e => !e.ok);
+      const schief = (await api.artists.assetsFuellen(songPfad, pfade)).filter(e => !e.ok);
       setMeldung(schief.length ? `Nicht übernommen: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`).join("; ")}` : null);
     } catch (e) {
       setMeldung(String(e));
@@ -86,7 +86,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   }, [ladenMitDownloads]);
 
   // Aus dem Explorer auf eine Song-Zeile ziehen: die Zeile unter dem Zeiger
-  // (data-song) leuchtet auf, Loslassen verschiebt in ihren Eingang.
+  // (data-song) leuchtet auf, Loslassen verschiebt in ihren Assets-Ordner.
   const [ziehen, setZiehen] = useState<{ pfad: string | null; anzahl: number } | null>(null);
   useEffect(() => {
     if (!active || !("__TAURI_INTERNALS__" in window)) return;
@@ -401,7 +401,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
       const flp = await api.artists.createSong(wer, name.trim(), vorlage);
       if (mit.length > 0) {
         const songPfad = flp.replace(/[\\/][^\\/]+$/, "");
-        const erg = await api.artists.eingangFuellen(songPfad, mit.map(d => d.path));
+        const erg = await api.artists.assetsFuellen(songPfad, mit.map(d => d.path));
         const schief = erg.filter(e => !e.ok);
         if (schief.length > 0) {
           setFehler(`Song angelegt, aber: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`).join("; ")}`);
@@ -431,7 +431,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
     <Modal
       icon={FolderPlus}
       title="Neuer Song"
-      subtitle="Legt den Song-Ordner an, darin die Template-FLP und Eingang/ für das, was der Künstler schickt."
+      subtitle="Legt den Song-Ordner an, darin die Template-FLP und Assets/ für das, was der Künstler schickt."
       width={560}
       onClose={() => onClose(angelegt)}
       footer={angelegt ? (
@@ -458,7 +458,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <span style={beschriftung}>Aus den Downloads in den Eingang</span>
+        <span style={beschriftung}>Aus den Downloads in Assets/</span>
         {downloads.length === 0 ? (
           <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Keine Audiodateien aus den letzten 30 Tagen.</div>
         ) : (
@@ -598,12 +598,12 @@ function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, ueberne
             )}
             {istZiel ? (
               <span style={{ fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>
-                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → Eingang
+                {ziehen!.anzahl === 1 ? "1 Datei" : `${ziehen!.anzahl} Dateien`} → Assets
               </span>
             ) : neue.length > 0 && (
               <Button
                 variant="secondary" size="sm" icon={FolderInput}
-                title={`Aus den Downloads in den Eingang verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
+                title={`Aus den Downloads in Assets/ verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
                 onClick={e => { e.stopPropagation(); uebernehmen(s.path, neue.map(d => d.path)); }}
               >
                 {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}

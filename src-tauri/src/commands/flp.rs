@@ -203,7 +203,7 @@ mod tests {
         let alt = flp(e);
         assert_eq!(audio_pfade(&alt), vec![r"D:\Downloads [D]\Feelings feeln vocals.mp3".to_string(), lang.clone()]);
 
-        let neu_pfad = r"C:\05_ARTISTS\JarnoGm\Fellings Feeln\Eingang\Feelings feeln vocals.mp3".to_string();
+        let neu_pfad = r"C:\05_ARTISTS\JarnoGm\Fellings Feeln\Assets\Feelings feeln vocals.mp3".to_string();
         let (neu, zahl) = pfade_ersetzen(&alt, &[(r"D:\Downloads [D]\Feelings feeln vocals.mp3".into(), neu_pfad.clone())]).unwrap();
         assert_eq!(zahl, 2);
         assert_eq!(audio_pfade(&neu), vec![neu_pfad, lang]);

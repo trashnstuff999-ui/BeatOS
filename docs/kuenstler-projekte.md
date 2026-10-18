@@ -39,7 +39,7 @@ ausdrücklich erwünscht — Plan wächst mit.
       Heartbreak Highlights.flp        ← FLP im Root, wie im Studio
       Heartbreak Highlights - Mix v1.wav
       Heartbreak Highlights - Master.wav
-      Eingang/                         ← alles, was der Künstler schickt
+      Assets/                         ← alles, was der Künstler schickt
         Heartbreak Highlights Vocals.wav
         Heartbreak Highlights.mp3      (Demo)
         LEFT ALONE [F#m 135].wav       (Beat)
@@ -64,7 +64,7 @@ Von Hand dazu: „Warte auf Künstler", „Abgegeben".
    oder Unterordner `_Fertig`?
 8. **Altbestand**: `JarnoGm - Library` und `Yoghi` aus `03_ARCHIVE` umziehen.
 9. **Discord-Downloads**: landen im Downloads-Ordner → BeatOS sortiert sie per
-   Namensregel (`X Vocals` → Song X) in den richtigen Eingang.
+   Namensregel (`X Vocals` → Song X) in den richtigen Assets-Ordner.
 
 ## Antworten (18.10.2026)
 
@@ -82,7 +82,7 @@ Von Hand dazu: „Warte auf Künstler", „Abgegeben".
 8. **Altbestand** → **umziehen**: BeatOS zeigt vorher, was wohin wandert,
    verschoben wird erst nach Bestätigung.
 9. **Discord-Downloads** → **vorschlagen**: neue Downloads mit passendem
-   Song anzeigen, ein Klick verschiebt sie in den `Eingang/`.
+   Song anzeigen, ein Klick verschiebt sie in den `Assets/`.
 
 **Befund Scheibe 0 (18.10.2026):** `JarnoGm - Library` und `Yoghi` stehen
 **nicht** als Schein-Beats im Katalog — der Archiv-Scan muss nicht repariert
@@ -94,16 +94,16 @@ werden.
 - [x] **1 — Künstler-Ordner + Ansicht** (nur lesen; erledigt 18.10.2026, e84e705): Einstellung
       `05_ARTISTS`, Studio-Tab „Künstler": pro Künstler die Songs, je Zeile
       Häkchen Vocals/Demo/Beat/FLP/Mix/Master + erste Notizzeile.
-- [x] **2 — Anlegen** (erledigt 18.10.2026): „Neuer Künstler" und „Neuer Song" (Ordner + `Eingang/`
+- [x] **2 — Anlegen** (erledigt 18.10.2026): „Neuer Künstler" und „Neuer Song" (Ordner + `Assets/`
       + leere FLP wie `create_project_folder`).
 - [x] **3 — Notiz + Status** (erledigt 18.10.2026) — Klick auf den Song klappt sie auf; eigene Tabelle `artist_songs` statt `studio_projects` (deren Status kennt kein „Warten" und zählt in die Studio-Statistik):
       eine Notiz pro Song, Status „Warte auf Künstler" / „In Arbeit".
-- [x] **4 — Dateien reinziehen + Downloads vorschlagen** (erledigt 18.10.2026: Ziehen auf eine Song-Zeile → Eingang/, an bestehenden Songs Knopf „n neue Downloads"; „Neuer Song" ist ein Knopf mit Künstlerauswahl und bietet Audio aus den Downloads der letzten 30 Tage an; Treffer am Songnamen, z. B. „heartbreak highlights_vocals", sind vorausgewählt. ): Vocals/Demo/Beat
-      auf den Song ziehen → `Eingang/`. Dazu der Downloads-Ordner: neue
+- [x] **4 — Dateien reinziehen + Downloads vorschlagen** (erledigt 18.10.2026: Ziehen auf eine Song-Zeile → Assets/, an bestehenden Songs Knopf „n neue Downloads"; „Neuer Song" ist ein Knopf mit Künstlerauswahl und bietet Audio aus den Downloads der letzten 30 Tage an; Treffer am Songnamen, z. B. „heartbreak highlights_vocals", sind vorausgewählt. ): Vocals/Demo/Beat
+      auf den Song ziehen → `Assets/`. Dazu der Downloads-Ordner: neue
       Dateien mit passendem Song (Namensregel „X Vocals" → Song X) werden
       vorgeschlagen, ein Klick verschiebt sie.
 - [ ] **5 — Mein Beat**: Beat aus dem Katalog suchen, im Song vermerken (BPM/Key
-      sichtbar), ungetaggte WAV in den Eingang kopieren — oder für Stems die
+      sichtbar), ungetaggte WAV in Assets/ kopieren — oder für Stems die
       FLP des Beats in FL öffnen.
 - [x] **6 — Altbestand umziehen** (Dialog fertig 18.10.2026, f634371 — Ausführen macht Stephan selbst) (`JarnoGm - Library`, `Yoghi`).
 - [x] **7 — Abgabe** (erledigt 18.10.2026; dazu „Wieder öffnen" holt einen Song aus _Fertig zurück): Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
@@ -124,3 +124,5 @@ werden.
   Beim Zuweisen von Downloads passiert das automatisch.
 - FL 26 schreibt ein Ereignis, das nicht ins Längenschema passt → Pfade
   werden per Bytefolge gesucht/ersetzt, nicht per Durchlauf.
+
+- 18.10.2026: Der Ordner für Vocals/Demo/Beat heißt **Assets/** statt Eingang/ (Stephans Wunsch: „dort sollen die ganzen Assets für die Songs hin").

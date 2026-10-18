@@ -16,7 +16,7 @@ export interface ArtistSong {
   /** Von Hand: eine Notiz und „Warte auf Künstler". */
   notiz: string | null;
   warten: boolean;
-  /** Dateinamen im Song-Ordner, in Eingang/ und Audio/. */
+  /** Dateinamen im Song-Ordner, in Assets/ und Audio/. */
   dateien: string[];
   /** Audio-Pfade aus den FLPs, die es gibt (auch außerhalb, z. B. in den Downloads). */
   verweise: string[];
