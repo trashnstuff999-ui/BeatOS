@@ -2,14 +2,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // Die Wiedergabeleiste am unteren Rand.
 //
-// Der Fortschritt läuft über die ganze Breite an der Oberkante, nicht mehr als
-// 480px-Streifen in der Mitte. Der Grund ist nicht Optik: bei 480px auf einem
-// breiten Bildschirm ist ein Pixel fast eine halbe Sekunde. Über die volle
-// Breite wird der Weg rund fünfmal so lang — und genau das braucht das Setzen
-// der Kapitelmarken im Upload-Tab, das sekundengenau sein will.
+// Das Cover liegt verschwommen dahinter, wie „Als Nächstes" in der Übersicht —
+// jeder Beat färbt die Leiste ein wenig anders ein.
 //
-// Beide Leisten lassen sich ziehen (vorher: nur klicken) und haben einen
-// unsichtbaren Griffbereich um die dünne Linie herum.
+// Die Zeitleiste füllt die ganze Mitte unter den Knöpfen. Lang muss sie
+// bleiben: bei 480px auf einem breiten Bildschirm ist ein Pixel fast eine
+// halbe Sekunde, und das Setzen der Kapitelmarken im Upload-Tab will
+// sekundengenau sein. Vorher lag sie als 3px-Linie an der Oberkante mit 12px
+// Griff — schwer zu treffen. Jetzt 5px Linie, 25px Griffhöhe, und über dem
+// Zeiger steht die Zeit an dieser Stelle.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useRef, useState, useEffect, useCallback } from "react";
@@ -17,16 +18,12 @@ import {
   Play, Pause, Repeat, SkipBack, SkipForward,
   Volume2, VolumeX, Loader2, Music, AlertTriangle,
 } from "lucide-react";
-import { C, radius } from "../lib/theme";
+import { C, alpha } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
 import { isStudioBeatId } from "../types/studio";
 
-export const PLAYER_HEIGHT = 68;
-
-/** Höhe des Streifens an der Oberkante, in dem die Fortschrittslinie liegt —
- *  3px Linie plus Griffbereich darunter. */
-const LEISTE_OBEN = 15;
+export const PLAYER_HEIGHT = 84;
 
 /** `versteckt`: nach unten weggefahren (Übersicht) — Tasten wirken weiter. */
 export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }) {
@@ -34,7 +31,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
     currentBeat, coverUrl, isPlaying, isLoading, isLooped, isMuted,
     volume, error,
     togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
-    seekSeconds, getCurrentSeconds,
+    seekSeconds, getCurrentSeconds, getDurationSeconds,
     playNext, playPrev, hasQueue,
   } = useAudioPlayerContext();
   const { progress, currentTimeFormatted, durationFormatted } = useAudioProgress();
@@ -99,6 +96,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
       height: PLAYER_HEIGHT,
       background: C.surfaceContainerLowest,
       borderTop: `1px solid ${C.border15}`,
+      overflow: "hidden",
       zIndex: 100,
       transform: versteckt ? "translateY(100%)" : "translateY(0)",
       visibility: versteckt ? "hidden" : "visible",
@@ -108,52 +106,51 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
       transitionTimingFunction: "ease",
       transitionDelay: versteckt ? "0s, 0.3s" : "0s",
     }} aria-hidden={versteckt}>
-      {/* ── Fortschritt, ganze Breite, an der Oberkante ──────────────────────
-          Der Griffbereich reicht nach unten in die Leiste hinein, nicht nach
-          oben aus ihr heraus — sonst finge er Klicks ab, die dem Inhalt
-          darüber gelten. */}
-      <ZiehLeiste
-        anteil={progress / 100}
-        onAnteil={a => seekPercent(a * 100)}
-        titel="Zum Springen ziehen — ← → 5 s, mit Shift 30 s"
-        linie={3}
-        griffOben={0}
-        griffUnten={LEISTE_OBEN - 3}
-        knopf
-        style={{ position: "absolute", top: 0, left: 0, right: 0 }}
-      />
+      {coverUrl && (
+        <>
+          <img src={coverUrl} alt="" aria-hidden style={{
+            position: "absolute", inset: -60, width: "calc(100% + 120px)", height: "calc(100% + 120px)",
+            objectFit: "cover", filter: "blur(40px) saturate(1.3)", opacity: 0.32, pointerEvents: "none",
+          }} />
+          <div style={{ position: "absolute", inset: 0, background: alpha(C.surfaceContainerLowest, 0.6), pointerEvents: "none" }} />
+        </>
+      )}
 
       <div style={{
-        position: "absolute", top: LEISTE_OBEN, left: 0, right: 0, bottom: 0,
+        position: "relative", height: "100%",
         display: "flex", alignItems: "center",
-        padding: "0 20px", gap: 16,
+        padding: "0 24px", gap: 28,
       }}>
         {/* ── Links: Cover + Beat ─────────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, width: 280, flexShrink: 0, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, width: 290, flexShrink: 0, minWidth: 0 }}>
           <div style={{
-            width: 42, height: 42, borderRadius: radius.control, flexShrink: 0,
+            width: 56, height: 56, borderRadius: 8, flexShrink: 0,
             background: C.surfaceContainerHigh, overflow: "hidden",
             display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
           }}>
             {coverUrl
               ? <img src={coverUrl} alt={currentBeat.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <Music size={17} color={C.onSurfaceVariant} strokeWidth={1.5} />
+              : <Music size={20} color={C.onSurfaceVariant} strokeWidth={1.5} />
             }
           </div>
 
           <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontSize: 13, fontWeight: 700, color: C.onSurface,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}>
-              {currentBeat.name}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span style={{
+                fontSize: 14, fontWeight: 800, color: C.onSurface, letterSpacing: "-0.01em",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>
+                {currentBeat.name}
+              </span>
+              <Pegel an={isPlaying} />
             </div>
             {/* Der Fehler stand bisher nirgends: der Play-Knopf wurde blass und
                 das war die ganze Auskunft. Er ersetzt jetzt die Kennzeile —
                 dort, wo man ohnehin hinsieht. */}
             {error ? (
               <div style={{
-                display: "flex", alignItems: "center", gap: 5, marginTop: 2,
+                display: "flex", alignItems: "center", gap: 5, marginTop: 3,
                 fontSize: 12, color: C.error,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
@@ -164,87 +161,102 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
               /* Ein Studio-Preview hat keine Katalognummer — seine ID ist der
                  Ordnerpfad und stand hier als „#studio:C:\…" quer durch die
                  Leiste. */
-              <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, marginTop: 2 }}>
+              <div style={{
+                fontSize: 12, color: C.onSurfaceVariant, marginTop: 3,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>
                 {[
-                  isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
+                  currentBeat.key,
                   currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
+                  isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
                 ].filter(Boolean).join(" · ")}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Mitte: Bedienung ────────────────────────────────────────────────
+        {/* ── Mitte: Bedienung über der Zeitleiste ────────────────────────────
             Die Skip-Knöpfe bleiben stehen, auch ohne Liste — sie wegzunehmen
             verschob den Play-Knopf, je nachdem woher der Beat kam. */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
-          <IconBtn
-            onClick={playPrev}
-            disabled={!hasQueue}
-            title="Von vorn — oder zum vorherigen Beat, wenn er gerade erst läuft"
-          >
-            <SkipBack size={18} color={C.onSurfaceVariant} strokeWidth={1.5} />
-          </IconBtn>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
+            <IconBtn onClick={toggleLoop} title={isLooped ? "Wiederholung aus" : "Diesen Beat wiederholen"} an={isLooped}>
+              <Repeat size={15} strokeWidth={2} />
+            </IconBtn>
+            <IconBtn
+              onClick={playPrev}
+              disabled={!hasQueue}
+              title="Von vorn — oder zum vorherigen Beat, wenn er gerade erst läuft"
+            >
+              <SkipBack size={18} fill="currentColor" strokeWidth={1.5} />
+            </IconBtn>
 
-          <button
-            onClick={togglePlay}
-            disabled={isLoading || !!error}
-            title={isPlaying ? "Pause (Leertaste)" : "Abspielen (Leertaste)"}
-            style={{
-              width: 36, height: 36, borderRadius: "50%",
-              background: isLoading ? C.surfaceContainerHigh : C.onSurface,
-              border: "none", cursor: isLoading || error ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: error ? 0.4 : 1,
-              flexShrink: 0,
-            }}
-          >
-            {isLoading
-              ? <Loader2 size={16} color={C.background} style={{ animation: "spin 1s linear infinite" }} />
-              : isPlaying
-                ? <Pause size={16} fill={C.background} color={C.background} />
-                : <Play size={16} fill={C.background} color={C.background} style={{ marginLeft: 2 }} />
-            }
-          </button>
+            <button
+              className="ue-hebt"
+              onClick={togglePlay}
+              disabled={isLoading || !!error}
+              title={isPlaying ? "Pause (Leertaste)" : "Abspielen (Leertaste)"}
+              style={{
+                width: 42, height: 42, borderRadius: "50%",
+                background: C.primary, color: C.onPrimary,
+                border: "none", cursor: isLoading || error ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: error ? 0.4 : isLoading ? 0.7 : 1,
+                boxShadow: isPlaying
+                  ? `0 0 0 4px ${alpha(C.primary, 0.18)}, 0 6px 20px ${alpha(C.primary, 0.4)}`
+                  : `0 4px 14px ${alpha(C.primary, 0.25)}`,
+                flexShrink: 0,
+              }}
+            >
+              {isLoading
+                ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                : isPlaying
+                  ? <Pause size={18} fill="currentColor" />
+                  : <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />
+              }
+            </button>
 
-          <IconBtn onClick={playNext} disabled={!hasQueue} title="Nächster Beat in der Liste">
-            <SkipForward size={18} color={C.onSurfaceVariant} strokeWidth={1.5} />
-          </IconBtn>
+            <IconBtn onClick={playNext} disabled={!hasQueue} title="Nächster Beat in der Liste">
+              <SkipForward size={18} fill="currentColor" strokeWidth={1.5} />
+            </IconBtn>
+            {/* Platzhalter in Breite des Wiederholen-Knopfs: hält Play genau in der Mitte. */}
+            <span style={{ width: 23 }} />
+          </div>
 
-          <IconBtn
-            onClick={toggleLoop}
-            title={isLooped ? "Wiederholung aus" : "Diesen Beat wiederholen"}
-          >
-            <Repeat size={15} color={isLooped ? C.primary : C.onSecondaryFixedVar} strokeWidth={1.5} />
-          </IconBtn>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Zeit>{currentTimeFormatted}</Zeit>
+            <ZiehLeiste
+              anteil={progress / 100}
+              onAnteil={a => seekPercent(a * 100)}
+              titel="Zum Springen ziehen — ← → 5 s, mit Shift 30 s"
+              linie={5}
+              griffOben={10}
+              griffUnten={10}
+              knopf
+              vorschau={a => zeitText(a * getDurationSeconds())}
+              style={{ flex: 1 }}
+            />
+            <Zeit>{durationFormatted}</Zeit>
+          </div>
         </div>
 
-        {/* ── Rechts: Zeit + Lautstärke ───────────────────────────────────── */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 14,
-          width: 240, justifyContent: "flex-end", flexShrink: 0,
-        }}>
-          <span style={{
-            fontSize: 12, fontFamily: "monospace", color: C.onSecondaryFixedVar,
-            fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-          }}>
-            {currentTimeFormatted} / {durationFormatted}
-          </span>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <IconBtn onClick={toggleMute} title={isMuted ? "Ton an" : "Ton aus"}>
-              {isMuted || volume === 0
-                ? <VolumeX size={16} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-                : <Volume2 size={16} color={C.onSecondaryFixedVar} strokeWidth={1.5} />
-              }
-            </IconBtn>
-            <ZiehLeiste
-              anteil={isMuted ? 0 : volume}
-              onAnteil={setVolume}
-              titel="Lautstärke — Shift + ↑ / ↓"
-              style={{ width: 84 }}
-            />
-          </div>
+        {/* ── Rechts: Lautstärke ──────────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, width: 200, justifyContent: "flex-end", flexShrink: 0 }}>
+          <IconBtn onClick={toggleMute} title={isMuted ? "Ton an" : "Ton aus"}>
+            {isMuted || volume === 0
+              ? <VolumeX size={17} strokeWidth={1.75} />
+              : <Volume2 size={17} strokeWidth={1.75} />
+            }
+          </IconBtn>
+          <ZiehLeiste
+            anteil={isMuted ? 0 : volume}
+            onAnteil={setVolume}
+            titel="Lautstärke — Shift + ↑ / ↓"
+            griffOben={10}
+            griffUnten={10}
+            knopf
+            style={{ width: 110 }}
+          />
         </div>
       </div>
     </div>
@@ -253,7 +265,40 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
 
 // ─── Helfer ─────────────────────────────────────────────────────────────────
 
-/** Eine dünne Linie, die man ziehen kann.
+function Zeit({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{
+      fontSize: 11, fontFamily: "monospace", color: C.onSurfaceVariant, width: 38, flexShrink: 0,
+      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", textAlign: "center",
+    }}>
+      {children}
+    </span>
+  );
+}
+
+function zeitText(sek: number): string {
+  if (!Number.isFinite(sek) || sek < 0) return "0:00";
+  return `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, "0")}`;
+}
+
+/** Drei hüpfende Balken neben dem Namen, solange Musik läuft. */
+function Pegel({ an }: { an: boolean }) {
+  return (
+    <span aria-hidden style={{
+      display: "inline-flex", alignItems: "flex-end", gap: 2, height: 12, flexShrink: 0,
+      opacity: an ? 1 : 0, transition: "opacity 0.2s",
+    }}>
+      {[0, 0.25, 0.5].map(v => (
+        <span key={v} className="pegel" style={{
+          width: 3, height: 12, borderRadius: 1, background: C.primary,
+          animationDelay: `${v}s`, animationPlayState: an ? "running" : "paused",
+        }} />
+      ))}
+    </span>
+  );
+}
+
+/** Eine Linie, die man ziehen kann.
  *
  *  Vorher hingen Fortschritt und Lautstärke an `onClick`: man konnte springen,
  *  aber nicht schieben. Und die Trefferfläche war die 4px hohe Linie selbst —
@@ -261,7 +306,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
  *  Zeigererfassung fürs Ziehen, Innenabstand als unsichtbarer Griffbereich. */
 function ZiehLeiste({
   anteil, onAnteil, titel,
-  linie = 4, griffOben = 7, griffUnten = 7, knopf = false, style,
+  linie = 4, griffOben = 7, griffUnten = 7, knopf = false, vorschau, style,
 }: {
   /** 0 bis 1. */
   anteil: number;
@@ -271,39 +316,46 @@ function ZiehLeiste({
   griffOben?: number;
   griffUnten?: number;
   knopf?: boolean;
+  /** Text über dem Zeiger, z. B. die Zeit an dieser Stelle. */
+  vorschau?: (anteil: number) => string;
   style?: React.CSSProperties;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [zieht, setZieht] = useState(false);
-  const [ueber, setUeber] = useState(false);
+  const [zeiger, setZeiger] = useState<number | null>(null);
 
-  const ausEreignis = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const anteilBei = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const kasten = ref.current?.getBoundingClientRect();
-    if (!kasten || kasten.width === 0) return;
-    onAnteil(Math.max(0, Math.min(1, (e.clientX - kasten.left) / kasten.width)));
-  }, [onAnteil]);
+    if (!kasten || kasten.width === 0) return null;
+    return Math.max(0, Math.min(1, (e.clientX - kasten.left) / kasten.width));
+  }, []);
 
-  const wach = zieht || ueber;
+  const wach = zieht || zeiger !== null;
   const hoehe = wach ? linie + 2 : linie;
   const prozent = `${Math.max(0, Math.min(1, anteil)) * 100}%`;
 
   return (
     <div
       ref={ref}
-      title={titel}
+      title={vorschau ? undefined : titel}
       onPointerDown={e => {
         e.currentTarget.setPointerCapture(e.pointerId);
         setZieht(true);
-        ausEreignis(e);
+        const a = anteilBei(e);
+        if (a !== null) onAnteil(a);
       }}
-      onPointerMove={e => { if (zieht) ausEreignis(e); }}
+      onPointerMove={e => {
+        const a = anteilBei(e);
+        if (a === null) return;
+        setZeiger(a);
+        if (zieht) onAnteil(a);
+      }}
       onPointerUp={e => {
         e.currentTarget.releasePointerCapture(e.pointerId);
         setZieht(false);
       }}
       onPointerCancel={() => setZieht(false)}
-      onPointerEnter={() => setUeber(true)}
-      onPointerLeave={() => setUeber(false)}
+      onPointerLeave={() => setZeiger(null)}
       style={{
         position: "relative",
         paddingTop: griffOben,
@@ -315,48 +367,65 @@ function ZiehLeiste({
     >
       <div style={{
         height: hoehe,
-        background: C.surfaceContainerHighest,
+        background: "rgba(255,255,255,0.12)",
         borderRadius: hoehe / 2,
         transition: "height 0.12s",
+        overflow: "hidden",
       }}>
         <div style={{
           width: prozent, height: "100%",
-          background: C.primary,
+          background: `linear-gradient(90deg, ${alpha(C.primary, 0.7)}, ${C.primary})`,
           borderRadius: hoehe / 2,
         }} />
       </div>
       {/* Der Knopf erscheint erst unter dem Zeiger: als Dauergast wäre er auf
-          einer Linie über die ganze Fensterbreite ein Punkt zu viel im Bild. */}
+          einer langen Linie ein Punkt zu viel im Bild. */}
       {knopf && wach && (
         <div style={{
           position: "absolute",
           top: griffOben + hoehe / 2,
           left: prozent,
           transform: "translate(-50%, -50%)",
-          width: 11, height: 11, borderRadius: "50%",
-          background: C.primary,
+          width: 14, height: 14, borderRadius: "50%",
+          background: C.onSurface,
+          boxShadow: `0 0 0 3px ${alpha(C.primary, 0.5)}`,
           pointerEvents: "none",
         }} />
+      )}
+      {vorschau && zeiger !== null && (
+        <div style={{
+          position: "absolute", bottom: "100%", left: `${zeiger * 100}%`,
+          transform: "translate(-50%, 4px)",
+          padding: "3px 7px", borderRadius: 6, background: C.surfaceContainerHighest,
+          fontSize: 11, fontFamily: "monospace", color: C.onSurface, whiteSpace: "nowrap",
+          pointerEvents: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}>
+          {vorschau(zeiger)}
+        </div>
       )}
     </div>
   );
 }
 
-function IconBtn({ children, onClick, title, disabled }: {
+function IconBtn({ children, onClick, title, disabled, an = false }: {
   children: React.ReactNode;
   onClick?: () => void;
   title?: string;
   disabled?: boolean;
+  /** Eingeschaltet (Wiederholen): orange statt grau. */
+  an?: boolean;
 }) {
   return (
     <button
+      className="player-knopf"
       onClick={onClick}
       title={title}
       disabled={disabled}
       style={{
-        background: "none", border: "none",
+        border: "none",
         cursor: disabled ? "default" : "pointer",
         display: "flex", padding: 4,
+        color: an ? C.primary : C.onSurfaceVariant,
         opacity: disabled ? 0.35 : 1,
       }}
     >
