@@ -107,8 +107,8 @@ Tags sitzen nicht immer an festen Stellen — Standard-Tags schon, manche
 liegen bewusst in Pausen des Beats. Ein starres „alle 30 s" passt also
 nicht; bräuchte Tag-Positionen je Beat (z. B. aus FL-Markern?).
 
-### Zum Schluss der Sitzung am 17.10.2026
-- [ ] Arbeitskopien in `%TEMP%\beatos-vorher`, `beatos-nachher` und den
+### Zum Schluss der Sitzung am 17.10.2026 — erledigt 18.10.2026 (≈5,3 GB frei)
+- [x] Arbeitskopien in `%TEMP%\beatos-vorher`, `beatos-nachher` und den
       Build-Ordner `beatos-target` löschen (node_modules dort ist eine
       Junction — nicht rekursiv hindurch löschen)
 
