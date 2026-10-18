@@ -389,6 +389,9 @@ pub fn init_db() -> Result<(), String> {
                 ) {
                     init_error = Some(format!("Failed to create artist_songs table: {}", e));
                 }
+                // Datum der Abgabe (Scheibe 7) kam später — scheitert, wenn
+                // die Spalte schon da ist, und das ist gut so.
+                let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN abgegeben TEXT", []);
 
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(

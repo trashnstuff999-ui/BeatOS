@@ -64,6 +64,8 @@ use commands::{
     create_artist_song,
     artist_downloads,
     artist_eingang_fuellen,
+    artist_abgeben,
+    artist_wieder_oeffnen,
     // Settings commands
     get_settings,
     save_settings,
@@ -246,6 +248,8 @@ pub fn run() {
             create_artist_song,
             artist_downloads,
             artist_eingang_fuellen,
+            artist_abgeben,
+            artist_wieder_oeffnen,
             // Settings
             get_settings,
             save_settings,

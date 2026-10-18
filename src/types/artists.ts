@@ -18,6 +18,10 @@ export interface ArtistSong {
   warten: boolean;
   /** Dateinamen in Eingang/. */
   eingang: string[];
+  /** Audiodateien im Song-Ordner (Mix, Master), neueste zuerst. */
+  exporte: string[];
+  /** Datum der Abgabe (JJJJ-MM-TT). */
+  abgegeben: string | null;
 }
 
 export interface Artist {

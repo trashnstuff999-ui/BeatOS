@@ -287,6 +287,11 @@ export const api = {
     /** Dateien nach <Song>/Eingang/ verschieben; Gleichnamiges wird übersprungen. */
     eingangFuellen: (songPath: string, dateien: string[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_eingang_fuellen", { songPath, dateien }),
+    /** Export umbenennen („<Künstler> - <Song> (Master).wav"), Song nach _Fertig/; gibt den Dateipfad zurück. */
+    abgeben: (songPath: string, datei: string, art: "Master" | "Mix") =>
+      invoke<string>("artist_abgeben", { songPath, datei, art }),
+    /** Song aus _Fertig/ zurückholen. */
+    wiederOeffnen: (songPath: string) => invoke<string>("artist_wieder_oeffnen", { songPath }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────

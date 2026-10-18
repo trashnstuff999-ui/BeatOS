@@ -106,6 +106,6 @@ werden.
       sichtbar), ungetaggte WAV in den Eingang kopieren — oder für Stems die
       FLP des Beats in FL öffnen.
 - [x] **6 — Altbestand umziehen** (Dialog fertig 18.10.2026, f634371 — Ausführen macht Stephan selbst) (`JarnoGm - Library`, `Yoghi`).
-- [ ] **7 — Abgabe**: Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
+- [x] **7 — Abgabe** (erledigt 18.10.2026; dazu „Wieder öffnen" holt einen Song aus _Fertig zurück): Knopf „Abgeben" (Mix oder Master) benennt die Datei nach
       `<Künstler> - <Song> (Master).wav`, merkt Datum; Song wandert nach
       `<Künstler>/_Fertig/`.

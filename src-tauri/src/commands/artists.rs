@@ -39,6 +39,11 @@ pub struct ArtistSong {
     /// Dateinamen in Eingang/ — damit Downloads, die schon da sind, nicht
     /// noch einmal vorgeschlagen werden.
     pub eingang: Vec<String>,
+    /// Audiodateien direkt im Song-Ordner (Mix, Master), neueste zuerst —
+    /// zur Auswahl beim Abgeben.
+    pub exporte: Vec<String>,
+    /// Datum der Abgabe (JJJJ-MM-TT), aus artist_songs.
+    pub abgegeben: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -68,17 +73,18 @@ pub struct ArtistsScan {
 pub fn scan_artists(root: String) -> Result<ArtistsScan, String> {
     let pfad = Path::new(&root);
     let mut kuenstler = kuenstler_lesen(pfad);
-    // Notiz + Warten dazulesen. Ohne Tabelle bleibt es leer.
+    // Notiz, Warten, Abgabedatum dazulesen. Ohne Tabelle bleibt es leer.
     if let Ok(conn) = open_db() {
-        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten FROM artist_songs") {
-            let zeilen: HashMap<String, (Option<String>, bool)> = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0))))
+        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben FROM artist_songs") {
+            let zeilen: HashMap<String, (Option<String>, bool, Option<String>)> = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?))))
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
             for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
-                if let Some((notiz, warten)) = zeilen.get(&s.path) {
+                if let Some((notiz, warten, abgegeben)) = zeilen.get(&s.path) {
                     s.notiz = notiz.clone();
                     s.warten = *warten;
+                    s.abgegeben = abgegeben.clone();
                 }
             }
         }
@@ -119,6 +125,82 @@ pub fn create_artist_song(artist_path: String, name: String, template_flp: Strin
         let _ = fs::create_dir_all(dir.join(EINGANG));
     }
     Ok(flp)
+}
+
+// ─── Abgabe ──────────────────────────────────────────────────────────────────
+
+/// Abgeben: Export umbenennen nach `<Künstler> - <Song> (Master|Mix).<ext>`,
+/// Song nach `<Künstler>/_Fertig/` schieben, Datum merken. Gibt den neuen Pfad
+/// der Datei zurück — das Frontend zeigt sie im Explorer, zum Verschicken.
+#[tauri::command]
+pub fn artist_abgeben(song_path: String, datei: String, art: String) -> Result<String, String> {
+    let (neuer_song, abgabe) = abgeben_dateien(Path::new(&song_path), &datei, &art)?;
+    pfad_umhaengen(&song_path, &neuer_song.to_string_lossy(), true);
+    Ok(abgabe.to_string_lossy().to_string())
+}
+
+/// Zurück aus `_Fertig/` — wenn der Künstler nach der Abgabe noch etwas will.
+#[tauri::command]
+pub fn artist_wieder_oeffnen(song_path: String) -> Result<String, String> {
+    let neu = wieder_oeffnen_dateien(Path::new(&song_path))?;
+    pfad_umhaengen(&song_path, &neu.to_string_lossy(), false);
+    Ok(neu.to_string_lossy().to_string())
+}
+
+/// Notiz und Status ziehen mit um. Die Dateien sind dann schon verschoben —
+/// ein DB-Fehler kostet höchstens die Notiz, darum kein Abbruch.
+fn pfad_umhaengen(alt: &str, neu: &str, abgegeben: bool) {
+    let Ok(conn) = open_db() else { return };
+    let _ = conn.execute("DELETE FROM artist_songs WHERE path = ?1", [neu]);
+    let _ = conn.execute("INSERT OR IGNORE INTO artist_songs (path) VALUES (?1)", [alt]);
+    let _ = conn.execute(
+        "UPDATE artist_songs SET path = ?2, warten = 0,
+            abgegeben = CASE WHEN ?3 THEN date('now', 'localtime') ELSE NULL END
+         WHERE path = ?1",
+        rusqlite::params![alt, neu, abgegeben],
+    );
+}
+
+fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    if art != "Master" && art != "Mix" { return Err(format!("Unbekannte Art: {art}")); }
+    let kuenstler_dir = song.parent().ok_or("Song-Ordner ohne Künstler")?;
+    let kuenstler = kuenstler_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if kuenstler == FERTIG { return Err("Der Song ist schon abgegeben".into()); }
+    let song_name = song.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+
+    // Nur ein Dateiname direkt im Song-Ordner, kein Pfad.
+    if datei.contains(['/', '\\']) { return Err("Ungültiger Dateiname".into()); }
+    let quelle = song.join(datei);
+    if !quelle.is_file() { return Err(format!("{datei} liegt nicht im Song-Ordner")); }
+    let ext = quelle.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "wav".into());
+    let neuer_name = format!("{}.{ext}", crate::utils::sanitize_filename_part(&format!("{kuenstler} - {song_name} ({art})")));
+
+    let fertig_dir = kuenstler_dir.join(FERTIG);
+    let ziel_song = fertig_dir.join(&song_name);
+    // Erst alles prüfen, dann anfassen.
+    if ziel_song.exists() { return Err(format!("In _Fertig gibt es „{song_name}\" schon")); }
+    let umbenannt = song.join(&neuer_name);
+    if !neuer_name.eq_ignore_ascii_case(datei) && umbenannt.exists() {
+        return Err(format!("„{neuer_name}\" gibt es im Song-Ordner schon"));
+    }
+
+    fs::rename(&quelle, &umbenannt).map_err(|e| format!("Umbenennen fehlgeschlagen: {e}"))?;
+    fs::create_dir_all(&fertig_dir).map_err(|e| format!("_Fertig ließ sich nicht anlegen: {e}"))?;
+    if let Err(e) = fs::rename(song, &ziel_song) {
+        // Ordner offen in FL oder im Explorer: Umbenennung zurück, nichts halb lassen.
+        let _ = fs::rename(&umbenannt, &quelle);
+        return Err(format!("Song-Ordner ließ sich nicht verschieben (in FL oder im Explorer offen?): {e}"));
+    }
+    Ok((ziel_song.clone(), ziel_song.join(&neuer_name)))
+}
+
+fn wieder_oeffnen_dateien(song: &Path) -> Result<std::path::PathBuf, String> {
+    let fertig_dir = song.parent().ok_or("Song-Ordner ohne Künstler")?;
+    if fertig_dir.file_name().map(|n| n != FERTIG).unwrap_or(true) { return Err("Der Song ist nicht abgegeben".into()); }
+    let ziel = fertig_dir.parent().ok_or("_Fertig ohne Künstler")?.join(song.file_name().ok_or("Kein Song-Name")?);
+    if ziel.exists() { return Err(format!("{} gibt es schon", ziel.display())); }
+    fs::rename(song, &ziel).map_err(|e| format!("Song-Ordner ließ sich nicht verschieben (in FL oder im Explorer offen?): {e}"))?;
+    Ok(ziel)
 }
 
 fn kuenstler_lesen(root: &Path) -> Vec<Artist> {
@@ -324,6 +406,9 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     s.beat = eingang.iter().any(|(n, _)| ist_audio(n) && !hat_vocal(n) && vergleich(n) != song_name);
     s.geaendert = wurzel.iter().chain(&eingang).chain(&audio_ordner).map(|(_, t)| *t).max().unwrap_or(0);
     s.eingang = eingang.iter().map(|(n, _)| n.clone()).collect();
+    let mut exporte: Vec<&(String, u64)> = wurzel.iter().filter(|(n, _)| ist_audio(n)).collect();
+    exporte.sort_by(|a, b| b.1.cmp(&a.1));
+    s.exporte = exporte.into_iter().map(|(n, _)| n.clone()).collect();
     s
 }
 
@@ -404,6 +489,35 @@ mod tests {
         assert!(erg[0].ok && !erg[1].ok);
         assert!(song.join("Eingang/no bleed_vocals.wav").is_file() && !dl.join("no bleed_vocals.wav").exists());
         assert!(dl.join("no bleed.mp3").is_file(), "nicht überschrieben, Original bleibt");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn abgeben_und_wieder_oeffnen() {
+        let root = std::env::temp_dir().join(format!("beatos_abgabe_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let song = root.join("JarnoGm/Mindestens 2K");
+        datei(&song.join("Mindestens 2K.flp"));
+        datei(&song.join("Mindestens 2K_master v3.wav"));
+        datei(&root.join("JarnoGm/Finden/Finden.mp3"));
+
+        assert!(abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Bounce").is_err(), "nur Master/Mix");
+        assert!(abgeben_dateien(&song, "../Finden/Finden.mp3", "Mix").is_err(), "nur Dateien im Song-Ordner");
+
+        let (neu, abgabe) = abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Master").unwrap();
+        assert_eq!(neu, root.join("JarnoGm/_Fertig/Mindestens 2K"));
+        assert_eq!(abgabe, neu.join("JarnoGm - Mindestens 2K (Master).wav"));
+        assert!(abgabe.is_file() && neu.join("Mindestens 2K.flp").is_file() && !song.exists());
+        assert!(abgeben_dateien(&neu, "JarnoGm - Mindestens 2K (Master).wav", "Master").is_err(), "schon abgegeben");
+
+        // Scan sieht ihn als fertig
+        let k = &kuenstler_lesen(&root)[0];
+        assert!(k.songs.iter().any(|s| s.name == "Mindestens 2K" && s.fertig));
+
+        let zurueck = wieder_oeffnen_dateien(&neu).unwrap();
+        assert_eq!(zurueck, song);
+        assert!(song.join("JarnoGm - Mindestens 2K (Master).wav").is_file());
+        assert!(wieder_oeffnen_dateien(&song).is_err(), "nicht in _Fertig");
         let _ = fs::remove_dir_all(&root);
     }
 

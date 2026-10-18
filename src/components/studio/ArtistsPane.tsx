@@ -15,11 +15,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Hourglass, Send, Undo2 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { formatRelativeTime } from "../../lib/time";
+import { formatRelativeTime, tageRelativ } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
@@ -511,7 +511,7 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
       {offen.length === 0 && (
         <div style={{ padding: "12px 18px", fontSize: 12, color: C.onSecondaryFixedVar }}>Nichts offen.</div>
       )}
-      {offen.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} {...zeile} />)}
+      {offen.map(s => <SongZeile key={s.path} song={s} kuenstler={k.name} onGeaendert={onGeaendert} {...zeile} />)}
 
       {fertig.length > 0 && (
         <>
@@ -528,7 +528,7 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
             <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: fertigOffen ? "rotate(180deg)" : "none" }} />
             Abgegeben ({fertig.length})
           </button>
-          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} onGeaendert={onGeaendert} {...zeile} />)}
+          {fertigOffen && fertig.map(s => <SongZeile key={s.path} song={s} kuenstler={k.name} onGeaendert={onGeaendert} {...zeile} />)}
         </>
       )}
     </section>
@@ -537,7 +537,8 @@ function KuenstlerBlock({ kuenstler: k, onGeaendert, zeile }: {
 
 /** Eine Song-Zeile. Klick klappt Notiz und Status auf; gespeichert wird beim
  *  Verlassen des Felds bzw. beim Umschalten. */
-function SongZeile({ song: s, onGeaendert, downloads, ziehen, uebernehmen }: { song: ArtistSong; onGeaendert: () => void } & ZeilenDrop) {
+function SongZeile({ song: s, kuenstler, onGeaendert, downloads, ziehen, uebernehmen }: { song: ArtistSong; kuenstler: string; onGeaendert: () => void } & ZeilenDrop) {
+  const [abgabeOffen, setAbgabeOffen] = useState(false);
   const [offen, setOffen] = useState(false);
   const istZiel = ziehen?.pfad === s.path;
   // Neue Downloads mit dem Songnamen, die noch nicht im Eingang liegen.
@@ -563,7 +564,7 @@ function SongZeile({ song: s, onGeaendert, downloads, ziehen, uebernehmen }: { s
         onClick={() => setOffen(o => !o)}
         title={offen ? "Zuklappen" : "Notiz und Status"}
         style={{
-          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 110px 14px", alignItems: "center", gap: 16,
+          display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 140px 14px", alignItems: "center", gap: 16,
           padding: "11px 18px", cursor: "pointer",
           opacity: s.fertig ? 0.7 : 1,
         }}
@@ -627,7 +628,7 @@ function SongZeile({ song: s, onGeaendert, downloads, ziehen, uebernehmen }: { s
           })}
         </span>
         <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, textAlign: "right" }}>
-          {s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
+          {s.fertig && s.abgegeben ? `abgegeben ${tageRelativ(s.abgegeben)}` : s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
         </span>
         <ChevronDown size={14} color={C.onSecondaryFixedVar} style={{ transition: "transform 0.15s", transform: offen ? "rotate(180deg)" : "none" }} />
       </div>
@@ -663,9 +664,94 @@ function SongZeile({ song: s, onGeaendert, downloads, ziehen, uebernehmen }: { s
             {fehler && <span style={{ fontSize: 12, color: C.error }}>{fehler}</span>}
             <span style={{ flex: 1 }} />
             <Button variant="secondary" size="sm" icon={FolderOpen} onClick={() => revealItemInDir(s.path).catch(() => {})}>Ordner öffnen</Button>
+            {s.fertig ? (
+              <Button variant="secondary" size="sm" icon={Undo2}
+                title="Zurück aus _Fertig — wenn der Künstler nach der Abgabe noch etwas will"
+                onClick={() => api.artists.wiederOeffnen(s.path).then(onGeaendert).catch(e => setFehler(String(e)))}
+              >
+                Wieder öffnen
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" icon={Send} disabled={s.exporte.length === 0}
+                title={s.exporte.length === 0 ? "Noch kein Export im Song-Ordner" : "Export benennen und den Song nach _Fertig schieben"}
+                onClick={() => setAbgabeOffen(true)}
+              >
+                Abgeben …
+              </Button>
+            )}
           </div>
         </div>
       )}
+      {abgabeOffen && (
+        <AbgabeDialog song={s} kuenstler={kuenstler} onClose={fertig => { setAbgabeOffen(false); if (fertig) onGeaendert(); }} />
+      )}
     </div>
+  );
+}
+
+/** Abgeben: Export wählen, Master oder Mix — der neue Name steht schon da.
+ *  Danach öffnet der Explorer die Datei, zum Reinziehen in Discord. */
+function AbgabeDialog({ song: s, kuenstler, onClose }: {
+  song: ArtistSong;
+  kuenstler: string;
+  onClose: (fertig: boolean) => void;
+}) {
+  const artVon = (datei: string): "Master" | "Mix" => (/master/i.test(datei) ? "Master" : "Mix");
+  // Vorauswahl: ein Master, wenn es einen gibt, sonst der neueste Export.
+  const [datei, setDatei] = useState(s.exporte.find(d => artVon(d) === "Master") ?? s.exporte[0]);
+  const [art, setArt] = useState<"Master" | "Mix">(artVon(datei));
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const endung = datei.includes(".") ? datei.slice(datei.lastIndexOf(".")) : ".wav";
+  const neuerName = `${kuenstler} - ${s.name} (${art})${endung}`;
+
+  const abgeben = async () => {
+    setLaeuft(true);
+    setFehler(null);
+    try {
+      const pfad = await api.artists.abgeben(s.path, datei, art);
+      revealItemInDir(pfad).catch(() => {});
+      onClose(true);
+    } catch (e) {
+      setFehler(String(e));
+      setLaeuft(false);
+    }
+  };
+
+  return (
+    <Modal
+      icon={Send}
+      title={`${s.name} abgeben`}
+      subtitle="Der Export bekommt den Abgabe-Namen, der Song wandert nach _Fertig."
+      width={560}
+      onClose={() => onClose(false)}
+      footer={<>
+        <Button variant="ghost" onClick={() => onClose(false)}>Abbrechen</Button>
+        <Button variant="primary" icon={Send} loading={laeuft} onClick={abgeben}>Abgeben</Button>
+      </>}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+        {s.exporte.map(d => (
+          <label key={d} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", cursor: "pointer",
+            borderRadius: radius.control, fontSize: 12, color: C.onSurface,
+            background: d === datei ? alpha(C.primary, 0.08) : "transparent",
+          }}>
+            <input type="radio" name="export" checked={d === datei} style={{ accentColor: C.primary }}
+              onChange={() => { setDatei(d); setArt(artVon(d)); }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d}</span>
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+        <Segmented label="Art der Abgabe" value={art} onChange={setArt}
+          options={[{ value: "Master", label: "Master" }, { value: "Mix", label: "Mix" }]} />
+        <ArrowRight size={14} color={C.onSecondaryFixedVar} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {neuerName}
+        </span>
+      </div>
+      {fehler && <div style={{ marginTop: 10, fontSize: 12, color: C.error }}>{fehler}</div>}
+    </Modal>
   );
 }
