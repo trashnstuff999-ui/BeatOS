@@ -64,6 +64,28 @@ Warteschlange „Ohne Termin" + Ziehen auf Tage gibt es schon.
       den eigenen Videos die meisten Aufrufe bringen
 - Voraussetzung: Uploads sind nacherfasst (sonst fehlen 2024/25)
 
+### Assets automatisch nummerieren, Cover ↔ Thumbnail abgleichen (Studio → Assets)
+Gewünscht am 18.10.2026. Covers und Thumbnails im Asset-Ordner bekommen
+automatisch fortlaufende Nummern (`Cover_12.png`, `Thumbnail_12.png`).
+Gehören Cover und Thumbnail zusammen (gleiches Motiv), tragen sie dieselbe
+Nummer — dann ist auf einen Blick klar, was zusammengehört.
+- [ ] Nummern stabil: vergebene Nummern ändern sich nie, Neues bekommt die
+      nächste freie (max + 1); beim ersten Durchlauf nach Änderungsdatum
+- [ ] Abgleich per Bildvergleich: beide verkleinern (z. B. dHash), beim
+      Thumbnail den mittleren quadratischen Ausschnitt nehmen; ähnlich genug
+      → gleiche Nummer. Zweites Signal: Exportzeit liegt nah beieinander
+- [ ] Thumbnail ohne passendes Cover → eigene Nummer; unsichere Treffer
+      vorschlagen statt still umbenennen
+- [ ] Bausteine: `scan_asset_inbox` (`guessed_role` cover/thumbnail) in
+      `commands/studio.rs`, Raster in `src/components/studio/AssetsPane.tsx`
+- Offen vor dem Bauen:
+  1. Sollen die Dateien im Asset-Ordner wirklich umbenannt werden, oder
+     reicht die Nummer als Anzeige in BeatOS?
+  2. Genaues Namensschema (`Cover_12.png`? mit Datum? Großschreibung?)
+  3. Videos mitnummerieren?
+  4. Beim Zuweisen an ein Projekt: behält die Datei die Nummer, oder gilt
+     dort wie bisher das Namensschema des Beats?
+
 ### Lautheit/Clipping prüfen (später, nicht dringend)
 ffmpeg misst LUFS und Spitzen beim Laden des Beats, Anzeige in der
 Asset-Kachel.
