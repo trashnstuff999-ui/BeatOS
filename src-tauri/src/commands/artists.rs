@@ -55,6 +55,8 @@ pub struct ArtistSong {
     pub abgegeben: Option<String>,
     /// So viele Dinge liegen noch außerhalb von 01_/02_/03_ — „Ordner aufräumen".
     pub umbau: usize,
+    /// Alle Audiodateien mit Rolle, neueste zuerst — Reinhören und Verlauf.
+    pub audio: Vec<AudioDatei>,
     /// Die FLPs des Songs (01_SAVEFILES oder lose), neueste zuerst — zum
     /// Öffnen in FL, mit Auswahl der Version.
     pub flps: Vec<FlpVersion>,
@@ -848,24 +850,31 @@ fn ziel_im_schema(name: &str, ist_ordner: bool, verwendet: &std::collections::Ha
     })
 }
 
+/// Eine Audiodatei des Songs mit ihrer Rolle — zum Reinhören und für den
+/// Verlauf. `art`: vocals, demo, beat (vom Künstler) oder mix, master (Exporte).
+#[derive(Debug, Serialize, PartialEq)]
+pub struct AudioDatei {
+    pub art: &'static str,
+    pub name: String,
+    pub path: String,
+    pub geaendert: u64,
+}
+
 pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
-    let wurzel = dateien(pfad);
-    let saves = dateien(&pfad.join(SAVES));
-    let versions = dateien(&pfad.join(VERSIONS));
+    // (Name, Zeit, voller Pfad)
+    type Datei = (String, u64, std::path::PathBuf);
+    let liste = |d: std::path::PathBuf| -> Vec<Datei> {
+        dateien(&d).into_iter().map(|(n, t)| { let p = d.join(&n); (n, t, p) }).collect()
+    };
+    let wurzel = liste(pfad.to_path_buf());
+    let saves = liste(pfad.join(SAVES));
+    let versions = liste(pfad.join(VERSIONS));
     // Was die FLP neben sich als Material verwendet, ist ein Asset, kein Export.
     let verwendet = verwendete_namen(pfad);
-    let lose = || saves.iter().chain(&wurzel).filter(|(n, _)| ist_audio(n));
+    let lose: Vec<&Datei> = saves.iter().chain(&wurzel).filter(|d| ist_audio(&d.0)).collect();
     // Bis „Ordner aufräumen" lief, liegen Assets auch noch in Assets/, Eingang/ oder lose.
-    let assets: Vec<(String, u64)> = [ASSETS, "Assets", "Eingang"].iter()
-        .flat_map(|o| dateien(&pfad.join(o)))
-        .chain(lose().filter(|(n, _)| ist_material(n, &verwendet)).cloned())
-        .collect();
-    let aufnahmen: Vec<(String, u64)> = dateien(&pfad.join(SAVES).join("Audio")).into_iter()
-        .chain(dateien(&pfad.join("Audio"))).collect();
-    // Exporte: in 03_VERSIONS, oder wo FL sie hinlegt — neben die FLP.
-    let export_quellen: Vec<&(String, u64)> = versions.iter().filter(|(n, _)| ist_audio(n))
-        .chain(lose().filter(|(n, _)| !ist_material(n, &verwendet)))
-        .collect();
+    let assets: Vec<Datei> = [ASSETS, "Assets", "Eingang"].iter().flat_map(|o| liste(pfad.join(o))).collect();
+    let aufnahmen: Vec<Datei> = liste(pfad.join(SAVES).join("Audio")).into_iter().chain(liste(pfad.join("Audio"))).collect();
     let song_name = vergleich(name);
     let hat_vocal = |n: &str| n.to_lowercase().contains("vocal");
     // In den Assets ist alles mit dem Songnamen außer der Demo selbst eine
@@ -874,27 +883,46 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     let ist_demo = |n: &str| !hat_vocal(n) && (vergleich(n) == song_name || n.to_lowercase().contains("demo"));
     let ist_asset_vocal = |n: &str| hat_vocal(n) || (!ist_demo(n) && vergleich(n).contains(&song_name));
 
+    // Alle Audiodateien mit Rolle — daraus folgen Häkchen, Reinhören, Verlauf.
+    let eintrag = |art: &'static str, d: &Datei| AudioDatei { art, name: d.0.clone(), path: d.2.to_string_lossy().to_string(), geaendert: d.1 };
+    let mut audio: Vec<AudioDatei> = Vec::new();
+    for d in assets.iter().filter(|d| ist_audio(&d.0)).chain(lose.iter().copied().filter(|d| ist_material(&d.0, &verwendet))) {
+        let art = if ist_demo(&d.0) { "demo" } else if ist_asset_vocal(&d.0) { "vocals" } else { "beat" };
+        audio.push(eintrag(art, d));
+    }
+    // Aufnahmen in Audio/: nur die als Vocals benannten, nicht jeder Take.
+    for d in aufnahmen.iter().filter(|d| ist_audio(&d.0) && hat_vocal(&d.0)) { audio.push(eintrag("vocals", d)); }
+    // Exporte: in 03_VERSIONS, oder wo FL sie hinlegt — neben die FLP.
+    let exporte: Vec<&Datei> = versions.iter().filter(|d| ist_audio(&d.0))
+        .chain(lose.iter().copied().filter(|d| !ist_material(&d.0, &verwendet)))
+        .collect();
+    for d in &exporte {
+        let n = d.0.to_lowercase();
+        let art = if hat_vocal(&n) { "vocals" } else if n.contains("master") { "master" } else { "mix" };
+        audio.push(eintrag(art, d));
+    }
+    audio.sort_by(|a, b| b.geaendert.cmp(&a.geaendert));
+
     let mut s = ArtistSong {
         name: name.to_string(),
         path: pfad.to_string_lossy().to_string(),
         fertig,
         ..Default::default()
     };
-    s.flps = [(SAVES, &saves), ("", &wurzel)].iter()
-        .flat_map(|(ordner, liste)| liste.iter().filter(|(n, _)| is_flp(Path::new(n)))
-            .map(move |(n, t)| FlpVersion { name: n.clone(), path: pfad.join(ordner).join(n).to_string_lossy().to_string(), geaendert: *t }))
+    s.flps = saves.iter().chain(&wurzel).filter(|d| is_flp(Path::new(&d.0)))
+        .map(|d| FlpVersion { name: d.0.clone(), path: d.2.to_string_lossy().to_string(), geaendert: d.1 })
         .collect();
     s.flps.sort_by(|a, b| b.geaendert.cmp(&a.geaendert));
     s.flp = !s.flps.is_empty();
-    s.vocals = assets.iter().any(|(n, _)| ist_audio(n) && ist_asset_vocal(n))
-        || aufnahmen.iter().chain(&wurzel).any(|(n, _)| ist_audio(n) && hat_vocal(n));
-    s.demo = assets.iter().any(|(n, _)| ist_audio(n) && ist_demo(n));
-    s.beat = assets.iter().any(|(n, _)| ist_audio(n) && !ist_asset_vocal(n) && !ist_demo(n));
-    s.master = export_quellen.iter().any(|(n, _)| n.to_lowercase().contains("master"));
-    s.mix = export_quellen.iter().any(|(n, _)| !hat_vocal(n) && !n.to_lowercase().contains("master"));
+    let hat = |art: &str| audio.iter().any(|a| a.art == art);
+    s.vocals = hat("vocals");
+    s.demo = hat("demo");
+    s.beat = hat("beat");
+    s.mix = hat("mix");
+    s.master = hat("master");
     let alle = || wurzel.iter().chain(&saves).chain(&versions).chain(&assets).chain(&aufnahmen);
-    s.geaendert = alle().map(|(_, t)| *t).max().unwrap_or(0);
-    s.dateien = alle().map(|(n, _)| n.clone()).collect();
+    s.geaendert = alle().map(|d| d.1).max().unwrap_or(0);
+    s.dateien = alle().map(|d| d.0.clone()).collect();
     s.umbau = fs::read_dir(pfad).map(|rd| rd.filter_map(|e| e.ok())
         .filter(|e| ziel_im_schema(&e.file_name().to_string_lossy(), e.path().is_dir(), &verwendet).is_some())
         .count()).unwrap_or(0);
@@ -904,9 +932,10 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
     s.reparierbar = plan.ersatz.iter().flat_map(|(_, e)| e.iter().map(|(alt, _)| alt))
         .collect::<std::collections::HashSet<_>>().len();
     s.fehlend = plan.fehlend;
-    let mut exporte = export_quellen;
+    let mut exporte = exporte;
     exporte.sort_by(|a, b| b.1.cmp(&a.1));
-    s.exporte = exporte.into_iter().map(|(n, _)| n.clone()).collect();
+    s.exporte = exporte.into_iter().map(|d| d.0.clone()).collect();
+    s.audio = audio;
     s
 }
 
@@ -1139,6 +1168,13 @@ mod tests {
         let s = song("Teufelskraut", &song_dir, false);
         assert!(s.vocals && s.beat && s.mix && s.umbau == 0 && s.reparierbar == 0);
         assert!(s.demo, "TEUFELSKRAUT [DEMO].wav ist die Demo");
+        // Reinhören/Verlauf: jede Datei mit Rolle und vollem Pfad
+        let art = |n: &str| s.audio.iter().find(|a| a.name == n).map(|a| a.art);
+        assert_eq!(art("Teufelskraut alles.mp3"), Some("vocals"));
+        assert_eq!(art("TEUFELSKRAUT [DEMO].wav"), Some("demo"));
+        assert_eq!(art("(FREE) Lil Tecca Type Beat — LIFESTYLE.mp3"), Some("beat"));
+        assert_eq!(art("teufelskraut.mp3"), Some("mix"));
+        assert!(s.audio.iter().all(|a| Path::new(&a.path).is_file()));
         let _ = fs::remove_dir_all(&root);
     }
 
