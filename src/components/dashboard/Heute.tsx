@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Flame } from "lucide-react";
+import { Flame, Play, Pause } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { api } from "../../lib/api";
@@ -22,6 +22,7 @@ import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../../contex
 import { parseRhythmus, naechsterFreierTag, wochenanfang, addDays, toISO } from "../../lib/planung";
 import { woche, alsNaechstes, liegengeblieben, tageAufzaehlen, type TagZelle } from "../../lib/heute";
 import { Button, Segmented } from "../ui";
+import { useAudioPlayerContext, useAudioProgress } from "../../contexts/AudioPlayerContext";
 import type { DashboardActions } from "../../types/stats";
 import type { Beat } from "../../types/browse";
 import type { ScheduleEntry, QueueBeat } from "../../types/upload";
@@ -266,6 +267,7 @@ export function Heute({ actions, recent, refreshKey }: {
                 <Button variant="secondary" onClick={() => zumUpload(held.id)}>Zum Upload</Button>
               </div>
             </div>
+            <Reinhoeren beatId={held.id} name={held.name} cover={held.cover} />
           </div>
         </section>
       )}
@@ -430,4 +432,63 @@ function Platzhalter({ name, groesse }: { name: string; groesse?: number }) {
 
 function Leise({ children }: { children: React.ReactNode }) {
   return <div style={{ padding: "12px 0", borderTop: `1px solid ${C.border10}`, fontSize: 13, color: C.onSecondaryFixedVar }}>{children}</div>;
+}
+
+/** Reinhören in „Als Nächstes": Play und Zeitleiste auf Glas, wie die Kachel.
+ *  Spielt über den App-Player — derselbe Beat läuft unten in der Leiste mit,
+ *  und es spielen nie zwei gleichzeitig. Eigene Komponente, weil der
+ *  Fortschritt zehnmal pro Sekunde tickt: so rendert nur sie neu. */
+function Reinhoeren({ beatId, name, cover }: { beatId: string; name: string; cover: string | null }) {
+  const { currentBeat, isPlaying, isLoading, togglePlay, playBeat, seekPercent } = useAudioPlayerContext();
+  const { progress, currentTimeFormatted, durationFormatted } = useAudioProgress();
+  const [fehlt, setFehlt] = useState(false);
+  const aktiv = currentBeat?.id === beatId;
+  const laeuft = aktiv && isPlaying;
+
+  const starten = async () => {
+    if (aktiv) { togglePlay(); return; }
+    const beat = await api.beats.getById(beatId).catch(() => null);
+    if (!beat) { setFehlt(true); return; }
+    playBeat(beat, cover ? bild(cover) : null);
+  };
+  const springen = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!aktiv) { starten(); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    seekPercent(Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)));
+  };
+
+  return (
+    <div style={{
+      flex: "0 1 340px", minWidth: 260, alignSelf: "center", boxSizing: "border-box",
+      display: "flex", alignItems: "center", gap: 18, padding: "18px 20px", borderRadius: 14,
+      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
+      backdropFilter: "blur(12px)",
+    }}>
+      <button type="button" className="ue-hebt" onClick={starten} disabled={fehlt}
+        aria-label={laeuft ? `${name} anhalten` : `${name} abspielen`}
+        title={fehlt ? "Beat nicht gefunden" : laeuft ? "Anhalten" : "Reinhören"}
+        style={{
+          width: 56, height: 56, flexShrink: 0, borderRadius: "50%", border: 0, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: C.primary, color: C.onPrimary, boxShadow: `0 8px 24px ${alpha(C.primary, 0.35)}`,
+          opacity: aktiv && isLoading ? 0.6 : 1,
+        }}>
+        {laeuft ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" style={{ marginLeft: 3 }} />}
+      </button>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
+          {fehlt ? "Keine Audiodatei" : laeuft ? "Läuft" : aktiv ? "Pausiert" : "Reinhören"}
+        </span>
+        <div onClick={springen} role="presentation" title="Springen" style={{ padding: "6px 0", cursor: "pointer" }}>
+          <div style={{ height: 4, borderRadius: radius.full, background: "rgba(255,255,255,0.14)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${aktiv ? progress : 0}%`, background: C.primary, borderRadius: radius.full, transition: "width 0.1s linear" }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "monospace", color: C.onSecondaryFixedVar }}>
+          <span>{aktiv ? currentTimeFormatted : "0:00"}</span>
+          <span>{aktiv ? durationFormatted : "–:––"}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
