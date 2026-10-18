@@ -73,8 +73,8 @@ fortlaufend nummeriert und **wirklich umbenannt**: `Cover_1.png`,
 `Thumbnail_1.png`, `Cover_2.png` … Die Nummer ist nur dafür da, zu sehen,
 was zusammengehört — gehören Cover und Thumbnail zum selben Motiv, tragen
 sie dieselbe Nummer.
-- [x] Nummern stabil: vergebene Nummern ändern sich nie, Neues bekommt die
-      nächste freie (max + 1); beim ersten Durchlauf nach Änderungsdatum
+- [x] ~~Nummern stabil~~ — **geändert 18.10.2026:** die Reihe ist lückenlos ab 1. Die Nummer heißt nur „wartet auf einen Beat“; wird Cover_1/Thumbnail_1 zugewiesen, rutscht Cover_2/Thumbnail_2 auf 1 nach (Rust `luecken_schliessen`, nach Zuweisen und Löschen). Neues kommt hinten dran,
+      Reihenfolge bleibt.
 - [x] Abgleich per Bildvergleich: beide verkleinern (z. B. dHash), beim
       Thumbnail den mittleren quadratischen Ausschnitt; ähnlich genug →
       gleiche Nummer. Zweites Signal: Exportzeit liegt nah beieinander
@@ -92,8 +92,8 @@ nicht braucht — die Datei verschwindet aus dem Asset-Ordner.
       Beats (`trash::delete`, Crate `trash` ist vorhanden): weg aus dem
       Ordner, nach einem Fehlklick aber wiederholbar
 - [x] Ein Klick pro Kachel, dazu Mehrfachauswahl zum Aufräumen in einem Rutsch
-- [x] Nach dem Löschen eines Covers/Thumbnails: Partner mit derselben Nummer
-      behält seine Nummer (keine Lücke schließen — Nummern bleiben stabil)
+- [x] Nach dem Löschen: der Rest rutscht nach wie nach dem Zuweisen; ein Partner
+      ohne Gegenstück behält seinen Platz in der Reihe
 
 Bausteine: `scan_asset_inbox` (`guessed_role` cover/thumbnail/video) in
 `src-tauri/src/commands/studio.rs`, Raster in

@@ -1613,6 +1613,53 @@ pub fn rename_assets(asset_root: String, umbenennungen: Vec<AssetUmbenennung>) -
 /// Ordner, nach einem Fehlklick aber wiederholbar.
 #[tauri::command]
 pub fn trash_assets(asset_root: String, pfade: Vec<String>) -> Vec<AssetErgebnis> {
+    let erg = trash_assets_einzeln(&asset_root, pfade);
+    // Nur Ordner wirklich gelöschter Dateien — die sind geprüft (im Asset-Ordner).
+    let ordner: std::collections::BTreeSet<PathBuf> = erg.iter().filter(|e| e.ok)
+        .filter_map(|e| Path::new(&e.pfad).parent().map(Path::to_path_buf)).collect();
+    for o in ordner { luecken_schliessen(&o); }
+    erg
+}
+
+/// Die Nummern-Reihe eines Asset-Ordners lückenlos machen: Cover_1, Cover_2 …
+/// in derselben Reihenfolge, ein Paar (Cover_n + Thumbnail_n) bleibt ein Paar.
+/// Die Nummer heißt nur „wartet auf einen Beat" — wird Cover_1 zugewiesen
+/// oder gelöscht, rutscht der Rest nach (Stephan, 18.10.2026). Dieselbe Regel
+/// steht für den Knopf „Nummerieren" in src/lib/assetNummern.ts. Nicht
+/// nummerierte Dateien und Videos bleiben, wie sie sind.
+pub(crate) fn luecken_schliessen(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    // (Rolle "Cover"/"Thumbnail", Nummer, Pfad, Endung)
+    let mut nummeriert: Vec<(&'static str, u32, PathBuf, String)> = Vec::new();
+    for p in rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file()) {
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if !is_image_extension(&ext) { continue; }
+        let stamm = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+        let (rolle, rest) = if let Some(r) = stamm.strip_prefix("cover") { ("Cover", r) }
+            else if let Some(r) = stamm.strip_prefix("thumbnail") { ("Thumbnail", r) }
+            else if let Some(r) = stamm.strip_prefix("thumb") { ("Thumbnail", r) }
+            else { continue };
+        let ziffern = rest.trim_start_matches([' ', '_', '-']);
+        if ziffern.is_empty() || !ziffern.chars().all(|c| c.is_ascii_digit()) { continue; }
+        let Ok(nr) = ziffern.parse::<u32>() else { continue };
+        nummeriert.push((rolle, nr, p, ext));
+    }
+    let mut reihe: Vec<u32> = nummeriert.iter().map(|n| n.1).collect();
+    reihe.sort_unstable();
+    reihe.dedup();
+    // Aufsteigend umbenennen: das Ziel ist dann immer schon frei.
+    nummeriert.sort_by_key(|n| (n.1, n.0));
+    for (rolle, alt, pfad, ext) in nummeriert {
+        let neu = reihe.iter().position(|&r| r == alt).map(|i| i as u32 + 1).unwrap_or(alt);
+        let ziel = dir.join(format!("{rolle}_{neu}.{ext}"));
+        if ziel == pfad { continue; }
+        let selbe = ziel.to_string_lossy().eq_ignore_ascii_case(&pfad.to_string_lossy());
+        if ziel.exists() && !selbe { continue; }
+        let _ = std::fs::rename(&pfad, &ziel);
+    }
+}
+
+fn trash_assets_einzeln(asset_root: &str, pfade: Vec<String>) -> Vec<AssetErgebnis> {
     pfade.into_iter().map(|pfad| {
         let ergebnis = |ok: bool, meldung: String| AssetErgebnis { pfad: pfad.clone(), ok, meldung };
         match im_asset_ordner(&asset_root, &pfad) {
@@ -1664,6 +1711,8 @@ pub fn assign_asset_to_project(
         if std::fs::rename(src, &dest).is_err() {
             copy_and_verify_move(src, &dest)?;
         }
+        // Cover_1 ist weg → Cover_2 rutscht auf 1 nach.
+        if let Some(ordner) = src.parent() { luecken_schliessen(ordner); }
     } else {
         crate::utils::copy_and_verify(src, &dest)?;
     }
@@ -2928,6 +2977,37 @@ mod asset_tests {
         // Trenner werden entfernt — die Datei bleibt in MEDIA, nichts landet darüber
         assert!(!basis.join("weg.png").exists() && !media.join("thumbnail9.png").exists());
         assert!(std::fs::read_dir(&media).unwrap().count() == 4, "{erg:?}");
+        let _ = std::fs::remove_dir_all(&basis);
+    }
+
+    #[test]
+    fn nach_zuweisen_rutschen_die_nummern_nach() {
+        let basis = std::env::temp_dir().join(format!("beatos_nachruecken_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&basis);
+        let media = basis.join("MEDIA");
+        let beat = basis.join("Beat");
+        std::fs::create_dir_all(&media).unwrap();
+        std::fs::create_dir_all(&beat).unwrap();
+        for n in ["Cover_1.png", "Thumbnail_1.png", "cover2.png", "thumbnail2.png", "Cover_5.jpg", "home again_video.mp4", "Logo.png"] {
+            std::fs::write(media.join(n), b"x").unwrap();
+        }
+        assign_asset_to_project(
+            media.join("Cover_1.png").to_string_lossy().to_string(), media.to_string_lossy().to_string(),
+            beat.to_string_lossy().to_string(), Some("cover".into()),
+        ).unwrap();
+        // Thumbnail_1 wartet noch, darum bleibt die 1 belegt
+        let mut namen: Vec<String> = std::fs::read_dir(&media).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        namen.sort();
+        assert_eq!(namen, vec!["Cover_2.png", "Cover_3.jpg", "Logo.png", "Thumbnail_1.png", "Thumbnail_2.png", "home again_video.mp4"]);
+
+        assign_asset_to_project(
+            media.join("Thumbnail_1.png").to_string_lossy().to_string(), media.to_string_lossy().to_string(),
+            beat.to_string_lossy().to_string(), Some("thumbnail".into()),
+        ).unwrap();
+        let mut namen: Vec<String> = std::fs::read_dir(&media).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        namen.sort();
+        assert_eq!(namen, vec!["Cover_1.png", "Cover_2.jpg", "Logo.png", "Thumbnail_1.png", "home again_video.mp4"],
+            "Cover_2/Thumbnail_2 rutschen auf 1, Videos und Unnummeriertes bleiben");
         let _ = std::fs::remove_dir_all(&basis);
     }
 }

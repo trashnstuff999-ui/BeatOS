@@ -3,7 +3,8 @@
 // Studio → Assets: Covers und Thumbnails fortlaufend nummerieren, damit man
 // sieht, was zusammengehört (Cover_9 ↔ Thumbnail_9). Wunsch vom 18.10.2026,
 // Regeln in docs/TODO.md:
-//   • Vorhandene Nummern bleiben („cover9" → „Cover_9"), Neues bekommt max + 1
+//   • Lückenlos ab 1, Reihenfolge bleibt („cover2", „cover9" → Cover_1, Cover_2);
+//     nach Zuweisen oder Löschen rutscht der Rest automatisch nach
 //   • Paare per Bildvergleich (dHash, beim Thumbnail der mittlere Ausschnitt),
 //     zweites Signal die Exportzeit — nur über die Zeit gepaart heißt „unsicher"
 //   • Videos werden nicht nummeriert
@@ -69,21 +70,28 @@ const endung = (name: string) => (name.includes(".") ? name.slice(name.lastIndex
 const zielName = (rolle: Rolle, nr: number, name: string) =>
   `${rolle === "cover" ? "Cover" : "Thumbnail"}_${nr}${endung(name).toLowerCase()}`;
 
-/** Was umbenannt werden soll. Bestehende Nummern bleiben, Neues bekommt max + 1. */
+/** Was umbenannt werden soll. Die Reihe ist lückenlos ab 1: Wird Cover_1 einem
+ *  Beat zugewiesen (oder gelöscht), rutscht Cover_2 auf 1 nach — die Nummer
+ *  heißt nur „wartet auf einen Beat" (Stephan, 18.10.2026). Die Reihenfolge
+ *  bleibt, Neues kommt hinten dran. Die Liste ist nach neuer Nummer sortiert:
+ *  so abgearbeitet, ist jeder Zielname frei, bevor er gebraucht wird. */
 export function planeNummern(bilder: Bild[]): Umbenennung[] {
   const plan: Umbenennung[] = [];
-  let max = 0;
   const ohne: Bild[] = [];
+  const mitNummer: { b: Bild; rolle: Rolle; nr: number }[] = [];
   for (const b of bilder) {
     const n = nummerAusName(b.name);
-    if (n) {
-      max = Math.max(max, n.nr);
-      const neu = zielName(n.rolle, n.nr, b.name);
-      if (neu !== b.name) plan.push({ pfad: b.pfad, alt: b.name, neu, nr: n.nr, unsicher: false });
-    } else if (b.rolle) {
-      ohne.push(b);
-    }
+    if (n) mitNummer.push({ b, ...n });
+    else if (b.rolle) ohne.push(b);
   }
+  // Alte Nummern → 1, 2, 3 … in derselben Reihenfolge; ein Paar bleibt ein Paar.
+  const reihe = [...new Set(mitNummer.map(m => m.nr))].sort((a, b) => a - b);
+  for (const m of mitNummer) {
+    const nr = reihe.indexOf(m.nr) + 1;
+    const neu = zielName(m.rolle, nr, m.b.name);
+    if (neu !== m.b.name) plan.push({ pfad: m.b.pfad, alt: m.b.name, neu, nr, unsicher: false });
+  }
+  let max = reihe.length;
 
   const nachZeit = (a: Bild, b: Bild) => a.secs - b.secs;
   const covers = ohne.filter(b => b.rolle === "cover").sort(nachZeit);

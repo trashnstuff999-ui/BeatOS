@@ -50,7 +50,8 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
   const [nummernOffen, setNummernOffen] = useState(false);
   const [meldung, setMeldung] = useState<string | null>(null);
 
-  // In den Papierkorb — wiederholbar, darum ohne Rückfrage.
+  // In den Papierkorb — wiederholbar, darum ohne Rückfrage. Die Nummern
+  // rutschen danach in Rust nach (luecken_schliessen), wie nach dem Zuweisen.
   const loeschen = async (pfade: string[]) => {
     try {
       const schief = (await api.studio.trashAssets(assetPath, pfade)).filter(e => !e.ok);
@@ -403,7 +404,7 @@ function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
     <Modal
       icon={ListOrdered}
       title="Covers und Thumbnails nummerieren"
-      subtitle="Vorhandene Nummern bleiben, Neues bekommt die nächste freie. Gleiches Motiv → gleiche Nummer."
+      subtitle="Lückenlos ab 1, Reihenfolge bleibt, Neues kommt hinten dran. Gleiches Motiv → gleiche Nummer."
       width={640}
       onClose={() => onClose(!!ergebnis)}
       closeOnBackdrop={!laeuft}

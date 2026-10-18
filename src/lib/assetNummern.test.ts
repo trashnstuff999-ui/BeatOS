@@ -25,12 +25,25 @@ describe("rolleAusMassen", () => {
 });
 
 describe("planeNummern", () => {
-  it("vereinheitlicht vorhandene Nummern, ohne sie zu ändern", () => {
+  it("schließt Lücken, Reihenfolge und Paare bleiben", () => {
     const plan = planeNummern([bild("cover9.png", 1, "cover"), bild("thumbnail9.png", 2, "thumbnail"), bild("Cover_2.png", 3, "cover")]);
-    expect(plan.map(p => [p.alt, p.neu])).toEqual([["cover9.png", "Cover_9.png"], ["thumbnail9.png", "Thumbnail_9.png"]]);
+    expect(plan.map(p => [p.alt, p.neu])).toEqual([
+      ["Cover_2.png", "Cover_1.png"], ["cover9.png", "Cover_2.png"], ["thumbnail9.png", "Thumbnail_2.png"],
+    ]);
   });
 
-  it("paart Neues übers Bild, sonst über die Zeit (unsicher), mit max + 1", () => {
+  it("nach dem Zuweisen von Cover_1/Thumbnail_1 rutscht der Rest nach", () => {
+    const plan = planeNummern([
+      bild("Cover_2.png", 1, "cover"), bild("Thumbnail_2.png", 1, "thumbnail"),
+      bild("Cover_3.png", 2, "cover"), bild("Thumbnail_3.png", 2, "thumbnail"),
+    ]);
+    expect(plan.map(p => p.neu)).toEqual(["Cover_1.png", "Thumbnail_1.png", "Cover_2.png", "Thumbnail_2.png"]);
+    // Reihenfolge: jedes Ziel ist frei, bevor es gebraucht wird
+    plan.forEach((p, i) => expect(plan.slice(i + 1).some(q => q.alt === p.neu)).toBe(false));
+    expect(planeNummern([bild("Cover_1.png", 1, "cover"), bild("Thumbnail_1.png", 1, "thumbnail")])).toEqual([]);
+  });
+
+  it("paart Neues übers Bild, sonst über die Zeit (unsicher), hinten dran", () => {
     const plan = planeNummern([
       bild("cover9.png", 0, "cover"),
       // gleiches Motiv, Thumbnail eine Stunde später exportiert
@@ -44,11 +57,12 @@ describe("planeNummern", () => {
       bild("Video.png", 7, null),
     ]);
     const neu = Object.fromEntries(plan.map(p => [p.alt, [p.neu, p.unsicher]]));
-    expect(neu["Neues Cover.png"]).toEqual(["Cover_10.png", false]);
-    expect(neu["yt thumb.png"]).toEqual(["Thumbnail_10.png", false]);
-    expect(neu["cover.png"]).toEqual(["Cover_11.png", true]);
-    expect(neu["Thumbnail.png"]).toEqual(["Thumbnail_11.png", true]);
-    expect(neu["thumb alt.jpg"]).toEqual(["Thumbnail_12.jpg", false]);
+    expect(neu["cover9.png"]).toEqual(["Cover_1.png", false]);
+    expect(neu["Neues Cover.png"]).toEqual(["Cover_2.png", false]);
+    expect(neu["yt thumb.png"]).toEqual(["Thumbnail_2.png", false]);
+    expect(neu["cover.png"]).toEqual(["Cover_3.png", true]);
+    expect(neu["Thumbnail.png"]).toEqual(["Thumbnail_3.png", true]);
+    expect(neu["thumb alt.jpg"]).toEqual(["Thumbnail_4.jpg", false]);
     expect(neu["Video.png"]).toBeUndefined();
   });
 });
