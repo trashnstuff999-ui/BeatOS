@@ -112,7 +112,7 @@ export default function Studio() {
         </div>
         {/* Künstler-Projekte (Mix & Master) — eigener Ordner, eigene Liste. */}
         {tab === "artists" && (
-          <ArtistsPane root={kuenstlerOrdner(settings)} active={tab === "artists"} />
+          <ArtistsPane root={kuenstlerOrdner(settings)} archivePath={settings.archivePath} active={tab === "artists"} />
         )}
         <div style={{ height: 40 }} />
       </PageBody>

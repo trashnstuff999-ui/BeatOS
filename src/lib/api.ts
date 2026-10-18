@@ -19,7 +19,7 @@ import type { BeatSampleCredit, SampleProducer } from "../types/sampleCredits";
 import type { Stats, DashboardActions } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
-import type { ArtistsScan } from "../types/artists";
+import type { ArtistsScan, Altbestand } from "../types/artists";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -269,6 +269,11 @@ export const api = {
     scan: (root: string) => invoke<ArtistsScan>("scan_artists", { root }),
     /** Den Wurzelordner anlegen. */
     createRoot: (root: string) => invoke<void>("create_artists_root", { root }),
+    /** Ordner im Archiv, die keine Jahresordner sind (frühere Künstler-Ablage). */
+    altbestand: (archiveRoot: string) => invoke<Altbestand[]>("artists_altbestand", { archiveRoot }),
+    /** Ganze Ordner nach <Künstler-Ordner>/<Künstler> verschieben; Ziel vorhanden → übersprungen. */
+    umziehen: (archiveRoot: string, artistsRoot: string, umzuege: { pfad: string; kuenstler: string }[]) =>
+      invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artists_umziehen", { archiveRoot, artistsRoot, umzuege }),
   },
 
   // ─── Studio ──────────────────────────────────────────────────────────────

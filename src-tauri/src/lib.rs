@@ -57,6 +57,8 @@ use commands::{
     upload_nacherfassen,
     scan_artists,
     create_artists_root,
+    artists_altbestand,
+    artists_umziehen,
     // Settings commands
     get_settings,
     save_settings,
@@ -232,6 +234,8 @@ pub fn run() {
             upload_nacherfassen,
             scan_artists,
             create_artists_root,
+            artists_altbestand,
+            artists_umziehen,
             // Settings
             get_settings,
             save_settings,

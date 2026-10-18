@@ -26,3 +26,12 @@ export interface ArtistsScan {
   vorhanden: boolean;
   kuenstler: Artist[];
 }
+
+/** Ordner im Archiv, der kein Jahresordner ist — früher Künstler-Ablage. */
+export interface Altbestand {
+  pfad: string;
+  name: string;
+  /** Vorschlag: „ - Library" fällt weg. */
+  kuenstler: string;
+  songs: number;
+}

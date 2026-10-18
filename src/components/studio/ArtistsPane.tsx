@@ -6,18 +6,20 @@
 // Demo, Beat, Mix, Master —, abgeleitet aus den Dateien im Song-Ordner
 // (Regeln in commands/artists.rs). Fehlt etwas, sieht man es. Abgegebene
 // Songs (<Künstler>/_Fertig/) stehen zugeklappt darunter.
+// Scheibe 6: Künstler-Ordner, die noch im Archiv liegen, umziehen — mit
+// Vorschau, verschoben wird erst auf Klick.
 // Plan und nächste Scheiben: docs/kuenstler-projekte.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2 } from "lucide-react";
+import { Users, FolderOpen, FolderPlus, ChevronDown, Check, Mic2, FolderInput, ArrowRight, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { EmptyState, Button, IconButton } from "../ui";
-import type { Artist, ArtistSong, ArtistsScan } from "../../types/artists";
+import { EmptyState, Button, IconButton, Modal } from "../ui";
+import type { Artist, ArtistSong, ArtistsScan, Altbestand } from "../../types/artists";
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
   { key: "flp", label: "FLP", titel: "FL-Projekt im Song-Ordner" },
@@ -28,8 +30,10 @@ const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat
   { key: "master", label: "Master", titel: "Eine Audiodatei mit „Master\" im Namen" },
 ];
 
-export function ArtistsPane({ root, active }: { root: string; active: boolean }) {
+export function ArtistsPane({ root, archivePath, active }: { root: string; archivePath: string; active: boolean }) {
   const [scan, setScan] = useState<ArtistsScan | null>(null);
+  const [altbestand, setAltbestand] = useState<Altbestand[]>([]);
+  const [umzugOffen, setUmzugOffen] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [legtAn, setLegtAn] = useState(false);
 
@@ -38,7 +42,8 @@ export function ArtistsPane({ root, active }: { root: string; active: boolean })
     api.artists.scan(root)
       .then(s => { setScan(s); setFehler(null); })
       .catch(e => setFehler(String(e)));
-  }, [root]);
+    if (archivePath) api.artists.altbestand(archivePath).then(setAltbestand).catch(() => setAltbestand([]));
+  }, [root, archivePath]);
 
   useEffect(() => { if (active) laden(); }, [active, laden]);
   // Zurück aus dem Explorer oder aus Discord: neu lesen, nur wenn der Tab offen ist.
@@ -53,11 +58,37 @@ export function ArtistsPane({ root, active }: { root: string; active: boolean })
       />
     );
   }
-  if (fehler) return <EmptyState icon={Users} title="Künstler-Ordner nicht lesbar" description={fehler} />;
-  if (!scan) return <div style={{ padding: 24, fontSize: 12, color: C.onSecondaryFixedVar }}>Lese Künstler-Ordner …</div>;
 
-  if (!scan.vorhanden) {
-    return (
+  // Früher lagen Künstler-Projekte im Archiv. Steht in jedem Zustand oben —
+  // auch wenn 05_ARTISTS noch fehlt: der Umzug legt ihn mit an.
+  const hinweis = altbestand.length > 0 && (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
+      padding: "10px 14px", borderRadius: radius.control,
+      background: alpha(C.primary, 0.08), border: `1px solid ${alpha(C.primary, 0.3)}`,
+      fontSize: 12, color: C.onSurface,
+    }}>
+      <FolderInput size={14} color={C.primary} />
+      Im Archiv {altbestand.length === 1 ? "liegt 1 Künstler-Ordner" : `liegen ${altbestand.length} Künstler-Ordner`}:
+      <span style={{ color: C.onSurfaceVariant }}>{altbestand.map(a => a.name).join(", ")}</span>
+      <span style={{ flex: 1 }} />
+      <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setUmzugOffen(true)}>Umziehen …</Button>
+    </div>
+  );
+  const dialog = umzugOffen && (
+    <UmzugDialog
+      altbestand={altbestand}
+      archivePath={archivePath}
+      root={root}
+      onClose={() => { setUmzugOffen(false); laden(); }}
+    />
+  );
+
+  let inhalt: React.ReactNode;
+  if (fehler) inhalt = <EmptyState icon={Users} title="Künstler-Ordner nicht lesbar" description={fehler} />;
+  else if (!scan) inhalt = <div style={{ padding: 24, fontSize: 12, color: C.onSecondaryFixedVar }}>Lese Künstler-Ordner …</div>;
+  else if (!scan.vorhanden) {
+    inhalt = (
       <EmptyState
         icon={FolderPlus}
         title="Den Künstler-Ordner gibt es noch nicht"
@@ -74,10 +105,8 @@ export function ArtistsPane({ root, active }: { root: string; active: boolean })
         }
       />
     );
-  }
-
-  if (scan.kuenstler.length === 0) {
-    return (
+  } else if (scan.kuenstler.length === 0) {
+    inhalt = (
       <EmptyState
         icon={Users}
         title="Noch keine Künstler"
@@ -85,12 +114,112 @@ export function ArtistsPane({ root, active }: { root: string; active: boolean })
         action={<Button variant="secondary" icon={FolderOpen} onClick={() => revealItemInDir(root).catch(() => {})}>Ordner öffnen</Button>}
       />
     );
+  } else {
+    inhalt = (
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {scan.kuenstler.map(k => <KuenstlerBlock key={k.path} kuenstler={k} />)}
+      </div>
+    );
   }
 
+  return <div>{hinweis}{inhalt}{dialog}</div>;
+}
+
+/** Vorschau und Bestätigung: welche Archiv-Ordner wohin wandern. Verschoben
+ *  wird erst beim Klick; vorhandene Ziele werden übersprungen. */
+function UmzugDialog({ altbestand, archivePath, root, onClose }: {
+  altbestand: Altbestand[];
+  archivePath: string;
+  root: string;
+  onClose: () => void;
+}) {
+  const [zeilen, setZeilen] = useState(altbestand.map(a => ({ ...a, an: true })));
+  const [laeuft, setLaeuft] = useState(false);
+  const [ergebnis, setErgebnis] = useState<{ pfad: string; ok: boolean; meldung: string }[] | null>(null);
+  const sep = root.includes("\\") ? "\\" : "/";
+  const gewaehlt = zeilen.filter(z => z.an && z.kuenstler.trim());
+
+  const umziehen = async () => {
+    setLaeuft(true);
+    try {
+      setErgebnis(await api.artists.umziehen(archivePath, root, gewaehlt.map(z => ({ pfad: z.pfad, kuenstler: z.kuenstler.trim() }))));
+    } catch (e) {
+      setErgebnis([{ pfad: "", ok: false, meldung: String(e) }]);
+    } finally {
+      setLaeuft(false);
+    }
+  };
+
+  const aendern = (i: number, teil: Partial<(typeof zeilen)[number]>) =>
+    setZeilen(p => p.map((x, k) => (k === i ? { ...x, ...teil } : x)));
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {scan.kuenstler.map(k => <KuenstlerBlock key={k.path} kuenstler={k} />)}
-    </div>
+    <Modal
+      icon={FolderInput}
+      title="Künstler-Ordner aus dem Archiv umziehen"
+      subtitle="Ganze Ordner wandern mit allem darin — gibt es das Ziel schon, wird übersprungen"
+      width={720}
+      onClose={onClose}
+      closeOnBackdrop={!laeuft}
+      footer={ergebnis ? (
+        <Button variant="primary" onClick={onClose}>Schließen</Button>
+      ) : (
+        <>
+          <Button variant="ghost" onClick={onClose}>Abbrechen</Button>
+          <Button variant="primary" icon={FolderInput} loading={laeuft} disabled={gewaehlt.length === 0} onClick={umziehen}>
+            {gewaehlt.length === 1 ? "1 Ordner verschieben" : `${gewaehlt.length} Ordner verschieben`}
+          </Button>
+        </>
+      )}
+    >
+      {!ergebnis && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {zeilen.map((z, i) => (
+            <div key={z.pfad} style={{
+              display: "grid", gridTemplateColumns: "20px minmax(0, 1fr) 20px minmax(0, 1fr)", alignItems: "center", gap: 10,
+              padding: "10px 12px", borderRadius: radius.control, background: C.surfaceContainerLow,
+              border: `1px solid ${C.border10}`,
+            }}>
+              <input type="checkbox" aria-label={`${z.name} umziehen`} checked={z.an} style={{ accentColor: C.primary }}
+                onChange={e => aendern(i, { an: e.target.checked })} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.onSurface }}>{z.name}</div>
+                <div style={{ fontSize: 11, color: C.onSecondaryFixedVar }}>
+                  im Archiv · {z.songs === 1 ? "1 Song" : `${z.songs} Songs`}
+                </div>
+              </div>
+              <ArrowRight size={14} color={C.onSecondaryFixedVar} />
+              <div style={{ minWidth: 0 }}>
+                <input
+                  value={z.kuenstler}
+                  aria-label={`Künstlername für ${z.name}`}
+                  onChange={e => aendern(i, { kuenstler: e.target.value })}
+                  style={{
+                    width: "100%", padding: "5px 8px", fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                    background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
+                    border: `1px solid ${C.border20}`, borderRadius: radius.control, boxSizing: "border-box",
+                  }}
+                />
+                <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  → {root}{sep}{z.kuenstler.trim() || "…"}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {ergebnis && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0" }}>
+          {ergebnis.map(e => (
+            <div key={e.pfad + e.meldung} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: e.ok ? C.mint : C.error }}>
+              {e.ok ? <Check size={13} /> : <X size={13} />}
+              <span style={{ color: C.onSurface }}>{e.pfad.split(/[\\/]/).pop()}</span>
+              <span>{e.meldung}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
 

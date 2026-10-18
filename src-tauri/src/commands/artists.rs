@@ -88,6 +88,81 @@ pub fn create_artists_root(root: String) -> Result<(), String> {
     fs::create_dir_all(&root).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))
 }
 
+// ─── Altbestand aus dem Archiv umziehen ─────────────────────────────────────
+
+/// Ein Ordner im Archiv, der kein Jahresordner ist — früher wurden
+/// Künstler-Projekte dort abgelegt („JarnoGm - Library", „Yoghi").
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Altbestand {
+    pub pfad: String,
+    pub name: String,
+    /// Vorschlag für den Künstlernamen: „ - Library" fällt weg.
+    pub kuenstler: String,
+    pub songs: usize,
+}
+
+#[tauri::command(async)]
+pub fn artists_altbestand(archive_root: String) -> Result<Vec<Altbestand>, String> {
+    let mut out: Vec<Altbestand> = unterordner(Path::new(&archive_root)).into_iter()
+        // Jahresordner (2024, 2025 …) sind das echte Archiv.
+        .filter(|(n, _)| !(n.len() == 4 && n.chars().all(|c| c.is_ascii_digit())))
+        .map(|(name, pfad)| Altbestand {
+            kuenstler: kuenstler_vorschlag(&name),
+            songs: unterordner(&pfad).iter().filter(|(n, _)| !kein_song(n)).count(),
+            pfad: pfad.to_string_lossy().to_string(),
+            name,
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+fn kuenstler_vorschlag(name: &str) -> String {
+    let n = name.trim();
+    let ohne = n.strip_suffix("Library").map(|r| r.trim_end().trim_end_matches('-').trim_end()).unwrap_or(n);
+    if ohne.is_empty() { n.to_string() } else { ohne.to_string() }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct Umzug {
+    pub pfad: String,
+    pub kuenstler: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UmzugErgebnis {
+    pub pfad: String,
+    pub ok: bool,
+    pub meldung: String,
+}
+
+/// Ganze Ordner nach <artists_root>/<Künstler> verschieben — mit allem
+/// darin, nichts geht verloren. Gibt es das Ziel schon, wird übersprungen
+/// statt zusammengeführt oder überschrieben. Verschoben wird nur, was
+/// wirklich im Archiv-Ordner liegt.
+#[tauri::command(async)]
+pub fn artists_umziehen(archive_root: String, artists_root: String, umzuege: Vec<Umzug>) -> Result<Vec<UmzugErgebnis>, String> {
+    fs::create_dir_all(&artists_root).map_err(|e| format!("Künstler-Ordner ließ sich nicht anlegen: {e}"))?;
+    let archiv = fs::canonicalize(&archive_root).map_err(|e| format!("Archiv-Ordner nicht gefunden: {e}"))?;
+    Ok(umzuege.into_iter().map(|u| {
+        let ergebnis = |ok: bool, meldung: String| UmzugErgebnis { pfad: u.pfad.clone(), ok, meldung };
+        let name = crate::utils::sanitize_filename_part(u.kuenstler.trim());
+        if name.is_empty() { return ergebnis(false, "Kein Künstlername".into()); }
+        let quelle = match fs::canonicalize(&u.pfad) {
+            Ok(q) if q.parent() == Some(archiv.as_path()) && q.is_dir() => q,
+            _ => return ergebnis(false, "Liegt nicht direkt im Archiv-Ordner".into()),
+        };
+        let ziel = Path::new(&artists_root).join(&name);
+        if ziel.exists() {
+            return ergebnis(false, format!("{} gibt es schon — übersprungen", ziel.display()));
+        }
+        match fs::rename(&quelle, &ziel) {
+            Ok(()) => ergebnis(true, format!("→ {}", ziel.display())),
+            Err(e) => ergebnis(false, format!("Verschieben fehlgeschlagen: {e}")),
+        }
+    }).collect())
+}
+
 fn unterordner(dir: &Path) -> Vec<(String, std::path::PathBuf)> {
     let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
     rd.filter_map(|e| e.ok())
@@ -194,5 +269,44 @@ mod tests {
     fn fehlender_ordner_ist_leer() {
         let scan = scan_artists("C:/gibt/es/nicht".into()).unwrap();
         assert!(!scan.vorhanden && scan.kuenstler.is_empty());
+    }
+
+    #[test]
+    fn altbestand_erkennen_und_umziehen() {
+        let basis = std::env::temp_dir().join(format!("beatos_umzug_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&basis);
+        let archiv = basis.join("03_ARCHIVE");
+        let artists = basis.join("05_ARTISTS");
+        datei(&archiv.join("2026/10_OCTOBER/Beat/x.mp3"));
+        datei(&archiv.join("JarnoGm - Library/Finden/Finden.flp"));
+        datei(&archiv.join("JarnoGm - Library/Backup/teufelskraut.flp"));
+        datei(&archiv.join("Yoghi/No Bleed/No Bleed.flp"));
+        datei(&artists.join("Yoghi/schon da.txt"));
+
+        let alt = artists_altbestand(archiv.to_string_lossy().to_string()).unwrap();
+        assert_eq!(alt.iter().map(|a| (a.name.as_str(), a.kuenstler.as_str(), a.songs)).collect::<Vec<_>>(),
+            vec![("JarnoGm - Library", "JarnoGm", 1), ("Yoghi", "Yoghi", 1)], "Jahresordner zählen nicht");
+
+        let erg = artists_umziehen(
+            archiv.to_string_lossy().to_string(),
+            artists.to_string_lossy().to_string(),
+            alt.iter().map(|a| Umzug { pfad: a.pfad.clone(), kuenstler: a.kuenstler.clone() }).collect(),
+        ).unwrap();
+        assert!(erg[0].ok, "JarnoGm zieht um");
+        assert!(!erg[1].ok, "Yoghi gibt es schon — übersprungen");
+        // Alles kam mit, auch die losen Backups; nichts wurde überschrieben
+        assert!(artists.join("JarnoGm/Finden/Finden.flp").is_file());
+        assert!(artists.join("JarnoGm/Backup/teufelskraut.flp").is_file());
+        assert!(!archiv.join("JarnoGm - Library").exists());
+        assert!(archiv.join("Yoghi/No Bleed/No Bleed.flp").is_file());
+        assert!(artists.join("Yoghi/schon da.txt").is_file());
+
+        // Außerhalb des Archivs wird nichts angefasst
+        let fremd = artists_umziehen(
+            archiv.to_string_lossy().to_string(), artists.to_string_lossy().to_string(),
+            vec![Umzug { pfad: basis.to_string_lossy().to_string(), kuenstler: "X".into() }],
+        ).unwrap();
+        assert!(!fremd[0].ok);
+        let _ = fs::remove_dir_all(&basis);
     }
 }
