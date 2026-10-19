@@ -29,8 +29,8 @@ import { MergeProjectsDialog } from "./MergeProjectsDialog";
 import { ProjectInspector } from "./ProjectInspector";
 import { Werkbank } from "./Werkbank";
 import { IdeenListe } from "./IdeenListe";
-import { AufraeumListe, type AufraeumFilter } from "./AufraeumListe";
-import { werkbankSatz, ideenGruppen, jahresGruppen, ideeName } from "../../lib/werkbank";
+import { AufraeumListe, type AufraeumFilter, type AufraeumSort } from "./AufraeumListe";
+import { werkbankSatz, ideenGruppen, jahresGruppen, zeitGruppen, ideeName, skizzen } from "../../lib/werkbank";
 import { deriveStage, projectDisplayName, studioBeatId } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 import type { Beat } from "../../types/browse";
@@ -117,6 +117,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [search, setSearch] = useState("");
   /** Aufräumen: alles oder nur das Vorgemerkte. */
   const [aufraeumFilter, setAufraeumFilter] = useState<AufraeumFilter>("alle");
+  const [aufraeumSort, setAufraeumSort] = useState<AufraeumSort>("neu");
+  /** Unter so vielen Minuten Arbeitszeit gilt eine alte Idee als Skizze. */
+  const [skizzenGrenze, setSkizzenGrenze] = useState(20);
   const [rootFilter, setRootFilter] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>(loadSort);
   /** Monats- (Ideen) und Jahresgruppen (Aufräumen), die schon ganz aufgeklappt sind. */
@@ -463,8 +466,17 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
 
   // Aufräumen: Lange inaktiv und Kann weg in EINER Liste, neueste zuerst, nach
   // Jahr. Vorgemerkte stehen durchgestrichen dazwischen, wo sie hingehören.
+  // Nach Zeit: ohne Zeitangabe immer ans Ende, bei gleicher Zeit das Neuere zuerst.
+  const nachZeit = (a: StudioProject, b: StudioProject, richtung: 1 | -1) =>
+    (a.work_minutes == null ? 1 : 0) - (b.work_minutes == null ? 1 : 0) ||
+    richtung * ((a.work_minutes ?? 0) - (b.work_minutes ?? 0)) || b.modified_secs - a.modified_secs;
+  const aufraeumSortiert = [...visible].sort((a, b) =>
+    aufraeumSort === "alt" ? a.modified_secs - b.modified_secs
+    : aufraeumSort === "kurz" ? nachZeit(a, b, 1)
+    : aufraeumSort === "lang" ? nachZeit(a, b, -1)
+    : b.modified_secs - a.modified_secs);
   const aufraeumGezeigt = view === "cleanup"
-    ? jahresGruppen([...visible].sort((a, b) => b.modified_secs - a.modified_secs)).map(g => ({
+    ? (aufraeumSort === "kurz" || aufraeumSort === "lang" ? zeitGruppen : jahresGruppen)(aufraeumSortiert).map(g => ({
         key: `jahr-${g.key}`, label: g.label, total: g.items.length,
         items: q || ideenOffen.has(`jahr-${g.key}`) ? g.items : g.items.slice(0, JAHR_LIMIT),
       }))
@@ -493,6 +505,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       melde(`Speichern fehlgeschlagen: ${String(e)}`);
     }
   };
+
+  // Über die gesuchte Menge — was die Suche ausblendet, wird nicht mit vorgemerkt.
+  const skizzenVorschlag = view === "cleanup" ? skizzen(preStatus, skizzenGrenze) : [];
 
   // „Kann weg" schaltet um: vormerken oder zurück zur automatischen Stufe.
   const handleToss = (p: StudioProject) =>
@@ -572,12 +587,15 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
 
   // Eine Änderung für die ganze Auswahl. Optimistisch wie patchProject, aber
   // die Fehler werden gesammelt gemeldet statt einzeln weggeklickt.
-  const patchSelected = async (patch: (p: StudioProject) => Partial<StudioProject>) => {
-    const targets = projectsRef.current.filter(p => selected.has(p.path));
+  const patchSelected = (patch: (p: StudioProject) => Partial<StudioProject>) => {
+    setSelected(new Set());
+    return patchMany(projectsRef.current.filter(p => selected.has(p.path)), patch);
+  };
+
+  const patchMany = async (targets: StudioProject[], patch: (p: StudioProject) => Partial<StudioProject>) => {
     if (targets.length === 0) return;
     const patched = new Map(targets.map(p => [p.path, { ...p, ...patch(p) }]));
     setProjects(prev => prev.map(p => patched.get(p.path) ?? p));
-    setSelected(new Set());
 
     const fehler: string[] = [];
     for (const p of patched.values()) {
@@ -732,6 +750,8 @@ Nummer läuft über alle Produktions-Ordner`}
           vorgemerkt={vorgemerkt}
           filter={aufraeumFilter}
           onFilter={setAufraeumFilter}
+          sort={aufraeumSort}
+          onSort={setAufraeumSort}
           gruppen={aufraeumGezeigt}
           onMore={key => setIdeenOffen(prev => new Set(prev).add(key))}
           inspectorPath={inspectorPath}
@@ -740,6 +760,10 @@ Nummer läuft über alle Produktions-Ordner`}
           onPreview={handlePreview}
           onKeep={handleKeep}
           onToss={handleToss}
+          skizzen={skizzenVorschlag}
+          skizzenGrenze={skizzenGrenze}
+          onSkizzenGrenze={setSkizzenGrenze}
+          onSkizzenVormerken={() => patchMany(skizzenVorschlag, () => ({ status: "discard" }))}
         >
           <Button
             size="sm" variant="ghost" icon={ListOrdered}

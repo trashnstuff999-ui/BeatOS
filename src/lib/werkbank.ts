@@ -77,6 +77,39 @@ export function ideenGruppen(items: StudioProject[], nachName: boolean): IdeenGr
   return gruppen;
 }
 
+/** „12 min", „1 h 20 min", „3 h" */
+export function arbeitszeit(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/** Skizzen-Vorschlag im Aufräumen: alt, kurz angefasst, nie exportiert, ohne
+ *  Notiz. Eine Notiz heißt: da hatte ich etwas vor — die bleibt draußen. */
+export function skizzen(items: StudioProject[], grenzeMin: number, jetztSek = Date.now() / 1000): StudioProject[] {
+  return items.filter(p =>
+    p.status === "idea" && !p.has_mp3 && !p.has_wav && !p.notes?.trim() &&
+    p.work_minutes != null && p.work_minutes < grenzeMin &&
+    jetztSek - p.modified_secs > 365 * 86_400);
+}
+
+/** Aufräumen nach Arbeitszeit: feste Spannen, ohne Zeit ans Ende. Die
+ *  Reihenfolge der Spannen folgt der Sortierung, die hereinkommt. */
+const SPANNEN: Array<[number, string]> = [
+  [15, "Unter 15 min"], [30, "15–30 min"], [60, "30–60 min"], [120, "1–2 h"], [Infinity, "Über 2 h"],
+];
+export function zeitGruppen(items: StudioProject[]): IdeenGruppe[] {
+  const gruppen: IdeenGruppe[] = [];
+  for (const p of items) {
+    const label = p.work_minutes == null ? "Ohne Zeitangabe"
+      : SPANNEN.find(([bis]) => p.work_minutes! < bis)![1];
+    const g = gruppen[gruppen.length - 1];
+    if (g && g.label === label) g.items.push(p);
+    else gruppen.push({ key: label, label, items: [p] });
+  }
+  return gruppen;
+}
+
 /** Aufräumen: nach Jahr der letzten Änderung. Wie oben — sortiert wird vorher. */
 export function jahresGruppen(items: StudioProject[]): IdeenGruppe[] {
   const gruppen: IdeenGruppe[] = [];

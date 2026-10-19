@@ -45,7 +45,7 @@ function project(over: Partial<StudioProject> & { name: string }): StudioProject
     modified_date: "2026-08-29", modified_secs: NOW - DAY,
     has_mp3: false, has_wav: false, has_cover: false, cover_path: null,
     has_thumbnail: false, has_video: false,
-    status: "idea", priority: 0, notes: null, kept: false,
+    status: "idea", priority: 0, notes: null, kept: false, work_minutes: null,
     ...over,
   };
 }
@@ -301,6 +301,34 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     await waitFor(() => expect(screen.queryByText("Staub")).not.toBeInTheDocument());
     expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_kept")).toEqual([
       ["set_studio_kept", { path: ALT.path, kept: true }],
+    ]);
+  });
+
+  it("schlägt kurze alte Skizzen vor — ohne die mit Notiz oder viel Arbeit", async () => {
+    const alt = NOW - 400 * DAY;
+    const SKIZZE = project({ name: "Project_0040", modified_secs: alt, work_minutes: 12 });
+    const MIT_NOTIZ = project({ name: "Project_0041", modified_secs: alt, work_minutes: 5, notes: "Hook!" });
+    const VIEL_ARBEIT = project({ name: "Project_0042", modified_secs: alt, work_minutes: 95 });
+    stubInvoke([], [SKIZZE, MIT_NOTIZ, VIEL_ARBEIT]);
+    const user = userEvent.setup();
+    renderProjects("cleanup");
+
+    // Arbeitszeit als eigene Spalte
+    expect(await screen.findByText("12 min")).toBeInTheDocument();
+    expect(screen.getByText("1 h 35 min")).toBeInTheDocument();
+    expect(screen.getByText("1 Skizze: unter 20 min in FL, älter als ein Jahr, nie exportiert")).toBeInTheDocument();
+
+    // Nach Arbeitszeit sortiert: Gruppen nach Spanne, Längste zuerst
+    await user.click(screen.getByRole("radio", { name: "Längste" }));
+    const koepfe = () => [...document.querySelectorAll("h3")].map(h => h.textContent);
+    await waitFor(() => expect(koepfe()).toEqual(["1–2 h", "Unter 15 min"]));
+    await user.click(screen.getByRole("radio", { name: "Kürzeste" }));
+    await waitFor(() => expect(koepfe()).toEqual(["Unter 15 min", "1–2 h"]));
+
+    await user.click(screen.getByRole("button", { name: "Alle 1 vormerken" }));
+    expect(await screen.findByText("1 Projekt kann weg")).toBeInTheDocument();
+    expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "update_studio_project")).toEqual([
+      ["update_studio_project", { path: SKIZZE.path, status: "discard", priority: 0, notes: null }],
     ]);
   });
 

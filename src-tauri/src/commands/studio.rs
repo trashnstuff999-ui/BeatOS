@@ -74,6 +74,8 @@ pub struct StudioProject {
     pub bpm: Option<i32>,
     pub newest_flp: Option<String>,
     pub flp_count: usize,
+    /// Arbeitszeit aus der FLP (FL zählt mit), über alle Versionen die größte
+    pub work_minutes: Option<u32>,
     /// All FLP versions, newest first (for the inspector)
     pub flps: Vec<FlpEntry>,
     pub modified_date: Option<String>, // of newest FLP (fallback: folder)
@@ -204,6 +206,39 @@ fn is_orphan_row(project_dir: &Path) -> bool {
     project_dir.parent().is_some_and(|root| root.is_dir()) && !project_dir.is_dir()
 }
 
+/// Wie lange in FL an der FLP gearbeitet wurde, in Minuten. Steht als Event
+/// 237 (zwei f64: Anlegedatum, Arbeitszeit — beides in Tagen) ganz vorn in
+/// der Datei, bei allen gemessenen Projekten unter 400 Bytes. Gelesen werden
+/// deshalb nur die ersten 16 KB — der Scan läuft bei jedem Fensterwechsel.
+fn flp_work_minutes(path: &Path) -> Option<u32> {
+    use std::io::Read;
+    let mut buf = Vec::with_capacity(16 * 1024);
+    std::fs::File::open(path).ok()?.take(16 * 1024).read_to_end(&mut buf).ok()?;
+    flp_work_minutes_from(&buf)
+}
+
+/// Gesucht wird das Muster selbst (Event 237, Länge 16, plausibles Datum),
+/// statt die Events der Reihe nach abzulaufen: FL Studio 2026 hat am
+/// Dateianfang ein neues Event, an dem ein Event-Leser aus dem Tritt kam —
+/// die Zeit steht trotzdem an derselben Stelle.
+fn flp_work_minutes_from(b: &[u8]) -> Option<u32> {
+    if b.get(0..4)? != b"FLhd" {
+        return None;
+    }
+    let f64_at = |i: usize| b.get(i..i + 8).map(|s| f64::from_le_bytes(s.try_into().unwrap()));
+    // 18 Bytes ab i: Id, Länge, zwei f64
+    (0..b.len().saturating_sub(17)).find_map(|i| {
+        if b[i] != 237 || b[i + 1] != 16 {
+            return None;
+        }
+        // Tage seit 1899-12-30: 35000 ≈ 1995, 60000 ≈ 2064
+        let angelegt = f64_at(i + 2)?;
+        let tage = f64_at(i + 10)?;
+        ((35_000.0..60_000.0).contains(&angelegt) && (0.0..3650.0).contains(&tage))
+            .then(|| (tage * 1440.0).round() as u32)
+    })
+}
+
 /// One project folder → StudioProject (None if it contains no FLP).
 fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
     let mut flps: Vec<(u64, PathBuf)> = Vec::new();
@@ -320,6 +355,8 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         bpm,
         newest_flp: Some(newest_flp.to_string_lossy().to_string()),
         flp_count: flps.len(),
+        // Die Zeit läuft über „Speichern unter" weiter — die größte zählt
+        work_minutes: flps.iter().filter_map(|(_, p)| flp_work_minutes(p)).max(),
         flps: flp_entries,
         modified_date: if modified_secs > 0 { Some(secs_to_date(modified_secs)) } else { None },
         modified_secs,
@@ -1933,7 +1970,7 @@ fn copy_and_verify_move(src: &Path, dest: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        derive_stage, duplicate_project_ids, ensure_slot_marker, is_manual_status, is_orphan_row,
+        derive_stage, duplicate_project_ids, ensure_slot_marker, flp_work_minutes_from, is_manual_status, is_orphan_row,
         parse_project_id, repath_studio_rows, resolve_status, scan_project_dir, MergeStep,
         STUDIO_STATUSES,
     };
@@ -2517,6 +2554,26 @@ mod tests {
         assert_eq!(anzahl, 2);
     }
 
+
+    #[test]
+    fn liest_die_arbeitszeit_aus_der_flp() {
+        // Header, dann ein paar Events — darunter wie in FL 2026 eins, das ein
+        // Event-Leser falsch zählt (0xac + 3 Bytes) — und Event 237
+        let mut b = b"FLhd".to_vec();
+        b.extend(6u32.to_le_bytes());
+        b.extend([0u8; 6]);
+        b.extend(b"FLdt");
+        b.extend(0u32.to_le_bytes());
+        b.extend([9, 1, 0xac, 1, 1, 0]);
+        b.extend([199, 3, b'a', b'b', b'c']);
+        b.push(237);
+        b.push(16);
+        b.extend(45000.0f64.to_le_bytes());
+        b.extend((90.0f64 / 1440.0).to_le_bytes()); // 90 Minuten
+        assert_eq!(flp_work_minutes_from(&b), Some(90));
+        assert_eq!(flp_work_minutes_from(b"keine flp"), None);
+        assert_eq!(flp_work_minutes_from(&b[..b.len() - 4]), None, "abgeschnitten");
+    }
 
     #[test]
     fn detects_flp_project_with_assets() {

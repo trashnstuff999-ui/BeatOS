@@ -71,6 +71,8 @@ export interface StudioProject {
   bpm: number | null;
   newest_flp: string | null;
   flp_count: number;
+  /** Arbeitszeit aus der FLP in Minuten (FL zählt mit) — null, wenn nicht lesbar */
+  work_minutes: number | null;
   /** Alle FLP-Versionen, neueste zuerst */
   flps: FlpEntry[];
   modified_date: string | null;

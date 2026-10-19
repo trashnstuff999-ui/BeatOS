@@ -10,12 +10,14 @@ import { useState } from "react";
 import { Play } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
-import { ideeName } from "../../lib/werkbank";
-import { Segmented } from "../ui";
+import { arbeitszeit, ideeName } from "../../lib/werkbank";
+import { Button, Segmented } from "../ui";
 import type { GezeigteGruppe } from "./IdeenListe";
 import type { StudioProject } from "../../types/studio";
 
 export type AufraeumFilter = "alle" | "discard";
+/** Nach Datum (Gruppen: Jahr) oder nach Arbeitszeit (Gruppen: Zeitspanne) */
+export type AufraeumSort = "neu" | "alt" | "kurz" | "lang";
 
 interface AufraeumListeProps {
   /** Lange inaktive Ideen, die noch nicht entschieden sind */
@@ -23,6 +25,8 @@ interface AufraeumListeProps {
   vorgemerkt: number;
   filter: AufraeumFilter;
   onFilter: (f: AufraeumFilter) => void;
+  sort: AufraeumSort;
+  onSort: (s: AufraeumSort) => void;
   gruppen: GezeigteGruppe[];
   onMore: (key: string) => void;
   inspectorPath: string | null;
@@ -31,13 +35,19 @@ interface AufraeumListeProps {
   onPreview: (p: StudioProject) => void;
   onKeep: (p: StudioProject) => void;
   onToss: (p: StudioProject) => void;
+  /** Vorschlag: alte, kurz angefasste Ideen ohne Export (noch nicht vorgemerkt) */
+  skizzen: StudioProject[];
+  skizzenGrenze: number;
+  onSkizzenGrenze: (min: number) => void;
+  onSkizzenVormerken: () => void;
   /** Lücken schließen, Zusammenführen — rechts neben dem Umschalter */
   children?: React.ReactNode;
 }
 
 export function AufraeumListe({
-  inaktiv, vorgemerkt, filter, onFilter, gruppen, onMore,
-  inspectorPath, selected, onOpen, onPreview, onKeep, onToss, children,
+  inaktiv, vorgemerkt, filter, onFilter, sort, onSort, gruppen, onMore,
+  inspectorPath, selected, onOpen, onPreview, onKeep, onToss,
+  skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken, children,
 }: AufraeumListeProps) {
   const kopf = inaktiv === 0 ? "Keine Idee liegt seit über 30 Tagen herum."
     : inaktiv === 1 ? "1 Idee hast du seit über 30 Tagen nicht angefasst."
@@ -52,6 +62,40 @@ export function AufraeumListe({
         </div>
       </div>
 
+      {/* Der große Hebel: die offensichtlichen Fälle auf einen Schlag. Gelöscht
+          wird trotzdem erst über die Leiste unten — bis dahin lässt sich jede
+          Zeile einzeln zurücknehmen. */}
+      {filter === "alle" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+          marginBottom: 18, padding: "14px 18px", borderRadius: 12,
+          background: C.surfaceContainer, border: `1px solid ${C.border20}`,
+        }}>
+          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface }}>
+              {skizzen.length === 0 ? "Keine Skizzen mehr übrig"
+                : `${skizzen.length} ${skizzen.length === 1 ? "Skizze" : "Skizzen"}: unter ${skizzenGrenze} min in FL, älter als ein Jahr, nie exportiert`}
+            </div>
+            <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
+              Ideen mit Notiz bleiben draußen. Vorgemerkt heißt noch nicht gelöscht.
+            </div>
+          </div>
+          <Segmented
+            label="Grenze für Skizzen"
+            value={String(skizzenGrenze)}
+            onChange={v => onSkizzenGrenze(Number(v))}
+            options={[
+              { value: "15", label: "15 min" },
+              { value: "20", label: "20 min" },
+              { value: "30", label: "30 min" },
+            ]}
+          />
+          <Button size="sm" variant="secondary" onClick={onSkizzenVormerken} disabled={skizzen.length === 0}>
+            {skizzen.length === 0 ? "Alle vormerken" : `Alle ${skizzen.length} vormerken`}
+          </Button>
+        </div>
+      )}
+
       <div style={{
         display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
         paddingBottom: 12, borderBottom: `1px solid ${C.border20}`,
@@ -63,6 +107,17 @@ export function AufraeumListe({
           options={[
             { value: "alle", label: `Lange inaktiv · ${inaktiv + vorgemerkt}` },
             { value: "discard", label: `Kann weg · ${vorgemerkt}` },
+          ]}
+        />
+        <Segmented
+          label="Sortierung"
+          value={sort}
+          onChange={onSort}
+          options={[
+            { value: "neu", label: "Neueste" },
+            { value: "alt", label: "Älteste" },
+            { value: "kurz", label: "Kürzeste" },
+            { value: "lang", label: "Längste" },
           ]}
         />
         <div style={{ flex: 1 }} />
@@ -94,7 +149,7 @@ export function AufraeumListe({
                 background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 600, cursor: "pointer",
               }}
             >
-              Alle {g.total} aus {g.label} anzeigen
+              Alle {g.total} anzeigen
             </button>
           )}
         </div>
@@ -115,7 +170,13 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onKeep, onToss
   const { nummer, titel } = ideeName(p);
   const canPreview = p.has_mp3 || p.has_wav;
   const weg = p.status === "discard";
-  const keyBpm = [p.key, p.bpm != null ? `${p.bpm} BPM` : null].filter(Boolean).join(" · ");
+  const notiz = p.notes?.split("\n").map(l => l.trim()).find(Boolean) ?? null;
+  const kopf = titel ?? notiz ?? "ohne Titel";
+  const neben = [
+    p.flp_count > 1 ? `${p.flp_count} Versionen` : null,
+    p.key, p.bpm != null ? `${p.bpm} BPM` : null,
+    canPreview ? null : "kein Export",
+  ].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -154,16 +215,23 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onKeep, onToss
           {nummer ?? ""}
         </span>
         <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "baseline", gap: 10, overflow: "hidden" }}>
-          <span style={{
-            fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            fontWeight: titel ? 700 : 500, color: titel ? C.onSurface : C.onSecondaryFixedVar,
+          <span title={notiz && !titel ? p.notes ?? undefined : undefined} style={{
+            fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "60%",
+            fontWeight: titel ? 700 : 600, color: titel ? C.onSurface : C.onSurfaceVariant,
             textDecoration: weg ? "line-through" : "none", textDecorationColor: alpha(C.error, 0.6),
           }}>
-            {titel ?? "ohne Titel"}
+            {kopf}
           </span>
-          <span style={{ fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>{keyBpm}</span>
+          <span style={{ fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{neben}</span>
         </span>
-        <span title={p.modified_date ?? undefined} style={{ flex: "0 0 auto", fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>
+        {/* Eigene Spalte, rechtsbündig — so liest man sie untereinander */}
+        <span title="Arbeitszeit in FL Studio" style={{
+          flex: "0 0 96px", textAlign: "right", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600,
+          fontVariantNumeric: "tabular-nums", color: p.work_minutes != null ? C.onSurface : C.onSecondaryFixedVar,
+        }}>
+          {p.work_minutes != null ? arbeitszeit(p.work_minutes) : "–"}
+        </span>
+        <span title={p.modified_date ?? undefined} style={{ flex: "0 0 150px", textAlign: "right", fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>
           zuletzt {formatRelativeTime(p.modified_secs)}
         </span>
       </button>
