@@ -13,10 +13,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings } from "lucide-react";
+import { RefreshCw, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
-import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
+import { C, STUDIO_STATUS_CONFIG, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
@@ -29,6 +29,9 @@ import { EmptyState, Button, IconButton } from "../ui";
 import { MergeProjectsDialog } from "./MergeProjectsDialog";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectInspector } from "./ProjectInspector";
+import { Werkbank } from "./Werkbank";
+import { IdeenListe } from "./IdeenListe";
+import { werkbankSatz, ideenGruppen, ideeName } from "../../lib/werkbank";
 import { deriveStage, projectDisplayName, studioBeatId } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 import type { Beat } from "../../types/browse";
@@ -44,6 +47,18 @@ const VIEW_SECTIONS: Record<StudioView, SectionKey[]> = {
   work: ["priority", "ready", "exported", "wip", "idea"],
   cleanup: ["stale", "discard"],
 };
+
+/** Diese Sektionen stehen in der Projekte-Ansicht als Cover-Regal (Werkbank). */
+const SHELF_SECTIONS: SectionKey[] = ["priority", "ready", "exported", "wip"];
+const SHELF_HINT: Partial<Record<SectionKey, string>> = {
+  priority: "Ideen mit Stern",
+  ready:    "alles da – kann archiviert werden",
+  exported: "MP3 und WAV liegen, Bilder oder Video fehlen",
+  wip:      "von dir vorgemerkt",
+};
+
+/** So viele Ideen zeigt eine Monatsgruppe, bevor „Alle N anzeigen" kommt. */
+const IDEEN_LIMIT = 8;
 
 /** So viele Zeilen zeigt eine Sektion, bevor sie „… weitere anzeigen" anbietet. */
 const SECTION_LIMIT = 50;
@@ -122,6 +137,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [collapsed, setCollapsed] = useState<Set<SectionKey>>(loadCollapsed);
   /** Sektionen, in denen „… weitere anzeigen" schon gedrückt wurde. */
   const [expanded, setExpanded] = useState<Set<SectionKey>>(new Set());
+  const [ideenOffen, setIdeenOffen] = useState<Set<string>>(new Set());
   /** Mehrfachauswahl (Projektpfade) und der Ankerpunkt für Shift-Klick. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -292,24 +308,51 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     const ok = await frage({
       titel: "In den Papierkorb verschieben?",
       text: `„${name}"\n\nDer komplette Projektordner wandert in den Windows-Papierkorb ` +
-            `und lässt sich von dort zurückholen:\n${p.path}`,
+            `und lässt sich von dort zurückholen:\n${p.path}\n\n` +
+            `Die Nummern dahinter rücken nach.`,
       bestaetigen: "In den Papierkorb",
       gefahr: true,
     });
     if (!ok) return;
     try {
-      await api.archive.trashSourceFolder(p.path, settings.archivePath);
+      const nichtNachgerueckt = await api.archive.trashSourceFolder(p.path, settings.archivePath);
       setProjects(prev => prev.filter(x => x.path !== p.path));
       if (inspectorPath === p.path) setInspectorPath(null);
+      zeigeNachruecken(nichtNachgerueckt);
+      scan(); // die Ordner dahinter heißen jetzt anders
     } catch (e) {
       melde(`Löschen fehlgeschlagen: ${String(e)}`);
     }
   };
 
-  // Alle „Kann weg"-Ordner auf einmal in den Papierkorb, danach anbieten, die
-  // Nummern nachrücken zu lassen. Das Umnummerieren macht der vorhandene
-  // Zusammenführen-Dialog — er zeigt jeden Schritt vorher und kann ihn
-  // rückgängig machen, das muss hier niemand nachbauen.
+  const zeigeNachruecken = (fehler: string[]) => {
+    if (fehler.length > 0) {
+      melde(`Nummern sind nicht ganz nachgerückt (Projekt in FL offen?) — ` +
+            `„Lücken schließen" repariert das:\n${fehler.join("\n")}`);
+    }
+  };
+
+  // Knopf für Ordner, die im Explorer gelöscht wurden — dort merkt BeatOS nichts.
+  const handleCloseGaps = async () => {
+    setIsCleaning(true);
+    try {
+      const r = await api.studio.closeGaps();
+      zeigeNachruecken(r.failed);
+      if (r.failed.length === 0) {
+        melde(r.moved === 0 ? "Keine Lücken — die Nummern sind schon lückenlos."
+                            : `${r.moved} ${r.moved === 1 ? "Projekt ist" : "Projekte sind"} nachgerückt.`,
+              r.moved === 0 ? "info" : "erfolg");
+      }
+      if (r.moved > 0) { setInspectorPath(null); scan(); }
+    } catch (e) {
+      melde(`Nachrücken fehlgeschlagen: ${String(e)}`);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
+  // Alle „Kann weg"-Ordner auf einmal in den Papierkorb, danach EIN Nachrücken
+  // für alle — nicht eins pro Ordner, das wären hunderte Umbenennungen je Stück.
   const handleTrashMarked = async () => {
     const n = discardable.length;
     const namen = discardable.slice(0, 8).map(p => `• ${projectDisplayName(p)}`).join("\n");
@@ -328,7 +371,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     const fehler: string[] = [];
     for (const p of discardable) {
       try {
-        await api.archive.trashSourceFolder(p.path, settings.archivePath);
+        await api.archive.trashSourceFolder(p.path, settings.archivePath, false);
         weg.add(p.path);
       } catch (e) {
         fehler.push(`${projectDisplayName(p)}: ${String(e)}`);
@@ -336,6 +379,11 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     }
     setProjects(prev => prev.filter(x => !weg.has(x.path)));
     if (inspectorPath && weg.has(inspectorPath)) setInspectorPath(null);
+    if (weg.size > 0) {
+      try { zeigeNachruecken((await api.studio.closeGaps()).failed); }
+      catch (e) { melde(`Nachrücken fehlgeschlagen: ${String(e)}`); }
+      scan();
+    }
     setIsCleaning(false);
 
     if (fehler.length > 0) {
@@ -346,16 +394,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
         bestaetigen: "Verstanden",
         nurHinweis: true,
       });
-      return;
-    }
-    if (weg.size > 0 && await frage({
-      titel: "Nummern nachrücken lassen?",
-      text: `${weg.size} ${weg.size === 1 ? "Ordner ist" : "Ordner sind"} im Papierkorb.\n\n` +
-            `Der nächste Schritt zeigt erst eine Vorschau, bevor etwas umbenannt wird.`,
-      bestaetigen: "Vorschau zeigen",
-      abbrechen: "Später",
-    })) {
-      setShowMerge(true);
     }
   };
 
@@ -372,15 +410,21 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     // Aussortiert schlägt den Stern: ein vorgemerktes Projekt gehört nach
     // unten, auch wenn es früher mal eine Priorität war.
     if (p.status === "discard") return "discard";
+    // Seit der Werkbank bleibt ein Stern-Projekt in seinem Regal (vorn, mit
+    // Marke); eigene Sektion nur für Ideen mit Stern — die hätten sonst kein Regal.
+    if (p.status !== "idea") return p.status;
     if (p.priority) return "priority";
-    if (p.status === "idea" && daysSince(p.modified_secs) > STALE_DAYS) return "stale";
-    return p.status;
+    if (daysSince(p.modified_secs) > STALE_DAYS) return "stale";
+    return "idea";
   };
 
   // Arbeiten und Aufräumen sind zwei Listen: ~30 Projekte, an denen du sitzt,
   // gegen ~800, die entschieden werden wollen. Vorher hing beides untereinander.
   const inView = (p: StudioProject) =>
     CLEANUP_SECTIONS.includes(sectionOf(p)) === (view === "cleanup");
+
+  // Regale klappen nicht zu und kürzen nicht — sie scrollen seitwärts.
+  const isShelf = (key: SectionKey) => view === "work" && SHELF_SECTIONS.includes(key);
 
   const preStatus = projects.filter(p => {
     if (!inView(p)) return false;
@@ -418,7 +462,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   // ohnehin erledigt. Ein Modus, der nichts bewirkt, ist schlimmer als keiner.
   const sortFn = (a: StudioProject, b: StudioProject): number => {
     switch (sortMode) {
-      case "name":   return projectDisplayName(a).localeCompare(projectDisplayName(b), "de");
+      // Nach dem Titel ohne „Project_0861 - " davor; ohne Titel ans Ende
+      case "name":   return (ideeName(a).titel ?? "￿").localeCompare(ideeName(b).titel ?? "￿", "de");
       case "oldest": return a.modified_secs - b.modified_secs;
       default:       return b.modified_secs - a.modified_secs;
     }
@@ -428,24 +473,38 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     .map(key => ({
       key,
       meta: SECTION_META[key],
-      items: visible.filter(p => sectionOf(p) === key).sort(sortFn),
+      // Im Regal steht der Stern vorn — er ist die Merkliste
+      items: visible.filter(p => sectionOf(p) === key)
+        .sort((a, b) => (isShelf(key) ? b.priority - a.priority : 0) || sortFn(a, b)),
     }))
     .filter(s => s.items.length > 0);
 
   // Suche und Status-Filter klappen alles auf: was übrig bleibt, will man sehen.
   const forcedOpen = sectionFilter !== null || q.length > 0;
-  const isSectionOpen = (key: SectionKey) => forcedOpen || !collapsed.has(key);
+  const isSectionOpen = (key: SectionKey) => isShelf(key) || forcedOpen || !collapsed.has(key);
 
   // Eine Sektion zeigt erst SECTION_LIMIT Zeilen. Ohne die Grenze rendert ein
   // einzelner Buchstabe in der Suche mehrere hundert Zeilen mit je sechs
   // Knöpfen — die Liste klappt ja beim Suchen komplett auf.
   const shownItems = (s: { key: SectionKey; items: StudioProject[] }) =>
-    expanded.has(s.key) ? s.items : s.items.slice(0, SECTION_LIMIT);
+    expanded.has(s.key) || isShelf(s.key) ? s.items : s.items.slice(0, SECTION_LIMIT);
 
   // Genau die Zeilen, die dastehen — in der Reihenfolge der Liste. Daraus wird
   // die Hör-Queue, damit „Weiter" das nächste Projekt meint und nicht die
   // Browse-Liste von vorhin.
-  const rows = sections.flatMap(s => isSectionOpen(s.key) ? shownItems(s) : []);
+  // Ideen in der Projekte-Ansicht: nach Monat/Buchstabe, je Gruppe erst
+  // IDEEN_LIMIT Zeilen. Suche zeigt alles — was übrig bleibt, will man sehen.
+  const ideen = view === "work" ? sections.find(s => s.key === "idea") : undefined;
+  const ideenGezeigt = ideen
+    ? ideenGruppen(ideen.items, sortMode === "name").map(g => ({
+        key: g.key, label: g.label, total: g.items.length,
+        items: q || ideenOffen.has(g.key) ? g.items : g.items.slice(0, IDEEN_LIMIT),
+      }))
+    : [];
+
+  const rows = sections.flatMap(s =>
+    s === ideen ? ideenGezeigt.flatMap(g => g.items)
+    : isSectionOpen(s.key) ? shownItems(s) : []);
 
   const toggleSection = (key: SectionKey) => {
     setCollapsed(prev => {
@@ -573,33 +632,26 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onInspectorOpen?.(inspectorOpen); }, [inspectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keine Karte drumherum: die Werkbank steht wie im Mockup direkt auf der Seite.
   return (
-    <div style={{
-      background: C.surfaceContainerLow,
-      border: `1px solid ${C.border10}`,
-      borderRadius: radius.card,
-      overflow: "hidden",
-    }}>
-      {/* Top bar */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "12px 16px",
-        borderBottom: `1px solid ${C.border10}`,
-      }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
-          {/* Was dieser Tab zeigt, nicht alle 875 — sonst widerspricht die Zahl der Liste. */}
-          {projects.filter(inView).length} Projekte
-        </span>
-        {/* Bei einem Pfad sagt „aus 1 Pfad" nichts. */}
-        {productionPaths.length > 1 && (
-          <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>
-            aus {productionPaths.length} Pfaden
-          </span>
-        )}
-        <div style={{ flex: 1 }} />
-        {/* Alles beschriftet, in einer Reihe: rechts das Häufigste. Vorher
-            standen hier zwei Symbole ohne Text, und „Ordner archivieren"
-            sass allein oben in der Ecke. */}
+    <div>
+      {/* Kopf: eine Zeile — Suche groß links, rechts die Knöpfe, „Neues Projekt"
+          als Hauptknopf. Vorher zwei Leisten (Zähler + Knöpfe, dann Suche +
+          Chips + Sortierung); die Regale sind jetzt die Einteilung. */}
+      <ProjectsToolbar
+        search={search}
+        onSearch={setSearch}
+        chips={chips}
+        total={preStatus.length}
+        active={sectionFilter}
+        onActive={k => setSectionFilter(k as SectionKey | null)}
+        roots={productionPaths}
+        rootFilter={rootFilter}
+        onRootFilter={setRootFilter}
+        sortMode={sortMode}
+        onSortMode={setSortMode}
+        showFilters={view === "cleanup"}
+      >
         <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Produktions-Ordner neu einlesen">
           Scan
         </Button>
@@ -613,15 +665,26 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
             Zusammenführen
           </Button>
         )}
+        {view === "cleanup" && (
+          <Button
+            size="sm" variant="ghost" icon={ListOrdered}
+            onClick={handleCloseGaps}
+            loading={isCleaning}
+            disabled={productionPaths.length === 0}
+            title="Nach Löschen im Explorer: Nummern lückenlos nachrücken lassen, Reihenfolge bleibt"
+          >
+            Lücken schließen
+          </Button>
+        )}
         <Button
-          size="sm" variant="secondary" icon={FolderPlus}
+          size="sm" variant="ghost" icon={FolderPlus}
           onClick={() => navigate("/create")}
           title="Einen Ordner von aussen archivieren (Übergabe-Ordner, anderer Rechner)"
         >
           Ordner archivieren
         </Button>
         <Button
-          size="sm" variant="secondary" icon={CopyPlus}
+          size="sm" variant="ghost" icon={CopyPlus}
           onClick={handleNewFromFlp}
           disabled={productionPaths.length === 0 || isCreating}
           title="Neues Projekt aus einer vorhandenen FLP — die Kopie bekommt die nächste freie Nummer"
@@ -629,7 +692,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
           Aus FLP
         </Button>
         <Button
-          size="sm"
           variant="primary"
           icon={FilePlus2}
           onClick={() => handleNewProject()}
@@ -641,22 +703,7 @@ Nummer läuft über alle Produktions-Ordner`}
           Neues Projekt
           {nextName && <span style={{ opacity: 0.65, fontWeight: 600 }}>{nextName}</span>}
         </Button>
-      </div>
-
-      {/* Search / filter / sort */}
-      <ProjectsToolbar
-        search={search}
-        onSearch={setSearch}
-        chips={chips}
-        total={preStatus.length}
-        active={sectionFilter}
-        onActive={k => setSectionFilter(k as SectionKey | null)}
-        roots={productionPaths}
-        rootFilter={rootFilter}
-        onRootFilter={setRootFilter}
-        sortMode={sortMode}
-        onSortMode={setSortMode}
-      />
+      </ProjectsToolbar>
 
       {error && (
         <div style={{
@@ -687,8 +734,48 @@ Nummer läuft über alle Produktions-Ordner`}
         <EmptyState variant="inline" title="Kein Projekt passt zu den Filtern." />
       )}
 
-      {/* Sections */}
-      {sections.map(section => {
+      {/* Der eine Satz über der Werkbank — nur ungefiltert, sonst stimmt er nicht */}
+      {view === "work" && !q && !sectionFilter && !rootFilter && projects.length > 0 && (() => {
+        const satz = werkbankSatz(projects.filter(p => p.status !== "discard"), projectDisplayName);
+        return (
+          <div style={{ padding: "28px 16px 8px" }}>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>{satz.kopf}</div>
+            {satz.unter && (
+              <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, color: C.onSurfaceVariant, maxWidth: 760 }}>{satz.unter}</div>
+            )}
+          </div>
+        );
+      })()}
+
+      {sections.some(s => isShelf(s.key)) && (
+        <Werkbank
+          regale={sections.filter(s => isShelf(s.key)).map(s => ({
+            key: s.key, label: s.meta.label, color: s.meta.color,
+            hint: SHELF_HINT[s.key] ?? "", items: s.items,
+          }))}
+          inspectorPath={inspectorPath}
+          selected={selected}
+          onOpen={handleRowClick}
+          onPreview={handlePreview}
+        />
+      )}
+
+      {ideen && (
+        <IdeenListe
+          gruppen={ideenGezeigt}
+          total={ideen.items.length}
+          sortMode={sortMode}
+          onSortMode={setSortMode}
+          onMore={key => setIdeenOffen(prev => new Set(prev).add(key))}
+          inspectorPath={inspectorPath}
+          selected={selected}
+          onOpen={handleRowClick}
+          onPreview={handlePreview}
+        />
+      )}
+
+      {/* Sections (Aufräumen) */}
+      {sections.filter(s => !isShelf(s.key) && s !== ideen).map(section => {
         const isCollapsed = !isSectionOpen(section.key);
         const shown = shownItems(section);
         const hidden = section.items.length - shown.length;
@@ -810,7 +897,7 @@ Nummer läuft über alle Produktions-Ordner`}
               {discardable.length} {discardable.length === 1 ? "Projekt kann" : "Projekte können"} weg
             </div>
             <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
-              Die Ordner landen im Windows-Papierkorb. Danach können die Nummern nachrücken.
+              Die Ordner landen im Windows-Papierkorb, die Nummern rücken danach nach.
             </div>
           </div>
           <div style={{ flex: 1 }} />

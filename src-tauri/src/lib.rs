@@ -107,6 +107,7 @@ use commands::{
     export_merge_preview,
     list_merge_runs,
     park_archived_projects,
+    close_project_gaps,
     // Upload commands (Phase A: bootstrap, B: read, C: write, D: render+save)
     get_templates_dir,
     read_template,
@@ -308,6 +309,7 @@ pub fn run() {
             export_merge_preview,
             list_merge_runs,
             park_archived_projects,
+            close_project_gaps,
             // Upload (Phase A + B + C + D)
             get_templates_dir,
             read_template,

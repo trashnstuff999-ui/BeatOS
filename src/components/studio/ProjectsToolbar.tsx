@@ -41,6 +41,10 @@ interface ProjectsToolbarProps {
   onRootFilter: (r: string | null) => void;
   sortMode: SortMode;
   onSortMode: (m: SortMode) => void;
+  /** Chips + Sortierung: nur noch im Aufräumen — in Projekte sind die Regale die Einteilung */
+  showFilters: boolean;
+  /** Knöpfe rechts neben der Suche (Scan, Neues Projekt …) */
+  children?: React.ReactNode;
 }
 
 export function ProjectsToolbar({
@@ -48,28 +52,29 @@ export function ProjectsToolbar({
   chips, total, active, onActive,
   roots, rootFilter, onRootFilter,
   sortMode, onSortMode,
+  showFilters, children,
 }: ProjectsToolbarProps) {
   return (
     <div style={{
-      display: "flex", flexDirection: "column", gap: 8,
-      padding: "10px 16px",
-      borderBottom: `1px solid ${C.border10}`,
+      display: "flex", flexDirection: "column", gap: 12,
+      padding: "4px 16px 8px",
     }}>
-      {/* Row 1: search + sort */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          flex: 1, maxWidth: 340,
-          display: "flex", alignItems: "center", gap: 8,
-          background: C.surfaceContainerLowest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
-          padding: "7px 11px",
+      {/* Row 1: Suche groß links, Knöpfe rechts — eine Zeile statt zwei Leisten */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <label style={{
+          flex: "1 1 260px", maxWidth: 440, height: 40, boxSizing: "border-box",
+          display: "flex", alignItems: "center", gap: 9,
+          background: C.surfaceContainer,
+          border: `1px solid ${C.border20}`,
+          borderRadius: 8,
+          padding: "0 12px",
         }}>
-          <Search size={12} color={C.onSecondaryFixedVar} />
+          <Search size={14} color={C.onSecondaryFixedVar} />
           <input
             value={search}
             onChange={e => onSearch(e.target.value)}
-            placeholder="Projekt, Tonart, BPM …"
+            aria-label="Projekte durchsuchen"
+            placeholder="Titel, Notiz, Tonart, BPM …"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
               color: C.onSurface, fontSize: 13,
@@ -83,13 +88,15 @@ export function ProjectsToolbar({
               <X size={11} />
             </button>
           )}
-        </div>
+        </label>
         <div style={{ flex: 1 }} />
-        <SortDropdown value={sortMode} onChange={onSortMode} />
+        {children}
       </div>
 
-      {/* Row 2: status chips + priority + roots */}
+      {/* Row 2: Chips + Wurzeln + Sortierung — nur, wenn es etwas zu filtern gibt */}
+      {(showFilters || roots.length > 1) && (
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {showFilters && <>
         <FilterChip
           label={`Alle (${total})`}
           active={active === null}
@@ -105,6 +112,7 @@ export function ProjectsToolbar({
             onClick={() => onActive(active === c.key ? null : c.key)}
           />
         ))}
+        </>}
 
         {roots.length > 1 && (
           <>
@@ -122,7 +130,9 @@ export function ProjectsToolbar({
             })}
           </>
         )}
+        {showFilters && <><div style={{ flex: 1 }} /><SortDropdown value={sortMode} onChange={onSortMode} /></>}
       </div>
+      )}
     </div>
   );
 }

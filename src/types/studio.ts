@@ -78,6 +78,8 @@ export interface StudioProject {
   has_mp3: boolean;
   has_wav: boolean;
   has_cover: boolean;
+  /** Das Bild für die Kachel — „Cover…" zuerst, sonst irgendein Nicht-Thumbnail */
+  cover_path: string | null;
   has_thumbnail: boolean;
   has_video: boolean;
   status: StudioStatus;

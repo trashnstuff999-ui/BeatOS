@@ -81,6 +81,8 @@ pub struct StudioProject {
     pub has_mp3: bool,
     pub has_wav: bool,
     pub has_cover: bool,
+    /// Das Bild für die Kachel: „Cover…" vor jedem anderen Bild, sonst None
+    pub cover_path: Option<String>,
     pub has_thumbnail: bool,
     pub has_video: bool,
     // from studio_projects table:
@@ -207,6 +209,8 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
     let mut has_cover = false;
     let mut has_thumbnail = false;
     let mut has_video = false;
+    // (Rang, Pfad): 0 = heißt „Cover…", 1 = irgendein anderes Bild
+    let mut cover: Option<(u8, String)> = None;
     // Exported audio: (rank, modified, filename) — rank 1 = mp3 beats wav.
     // The export filename carries the real song title ("MEMORIES [156 Fm].mp3")
     // even when the project folder is still called "project_187".
@@ -237,7 +241,13 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
                 audio_exports.push((rank, file_modified_secs(&p).unwrap_or(0), file_name));
             }
             if is_image_extension(&ext) {
-                if name_lower.contains("thumb") { has_thumbnail = true; } else { has_cover = true; }
+                if name_lower.contains("thumb") {
+                    has_thumbnail = true;
+                } else {
+                    has_cover = true;
+                    let kandidat = (u8::from(!name_lower.starts_with("cover")), p.to_string_lossy().to_string());
+                    if cover.as_ref().is_none_or(|c| kandidat < *c) { cover = Some(kandidat); }
+                }
             }
             if is_video_extension(&ext) { has_video = true; }
         }
@@ -313,6 +323,7 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         has_mp3,
         has_wav,
         has_cover,
+        cover_path: cover.map(|(_, p)| p),
         has_thumbnail,
         has_video,
         status: "idea".to_string(),
@@ -901,14 +912,14 @@ fn oldest_flp_secs(dir: &Path) -> Option<u64> {
 /// Plan ausführen: DB sichern, verschieben, umbenennen, protokollieren.
 #[tauri::command]
 pub fn apply_production_merge(steps: Vec<MergeStep>) -> Result<MergeReport, String> {
-    apply_steps(steps, "zusammengeführt")
+    apply_steps(steps, Some("zusammengeführt"))
 }
 
 /// Der gemeinsame Ausführungsteil für alles, was Ordner bewegt: DB-Sicherung,
 /// Protokoll vorher, zweiphasiges Umbenennen, DB-Pfade nachziehen, Protokoll
 /// eindampfen, lesbare Liste. Das Parken benutzt denselben Weg — und erbt damit
 /// dasselbe Sicherheitsnetz, inklusive „Rückgängig" aus der Läufe-Liste.
-fn apply_steps(steps: Vec<MergeStep>, was: &str) -> Result<MergeReport, String> {
+fn apply_steps(steps: Vec<MergeStep>, was: Option<&str>) -> Result<MergeReport, String> {
     // Erst der DB-Schnappschuss — Status, Priorität und Notizen hängen daran.
     let db_backup = match crate::db::backup_db() {
         Ok(()) => Some(crate::db::backup_target_path().to_string_lossy().to_string()),
@@ -951,10 +962,12 @@ fn apply_steps(steps: Vec<MergeStep>, was: &str) -> Result<MergeReport, String> 
     rewrite_merge_logs(&log_paths, &done, &mut failed);
 
     // Die lesbare Liste erst jetzt: sie dokumentiert, was passiert ist, nicht
-    // was geplant war.
-    let summary_path = target_dir
-        .as_deref()
-        .and_then(|dir| write_merge_summary(dir, &done, was));
+    // was geplant war. Ohne `was` keine Liste — das Nachrücken läuft nach jedem
+    // Löschen und würde den Produktions-Ordner sonst mit Textdateien füllen.
+    let summary_path = match (target_dir.as_deref(), was) {
+        (Some(dir), Some(was)) => write_merge_summary(dir, &done, was),
+        _ => None,
+    };
 
     let mut log_paths = log_paths;
     // Rückgängig nur anbieten, wenn tatsächlich etwas zu drehen ist
@@ -972,6 +985,111 @@ fn apply_steps(steps: Vec<MergeStep>, was: &str) -> Result<MergeReport, String> 
         summary_path,
         db_backup,
     })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Nachrücken: Lücken in der Projekt-Nummerierung schließen
+//
+// Wie im Asset-Tab: wird Project_0005 gelöscht, wird aus 0006 die 0005 usw.
+// Die Reihenfolge bleibt (anders als beim Zusammenführen, das nach Alter
+// sortiert), jeder Ordner bleibt in seinem Root. Läuft automatisch nach dem
+// Papierkorb und per Knopf „Lücken schließen" nach Löschen im Explorer —
+// derselbe Weg wie der Merge, also mit Protokoll und „Rückgängig".
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Produktions-Roots aus den Einstellungen (eine Zeile pro Root).
+fn production_roots() -> Vec<String> {
+    crate::commands::get_settings()
+        .ok()
+        .and_then(|s| s.get("production_path").cloned())
+        .map(|p| {
+            p.split(['\n', ';'])
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Ein Schritt je Ordner, dessen Nummer sich ändert. Doppelte Nummern
+/// bekommen nacheinander eigene; Ordner ohne Nummer bleiben, wie sie sind.
+fn plan_close_gaps(roots: &[String]) -> Vec<MergeStep> {
+    let mut found: Vec<(u32, PathBuf, String, ProjectId)> = Vec::new();
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for root in roots {
+        let Ok(rd) = std::fs::read_dir(Path::new(root)) else { continue };
+        for e in rd.filter_map(|e| e.ok()) {
+            let dir = e.path();
+            if !dir.is_dir() || !seen.insert(dir.canonicalize().unwrap_or_else(|_| dir.clone())) {
+                continue;
+            }
+            let name = e.file_name().to_string_lossy().to_string();
+            if let Some(id) = parse_project_id(&name) {
+                found.push((id.number, dir, name, id));
+            }
+        }
+    }
+    found.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    found
+        .into_iter()
+        .enumerate()
+        // Stimmt die Nummer schon, bleibt auch die Schreibweise unangetastet
+        .filter(|(i, (n, ..))| *n != *i as u32 + 1)
+        .map(|(i, (_, dir, old_name, id))| {
+            let number = format!("{}{:04}", PROJECT_PREFIX, i + 1);
+            let new_name = match &id.name {
+                Some(n) => sanitize_filename_part(&format!("{} - {}", number, n)),
+                None => number,
+            };
+            MergeStep {
+                from: dir.to_string_lossy().to_string(),
+                to: dir.with_file_name(&new_name).to_string_lossy().to_string(),
+                old_name,
+                new_name,
+                date: None,
+            }
+        })
+        .collect()
+}
+
+fn close_gaps_in(roots: &[String]) -> Result<MergeReport, String> {
+    let steps = plan_close_gaps(roots);
+    if steps.is_empty() {
+        return Ok(MergeReport {
+            moved: 0,
+            failed: Vec::new(),
+            log_path: None,
+            log_copies: Vec::new(),
+            summary_path: None,
+            db_backup: None,
+        });
+    }
+    apply_steps(steps, None)
+}
+
+/// Nach dem Löschen eines Ordners: nachrücken, wenn er in einem Produktions-
+/// Root lag. Gibt zurück, was nicht geklappt hat (z.B. Projekt in FL offen).
+pub(crate) fn nachruecken_nach_loeschen(geloescht: &Path) -> Vec<String> {
+    let roots = production_roots();
+    let Some(parent) = geloescht.parent() else { return Vec::new() };
+    let parent = norm_path(&parent.to_string_lossy());
+    if !roots.iter().any(|r| norm_path(r) == parent) {
+        return Vec::new(); // Übergabe-Ordner, Künstler-Ordner … — keine Nummernreihe
+    }
+    match close_gaps_in(&roots) {
+        Ok(r) => r.failed,
+        Err(e) => vec![e],
+    }
+}
+
+/// Knopf „Lücken schließen" — für Ordner, die im Explorer gelöscht wurden.
+#[tauri::command]
+pub async fn close_project_gaps() -> Result<MergeReport, String> {
+    tauri::async_runtime::spawn_blocking(|| close_gaps_in(&production_roots()))
+        .await
+        .map_err(|e| format!("Nachrücken abgestürzt: {}", e))?
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1108,7 +1226,7 @@ fn park_blocking(
     }
 
     // Verschieben, protokollieren, DB nachziehen — derselbe Weg wie der Merge
-    let report = apply_steps(steps, "geparkt")?;
+    let report = apply_steps(steps, Some("geparkt"))?;
 
     Ok(ParkReport {
         park_dir: park.to_string_lossy().to_string(),
@@ -2592,6 +2710,33 @@ mod tests {
             super::next_project_name(vec![tmp.join("leer").to_string_lossy().to_string()]).unwrap(),
             "Project_0001"
         );
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn close_gaps_keeps_order_and_names() {
+        let tmp = std::env::temp_dir().join(format!("beatos_gaps_{}", std::process::id()));
+        let root = tmp.join("prod");
+        for d in ["Project_0001", "Project_0003 - MEMORIES", "Project_0004", "Project_0007", "NO MORE RUNNING"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        std::fs::write(root.join("Project_0004").join("Project_0004.flp"), b"x").unwrap();
+        let roots = vec![root.to_string_lossy().to_string()];
+
+        let steps = super::plan_close_gaps(&roots);
+        let neu: Vec<&str> = steps.iter().map(|s| s.new_name.as_str()).collect();
+        assert_eq!(neu, ["Project_0002 - MEMORIES", "Project_0003", "Project_0004"]);
+
+        // Kette 3→2, 4→3, 7→4 auf der Platte — die Zwischennamen fangen das ab
+        let (done, failed) = super::merge_steps_on_disk(&steps);
+        assert!(failed.is_empty(), "{:?}", failed);
+        assert_eq!(done.len(), 3);
+        assert!(root.join("Project_0003").join("Project_0003.flp").is_file());
+        assert!(root.join("Project_0004").is_dir());
+        assert!(!root.join("Project_0007").exists());
+        assert!(root.join("NO MORE RUNNING").is_dir());
+        assert!(super::plan_close_gaps(&roots).is_empty());
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }

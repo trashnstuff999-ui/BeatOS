@@ -43,7 +43,7 @@ function project(over: Partial<StudioProject> & { name: string }): StudioProject
     flps: [{ path: `C:\\PROD\\${over.name}\\x.flp`, name: `${over.name}.flp`,
              modified_secs: NOW - DAY, modified_date: "2026-08-29" }],
     modified_date: "2026-08-29", modified_secs: NOW - DAY,
-    has_mp3: false, has_wav: false, has_cover: false,
+    has_mp3: false, has_wav: false, has_cover: false, cover_path: null,
     has_thumbnail: false, has_video: false,
     status: "idea", priority: 0, notes: null,
     ...over,
@@ -69,9 +69,13 @@ function stubInvoke(assets: AssetFile[] = [], projects: StudioProject[] = PROJEC
     switch (cmd) {
       case "get_settings":
         return Promise.resolve({ production_path: "C:\\PROD", asset_path: "C:\\ASSETS" }) as never;
-      case "scan_studio_projects": return Promise.resolve(projects) as never;
+      case "scan_studio_projects": return Promise.resolve([...projects]) as never;
       case "scan_asset_inbox":     return Promise.resolve(assets) as never;
       case "next_project_name":    return Promise.resolve("Project_0858") as never;
+      case "trash_source_folder":  // wie die Platte: weg ist weg, auch beim nächsten Scan
+        projects = projects.filter(p => p.path !== (args as { sourceFolder: string }).sourceFolder);
+        return Promise.resolve([]) as never;
+      case "close_project_gaps":   return Promise.resolve({ moved: 0, failed: [], log_path: null, log_copies: [], summary_path: null, db_backup: null }) as never;
       case "assign_asset_to_project": return Promise.resolve("C:\\PROD\\0857\\x.png") as never;
       case "parse_beat_folder_for_create":
         return Promise.resolve({
@@ -126,10 +130,11 @@ function renderAssets(props: { assetPath: string; onAssigned?: () => void; proje
  * Sektionsköpfe in DOM-Reihenfolge. Sie tragen Label + Anzahl ("Priorität1") —
  * das trennt sie vom gleichnamigen Filter-Chip in der Toolbar.
  */
+/** Regal-Überschriften (Werkbank) und Sektionsköpfe der Liste, in Reihenfolge. */
 function sectionHeadings(): string[] {
-  return screen.getAllByRole("button")
-    .map(b => b.textContent ?? "")
-    .filter(t => /^(Priorität|Bereit|Exportiert|Überarbeiten|Idee|Lange inaktiv|Kann weg)\d+$/.test(t));
+  return [...document.querySelectorAll("h2, button")]
+    .map(el => el.textContent ?? "")
+    .filter(t => /^(Priorität|Bereit|Exportiert|Überarbeiten|Idee|Lange inaktiv|Kann weg)\d*$/.test(t));
 }
 
 /**
@@ -178,10 +183,12 @@ describe("Aufräumen — die eine Stelle, an der gelöscht wird", () => {
       ]);
     });
 
-    // Danach die zweite Rückfrage: sollen die Nummern nachrücken?
-    const nachruecken = await screen.findByRole("dialog");
-    expect(nachruecken).toHaveAccessibleName("Nummern nachrücken lassen?");
-    await user.click(within(nachruecken).getByRole("button", { name: "Später" }));
+    // Einzeln ohne Nachrücken, danach genau EIN Nachrücken für alle — ohne Rückfrage
+    const calls = vi.mocked(invoke).mock.calls.filter(c => c[0] === "trash_source_folder");
+    expect(calls.map(c => (c[1] as { nachruecken?: boolean }).nachruecken)).toEqual([false, false]);
+    await waitFor(() =>
+      expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "close_project_gaps")).toHaveLength(1)
+    );
 
     // READY ist nicht markiert: es steht auch nicht in der Aufräumen-Liste
     expect(screen.queryByText("ARE YOU HERE")).not.toBeInTheDocument();
@@ -209,29 +216,17 @@ describe("Q2 + Q3 — was aus der Zeile verschwunden ist", () => {
   // einer Legende (die gegen die Spalte driftete — „EXPARTVID"), und stehen
   // jetzt wieder in der Zeile. Diesmal ohne Legende: sie beschriften sich
   // selbst, und was fehlt, tritt zurück statt mitzuleuchten.
-  it("beschriftet jede Datei in der Zeile — und dimmt, was fehlt", async () => {
-    // Eine einzige Zeile, damit „genau einmal" zählbar ist. Status exportiert,
-    // weil die Sektion „Idee" per Default eingeklappt ist — und weil MP3+WAV
-    // genau das ist, was diese Stufe ausmacht.
+  it("Werkbank: die Kachel sagt in Worten, was fehlt", async () => {
+    // Die fünf Datei-Spalten sind raus — an ihrer Stelle ein Strich-Balken und
+    // eine Zeile „fehlt: …" in Pipeline-Reihenfolge.
     stubInvoke([], [project({
       name: "0857", song_name: "ARE YOU HERE", status: "exported",
-      has_mp3: true, has_wav: true,
+      has_mp3: true, has_wav: true, has_thumbnail: true,
     })]);
     renderProjects();
     await screen.findByText("ARE YOU HERE");
-    const row = rowOf("ARE YOU HERE");
-
-    // Alle fünf stehen da, jedes genau einmal — es gibt keine Kopfzeile mehr,
-    // die sie wiederholt.
-    for (const label of ["MP3", "WAV", "COV", "THU", "VID"]) {
-      expect(within(row).getByText(label)).toBeInTheDocument();
-      expect(screen.getAllByText(label)).toHaveLength(1);
-    }
-
-    // Der Zweck der Spalte: vorhanden sticht heraus, fehlend bleibt ruhig.
-    const deckkraft = (l: string) => Number(within(row).getByText(l).style.opacity);
-    expect(deckkraft("MP3")).toBe(1);
-    expect(deckkraft("VID")).toBeLessThan(0.5);
+    expect(within(rowOf("ARE YOU HERE")).getByText("fehlt: Cover, Video")).toBeInTheDocument();
+    expect(screen.queryByText("VID")).not.toBeInTheDocument();
   });
 
   it("nennt den Produktions-Root nicht mehr in jeder Zeile", async () => {
@@ -244,70 +239,79 @@ describe("Q2 + Q3 — was aus der Zeile verschwunden ist", () => {
 
 describe("Scheibe 7 — namenlose Projekte zeigen ihre Notiz", () => {
   it("zeigt die erste Notizzeile nur, wenn es keinen Songtitel gibt", async () => {
+    // Liste (Ideen): Suche klappt die Sektion auf
     stubInvoke([], [
-      project({ name: "Project_0861", status: "wip", notes: "\nfür JarnoGm — Hook neu\nzweite Zeile" }),
-      project({ name: "0857", song_name: "ARE YOU HERE", status: "wip", notes: "steht nicht in der Zeile" }),
+      project({ name: "Project_0861", notes: "\nfür JarnoGm — Hook neu\nzweite Zeile" }),
+      project({ name: "0857", song_name: "ARE YOU HERE", notes: "steht nicht in der Zeile" }),
     ]);
+    const user = userEvent.setup();
     renderProjects();
+    await user.type(await screen.findByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "0");
     await screen.findByText("ARE YOU HERE");
 
-    expect(within(rowOf("Project_0861")).getByText("für JarnoGm — Hook neu")).toBeInTheDocument();
+    // Ohne Titel: Nummer + „ohne Titel" + Notiz
+    expect(within(rowOf("ohne Titel")).getByText("für JarnoGm — Hook neu")).toBeInTheDocument();
     expect(screen.queryByText("zweite Zeile")).not.toBeInTheDocument();
     expect(screen.queryByText("steht nicht in der Zeile")).not.toBeInTheDocument();
   });
+
+  it("Werkbank: die Überarbeiten-Kachel zeigt die erste Notizzeile", async () => {
+    stubInvoke([], [project({ name: "Project_0861", status: "wip", notes: "\nBridge neu\nzweite Zeile" })]);
+    renderProjects();
+    expect(await screen.findByText("Bridge neu")).toBeInTheDocument();
+    expect(screen.queryByText("zweite Zeile")).not.toBeInTheDocument();
+  });
 });
 
-describe("B7 — Chips und Sektionen zählen dasselbe", () => {
-  it("zählt über die gesuchte Menge, nicht über alle Projekte", async () => {
+describe("B7 — Chips und Sektionen zählen dasselbe (nur noch im Aufräumen)", () => {
+  const RAUS = project({ name: "Project_300", status: "discard" });
+
+  it("Projekte zeigt keine Chips mehr — die Regale sind die Einteilung", async () => {
     stubInvoke();
-    const user = userEvent.setup();
     renderProjects();
     await screen.findByText("ARE YOU HERE");
+    expect(screen.queryByText(/^Alle \(\d+\)$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Zuletzt bearbeitet")).not.toBeInTheDocument();
+  });
 
-    // Arbeitsliste: READY und die alte Idee mit Stern. Die steht unter
-    // „Priorität" — also zählt auch der Chip sie dort und nicht unter „Idee".
-    expect(screen.getByText("Alle (2)")).toBeInTheDocument();
-    expect(screen.getByText("Priorität (1)")).toBeInTheDocument();
-    expect(screen.getByText("Idee (0)")).toBeInTheDocument();
+  it("zählt über die gesuchte Menge, nicht über alle Projekte", async () => {
+    stubInvoke([], [ALTE_IDEE_OHNE_STERN, RAUS]);
+    const user = userEvent.setup();
+    renderProjects("cleanup");
+    expect(await screen.findByText("Alle (2)")).toBeInTheDocument();
+    expect(screen.getByText("Lange inaktiv (1)")).toBeInTheDocument();
+    expect(screen.getByText("Kann weg (1)")).toBeInTheDocument();
 
-    // Suche nach dem fertigen Track → die Zahlen müssen mitgehen
-    await user.type(screen.getByPlaceholderText("Projekt, Tonart, BPM …"), "ARE YOU");
-
+    await user.type(screen.getByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "Project_12");
     await waitFor(() => expect(screen.getByText("Alle (1)")).toBeInTheDocument());
-    expect(screen.getByText("Priorität (0)")).toBeInTheDocument();
-    expect(screen.getByText("Bereit (1)")).toBeInTheDocument();
+    expect(screen.getByText("Kann weg (0)")).toBeInTheDocument();
   });
 
   it("zeigt nach Klick auf einen Chip genau seine Sektion", async () => {
-    stubInvoke();
+    stubInvoke([], [ALTE_IDEE_OHNE_STERN, RAUS]);
     const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    await user.click(screen.getByText("Priorität (1)"));
-    await waitFor(() => expect(screen.queryByText("ARE YOU HERE")).not.toBeInTheDocument());
-    expect(screen.getByText("Project_102")).toBeInTheDocument();
+    renderProjects("cleanup");
+    await user.click(await screen.findByText("Kann weg (1)"));
+    await waitFor(() => expect(screen.queryByText("Project_12")).not.toBeInTheDocument());
+    expect(screen.getByText("Project_300")).toBeInTheDocument();
   });
 });
 
 describe("B4 — „Priorität zuerst“ ist raus", () => {
   it("bietet den wirkungslosen Sortiermodus nicht mehr an", async () => {
-    stubInvoke();
+    stubInvoke([], [ALTE_IDEE_OHNE_STERN]);
     const user = userEvent.setup();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-
-    await user.click(screen.getByText("Zuletzt bearbeitet"));
+    renderProjects("cleanup");
+    await user.click(await screen.findByText("Zuletzt bearbeitet"));
     expect(screen.getByText("Name A–Z")).toBeInTheDocument();
     expect(screen.queryByText("Priorität zuerst")).not.toBeInTheDocument();
   });
 
   it("fällt auf den Standard zurück, wenn „priority“ noch gespeichert ist", async () => {
     localStorage.setItem("beatos_studio_sort", "priority");
-    stubInvoke();
-    renderProjects();
-    await screen.findByText("ARE YOU HERE");
-    expect(screen.getByText("Zuletzt bearbeitet")).toBeInTheDocument();
+    stubInvoke([], [ALTE_IDEE_OHNE_STERN]);
+    renderProjects("cleanup");
+    expect(await screen.findByText("Zuletzt bearbeitet")).toBeInTheDocument();
   });
 });
 
@@ -509,17 +513,18 @@ describe("Q1 — Mehrfachauswahl für die Triage", () => {
 });
 
 describe("B5 — eine Sektion rendert nicht hunderte Zeilen auf einmal", () => {
+  // Ideen aus demselben Monat — die Gruppe zeigt erst 8
   const VIELE = Array.from({ length: 60 }, (_, i) =>
-    project({ name: `09${String(i).padStart(2, "0")}`, song_name: `SONG ${i}`, status: "ready" }));
+    project({ name: `09${String(i).padStart(2, "0")}`, song_name: `SONG ${i}` }));
 
-  it("zeigt erst 50 und den Rest auf Knopfdruck", async () => {
+  it("zeigt erst 8 pro Monat und den Rest auf Knopfdruck", async () => {
     stubInvoke([], VIELE);
     const user = userEvent.setup();
     renderProjects();
     await screen.findByText("SONG 0");
 
-    expect(rows()).toHaveLength(50);
-    await user.click(screen.getByRole("button", { name: /10 weitere Projekte anzeigen/ }));
+    expect(rows()).toHaveLength(8);
+    await user.click(screen.getByRole("button", { name: /Alle 60 aus .* anzeigen/ }));
     expect(rows()).toHaveLength(60);
   });
 });
@@ -579,7 +584,7 @@ describe("S5 — die Auswahl bleibt ehrlich", () => {
     fireEvent.click(rowOf("DREI"), { ctrlKey: true });
     expect(screen.getByText("1 ausgewählt")).toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("Projekt, Tonart, BPM …"), "EIN");
+    await user.type(screen.getByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "EIN");
     expect(screen.queryByText("DREI")).not.toBeInTheDocument();
 
     // Shift-Klick ohne sichtbaren Anker: nimmt dazu, wirft nichts weg

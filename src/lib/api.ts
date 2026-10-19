@@ -208,9 +208,11 @@ export const api = {
     archiveBeat: (params: ArchiveBeatParams) =>
       invoke<ArchiveResult>("archive_beat", { params }),
 
-    /** Move the source folder of an archived beat to the recycle bin (opt-in). */
-    trashSourceFolder: (sourceFolder: string, archiveBasePath: string) =>
-      invoke<void>("trash_source_folder", { sourceFolder, archiveBasePath }),
+    /** Ordner in den Papierkorb. Lag er in einem Produktions-Ordner, rücken die
+     *  Nummern danach nach (nachruecken=false: mehrere löschen, dann closeGaps).
+     *  Liefert, was beim Nachrücken nicht geklappt hat. */
+    trashSourceFolder: (sourceFolder: string, archiveBasePath: string, nachruecken?: boolean) =>
+      invoke<string[]>("trash_source_folder", { sourceFolder, archiveBasePath, nachruecken }),
 
     /** Relative archive path preview — shares the exact folder-name logic of archive_beat. */
     previewPath: (catalogId: number, title: string, key: string | null, bpm: number | null, yearMonth: string) =>
@@ -369,6 +371,10 @@ export const api = {
      *  Kein Pfad vom Frontend — der Command wählt den Ort selbst. */
     exportPreview: (content: string) =>
       invoke<string>("export_merge_preview", { content }),
+
+    /** Lücken in der Projekt-Nummerierung schließen, Reihenfolge bleibt. */
+    closeGaps: () =>
+      invoke<MergeReport>("close_project_gaps"),
 
     /** Spielt ein Protokoll rückwärts ab. */
     undoMerge: (logPath: string) =>

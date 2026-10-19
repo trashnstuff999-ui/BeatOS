@@ -144,8 +144,12 @@ export function useCreateBeat({
         let warning = result.error ?? null;
         if (trashSource) {
           try {
-            await api.archive.trashSourceFolder(sourceFolderPath, settings.archivePath);
+            const nichtNachgerueckt = await api.archive.trashSourceFolder(sourceFolderPath, settings.archivePath);
             sourceTrashed = true;
+            if (nichtNachgerueckt.length > 0) {
+              warning = [warning, `Projekt-Nummern nicht ganz nachgerückt (Studio → „Lücken schließen"): ${nichtNachgerueckt.join(", ")}`]
+                .filter(Boolean).join(" · ");
+            }
           } catch (e) {
             warning = [warning, `Quellordner-Cleanup fehlgeschlagen: ${String(e)}`]
               .filter(Boolean).join(" · ");

@@ -302,10 +302,23 @@ pub(crate) fn build_archive_folder_name(
     )
 }
 
-/// Move the source folder of a just-archived beat to the recycle bin.
-/// Opt-in only (dialog after successful archive) — never called automatically.
+/// Move a project/source folder to the recycle bin. Lag er in einem
+/// Produktions-Root, rücken die Nummern danach nach (`nachruecken: false`
+/// beim Löschen vieler Ordner — dann einmal `close_project_gaps` am Ende).
+/// Ok = was beim Nachrücken nicht geklappt hat; leer = alles gut.
 #[tauri::command]
-pub fn trash_source_folder(source_folder: String, archive_base_path: String) -> Result<(), String> {
+pub async fn trash_source_folder(
+    source_folder: String,
+    archive_base_path: String,
+    nachruecken: Option<bool>,
+) -> Result<Vec<String>, String> {
+    // Das Nachrücken benennt u.U. hunderte Ordner um — nicht auf dem IPC-Thread.
+    tauri::async_runtime::spawn_blocking(move || trash_blocking(&source_folder, &archive_base_path, nachruecken))
+        .await
+        .map_err(|e| format!("Papierkorb abgestürzt: {}", e))?
+}
+
+fn trash_blocking(source_folder: &str, archive_base_path: &str, nachruecken: Option<bool>) -> Result<Vec<String>, String> {
     let src = Path::new(&source_folder);
     if !src.exists() || !src.is_dir() {
         return Err(format!("Quellordner nicht gefunden: {}", source_folder));
@@ -324,7 +337,11 @@ pub fn trash_source_folder(source_folder: String, archive_base_path: String) -> 
             }
         }
     }
-    trash::delete(src).map_err(|e| format!("Papierkorb fehlgeschlagen: {}", e))
+    trash::delete(src).map_err(|e| format!("Papierkorb fehlgeschlagen: {}", e))?;
+    if nachruecken == Some(false) {
+        return Ok(Vec::new());
+    }
+    Ok(crate::commands::studio::nachruecken_nach_loeschen(src))
 }
 
 /// Relative archive path preview for the Create tab (e.g.
