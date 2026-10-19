@@ -13,11 +13,13 @@ import Browse from "./pages/Browse";
 import Create from "./pages/Create";
 import Studio from "./pages/Studio";
 import Upload from "./pages/Upload";
+import Video from "./pages/Video";
 import { Settings } from "./pages/Settings";
 import { Support } from "./pages/Placeholder";
 import { useBeatCount } from "./hooks/useStats";
 import { SettingsProvider, useSettings, parseProductionPaths } from "./contexts/SettingsContext";
 import { AudioPlayerProvider } from "./contexts/AudioPlayerContext";
+import { VideoProvider } from "./contexts/VideoContext";
 import { GlobalAudioPlayer, PLAYER_HEIGHT } from "./components/GlobalAudioPlayer";
 import { useAudioPlayerContext } from "./contexts/AudioPlayerContext";
 import { TagManagerProvider, useTagManager } from "./contexts/TagManagerContext";
@@ -37,7 +39,8 @@ function AppRoutes() {
         <Route path="/browse" element={<ErrorBoundary fallbackLabel="Fehler im Archiv"><Browse /></ErrorBoundary>} />
         <Route path="/studio" element={<ErrorBoundary fallbackLabel="Fehler im Studio"><Studio /></ErrorBoundary>} />
         <Route path="/upload" element={<ErrorBoundary fallbackLabel="Fehler im Upload"><Upload /></ErrorBoundary>} />
-        <Route path="/settings" element={<ErrorBoundary fallbackLabel="Fehler in den Einstellungen"><Settings /></ErrorBoundary>} />
+        <Route path="/video" element={<ErrorBoundary fallbackLabel="Fehler im Video-Tab"><Video /></ErrorBoundary>} />
+        <Route path="/settings"element={<ErrorBoundary fallbackLabel="Fehler in den Einstellungen"><Settings /></ErrorBoundary>} />
         <Route path="/support" element={<ErrorBoundary fallbackLabel="Fehler in der Hilfe"><Support /></ErrorBoundary>} />
       </Routes>
 
@@ -132,9 +135,11 @@ export default function App() {
       <DialogProvider>
         <SettingsProvider>
           <AudioPlayerProvider>
-            <TagManagerProvider>
-              <AppContent />
-            </TagManagerProvider>
+            <VideoProvider>
+              <TagManagerProvider>
+                <AppContent />
+              </TagManagerProvider>
+            </VideoProvider>
           </AudioPlayerProvider>
         </SettingsProvider>
       </DialogProvider>

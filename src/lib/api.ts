@@ -243,6 +243,10 @@ export const api = {
     getAudioPath: (beatPath: string) =>
       invoke<string | null>("get_beat_audio_path", { beatPath }),
 
+    /** Die MP4 des Beats für den Video-Tab — die größte, falls mehrere. */
+    getVideoPath: (beatPath: string) =>
+      invoke<string | null>("get_beat_video_path", { beatPath }),
+
     /** Aenderungszeit in ms — erkennt einen ueberschriebenen Export. */
     getFileMtime: (path: string) =>
       invoke<number | null>("get_file_mtime", { path }),

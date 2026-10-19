@@ -49,6 +49,7 @@ use commands::{
     read_image_file,
     // Audio commands
     get_beat_audio_path,
+    get_beat_video_path,
     get_beat_cover_path,
     get_file_mtime,
     read_flp_markers,
@@ -249,6 +250,7 @@ pub fn run() {
             read_image_file,
             // Audio
             get_beat_audio_path,
+            get_beat_video_path,
             get_beat_cover_path,
             get_file_mtime,
             read_flp_markers,

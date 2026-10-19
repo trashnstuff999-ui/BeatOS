@@ -80,3 +80,7 @@ html, body, #root {
 .player-knopf:not(:disabled):hover, .player-knopf:focus-visible { color: #ffffff !important; background: rgba(255,255,255,0.08); }
 @keyframes pegel { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
 .pegel { transform-origin: bottom; animation: pegel .9s ease-in-out infinite; }
+
+/* ── Video-Tab: Overlay nur beim Überfahren ── */
+.video-buehne .video-overlay { opacity: 0; transition: opacity .2s; }
+.video-buehne:hover .video-overlay, .video-buehne:focus-within .video-overlay { opacity: 1; }

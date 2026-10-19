@@ -36,6 +36,22 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
     Ok(waehle_audio(&dateien))
 }
 
+/// Das Video eines Beats für den Video-Tab: die MP4 im Beat-Ordner, sonst in
+/// 02_VISUALS/. Liegen mehrere da, die größte — das volle Video schlägt ein
+/// Snippet.
+#[tauri::command(async)]
+pub fn get_beat_video_path(beat_path: String) -> Option<String> {
+    let base = Path::new(&beat_path);
+    [base.to_path_buf(), base.join("02_VISUALS")].iter().find_map(|dir| {
+        std::fs::read_dir(dir).ok()?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |x| x.eq_ignore_ascii_case("mp4")))
+            .filter_map(|e| Some((e.metadata().ok().filter(|m| m.is_file())?.len(), e.path())))
+            .max_by_key(|(groesse, _)| *groesse)
+            .map(|(_, p)| p.to_string_lossy().to_string())
+    })
+}
+
 /// Änderungszeit einer Datei in ms — daran erkennt die Kapitel-Karte einen
 /// Export, der die alte Datei unter gleichem Namen überschrieben hat.
 #[tauri::command(async)]
