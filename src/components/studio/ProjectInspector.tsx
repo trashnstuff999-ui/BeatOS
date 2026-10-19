@@ -4,13 +4,9 @@
 // Öffnet sich per Zeilenklick — das ist der Weg „erst Projekt, dann Datei".
 // Die Gegenrichtung steht im Assets-Tab.
 //
-// Reihenfolge nach Häufigkeit, nicht nach Datenmodell: Status (samt dem Satz,
-// WARUM er so ist) → Zuweisen → FLP-Versionen → Notizen. Das Zuweisen stand
-// vorher ganz unten und damit unter dem Falz — genau die Arbeit, für die man
-// das Panel aufmacht.
-//
-// Kein zweites Bild derselben Sache: die Asset-Ampel ist raus, die drei Slots
-// sagen dasselbe und man kann sie anklicken.
+// Reihenfolge wie auf der Werkbank: großes Cover → „Weg zum Upload" (die fünf
+// Dateien als Checkliste, fehlende direkt „Aus Assets") → Status → FLP-Versionen
+// → Notizen.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
@@ -28,8 +24,8 @@ import { formatRelativeTime } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import { useDialog } from "../../contexts/DialogContext";
-import { useFolderAssets } from "../../hooks/useFolderAssets";
-import { BeatAssetsCard } from "../BeatAssetsCard";
+import { useFolderAssets, type FolderAssets } from "../../hooks/useFolderAssets";
+import { AssetPickerDialog, type AssetSlotKind } from "../AssetPickerDialog";
 import { PLAYER_HEIGHT } from "../GlobalAudioPlayer";
 import { ManualStatusToggles } from "./ProjectRow";
 import { deriveStage, isManualStatus, projectDisplayName, projectExportName, projectFolderLabel } from "../../types/studio";
@@ -107,6 +103,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
   }, [p.path, settings.archivePath]);
   const playerVisible = !!currentBeat;
   const folderAssets = useFolderAssets(p.path);
+  const [picker, setPicker] = useState<AssetSlotKind | null>(null);
 
   // ── Notes: local draft, 600ms debounced save ───────────────────────────────
   const [notes, setNotes] = useState(p.notes ?? "");
@@ -313,16 +310,20 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            {p.key && <MetaChip>{p.key}</MetaChip>}
-            {p.bpm != null && <MetaChip>{p.bpm} BPM</MetaChip>}
-            <span
-              title={`${p.path}${p.modified_date ? `
+          {/* Tonart/BPM und Ordner · Alter immer auf zwei Zeilen — in einer
+              Zeile hing es vom Platz ab und brach mal so, mal so. */}
+          {(p.key || p.bpm != null) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              {p.key && <MetaChip>{p.key}</MetaChip>}
+              {p.bpm != null && <MetaChip>{p.bpm} BPM</MetaChip>}
+            </div>
+          )}
+          <div
+            title={`${p.path}${p.modified_date ? `
 Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
-              style={{ fontSize: 12, color: C.onSurfaceVariant, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              {[projectFolderLabel(p), formatRelativeTime(p.modified_secs)].filter(Boolean).join(" · ")}
-            </span>
+            style={{ marginTop: 6, fontSize: 12, color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
+            {[projectFolderLabel(p), formatRelativeTime(p.modified_secs)].filter(Boolean).join(" · ")}
           </div>
         </div>
         <button
@@ -352,25 +353,27 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 18 }}>
 
-        {/* Status — hier steht auch, warum er so ist. Die Stufe kommt aus den
-            Dateien, also sagt der Inspector, welche noch fehlt. */}
-        <StatusSection project={p} onPatch={onPatch} />
-
-        {/* Die Arbeit, für die man das Panel aufmacht. Die Karte kommt ohne
-            eigene Fläche, sonst steckt eine Karte in einem Panel derselben
-            Farbe und zieht nur eine Linie ein.
-            Überschrift benennt, Knöpfe handeln: „Zuweisen" stand vorher als
-            Titel UND auf jedem leeren Slot — viermal dasselbe Wort. */}
-        <BeatAssetsCard
-          assets={folderAssets.assets}
-          folderPath={p.path}
-          assetPath={settings.assetPath}
-          isRefreshing={folderAssets.isRefreshing}
-          onRefresh={() => { folderAssets.refresh(); onAssetsChanged(); }}
-          title="Bilder & Video"
-          showArchiveWarning={false}
-          style={{ background: "transparent", border: "none", padding: 0, boxShadow: "none" }}
+        {/* Werkbank: das Cover groß, darunter der Weg zum Upload als
+            Checkliste. Ersetzt die drei Slots — was fehlt, holt man direkt
+            aus der Zeile, die sagt, dass es fehlt. */}
+        <GrossesCover
+          preview={folderAssets.assets.coverPreview}
+          title={title}
+          disabled={!settings.assetPath.trim()}
+          onPick={() => setPicker("cover")}
         />
+
+        <WegZumUpload
+          project={p}
+          assets={folderAssets.assets}
+          noAssetPath={!settings.assetPath.trim()}
+          onPick={setPicker}
+          onOpenDaw={onOpenDaw}
+        />
+
+        {/* Status — Pille und die zwei Handschalter. Warum er so ist, sagt
+            jetzt die Checkliste darüber. */}
+        <StatusSection project={p} onPatch={onPatch} />
 
         {/* FLP-Versionen — eine Zeile pro Version statt einer Karte. Meistens
             sind es zwei, und man will nur eine davon öffnen. */}
@@ -448,7 +451,124 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
         </section>
       </div>
 
+      {picker && (
+        <AssetPickerDialog
+          targetDir={p.path}
+          assetRoot={settings.assetPath}
+          slot={picker}
+          title={`${SLOT_TITLE[picker]} zuweisen`}
+          onAssigned={() => { folderAssets.refresh(); onAssetsChanged(); }}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </aside>
+  );
+}
+
+const SLOT_TITLE: Record<AssetSlotKind, string> = { cover: "Cover", thumbnail: "Thumbnail", video: "Video" };
+
+const fileNameOf = (path: string | null) => path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
+
+/** Das Cover über die ganze Panelbreite — oder, solange keins da ist, die
+ *  Initialen im gestrichelten Rahmen. Klick: Cover aus den Assets holen. */
+function GrossesCover({ preview, title, disabled, onPick }: {
+  preview: string | null;
+  title: string;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  const initialen = title.split(/\s+/).map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase();
+  return (
+    <button
+      onClick={onPick}
+      disabled={disabled}
+      title={disabled ? "Kein Asset-Pfad gesetzt — Einstellungen → Pfade"
+        : preview ? "Cover ersetzen — das alte geht zurück in den Asset-Ordner" : "Cover aus den Assets holen"}
+      style={{
+        width: "100%", aspectRatio: "1 / 1", flexShrink: 0,
+        padding: 0, overflow: "hidden", borderRadius: radius.card,
+        background: "transparent",
+        border: preview ? "none" : `1px dashed ${C.outlineVariant}`,
+        cursor: disabled ? "not-allowed" : "pointer",
+        display: "flex", flexDirection: "column", gap: 10,
+        alignItems: "center", justifyContent: "center",
+        color: C.onSurfaceVariant, fontSize: 13,
+      }}
+    >
+      {preview ? (
+        <img src={preview} alt={`Cover ${title}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : (
+        <>
+          <span style={{ fontSize: 44, fontWeight: 800, color: C.onSecondaryFixedVar }}>{initialen}</span>
+          Noch kein Cover
+        </>
+      )}
+    </button>
+  );
+}
+
+/** Die fünf Dateien bis „Bereit" als Checkliste. Fehlt ein Bild oder das
+ *  Video, steht „Aus Assets" in der Zeile; fehlt MP3/WAV, geht's zurück in FL. */
+function WegZumUpload({ project: p, assets, noAssetPath, onPick, onOpenDaw }: {
+  project: StudioProject;
+  assets: FolderAssets;
+  noAssetPath: boolean;
+  onPick: (slot: AssetSlotKind) => void;
+  onOpenDaw: () => void;
+}) {
+  // Bilder und Video aus dem frisch gelesenen Ordner, nicht aus dem Scan —
+  // nach einer Zuweisung hakt die Zeile sofort ab.
+  const rows: Array<{ label: string; da: boolean; datei: string | null; slot?: AssetSlotKind; vorschau?: string | null }> = [
+    { label: "MP3", da: p.has_mp3, datei: null },
+    { label: "WAV", da: p.has_wav, datei: null },
+    { label: "Cover", da: !!assets.coverPath, datei: fileNameOf(assets.coverPath), slot: "cover" },
+    { label: "Thumbnail", da: !!assets.thumbnailPath, datei: fileNameOf(assets.thumbnailPath), slot: "thumbnail", vorschau: assets.thumbnailPreview },
+    { label: "Video", da: !!assets.videoPath, datei: fileNameOf(assets.videoPath), slot: "video" },
+  ];
+  return (
+    <section>
+      <SectionLabel>Weg zum Upload</SectionLabel>
+      {rows.map(r => (
+        <div key={r.label} style={{
+          display: "flex", alignItems: "center", gap: 12,
+          minHeight: 40, borderTop: `1px solid ${C.border10}`,
+        }}>
+          <span style={{
+            width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: r.da ? alpha(C.mint, 0.15) : "transparent",
+            border: r.da ? "none" : `1.5px solid ${C.outlineVariant}`,
+          }}>
+            {r.da && <Check size={12} strokeWidth={3} color={C.mint} />}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: r.da ? C.onSurface : C.onSurfaceVariant, flexShrink: 0 }}>
+            {r.label}
+          </span>
+          <span title={r.datei ?? undefined} style={{
+            flex: 1, minWidth: 0, fontSize: 11, fontFamily: "monospace", color: C.onSecondaryFixedVar,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {r.datei}
+          </span>
+          {r.vorschau && (
+            <img src={r.vorschau} alt="" style={{ width: 48, height: 27, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
+          )}
+          {r.slot ? (
+            <Button variant="ghost" size="sm" onClick={() => onPick(r.slot!)} disabled={noAssetPath}
+              title={noAssetPath ? "Kein Asset-Pfad gesetzt — Einstellungen → Pfade"
+                : r.da ? "Ersetzen — die alte Datei geht zurück in den Asset-Ordner" : undefined}
+              style={r.da ? undefined : { color: C.primary }}>
+              {r.da ? "Ersetzen" : "Aus Assets"}
+            </Button>
+          ) : !r.da && (
+            <Button variant="ghost" size="sm" onClick={onOpenDaw} disabled={!p.newest_flp}
+              title="In FL Studio exportieren" style={{ color: C.primary }}>
+              In FL öffnen
+            </Button>
+          )}
+        </div>
+      ))}
+    </section>
   );
 }
 
