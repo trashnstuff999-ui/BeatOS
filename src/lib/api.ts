@@ -415,6 +415,14 @@ export const api = {
     scheduleRelease: (beatId: string, date: string) =>
       invoke<void>("schedule_release", { beatId, date }),
 
+    /** Termin lösen — der Beat kommt zurück in die Warteschlange. */
+    unscheduleRelease: (beatId: string) =>
+      invoke<void>("unschedule_release", { beatId }),
+
+    /** „Nicht hochladen": aus der Warteschlange nehmen oder zurückholen. */
+    setUploadSkip: (beatId: string, skip: boolean) =>
+      invoke<void>("set_upload_skip", { beatId, skip }),
+
     updateTypeBeatInfo: (
       beatId: string,
       main: string,

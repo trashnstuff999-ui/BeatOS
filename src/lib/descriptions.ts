@@ -160,9 +160,8 @@ export function pruefeBeschreibung(
   if (!titel) out.push({ stufe: "fehler", text: "Kein Titel" });
   else if (titel.length > 100) out.push({ stufe: "fehler", text: `Titel ist ${titel.length} Zeichen lang — erlaubt sind 100` });
 
-  if (plattform !== "beatstars" && !beatstarsUrl?.trim()) {
-    out.push({ stufe: "hinweis", text: "Kein BeatStars-Link — im Text steht dein Profil statt dieses Beats" });
-  }
+  // Kein Hinweis auf einen fehlenden BeatStars-Link: vor dem BeatStars-Upload
+  // fehlt er immer, und der Release-Assistent rendert danach mit Link neu.
 
   // Doppelte Tags kosten bei YouTube Zeichen und bei SoundCloud einen Platz.
   const liste = tags.split(/[,\n]/).map(t => t.trim().replace(/^#/, "").toLowerCase()).filter(Boolean);

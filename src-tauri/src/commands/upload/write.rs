@@ -156,6 +156,28 @@ pub fn schedule_release(beat_id: String, date: String) -> Result<(), String> {
     release_einplanen(&conn, &beat_id, &date).map_err(|e| format!("Planen fehlgeschlagen: {e}"))
 }
 
+/// Termin lösen: geplante Plattformen gehen zurück auf Entwurf, der Beat
+/// steht wieder in der Warteschlange. Hochgeladenes bleibt.
+#[tauri::command]
+pub fn unschedule_release(beat_id: String) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE beat_uploads SET status = 'draft', scheduled_at = NULL
+         WHERE beat_id = ?1 AND status = 'scheduled'",
+        [&beat_id],
+    ).map_err(|e| format!("Termin lösen fehlgeschlagen: {e}"))?;
+    Ok(())
+}
+
+/// „Nicht hochladen" setzen oder zurücknehmen — die Warteschlange lässt den Beat dann aus.
+#[tauri::command]
+pub fn set_upload_skip(beat_id: String, skip: bool) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute("UPDATE beats SET upload_skip = ?1 WHERE id = ?2", rusqlite::params![skip, beat_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub(crate) fn release_einplanen(conn: &rusqlite::Connection, beat_id: &str, date: &str) -> rusqlite::Result<()> {
     for p in PLATFORMS {
         conn.execute(

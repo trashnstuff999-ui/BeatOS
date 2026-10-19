@@ -11,7 +11,7 @@
 // Entwurf: docs/uebersicht-plan.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Flame, Play, Pause } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -71,6 +71,11 @@ export function Heute({ actions, recent, refreshKey }: {
   const [neuLaden, setNeuLaden] = useState(0);
   const [planen, setPlanen] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
+  /** Zuletzt per „Nicht hochladen" weggeklickt — für „Rückgängig". */
+  const [ausgeblendet, setAusgeblendet] = useState<{ id: string; name: string } | null>(null);
+  /** In den Startlöchern angeklickt — steht dann oben in „Als Nächstes". */
+  const [gewaehlt, setGewaehlt] = useState<string | null>(null);
+  const heldRef = useRef<HTMLElement>(null);
 
   const heute = new Date();
   const montag = wochenanfang(heute);
@@ -118,7 +123,8 @@ export function Heute({ actions, recent, refreshKey }: {
   const naechsteLeer = naechste.every(t => t.beats.length === 0);
   const bereit = queue.filter(q => q.fehlt.length === 0);
 
-  const held = alsNaechstes(queue);
+  // Aus den Startlöchern angeklickt, sonst der, dem am wenigsten fehlt.
+  const held = queue.find(q => q.id === gewaehlt) ?? alsNaechstes(queue);
   const regal = queue.filter(q => q.id !== held?.id);
   const freierTag = naechsterFreierTag(rhythmus, belegt, heute);
 
@@ -160,6 +166,18 @@ export function Heute({ actions, recent, refreshKey }: {
     finally { setPlanen(false); }
   };
   const zumUpload = (beatId: string) => navigate("/upload", { state: { beatId } });
+  const aendern = async (schritt: () => Promise<void>) => {
+    try { await schritt(); setNeuLaden(k => k + 1); } catch (e) { setFehler(String(e)); }
+  };
+  const ausblenden = (b: QueueBeat) => aendern(async () => {
+    await api.upload.setUploadSkip(b.id, true);
+    setAusgeblendet({ id: b.id, name: b.name });
+  });
+  const zurueckholen = () => ausgeblendet && aendern(async () => {
+    await api.upload.setUploadSkip(ausgeblendet.id, false);
+    setAusgeblendet(null);
+  });
+  const terminLoesen = (beatId: string) => aendern(() => api.upload.unscheduleRelease(beatId));
 
   // ── Diese Woche geschafft ──
   const geschafft = [
@@ -218,15 +236,22 @@ export function Heute({ actions, recent, refreshKey }: {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12, borderTop: `1px solid ${C.border10}`, paddingTop: 16 }}>
             {(ansicht === "diese" ? diese : naechste).map(t => (
-              <Tag key={t.iso} tag={t} onOpen={zumUpload} planName={held?.name ?? null} onPlan={iso => einplanen(iso)} />
+              <Tag key={t.iso} tag={t} onOpen={zumUpload} planName={held?.name ?? null} onPlan={iso => einplanen(iso)} onLoesen={terminLoesen} />
             ))}
           </div>
         </section>
       )}
 
+      {ausgeblendet && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, fontSize: 13, color: C.onSurfaceVariant }}>
+          „{ausgeblendet.name}" wird nicht mehr zum Hochladen vorgeschlagen.
+          <Button size="sm" variant="ghost" onClick={zurueckholen}>Rückgängig</Button>
+        </div>
+      )}
+
       {/* ── Als Nächstes ── */}
       {held && (
-        <section aria-label="Als Nächstes hochladen" style={{ position: "relative", overflow: "hidden", borderRadius: 16, marginBottom: 56, background: C.surfaceContainer }}>
+        <section ref={heldRef} aria-label="Als Nächstes hochladen" style={{ position: "relative", overflow: "hidden", borderRadius: 16, marginBottom: 56, background: C.surfaceContainer }}>
           {held.cover && (
             <>
               <img src={bild(held.cover)} alt="" aria-hidden style={{ position: "absolute", inset: -40, width: "calc(100% + 80px)", height: "calc(100% + 80px)", objectFit: "cover", filter: "blur(48px) saturate(1.2)", opacity: 0.45 }} />
@@ -265,6 +290,7 @@ export function Heute({ actions, recent, refreshKey }: {
                   <Button variant="primary" loading={planen} onClick={() => einplanen()}>Auf {tagMonat(freierTag)} planen</Button>
                 )}
                 <Button variant="secondary" onClick={() => zumUpload(held.id)}>Zum Upload</Button>
+                <Button variant="ghost" onClick={() => ausblenden(held)} title="Nicht mehr in der Übersicht und in der Planung vorschlagen">Nicht hochladen</Button>
               </div>
             </div>
             <Reinhoeren beatId={held.id} name={held.name} cover={held.cover} />
@@ -284,7 +310,8 @@ export function Heute({ actions, recent, refreshKey }: {
               {/* Scrollt waagerecht und schneidet damit auch oben ab — der Rand
                   oben gibt dem Anheben beim Hover Platz. */}
               {regal.map(q => (
-                <button key={q.id} className="ue-hebt" onClick={() => zumUpload(q.id)} title={`${q.name} im Upload-Tab öffnen`}
+                <button key={q.id} className="ue-hebt" title={`${q.name} oben anhören`}
+                  onClick={() => { setGewaehlt(q.id); heldRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }}
                   style={{ flex: "0 0 150px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}>
                   {q.cover
                     ? <img src={bild(q.cover)} alt="" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 8, display: "block" }} />
@@ -357,12 +384,14 @@ export function Heute({ actions, recent, refreshKey }: {
   );
 }
 
-function Tag({ tag, onOpen, planName, onPlan }: {
+function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
   tag: TagZelle;
   onOpen: (beatId: string) => void;
   /** Der Beat aus „Als Nächstes" — ein freier Upload-Tag plant ihn per Klick ein. */
   planName: string | null;
   onPlan: (iso: string) => void;
+  /** Termin des Beats lösen — zurück in die Warteschlange. */
+  onLoesen: (beatId: string) => void;
 }) {
   const beat = tag.beats[0];
   const quadrat: React.CSSProperties = {
@@ -378,7 +407,7 @@ function Tag({ tag, onOpen, planName, onPlan }: {
       }}>
         {KURZ[tag.wochentag]} <span style={{ fontWeight: 500, color: C.onSecondaryFixedVar }}>{Number(tag.iso.slice(8, 10))}.</span>
       </div>
-      {beat ? (
+      {beat ? (<>
         <button className="ue-hebt" onClick={() => onOpen(beat.id)} title={`${beat.name} im Upload-Tab öffnen`}
           style={{ background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           {beat.cover
@@ -391,7 +420,10 @@ function Tag({ tag, onOpen, planName, onPlan }: {
             {beat.hochgeladen ? "✓ hochgeladen" : "geplant"}
           </span>
         </button>
-      ) : tag.uploadTag && !tag.vorbei && planName ? (
+        {!beat.hochgeladen && !tag.vorbei && (
+          <Button size="sm" variant="ghost" onClick={() => onLoesen(beat.id)} title={`Termin von ${beat.name} entfernen`}>Termin lösen</Button>
+        )}
+      </>) : tag.uploadTag && !tag.vorbei && planName ? (
         <button className="ue-hell" onClick={() => onPlan(tag.iso)} title={`${planName} an diesem Tag planen`} style={{
           ...quadrat, width: "100%", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600,
           border: `1.5px dashed ${alpha(C.primary, 0.55)}`, color: C.primary, background: alpha(C.primary, 0.05),

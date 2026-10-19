@@ -395,6 +395,8 @@ pub fn init_db() -> Result<(), String> {
                 // „Mein Beat" (Scheibe 5): welcher Katalog-Beat im Song steckt.
                 // Nur hier vermerkt — am Beat im Archiv ändert sich nichts.
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN beat_id TEXT", []);
+                // „Nicht hochladen": der Beat fällt aus der Warteschlange.
+                let _ = conn.execute("ALTER TABLE beats ADD COLUMN upload_skip INTEGER NOT NULL DEFAULT 0", []);
 
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(

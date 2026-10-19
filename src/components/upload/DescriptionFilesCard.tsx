@@ -8,9 +8,10 @@
 // .txt-Dateien schrieb, die nichts zurücklas: nach einem Beat-Wechsel stand
 // wieder die Vorlage da, und der Assistent kopierte sie auch.
 //
-// Dazu prüft die Karte, was vor dem Upload auffallen sollte, und zeigt die
-// Beschreibung so, wie die Plattform sie anklickbar macht — bei YouTube mit
-// der Linie, ab der „…mehr" zuklappt.
+// Alle drei Plattformen stehen nebeneinander statt hinter Reitern — hochgeladen
+// wird immer überall. Ein Klick auf Titel, Beschreibung oder Tags kopiert sie.
+// Zähler erscheinen erst, wenn es knapp wird; was vor dem Upload auffallen
+// sollte, steht unter dem Spaltenkopf.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react";
@@ -20,7 +21,6 @@ import {
 } from "lucide-react";
 import { C, PLATFORM_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
-import { Segmented } from "../ui/Segmented";
 import { Button, IconButton, Modal } from "../ui";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { api } from "../../lib/api";
@@ -43,7 +43,6 @@ interface DescriptionFilesCardProps {
 }
 
 type TabKey = UploadPlatform;
-type Feld = "title" | "description" | "tags";
 
 /** Titellänge. YouTube schneidet bei 100 Zeichen hart ab; SoundCloud und
  *  Beatstars liegen ebenfalls bei 100. */
@@ -52,9 +51,11 @@ const TITEL_MAX = 100;
 /** YouTube begrenzt die Tags auf 500 Zeichen in Summe. */
 const YT_TAG_ZEICHEN = 500;
 
-// Die Markenfarbe traegt NUR der aktive Abschnitt — drei bunte Knoepfe
-// nebeneinander konkurrieren, aktiv gefaerbt sagt die Farbe genau eines:
-// wo du gerade bist.
+/** Ab diesem Anteil am Limit erscheint der Zähler. */
+const KNAPP = 0.9;
+
+// Die Plattformfarbe nur als dünne Linie unter dem Spaltenkopf — drei bunte
+// Flächen nebeneinander würden mit dem Orange der App konkurrieren.
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
   { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
   { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
@@ -65,7 +66,6 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: 
 const norm = (t: string) => t.replace(/\r\n/g, "\n").trim();
 
 export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style }: DescriptionFilesCardProps) {
-  const [active, setActive] = useState<TabKey>("beatstars");
   const [gerendert, setGerendert] = useState<UploadDescriptions | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [dateien, setDateien] = useState<Record<string, string>>({});
@@ -73,8 +73,11 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
   const [isLoading, setIsLoading] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [speichert, setSpeichert] = useState(false);
-  const [kopiert, setKopiert] = useState<Feld | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
+  /** "youtube:title" — welches Feld gerade kopiert wurde. */
+  const [kopiert, setKopiert] = useState<string | null>(null);
+  /** Welche Beschreibung ganz aufgeklappt ist. */
+  const [aufgeklappt, setAufgeklappt] = useState<Record<string, boolean>>({});
+  const [editor, setEditor] = useState<TabKey | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
 
   const laden = async () => {
@@ -149,7 +152,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
     if (offenRef.current) schreiben();
   }, [beatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const kopieren = async (feld: Feld, text: string) => {
+  const kopieren = async (feld: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setKopiert(feld);
@@ -159,71 +162,8 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
     }
   };
 
-  const activeContent = drafts?.[active] ?? "";
-  const activeTitle = extractTitle(activeContent);
-  const activeDescription = extractDescription(activeContent);
-  const activeTags = extractTags(activeContent);
-  const activeTagCount = countTags(activeTags);
-  const hinweise = drafts ? pruefeBeschreibung(active, activeContent, beatstarsUrl) : [];
-  const eigeneFassung = overrides[active] !== undefined;
-  // Eine .txt, die anders ist als die Vorlage, und keine eigene Fassung in der
-  // DB: vielleicht eine alte Änderung, die nur dort steht. Anbieten, nicht
-  // aufdrängen.
-  const dateiAnders = !eigeneFassung && gerendert && dateien[active] !== undefined
-    && norm(dateien[active]) !== norm(gerendert[active]);
-  const tabLabel = TABS.find(t => t.key === active)?.label ?? active;
-
-  // Prüfung + Herkunft: eine ruhige Zeile, Hinweise nur wenn nötig.
-  const pruefung = drafts && !isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "10px 2px", borderTop: `1px solid ${C.border10}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, flexWrap: "wrap" }}>
-            {hinweise.length === 0 ? (
-              <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.mint }}>
-                <CheckCircle2 size={12} strokeWidth={2} /> Alles in Ordnung
-              </span>
-            ) : (
-              <span style={{ color: C.onSurfaceVariant }}>
-                {hinweise.length === 1 ? "1 Hinweis" : `${hinweise.length} Hinweise`}
-              </span>
-            )}
-            <span style={{ flex: 1 }} />
-            {eigeneFassung && (
-              <span style={{ color: C.onSecondaryFixedVar }}>
-                Von Hand geändert ·{" "}
-                <LinkKnopf
-                  onClick={() => gerendert && setDraft(active, gerendert[active], true)}
-                  title="Die eigene Fassung verwerfen — der Text folgt wieder der Vorlage"
-                >
-                  Vorlage wiederherstellen
-                </LinkKnopf>
-              </span>
-            )}
-            {dateiAnders && (
-              <span style={{ color: C.onSecondaryFixedVar }}>
-                {TABS.find(t => t.key === active)?.file} weicht ab ·{" "}
-                <LinkKnopf
-                  onClick={() => setDraft(active, dateien[active], true)}
-                  title="Den Text aus der Datei im Beat-Ordner als eigene Fassung übernehmen"
-                >
-                  übernehmen
-                </LinkKnopf>
-              </span>
-            )}
-          </div>
-          {hinweise.map(h => (
-            <div key={h.text} style={{
-              display: "flex", alignItems: "flex-start", gap: 6,
-              fontSize: 12, lineHeight: 1.45,
-              color: h.stufe === "fehler" ? C.error : C.primary,
-            }}>
-              {h.stufe === "fehler"
-                ? <AlertCircle size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-                : <Info size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />}
-              {h.text}
-            </div>
-          ))}
-        </div>
-      );
+  const bereit = Boolean(drafts) && !isLoading;
+  const editorTab = TABS.find(t => t.key === editor);
 
   return (
     <SectionCard
@@ -234,14 +174,6 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {speichert && <Loader2 size={12} color={C.onSecondaryFixedVar} style={{ animation: "spin 0.8s linear infinite" }} />}
           <Button
-            size="sm" variant="secondary" icon={Pencil}
-            onClick={() => setEditorOpen(true)}
-            disabled={!drafts}
-            title={`${tabLabel}-Text von Hand bearbeiten — speichert sich selbst`}
-          >
-            Bearbeiten
-          </Button>
-          <Button
             size="sm" variant="secondary" icon={FileCode2}
             onClick={() => setShowTemplates(true)}
             title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
@@ -251,107 +183,148 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
         </div>
       }
     >
-      {/* ─── Reiter ──────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 10, flexShrink: 0 }}>
-        <Segmented
-          full
-          label="Plattform"
-          value={active}
-          onChange={setActive}
-          options={TABS.map(tab => ({
-            value: tab.key,
-            label: tab.label,
-            icon: tab.icon,
-            color: tab.color,
-            zusatz: overrides[tab.key] !== undefined && (
-              <span title="Von Hand geändert" style={{ display: "flex" }}>
-                <Pencil size={10} strokeWidth={2.25} />
-              </span>
-            ),
-          }))}
-        />
-      </div>
+      {/* BeatStars schmaler: dort gibt es nur den Titel — die Beschreibung
+          wird nicht genutzt, die Exportnamen stehen oben bei den Dateien. */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1.5fr)", gap: 28, alignItems: "start" }}>
+        {TABS.map(tab => {
+          const p = tab.key;
+          const inhalt = drafts?.[p] ?? "";
+          const titel = extractTitle(inhalt);
+          const text = extractDescription(inhalt);
+          const tags = extractTags(inhalt);
+          const anzahl = countTags(tags);
+          const hinweise = drafts ? pruefeBeschreibung(p, inhalt, beatstarsUrl) : [];
+          const eigen = overrides[p] !== undefined;
+          // Eine .txt, die anders ist als die Vorlage, und keine eigene Fassung
+          // in der DB: vielleicht eine alte Änderung, die nur dort steht.
+          // Anbieten, nicht aufdrängen.
+          const dateiAnders = !eigen && gerendert && dateien[p] !== undefined
+            && norm(dateien[p]) !== norm(gerendert[p]);
+          const zeilen = text.split(/\r?\n/);
+          const offen = aufgeklappt[p] || zeilen.length <= YT_SICHTBARE_ZEILEN;
+          const Icon = tab.icon;
 
-      {/* ─── Ausgabe ──────────────────────────────────────────────────────────
-          Die Karte steht über die volle Breite, neben ihr nichts — so kann
-          keine Lücke entstehen, egal wie kurz die BeatStars-Beschreibung ist.
-          Innen zwei Spalten, damit die Zeilen lesbar kurz bleiben: links der
-          Text, rechts Prüfung und Tags. */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(260px, 2fr)", gap: "0 32px", alignItems: "start" }}>
-      <div style={{ minWidth: 0 }}>
-        <OutputRow
-          label="Titel"
-          badge={`${activeTitle.length}/${TITEL_MAX}`}
-          badgeWarn={activeTitle.length > TITEL_MAX}
-          kopiert={kopiert === "title"}
-          onCopy={() => kopieren("title", activeTitle)}
-          disabled={!drafts || isLoading}
-        >
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.onSurface, lineHeight: 1.45, wordBreak: "break-word" }}>
-            {isLoading
-              ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.onSurfaceVariant }}>
-                  <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> Rendering…
+          return (
+            <div key={p} style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+              {/* ── Spaltenkopf ── */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                paddingBottom: 8, marginBottom: 6, borderBottom: `2px solid ${alpha(tab.color, 0.55)}`,
+              }}>
+                <Icon size={14} color={tab.color} strokeWidth={2} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>{tab.label}</span>
+                {bereit && hinweise.length === 0 && (
+                  <span title="Alles in Ordnung" style={{ display: "flex" }}>
+                    <CheckCircle2 size={13} color={C.mint} strokeWidth={2} />
+                  </span>
+                )}
+                <span style={{ flex: 1 }} />
+                <IconButton
+                  icon={Pencil} size={28} variant="ghost"
+                  onClick={() => setEditor(p)}
+                  disabled={!drafts}
+                  title={`${tab.label}-Text von Hand bearbeiten — speichert sich selbst`}
+                />
+              </div>
+
+              {/* ── Hinweise und Herkunft, nur wenn nötig ── */}
+              {bereit && (hinweise.length > 0 || eigen || dateiAnders) && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
+                  {hinweise.map(h => (
+                    <div key={h.text} style={{
+                      display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, lineHeight: 1.45,
+                      color: h.stufe === "fehler" ? C.error : C.primary,
+                    }}>
+                      {h.stufe === "fehler"
+                        ? <AlertCircle size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
+                        : <Info size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />}
+                      {h.text}
+                    </div>
+                  ))}
+                  {eigen && (
+                    <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
+                      Von Hand geändert ·{" "}
+                      <LinkKnopf
+                        onClick={() => gerendert && setDraft(p, gerendert[p], true)}
+                        title="Die eigene Fassung verwerfen — der Text folgt wieder der Vorlage"
+                      >
+                        Vorlage wiederherstellen
+                      </LinkKnopf>
+                    </span>
+                  )}
+                  {dateiAnders && (
+                    <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
+                      {tab.file} weicht ab ·{" "}
+                      <LinkKnopf
+                        onClick={() => setDraft(p, dateien[p], true)}
+                        title="Den Text aus der Datei im Beat-Ordner als eigene Fassung übernehmen"
+                      >
+                        übernehmen
+                      </LinkKnopf>
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <Kopierfeld
+                label="Titel"
+                zaehler={titel.length >= TITEL_MAX * KNAPP ? `${titel.length}/${TITEL_MAX}` : null}
+                warn={titel.length > TITEL_MAX}
+                kopiert={kopiert === `${p}:title`}
+                onCopy={() => kopieren(`${p}:title`, titel)}
+                disabled={!bereit || !titel}
+              >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.onSurface, lineHeight: 1.45, wordBreak: "break-word" }}>
+                  {isLoading ? <Laedt /> : (titel || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)}
                 </span>
-              : (activeTitle || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)
-            }
-          </div>
-        </OutputRow>
+              </Kopierfeld>
 
-        {/* BeatStars bekommt keine Beschreibung: das Feld wird dort nicht
-            genutzt, und der Text unter dem Titel der Vorlage sind die
-            Exportnamen — die stehen jetzt oben bei den Dateien. */}
-        {active === "beatstars" ? (
-          <div style={{
-            padding: "10px 2px", borderTop: `1px solid ${C.border10}`,
-            fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5,
-          }}>
-            BeatStars ohne Beschreibung · Exportnamen stehen oben bei den Dateien
-          </div>
-        ) : (
-          <OutputRow
-            label="Beschreibung"
-            kopiert={kopiert === "description"}
-            onCopy={() => kopieren("description", activeDescription)}
-            disabled={!drafts || isLoading}
-          >
-            {isLoading || !activeDescription
-              ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>{isLoading ? "Rendering…" : "—"}</span>
-              : <Vorschau text={activeDescription} youtube={active === "youtube"} />
-            }
-          </OutputRow>
-        )}
-      </div>
+              {p !== "beatstars" && (
+                <>
+                  <Kopierfeld
+                    label="Beschreibung"
+                    kopiert={kopiert === `${p}:description`}
+                    onCopy={() => kopieren(`${p}:description`, text)}
+                    disabled={!bereit || !text}
+                  >
+                    {isLoading ? <Laedt /> : !text
+                      ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>—</span>
+                      : <Vorschau zeilen={offen ? zeilen : zeilen.slice(0, YT_SICHTBARE_ZEILEN)} youtube={p === "youtube" && offen} />}
+                  </Kopierfeld>
+                  {bereit && zeilen.length > YT_SICHTBARE_ZEILEN && (
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={() => setAufgeklappt(a => ({ ...a, [p]: !a[p] }))}
+                      style={{ alignSelf: "flex-start", padding: "2px 8px", marginTop: -2 }}
+                    >
+                      {aufgeklappt[p] ? "Weniger" : `…mehr (${zeilen.length - YT_SICHTBARE_ZEILEN} Zeilen)`}
+                    </Button>
+                  )}
+                </>
+              )}
 
-      <div style={{ minWidth: 0 }}>
-        {pruefung}
-
-        {activeTags && (
-          <OutputRow
-            label="Tags"
-            // SoundCloud begrenzt die Anzahl, YouTube die Zeichensumme.
-            badge={
-              active === "soundcloud" ? `${activeTagCount}/9`
-              : active === "youtube"  ? `${activeTags.length}/${YT_TAG_ZEICHEN} Zeichen`
-              : String(activeTagCount)
-            }
-            badgeWarn={
-              (active === "soundcloud" && activeTagCount > 9) ||
-              (active === "youtube" && activeTags.length > YT_TAG_ZEICHEN)
-            }
-            kopiert={kopiert === "tags"}
-            onCopy={() => kopieren("tags", activeTags)}
-            disabled={!drafts || isLoading}
-            letzte
-          >
-            <div style={{
-              fontSize: 12, color: C.onSurfaceVariant, fontFamily: "monospace",
-              lineHeight: 1.5, wordBreak: "break-word",
-            }}>
-              {activeTags.split(/\r?\n/).join("  ")}
+              {tags && (
+                <Kopierfeld
+                  label="Tags"
+                  // SoundCloud begrenzt die Anzahl, YouTube die Zeichensumme.
+                  zaehler={
+                    p === "soundcloud" && anzahl > 9 ? `${anzahl}/9`
+                    : p === "youtube" && tags.length >= YT_TAG_ZEICHEN * KNAPP ? `${tags.length}/${YT_TAG_ZEICHEN} Zeichen`
+                    : null
+                  }
+                  warn={(p === "soundcloud" && anzahl > 9) || (p === "youtube" && tags.length > YT_TAG_ZEICHEN)}
+                  kopiert={kopiert === `${p}:tags`}
+                  onCopy={() => kopieren(`${p}:tags`, tags)}
+                  disabled={!bereit}
+                >
+                  <span style={{ display: "block", fontSize: 12, color: C.onSurfaceVariant, fontFamily: "monospace", lineHeight: 1.5, wordBreak: "break-word" }}>
+                    {tags.split(/\r?\n/).join("  ")}
+                  </span>
+                </Kopierfeld>
+              )}
             </div>
-          </OutputRow>
-        )}
-      </div>
+          );
+        })}
       </div>
 
       {fehler && (
@@ -364,23 +337,23 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
       )}
 
       {/* Volltext im Dialog: speichert sich selbst, wie die Karte. */}
-      {editorOpen && (
+      {editor && editorTab && (
         <Modal
-          title={`Bearbeiten — ${tabLabel}`}
+          title={`Bearbeiten — ${editorTab.label}`}
           subtitle="Speichert sich selbst · gilt hier und im Release-Assistenten"
           icon={Pencil}
           width={900}
-          onClose={() => setEditorOpen(false)}
+          onClose={() => setEditor(null)}
           footerLeft={
             <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
-              {speichert ? "Speichert …" : eigeneFassung ? "Eigene Fassung gespeichert" : "Folgt der Vorlage"}
+              {speichert ? "Speichert …" : overrides[editor] !== undefined ? "Eigene Fassung gespeichert" : "Folgt der Vorlage"}
             </span>
           }
-          footer={<Button size="sm" variant="primary" onClick={() => setEditorOpen(false)}>Fertig</Button>}
+          footer={<Button size="sm" variant="primary" onClick={() => setEditor(null)}>Fertig</Button>}
         >
           <textarea
-            value={activeContent}
-            onChange={e => setDraft(active, e.target.value)}
+            value={drafts?.[editor] ?? ""}
+            onChange={e => setDraft(editor, e.target.value)}
             spellCheck={false}
             autoFocus
             style={{
@@ -417,18 +390,25 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+function Laedt() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.onSurfaceVariant }}>
+      <Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> Lädt …
+    </span>
+  );
+}
+
 /** Die Beschreibung, wie die Plattform sie anklickbar macht: Links,
  *  Zeitmarken und Hashtags hervorgehoben. Bei YouTube zeigt eine Linie, wo
  *  „…mehr" zuklappt — darüber steht, was man ohne Aufklappen sieht. */
-function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
-  const zeilen = text.split(/\r?\n/);
+function Vorschau({ zeilen, youtube }: { zeilen: string[]; youtube: boolean }) {
   const farbe = { text: C.onSurfaceVariant, link: C.tertiary, zeit: C.tertiary, hashtag: C.tertiary };
   return (
-    <div style={{ fontSize: 12, lineHeight: 1.55, wordBreak: "break-word" }}>
+    <span style={{ display: "block", fontSize: 12, lineHeight: 1.55, wordBreak: "break-word" }}>
       {zeilen.map((zeile, i) => (
-        <div key={i}>
-          {youtube && i === YT_SICHTBARE_ZEILEN && zeilen.length > YT_SICHTBARE_ZEILEN && (
-            <div
+        <span key={i} style={{ display: "block" }}>
+          {youtube && i === YT_SICHTBARE_ZEILEN && (
+            <span
               title="Bis hierhin sehen Zuschauer die Beschreibung, ohne sie aufzuklappen"
               style={{
                 display: "flex", alignItems: "center", gap: 8, margin: "6px 0",
@@ -438,16 +418,16 @@ function Vorschau({ text, youtube }: { text: string; youtube: boolean }) {
               <span style={{ flex: 1, borderTop: `1px dashed ${C.border20}` }} />
               …mehr
               <span style={{ flex: 1, borderTop: `1px dashed ${C.border20}` }} />
-            </div>
+            </span>
           )}
           {zeile.trim() === ""
             ? <span>&nbsp;</span>
             : zerlege(zeile).map((s, k) => (
                 <span key={k} style={{ color: farbe[s.art] }}>{s.text}</span>
               ))}
-        </div>
+        </span>
       ))}
-    </div>
+    </span>
   );
 }
 
@@ -460,55 +440,54 @@ function LinkKnopf({ onClick, title, children }: { onClick: () => void; title: s
   );
 }
 
-/** Eine Ausgabe-Zeile: Label links, Inhalt darunter, Kopieren rechts. */
-function OutputRow({ label, badge, badgeWarn, onCopy, kopiert, disabled, letzte, children }: {
+/** Ein Feld, das sich per Klick kopiert: das ganze Feld ist der Knopf, der
+ *  Haken neben dem Label sagt „erledigt". */
+function Kopierfeld({ label, zaehler, warn, onCopy, kopiert, disabled, children }: {
   label: string;
-  badge?: string;
-  badgeWarn?: boolean;
+  zaehler?: string | null;
+  warn?: boolean;
   onCopy: () => void;
   kopiert: boolean;
   disabled?: boolean;
-  /** Ohne Trennlinie darunter — die Karte endet hier. */
-  letzte?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "flex-start", gap: 12,
-      padding: "10px 2px",
-      borderTop: `1px solid ${C.border10}`,
-      borderBottom: letzte ? "none" : undefined,
-    }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-          textTransform: "uppercase", color: C.onSecondaryFixedVar,
-          marginBottom: 4,
-        }}>
-          {label}
-          {badge && (
-            <span style={{
-              padding: "1px 7px", borderRadius: radius.full,
-              fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
-              background: badgeWarn ? alpha(C.error, 0.15) : "rgba(255,255,255,0.05)",
-              color: badgeWarn ? C.error : C.onSurfaceVariant,
-            }}>
-              {badge}
+    <button
+      type="button"
+      className="ue-zeile"
+      onClick={onCopy}
+      disabled={disabled}
+      title={`${label} kopieren`}
+      style={{
+        display: "block", width: "calc(100% + 16px)", margin: "0 -8px", padding: "8px",
+        border: 0, font: "inherit", color: "inherit", textAlign: "left",
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      <span style={{
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 4,
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: C.onSecondaryFixedVar,
+      }}>
+        {label}
+        {zaehler && (
+          <span style={{
+            padding: "1px 7px", borderRadius: radius.full,
+            fontWeight: 600, letterSpacing: "0.02em", textTransform: "none",
+            background: warn ? alpha(C.error, 0.15) : "rgba(255,255,255,0.05)",
+            color: warn ? C.error : C.onSurfaceVariant,
+          }}>
+            {zaehler}
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {kopiert
+          ? <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.mint, letterSpacing: "0.02em", textTransform: "none" }}>
+              <Check size={12} strokeWidth={2.5} /> Kopiert
             </span>
-          )}
-        </div>
-        {children}
-      </div>
-      {/* Kopieren: der Haken im Knopf selbst sagt „erledigt" — vorher sprang
-          dafür eine Meldung unter die Karte und schob alles nach unten. */}
-      <IconButton
-        icon={kopiert ? Check : Copy} size={28} variant="secondary"
-        onClick={onCopy}
-        disabled={disabled}
-        title={kopiert ? "Kopiert" : `${label} kopieren`}
-        style={{ flexShrink: 0, ...(kopiert ? { color: C.mint, borderColor: C.mint } : null) }}
-      />
-    </div>
+          : !disabled && <Copy size={12} strokeWidth={2} />}
+      </span>
+      {children}
+    </button>
   );
 }

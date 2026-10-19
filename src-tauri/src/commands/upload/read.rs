@@ -115,6 +115,7 @@ pub fn get_upload_queue() -> Result<Vec<QueueBeat>, String> {
          FROM beats b
          WHERE b.path IS NOT NULL
            AND COALESCE(b.created_date, '') >= date('now', ?1)
+           AND COALESCE(b.upload_skip, 0) = 0
            AND NOT EXISTS (
              SELECT 1 FROM beat_uploads u WHERE u.beat_id = b.id
                AND ((u.scheduled_at IS NOT NULL AND u.scheduled_at != '') OR u.status = 'uploaded'))

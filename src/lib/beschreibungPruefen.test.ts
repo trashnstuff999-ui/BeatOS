@@ -24,9 +24,8 @@ describe("pruefeBeschreibung", () => {
     expect(h.some(x => x.text.startsWith("Der Kauflink steht nicht"))).toBe(true);
   });
 
-  it("ohne BeatStars-Link warnt nur YouTube/SoundCloud", () => {
-    expect(pruefeBeschreibung("beatstars", yt("x"), null)).toEqual([]);
-    expect(pruefeBeschreibung("soundcloud", yt("x"), null)[0].text).toMatch(/Kein BeatStars-Link/);
+  it("ohne BeatStars-Link kein Hinweis — der fehlt vor dem Upload immer", () => {
+    expect(pruefeBeschreibung("soundcloud", yt("x"), null)).toEqual([]);
   });
 });
 
