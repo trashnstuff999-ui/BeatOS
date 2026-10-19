@@ -1,11 +1,10 @@
 // src/components/studio/ProjectsPane.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Studio → Projekte: search/filter toolbar, collapsible sections
-// (Priorität → Bereit → Exportiert → Überarbeiten → Idee → Lange inaktiv →
-// Kann weg), audio preview via the global player, and the inspector.
-// Zeilenklick öffnet den Inspector — dort hängen Notizen, FLP-Versionen und die
-// Asset-Slots. Filtering, grouping and sorting are pure client-side derivations
-// over one scan result.
+// Studio → Projekte: Werkbank (Cover-Regale) + Ideen-Liste, oder Aufräumen
+// (Lange inaktiv / Kann weg nach Jahr). Audio preview via the global player,
+// and the inspector. Zeilenklick öffnet den Inspector — dort hängen Notizen,
+// FLP-Versionen und der Weg zum Upload. Filtering, grouping and sorting are
+// pure client-side derivations over one scan result.
 //
 // Gelöscht wird nur an EINER Stelle: der Aufräum-Leiste ganz unten, die
 // erscheint, sobald etwas als „Kann weg" markiert ist.
@@ -13,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, ChevronDown, Moon, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered } from "lucide-react";
+import { RefreshCw, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
 import { C, STUDIO_STATUS_CONFIG, alpha } from "../../lib/theme";
@@ -27,11 +26,11 @@ import { useKlickDaneben } from "../../hooks/useKlickDaneben";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
 import { EmptyState, Button, IconButton } from "../ui";
 import { MergeProjectsDialog } from "./MergeProjectsDialog";
-import { ProjectRow } from "./ProjectRow";
 import { ProjectInspector } from "./ProjectInspector";
 import { Werkbank } from "./Werkbank";
 import { IdeenListe } from "./IdeenListe";
-import { werkbankSatz, ideenGruppen, ideeName } from "../../lib/werkbank";
+import { AufraeumListe, type AufraeumFilter } from "./AufraeumListe";
+import { werkbankSatz, ideenGruppen, jahresGruppen, ideeName } from "../../lib/werkbank";
 import { deriveStage, projectDisplayName, studioBeatId } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 import type { Beat } from "../../types/browse";
@@ -42,11 +41,6 @@ const STALE_DAYS = 30;
 /** Arbeiten: woran du gerade sitzt. Aufräumen: Lange inaktiv + Kann weg. */
 export type StudioView = "work" | "cleanup";
 const CLEANUP_SECTIONS: SectionKey[] = ["stale", "discard"];
-// Die Chips einer Ansicht sind ihre Sektionen — in Listen-Reihenfolge.
-const VIEW_SECTIONS: Record<StudioView, SectionKey[]> = {
-  work: ["priority", "ready", "exported", "wip", "idea"],
-  cleanup: ["stale", "discard"],
-};
 
 /** Diese Sektionen stehen in der Projekte-Ansicht als Cover-Regal (Werkbank). */
 const SHELF_SECTIONS: SectionKey[] = ["priority", "ready", "exported", "wip"];
@@ -60,8 +54,8 @@ const SHELF_HINT: Partial<Record<SectionKey, string>> = {
 /** So viele Ideen zeigt eine Monatsgruppe, bevor „Alle N anzeigen" kommt. */
 const IDEEN_LIMIT = 8;
 
-/** So viele Zeilen zeigt eine Sektion, bevor sie „… weitere anzeigen" anbietet. */
-const SECTION_LIMIT = 50;
+/** So viele Zeilen zeigt ein Jahr im Aufräumen, bevor „Alle N anzeigen" kommt. */
+const JAHR_LIMIT = 50;
 
 type SectionKey = StudioStatus | "stale" | "priority";
 
@@ -76,16 +70,7 @@ const SECTION_META: Record<SectionKey, { label: string; color: string }> = {
   discard:  { label: STUDIO_STATUS_CONFIG.discard.label,  color: STUDIO_STATUS_CONFIG.discard.color },
 };
 
-const LS_COLLAPSED = "beatos_studio_collapsed";
 const LS_SORT = "beatos_studio_sort";
-
-function loadCollapsed(): Set<SectionKey> {
-  try {
-    const raw = localStorage.getItem(LS_COLLAPSED);
-    if (raw) return new Set(JSON.parse(raw) as SectionKey[]);
-  } catch { /* fallthrough to default */ }
-  return new Set<SectionKey>(["idea", "stale", "discard"]);
-}
 
 function loadSort(): SortMode {
   const raw = localStorage.getItem(LS_SORT);
@@ -130,13 +115,11 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
 
   // Filters & view state
   const [search, setSearch] = useState("");
-  /** Eine Sektion als Filter — dieselbe Einteilung wie die Liste darunter. */
-  const [sectionFilter, setSectionFilter] = useState<SectionKey | null>(null);
+  /** Aufräumen: alles oder nur das Vorgemerkte. */
+  const [aufraeumFilter, setAufraeumFilter] = useState<AufraeumFilter>("alle");
   const [rootFilter, setRootFilter] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>(loadSort);
-  const [collapsed, setCollapsed] = useState<Set<SectionKey>>(loadCollapsed);
-  /** Sektionen, in denen „… weitere anzeigen" schon gedrückt wurde. */
-  const [expanded, setExpanded] = useState<Set<SectionKey>>(new Set());
+  /** Monats- (Ideen) und Jahresgruppen (Aufräumen), die schon ganz aufgeklappt sind. */
   const [ideenOffen, setIdeenOffen] = useState<Set<string>>(new Set());
   /** Mehrfachauswahl (Projektpfade) und der Ankerpunkt für Shift-Klick. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -162,9 +145,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [showMerge, setShowMerge] = useState(false);
 
   useEffect(() => { localStorage.setItem(LS_SORT, sortMode); }, [sortMode]);
-  useEffect(() => {
-    localStorage.setItem(LS_COLLAPSED, JSON.stringify([...collapsed]));
-  }, [collapsed]);
 
   const scan = useCallback(async () => {
     if (productionPaths.length === 0) {
@@ -414,7 +394,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     // Marke); eigene Sektion nur für Ideen mit Stern — die hätten sonst kein Regal.
     if (p.status !== "idea") return p.status;
     if (p.priority) return "priority";
-    if (daysSince(p.modified_secs) > STALE_DAYS) return "stale";
+    // „Behalten" im Aufräumen: bleibt eine Idee, auch wenn sie alt ist
+    if (!p.kept && daysSince(p.modified_secs) > STALE_DAYS) return "stale";
     return "idea";
   };
 
@@ -423,7 +404,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const inView = (p: StudioProject) =>
     CLEANUP_SECTIONS.includes(sectionOf(p)) === (view === "cleanup");
 
-  // Regale klappen nicht zu und kürzen nicht — sie scrollen seitwärts.
+  // Regale klappen nicht zu und kürzen nicht.
   const isShelf = (key: SectionKey) => view === "work" && SHELF_SECTIONS.includes(key);
 
   const preStatus = projects.filter(p => {
@@ -438,23 +419,14 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     return true;
   });
 
-  // Eine Zählweise: Chip und Sektionskopf zählen dieselbe Menge. Vorher
-  // zählten die Chips nach Status („Idee (25)") und die Sektionen nach
-  // Einteilung („Idee 18" — die 7 mit Stern stehen unter Priorität).
-  const chips = VIEW_SECTIONS[view].map(key => ({
-    key,
-    label: SECTION_META[key].label,
-    color: SECTION_META[key].color,
-    count: preStatus.filter(p => sectionOf(p) === key).length,
-  }));
-
   // Alle vorgemerkten Projekte — unabhängig von Suche und Filtern, sonst räumt
   // die Leiste unten je nach Sucheingabe mal mehr und mal weniger weg.
   const discardable = projects.filter(p => p.status === "discard");
 
-  const visible = sectionFilter
-    ? preStatus.filter(p => sectionOf(p) === sectionFilter)
-    : preStatus;
+  // Umschalter und Liste zählen dieselbe (gesuchte) Menge.
+  const vorgemerkt = preStatus.filter(p => p.status === "discard").length;
+  const filtered = view === "cleanup" && aufraeumFilter === "discard";
+  const visible = filtered ? preStatus.filter(p => p.status === "discard") : preStatus;
 
   // B4: „Priorität zuerst" ist raus. Der Modus sortierte nur INNERHALB einer
   // Sektion, die Sektionsreihenfolge liegt aber fest — er tat also sichtbar
@@ -479,19 +451,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     }))
     .filter(s => s.items.length > 0);
 
-  // Suche und Status-Filter klappen alles auf: was übrig bleibt, will man sehen.
-  const forcedOpen = sectionFilter !== null || q.length > 0;
-  const isSectionOpen = (key: SectionKey) => isShelf(key) || forcedOpen || !collapsed.has(key);
-
-  // Eine Sektion zeigt erst SECTION_LIMIT Zeilen. Ohne die Grenze rendert ein
-  // einzelner Buchstabe in der Suche mehrere hundert Zeilen mit je sechs
-  // Knöpfen — die Liste klappt ja beim Suchen komplett auf.
-  const shownItems = (s: { key: SectionKey; items: StudioProject[] }) =>
-    expanded.has(s.key) || isShelf(s.key) ? s.items : s.items.slice(0, SECTION_LIMIT);
-
-  // Genau die Zeilen, die dastehen — in der Reihenfolge der Liste. Daraus wird
-  // die Hör-Queue, damit „Weiter" das nächste Projekt meint und nicht die
-  // Browse-Liste von vorhin.
   // Ideen in der Projekte-Ansicht: nach Monat/Buchstabe, je Gruppe erst
   // IDEEN_LIMIT Zeilen. Suche zeigt alles — was übrig bleibt, will man sehen.
   const ideen = view === "work" ? sections.find(s => s.key === "idea") : undefined;
@@ -502,17 +461,42 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       }))
     : [];
 
-  const rows = sections.flatMap(s =>
-    s === ideen ? ideenGezeigt.flatMap(g => g.items)
-    : isSectionOpen(s.key) ? shownItems(s) : []);
+  // Aufräumen: Lange inaktiv und Kann weg in EINER Liste, neueste zuerst, nach
+  // Jahr. Vorgemerkte stehen durchgestrichen dazwischen, wo sie hingehören.
+  const aufraeumGezeigt = view === "cleanup"
+    ? jahresGruppen([...visible].sort((a, b) => b.modified_secs - a.modified_secs)).map(g => ({
+        key: `jahr-${g.key}`, label: g.label, total: g.items.length,
+        items: q || ideenOffen.has(`jahr-${g.key}`) ? g.items : g.items.slice(0, JAHR_LIMIT),
+      }))
+    : [];
 
-  const toggleSection = (key: SectionKey) => {
-    setCollapsed(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+  // Genau die Zeilen, die dastehen — in der Reihenfolge der Liste. Daraus wird
+  // die Hör-Queue, damit „Weiter" das nächste Projekt meint und nicht die
+  // Browse-Liste von vorhin.
+  const rows = view === "cleanup"
+    ? aufraeumGezeigt.flatMap(g => g.items)
+    : sections.flatMap(s => s === ideen ? ideenGezeigt.flatMap(g => g.items) : isShelf(s.key) ? s.items : []);
+
+  // „Behalten": raus aus dem Aufräumen. War es vorgemerkt, gilt wieder die
+  // automatische Stufe — behalten heißt auch: nicht löschen.
+  const handleKeep = async (p: StudioProject) => {
+    const vorher = projectsRef.current.find(x => x.path === p.path) ?? p;
+    const swap = (to: StudioProject) => setProjects(prev => prev.map(x => x.path === p.path ? to : x));
+    swap({ ...vorher, kept: true, status: vorher.status === "discard" ? deriveStage(vorher) : vorher.status });
+    try {
+      await api.studio.setKept(p.path, true);
+      if (vorher.status === "discard") {
+        await api.studio.updateProject(p.path, deriveStage(vorher), vorher.priority, vorher.notes);
+      }
+    } catch (e) {
+      swap(vorher);
+      melde(`Speichern fehlgeschlagen: ${String(e)}`);
+    }
   };
+
+  // „Kann weg" schaltet um: vormerken oder zurück zur automatischen Stufe.
+  const handleToss = (p: StudioProject) =>
+    patchProject(p, { status: p.status === "discard" ? deriveStage(p) : "discard" });
 
   // ── Tastatur: dieselbe Belegung wie im Archiv ──────────────────────────────
   // Die Zeilen waren nur mit der Maus erreichbar — anders als im Archiv, wo
@@ -626,10 +610,6 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     return () => clearTimeout(t);
   }, [inspectorProject]);
   const panelProject = inspectorProject ?? leaving;
-  // Ein Status-Chip, den die neue Ansicht nicht hat, darf die Liste nicht leeren.
-  useEffect(() => {
-    if (sectionFilter && !VIEW_SECTIONS[view].includes(sectionFilter)) setSectionFilter(null);
-  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onInspectorOpen?.(inspectorOpen); }, [inspectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keine Karte drumherum: die Werkbank steht wie im Mockup direkt auf der Seite.
@@ -641,41 +621,13 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       <ProjectsToolbar
         search={search}
         onSearch={setSearch}
-        chips={chips}
-        total={preStatus.length}
-        active={sectionFilter}
-        onActive={k => setSectionFilter(k as SectionKey | null)}
         roots={productionPaths}
         rootFilter={rootFilter}
         onRootFilter={setRootFilter}
-        sortMode={sortMode}
-        onSortMode={setSortMode}
-        showFilters={view === "cleanup"}
       >
         <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Produktions-Ordner neu einlesen">
           Scan
         </Button>
-        {view === "cleanup" && (
-          <Button
-            size="sm" variant="ghost" icon={FolderInput}
-            onClick={() => setShowMerge(true)}
-            disabled={productionPaths.length === 0}
-            title="Produktions-Ordner zusammenführen und nach Alter neu nummerieren"
-          >
-            Zusammenführen
-          </Button>
-        )}
-        {view === "cleanup" && (
-          <Button
-            size="sm" variant="ghost" icon={ListOrdered}
-            onClick={handleCloseGaps}
-            loading={isCleaning}
-            disabled={productionPaths.length === 0}
-            title="Nach Löschen im Explorer: Nummern lückenlos nachrücken lassen, Reihenfolge bleibt"
-          >
-            Lücken schließen
-          </Button>
-        )}
         <Button
           size="sm" variant="ghost" icon={FolderPlus}
           onClick={() => navigate("/create")}
@@ -735,7 +687,7 @@ Nummer läuft über alle Produktions-Ordner`}
       )}
 
       {/* Der eine Satz über der Werkbank — nur ungefiltert, sonst stimmt er nicht */}
-      {view === "work" && !q && !sectionFilter && !rootFilter && projects.length > 0 && (() => {
+      {view === "work" && !q && !rootFilter && projects.length > 0 && (() => {
         const satz = werkbankSatz(projects.filter(p => p.status !== "discard"), projectDisplayName);
         return (
           <div style={{ padding: "28px 16px 8px" }}>
@@ -774,82 +726,40 @@ Nummer läuft über alle Produktions-Ordner`}
         />
       )}
 
-      {/* Sections (Aufräumen) */}
-      {sections.filter(s => !isShelf(s.key) && s !== ideen).map(section => {
-        const isCollapsed = !isSectionOpen(section.key);
-        const shown = shownItems(section);
-        const hidden = section.items.length - shown.length;
-        return (
-          <div key={section.key}>
-            <button
-              onClick={() => !forcedOpen && toggleSection(section.key)}
-              style={{
-                width: "100%",
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "9px 16px",
-                background: "rgba(255,255,255,0.02)",
-                border: "none",
-                borderTop: `1px solid ${C.border10}`,
-                cursor: forcedOpen ? "default" : "pointer",
-                textAlign: "left",
-              }}
-            >
-              {section.key === "stale"
-                ? <Moon size={10} color={section.meta.color} strokeWidth={2} />
-                : section.key === "priority"
-                ? <Star size={10} color={section.meta.color} fill={section.meta.color} strokeWidth={2} />
-                : <span style={{ width: 7, height: 7, borderRadius: "50%", background: section.meta.color }} />
-              }
-              <span style={{
-                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
-                textTransform: "uppercase", color: C.onSurfaceVariant,
-              }}>
-                {section.meta.label}
-              </span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant }}>
-                {section.items.length}
-              </span>
-              <div style={{ flex: 1 }} />
-              {!forcedOpen && (
-                <ChevronDown
-                  size={12}
-                  color={C.onSecondaryFixedVar}
-                  style={{ transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)" }}
-                />
-              )}
-            </button>
-
-            {!isCollapsed && shown.map(p => (
-              <ProjectRow
-                key={p.path}
-                project={p}
-                isOpen={inspectorPath === p.path}
-                isSelected={selected.has(p.path)}
-                dimmed={section.key === "stale"}
-                onPatch={patch => patchProject(p, patch)}
-                onPreview={() => handlePreview(p)}
-                onOpen={e => handleRowClick(p, e)}
-              />
-            ))}
-
-            {!isCollapsed && hidden > 0 && (
-              <button
-                onClick={() => setExpanded(prev => new Set(prev).add(section.key))}
-                style={{
-                  width: "100%",
-                  padding: "10px 16px",
-                  background: "transparent",
-                  border: "none", borderTop: `1px solid ${C.border10}`,
-                  cursor: "pointer", textAlign: "left",
-                  fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant,
-                }}
-              >
-                … {hidden} {hidden === 1 ? "weiteres Projekt" : "weitere Projekte"} anzeigen
-              </button>
-            )}
-          </div>
-        );
-      })}
+      {view === "cleanup" && projects.length > 0 && (
+        <AufraeumListe
+          inaktiv={preStatus.length - vorgemerkt}
+          vorgemerkt={vorgemerkt}
+          filter={aufraeumFilter}
+          onFilter={setAufraeumFilter}
+          gruppen={aufraeumGezeigt}
+          onMore={key => setIdeenOffen(prev => new Set(prev).add(key))}
+          inspectorPath={inspectorPath}
+          selected={selected}
+          onOpen={handleRowClick}
+          onPreview={handlePreview}
+          onKeep={handleKeep}
+          onToss={handleToss}
+        >
+          <Button
+            size="sm" variant="ghost" icon={ListOrdered}
+            onClick={handleCloseGaps}
+            loading={isCleaning}
+            disabled={productionPaths.length === 0}
+            title="Nach Löschen im Explorer: Nummern lückenlos nachrücken lassen, Reihenfolge bleibt"
+          >
+            Lücken schließen
+          </Button>
+          <Button
+            size="sm" variant="ghost" icon={FolderInput}
+            onClick={() => setShowMerge(true)}
+            disabled={productionPaths.length === 0}
+            title="Produktions-Ordner zusammenführen und nach Alter neu nummerieren"
+          >
+            Zusammenführen
+          </Button>
+        </AufraeumListe>
+      )}
 
       {/* Solange etwas ausgewählt ist, gehört die Fußleiste der Auswahl — sonst
           stünden zwei Leisten übereinander und man drückt die falsche. */}
@@ -882,14 +792,17 @@ Nummer läuft über alle Produktions-Ordner`}
       )}
 
       {/* Aufräumen — der einzige laute Moment im Studio, und der einzige Weg,
-          auf dem mehrere Ordner auf einmal verschwinden. Steht am Fuß der
-          Liste, direkt unter dem, was er wegräumt. */}
+          auf dem mehrere Ordner auf einmal verschwinden. Schwebt unten über
+          der Liste, damit man bei 600 Zeilen nicht erst ans Ende scrollt. */}
       {view === "cleanup" && selected.size === 0 && discardable.length > 0 && (
         <div style={{
+          position: "sticky", bottom: 16, zIndex: 5,
           display: "flex", alignItems: "center", gap: 12,
-          padding: "12px 16px",
-          borderTop: `1px solid ${C.border20}`,
-          background: "rgba(255,255,255,0.02)",
+          margin: "28px 16px 0", padding: "14px 18px",
+          borderRadius: 12,
+          background: C.surfaceContainerHigh,
+          border: `1px solid ${C.border20}`,
+          boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
         }}>
           <Trash2 size={14} color={STUDIO_STATUS_CONFIG.discard.color} strokeWidth={1.75} />
           <div style={{ minWidth: 0 }}>

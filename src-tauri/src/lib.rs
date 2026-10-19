@@ -92,6 +92,7 @@ use commands::{
     // Studio commands
     scan_studio_projects,
     update_studio_project,
+    set_studio_kept,
     studio_status_counts,
     create_project_folder,
     next_project_name,
@@ -294,6 +295,7 @@ pub fn run() {
             // Studio
             scan_studio_projects,
             update_studio_project,
+            set_studio_kept,
             studio_status_counts,
             create_project_folder,
             next_project_name,

@@ -28,6 +28,7 @@ import { useFolderAssets, type FolderAssets } from "../../hooks/useFolderAssets"
 import { AssetPickerDialog, type AssetSlotKind } from "../AssetPickerDialog";
 import { PLAYER_HEIGHT } from "../GlobalAudioPlayer";
 import { ManualStatusToggles } from "./ProjectRow";
+import { CoverPlatzhalter } from "./CoverPlatzhalter";
 import { deriveStage, isManualStatus, projectDisplayName, projectExportName, projectFolderLabel } from "../../types/studio";
 import type { StudioProject } from "../../types/studio";
 
@@ -469,15 +470,14 @@ const SLOT_TITLE: Record<AssetSlotKind, string> = { cover: "Cover", thumbnail: "
 
 const fileNameOf = (path: string | null) => path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
 
-/** Das Cover über die ganze Panelbreite — oder, solange keins da ist, die
- *  Initialen im gestrichelten Rahmen. Klick: Cover aus den Assets holen. */
+/** Das Cover über die ganze Panelbreite — oder, solange keins da ist, der
+ *  Platzhalter mit Note. Klick: Cover aus den Assets holen. */
 function GrossesCover({ preview, title, disabled, onPick }: {
   preview: string | null;
   title: string;
   disabled: boolean;
   onPick: () => void;
 }) {
-  const initialen = title.split(/\s+/).map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase();
   return (
     <button
       onClick={onPick}
@@ -487,21 +487,15 @@ function GrossesCover({ preview, title, disabled, onPick }: {
       style={{
         width: "100%", aspectRatio: "1 / 1", flexShrink: 0,
         padding: 0, overflow: "hidden", borderRadius: radius.card,
-        background: "transparent",
-        border: preview ? "none" : `1px dashed ${C.outlineVariant}`,
+        background: "transparent", border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
-        display: "flex", flexDirection: "column", gap: 10,
-        alignItems: "center", justifyContent: "center",
-        color: C.onSurfaceVariant, fontSize: 13,
+        display: "block",
       }}
     >
       {preview ? (
         <img src={preview} alt={`Cover ${title}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
-        <>
-          <span style={{ fontSize: 44, fontWeight: 800, color: C.onSecondaryFixedVar }}>{initialen}</span>
-          Noch kein Cover
-        </>
+        <CoverPlatzhalter gross />
       )}
     </button>
   );

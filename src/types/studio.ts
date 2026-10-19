@@ -85,6 +85,8 @@ export interface StudioProject {
   status: StudioStatus;
   priority: number;
   notes: string | null;
+  /** Im Aufräumen „Behalten" gedrückt */
+  kept: boolean;
 }
 
 /** Die zwei Zahlen am Studio-Tab. */

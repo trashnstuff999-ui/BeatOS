@@ -445,6 +445,10 @@ pub fn init_db() -> Result<(), String> {
                     }
                 }
 
+                // Aufräumen → „Behalten" (Werkbank Scheibe 5). Nach dem Umbau
+                // oben, sonst fiele die Spalte dem SELECT * zum Opfer.
+                let _ = conn.execute("ALTER TABLE studio_projects ADD COLUMN kept INTEGER NOT NULL DEFAULT 0", []);
+
                 // Data repair: earlier archive scans stored 0.0 / '' instead
                 // of NULL, which poisons BPM filters.
                 // Idempotent, so safe to run on every start.

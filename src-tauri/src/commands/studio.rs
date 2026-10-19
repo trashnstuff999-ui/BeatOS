@@ -89,6 +89,8 @@ pub struct StudioProject {
     pub status: String,
     pub priority: i64,
     pub notes: Option<String>,
+    /// Im Aufräumen „Behalten" gedrückt — steht nicht mehr unter „Lange inaktiv"
+    pub kept: bool,
 }
 
 /// Scan all production roots for project folders (any direct subfolder
@@ -126,16 +128,16 @@ fn scan_studio_projects_blocking(paths: &[String]) -> Result<Vec<StudioProject>,
 
     // Merge with DB state + drop orphaned rows (folder gone = archived/deleted)
     let conn = open_db().map_err(|e| e.to_string())?;
-    let mut db_state: HashMap<String, (String, i64, Option<String>)> = HashMap::new();
+    let mut db_state: HashMap<String, (String, i64, Option<String>, bool)> = HashMap::new();
     {
         let mut stmt = conn
-            .prepare("SELECT path, status, priority, notes FROM studio_projects")
+            .prepare("SELECT path, status, priority, notes, kept FROM studio_projects")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
-                    (r.get::<_, String>(1)?, r.get::<_, i64>(2)?, r.get::<_, Option<String>>(3)?),
+                    (r.get::<_, String>(1)?, r.get::<_, i64>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, i64>(4)? != 0),
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -159,9 +161,10 @@ fn scan_studio_projects_blocking(paths: &[String]) -> Result<Vec<StudioProject>,
     for p in &mut projects {
         let derived = derive_stage(p.has_mp3, p.has_wav, p.has_cover, p.has_thumbnail, p.has_video);
         match db_state.get(&p.path) {
-            Some((status, priority, notes)) => {
+            Some((status, priority, notes, kept)) => {
                 p.priority = *priority;
                 p.notes = notes.clone();
+                p.kept = *kept;
                 p.status = resolve_status(Some(status), derived);
                 // Nur bei Abweichung schreiben — der Scan läuft bei jedem
                 // Fensterwechsel über alle Produktions-Ordner.
@@ -329,6 +332,7 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         status: "idea".to_string(),
         priority: 0,
         notes: None,
+        kept: false,
     })
 }
 
@@ -352,6 +356,19 @@ pub fn update_studio_project(
             priority = excluded.priority,
             notes = excluded.notes",
         rusqlite::params![path, status, priority, notes],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Aufräumen → „Behalten": das Projekt bleibt, fällt aber aus „Lange inaktiv".
+#[tauri::command]
+pub fn set_studio_kept(path: String, kept: bool) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO studio_projects (path, kept) VALUES (?1, ?2)
+         ON CONFLICT(path) DO UPDATE SET kept = excluded.kept",
+        rusqlite::params![path, kept as i64],
     )
     .map_err(|e| e.to_string())?;
     Ok(())

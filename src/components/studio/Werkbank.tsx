@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { CoverPlatzhalter } from "./CoverPlatzhalter";
 import { Play, Star } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
@@ -102,7 +103,6 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
   const title = projectDisplayName(p);
   const canPreview = p.has_mp3 || p.has_wav;
   const bild = p.cover_path && !bildKaputt ? convertFileSrc(p.cover_path.replace(/\\/g, "/")) : null;
-  const initialen = title.split(/\s+/).map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase();
   const meta = [p.key, p.bpm != null ? `${p.bpm} BPM` : null].filter(Boolean).join(" · ") || formatRelativeTime(p.modified_secs);
   const fehlend = fehlt(p);
   const notiz = p.notes?.split("\n").map(l => l.trim()).find(Boolean) ?? null;
@@ -143,14 +143,7 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
             <img src={bild} alt="" onError={() => setBildKaputt(true)}
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : (
-            <div style={{
-              width: "100%", height: "100%", boxSizing: "border-box", borderRadius: 10,
-              background: C.surfaceContainerLow, border: `1px dashed ${C.outlineVariant}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 34, fontWeight: 800, color: C.outlineVariant,
-            }}>
-              {initialen}
-            </div>
+            <CoverPlatzhalter />
           )}
         </div>
         <span title={title} style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

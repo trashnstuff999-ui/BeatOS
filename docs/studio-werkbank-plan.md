@@ -20,5 +20,5 @@ Scheiben, jede einzeln ansehen lassen:
       Hauptknopf; Status-Chips entfallen (die Regale sind die Einteilung).
 - [x] 4. **Detailpanel**: großes Cover, „Weg zum Upload" als Checkliste mit
       „Aus Assets" bei fehlenden Dateien.
-- [ ] 5. **Aufräumen**: Satz oben, nach Jahr gruppiert, pro Zeile Behalten /
+- [x] 5. **Aufräumen**: Satz oben, nach Jahr gruppiert, pro Zeile Behalten /
       Kann weg, Leiste unten „N vorgemerkt → In den Papierkorb".

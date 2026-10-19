@@ -45,7 +45,7 @@ function project(over: Partial<StudioProject> & { name: string }): StudioProject
     modified_date: "2026-08-29", modified_secs: NOW - DAY,
     has_mp3: false, has_wav: false, has_cover: false, cover_path: null,
     has_thumbnail: false, has_video: false,
-    status: "idea", priority: 0, notes: null,
+    status: "idea", priority: 0, notes: null, kept: false,
     ...over,
   };
 }
@@ -263,10 +263,12 @@ describe("Scheibe 7 — namenlose Projekte zeigen ihre Notiz", () => {
   });
 });
 
-describe("B7 — Chips und Sektionen zählen dasselbe (nur noch im Aufräumen)", () => {
-  const RAUS = project({ name: "Project_300", status: "discard" });
+describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
+  // Titel aus dem Ordnernamen: „Project_300 - Alt" → Nummer 300, Titel „Alt"
+  const RAUS = project({ name: "Project_300 - Alt", status: "discard", modified_secs: NOW - 400 * DAY });
+  const ALT = project({ name: "Project_12 - Staub", modified_secs: NOW - 300 * DAY });
 
-  it("Projekte zeigt keine Chips mehr — die Regale sind die Einteilung", async () => {
+  it("Projekte zeigt keine Status-Chips und kein Sortier-Menü mehr", async () => {
     stubInvoke();
     renderProjects();
     await screen.findByText("ARE YOU HERE");
@@ -274,44 +276,50 @@ describe("B7 — Chips und Sektionen zählen dasselbe (nur noch im Aufräumen)",
     expect(screen.queryByText("Zuletzt bearbeitet")).not.toBeInTheDocument();
   });
 
-  it("zählt über die gesuchte Menge, nicht über alle Projekte", async () => {
-    stubInvoke([], [ALTE_IDEE_OHNE_STERN, RAUS]);
+  it("Umschalter zählt die gesuchte Menge und zeigt auf Wunsch nur das Vorgemerkte", async () => {
+    stubInvoke([], [ALT, RAUS]);
     const user = userEvent.setup();
     renderProjects("cleanup");
-    expect(await screen.findByText("Alle (2)")).toBeInTheDocument();
-    expect(screen.getByText("Lange inaktiv (1)")).toBeInTheDocument();
-    expect(screen.getByText("Kann weg (1)")).toBeInTheDocument();
+    expect(await screen.findByText("1 Idee hast du seit über 30 Tagen nicht angefasst.")).toBeInTheDocument();
+    expect(screen.getByText("Lange inaktiv · 2")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Kann weg · 1"));
+    await waitFor(() => expect(screen.queryByText("Staub")).not.toBeInTheDocument());
+    expect(screen.getByText("Alt")).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "Project_12");
-    await waitFor(() => expect(screen.getByText("Alle (1)")).toBeInTheDocument());
-    expect(screen.getByText("Kann weg (0)")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Kann weg · 0")).toBeInTheDocument());
   });
 
-  it("zeigt nach Klick auf einen Chip genau seine Sektion", async () => {
-    stubInvoke([], [ALTE_IDEE_OHNE_STERN, RAUS]);
+  it("„Behalten“ nimmt die Idee aus der Liste und merkt es sich", async () => {
+    stubInvoke([], [ALT]);
     const user = userEvent.setup();
     renderProjects("cleanup");
-    await user.click(await screen.findByText("Kann weg (1)"));
-    await waitFor(() => expect(screen.queryByText("Project_12")).not.toBeInTheDocument());
-    expect(screen.getByText("Project_300")).toBeInTheDocument();
-  });
-});
+    await screen.findByText("Staub");
+    await user.click(screen.getByRole("button", { name: "Behalten" }));
 
-describe("B4 — „Priorität zuerst“ ist raus", () => {
-  it("bietet den wirkungslosen Sortiermodus nicht mehr an", async () => {
-    stubInvoke([], [ALTE_IDEE_OHNE_STERN]);
+    await waitFor(() => expect(screen.queryByText("Staub")).not.toBeInTheDocument());
+    expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_kept")).toEqual([
+      ["set_studio_kept", { path: ALT.path, kept: true }],
+    ]);
+  });
+
+  it("„Kann weg“ merkt vor und nimmt es beim zweiten Klick zurück", async () => {
+    stubInvoke([], [ALT]);
     const user = userEvent.setup();
     renderProjects("cleanup");
-    await user.click(await screen.findByText("Zuletzt bearbeitet"));
-    expect(screen.getByText("Name A–Z")).toBeInTheDocument();
-    expect(screen.queryByText("Priorität zuerst")).not.toBeInTheDocument();
-  });
+    await screen.findByText("Staub");
+    const knopf = screen.getByRole("button", { name: "Kann weg" });
+    await user.click(knopf);
+    expect(await screen.findByText("1 Projekt kann weg")).toBeInTheDocument();
+    expect(knopf).toHaveAttribute("aria-pressed", "true");
 
-  it("fällt auf den Standard zurück, wenn „priority“ noch gespeichert ist", async () => {
-    localStorage.setItem("beatos_studio_sort", "priority");
-    stubInvoke([], [ALTE_IDEE_OHNE_STERN]);
-    renderProjects("cleanup");
-    expect(await screen.findByText("Zuletzt bearbeitet")).toBeInTheDocument();
+    await user.click(knopf);
+    await waitFor(() => expect(screen.queryByText("1 Projekt kann weg")).not.toBeInTheDocument());
+    const status = vi.mocked(invoke).mock.calls
+      .filter(c => c[0] === "update_studio_project")
+      .map(c => (c[1] as { status: string }).status);
+    expect(status).toEqual(["discard", "idea"]);
   });
 });
 

@@ -76,3 +76,15 @@ export function ideenGruppen(items: StudioProject[], nachName: boolean): IdeenGr
   }
   return gruppen;
 }
+
+/** Aufräumen: nach Jahr der letzten Änderung. Wie oben — sortiert wird vorher. */
+export function jahresGruppen(items: StudioProject[]): IdeenGruppe[] {
+  const gruppen: IdeenGruppe[] = [];
+  for (const p of items) {
+    const key = String(new Date(p.modified_secs * 1000).getFullYear());
+    const g = gruppen[gruppen.length - 1];
+    if (g && g.key === key) g.items.push(p);
+    else gruppen.push({ key, label: key, items: [p] });
+  }
+  return gruppen;
+}
