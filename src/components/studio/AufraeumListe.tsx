@@ -1,6 +1,6 @@
 // src/components/studio/AufraeumListe.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Aufräumen: ein Satz oben, nach Jahr gruppiert, pro Zeile „Behalten" und
+// Aufräumen: eine Leiste oben, nach Jahr gruppiert, pro Zeile „Behalten" und
 // „Kann weg". Behalten nimmt die Idee aus der Liste (sie bleibt eine Idee),
 // Kann weg merkt sie für den Papierkorb vor — gelöscht wird erst gesammelt
 // über die Leiste unten.
@@ -42,41 +42,15 @@ interface AufraeumListeProps {
   skizzenGrenze: number;
   onSkizzenGrenze: (min: number) => void;
   onSkizzenVormerken: () => void;
-  /** Lücken schließen, Zusammenführen — rechts neben dem Umschalter */
-  children?: React.ReactNode;
 }
 
 export function AufraeumListe({
   inaktiv, vorgemerkt, filter, onFilter, sort, onSort, gruppen, onMore,
   inspectorPath, selected, onOpen, onPreview, onOpenDaw, onKeep, onToss,
-  skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken, children,
+  skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken,
 }: AufraeumListeProps) {
   return (
-    <section aria-label="Aufräumen" style={{ padding: "20px 16px 0" }}>
-      {/* Die offensichtlichen Fälle auf einen Schlag — als schlichte Zeile, nur
-          wenn es welche gibt. Gelöscht wird erst über die Leiste unten. */}
-      {filter === "alle" && skizzen.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-          <span title="Ideen mit Notiz bleiben draußen. Vorgemerkt heißt noch nicht gelöscht."
-            style={{ fontSize: 13, color: C.onSurfaceVariant }}>
-            {`${skizzen.length} ${skizzen.length === 1 ? "Skizze" : "Skizzen"}: unter ${skizzenGrenze} min in FL, älter als ein Jahr, nie exportiert`}
-          </span>
-          <Segmented
-            label="Grenze für Skizzen"
-            value={String(skizzenGrenze)}
-            onChange={v => onSkizzenGrenze(Number(v))}
-            options={[
-              { value: "15", label: "15 min" },
-              { value: "20", label: "20 min" },
-              { value: "30", label: "30 min" },
-            ]}
-          />
-          <Button size="sm" variant="ghost" onClick={onSkizzenVormerken}>
-            {`Alle ${skizzen.length} vormerken`}
-          </Button>
-        </div>
-      )}
-
+    <section aria-label="Aufräumen" style={{ padding: "20px 16px 0", maxWidth: 1100 }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
         paddingBottom: 12, borderBottom: `1px solid ${C.border20}`,
@@ -102,7 +76,24 @@ export function AufraeumListe({
           ]}
         />
         <div style={{ flex: 1 }} />
-        {children}
+        {/* Skizzen: älter als ein Jahr, kein Export, keine Notiz, kurze Arbeitszeit */}
+        {filter === "alle" && (<>
+          <span style={{ fontSize: 13, color: C.onSurfaceVariant }}>Arbeitszeit unter</span>
+          <Segmented
+            label="Arbeitszeit unter"
+            value={String(skizzenGrenze)}
+            onChange={v => onSkizzenGrenze(Number(v))}
+            options={[
+              { value: "15", label: "15 min" },
+              { value: "20", label: "20 min" },
+              { value: "30", label: "30 min" },
+            ]}
+          />
+          <Button size="sm" variant="ghost" onClick={onSkizzenVormerken} disabled={skizzen.length === 0}
+            title="Älter als ein Jahr, ohne Export und Notiz">
+            {`${skizzen.length} vormerken`}
+          </Button>
+        </>)}
       </div>
 
       {gruppen.map(g => (
@@ -161,7 +152,6 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
   const neben = [
     p.flp_count > 1 ? `${p.flp_count} Versionen` : null,
     p.key, p.bpm != null ? `${p.bpm} BPM` : null,
-    canPreview ? null : "kein Export",
   ].filter(Boolean).join(" · ");
 
   return (
@@ -175,7 +165,7 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
         onClick={() => { if (canPreview) onPreview(); else if (canDaw) onOpenDaw(); }}
         disabled={!kannWas}
         aria-label={canPreview ? "Export anhören" : canDaw ? "In FL öffnen" : "Keine FLP im Ordner"}
-        title={canPreview ? "Export anhören" : canDaw ? "Kein Export — in FL öffnen und reinhören" : "Weder Export noch FLP im Ordner"}
+        title={canPreview ? "Anhören" : canDaw ? "In FL öffnen" : "Keine FLP"}
         style={{
           flex: "0 0 36px", width: 36, height: 36, borderRadius: "50%", border: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -190,7 +180,7 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
       </button>
       <button
         onClick={onOpen}
-        title="Details, Notizen und Assets öffnen — mit Strg oder Shift auswählen"
+        title="Details · Strg/Shift: auswählen"
         style={{
           flex: 1, minWidth: 0, minHeight: 48, display: "flex", alignItems: "center", gap: 12,
           padding: "0 12px", border: "none", borderRadius: 8, textAlign: "left", color: "inherit",
@@ -213,21 +203,21 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
           <span style={{ fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{neben}</span>
         </span>
         {/* Eigene Spalte, rechtsbündig — so liest man sie untereinander */}
-        <span title="Arbeitszeit in FL Studio" style={{
+        <span title="Arbeitszeit" style={{
           flex: "0 0 96px", textAlign: "right", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600,
           fontVariantNumeric: "tabular-nums", color: p.work_minutes != null ? C.onSurface : C.onSecondaryFixedVar,
         }}>
           {p.work_minutes != null ? arbeitszeit(p.work_minutes) : "–"}
         </span>
-        <span title={p.modified_date ?? undefined} style={{ flex: "0 0 150px", textAlign: "right", fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>
-          zuletzt {formatRelativeTime(p.modified_secs)}
+        <span title={p.modified_date ?? undefined} style={{ flex: "0 0 120px", textAlign: "right", fontSize: 13, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>
+          {formatRelativeTime(p.modified_secs)}
         </span>
       </button>
       <div style={{ display: "flex", gap: 6, flex: "0 0 auto", paddingLeft: 8 }}>
-        <Pille onClick={onKeep} farbe={C.mint} an={false} title="Bleibt eine Idee, steht aber nicht mehr im Aufräumen">
+        <Pille onClick={onKeep} farbe={C.mint} an={false} title="Aus dem Aufräumen nehmen">
           Behalten
         </Pille>
-        <Pille onClick={onToss} farbe={C.error} an={weg} title={weg ? "Doch nicht löschen" : "Zum Löschen vormerken"}>
+        <Pille onClick={onToss} farbe={C.error} an={weg} title={weg ? "Nicht löschen" : "Zum Löschen vormerken"}>
           Kann weg
         </Pille>
       </div>

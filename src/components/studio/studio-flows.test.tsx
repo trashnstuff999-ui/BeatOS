@@ -144,7 +144,7 @@ function sectionHeadings(): string[] {
  */
 function rowOf(name: string): HTMLElement {
   for (const treffer of screen.getAllByText(name)) {
-    const row = treffer.closest('[title^="Details, Notizen und Assets öffnen"]');
+    const row = treffer.closest('[title^="Details · Strg"]');
     if (row) return row as HTMLElement;
   }
   throw new Error(`Keine Zeile für „${name}" gefunden`);
@@ -351,7 +351,7 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     // Arbeitszeit als eigene Spalte
     expect(await screen.findByText("12 min")).toBeInTheDocument();
     expect(screen.getByText("1 h 35 min")).toBeInTheDocument();
-    expect(screen.getByText("1 Skizze: unter 20 min in FL, älter als ein Jahr, nie exportiert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1 vormerken" })).toBeEnabled();
 
     // Nach Arbeitszeit sortiert: Gruppen nach Spanne, Längste zuerst
     await user.click(screen.getByRole("radio", { name: "Längste" }));
@@ -360,7 +360,7 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     await user.click(screen.getByRole("radio", { name: "Kürzeste" }));
     await waitFor(() => expect(koepfe()).toEqual(["Unter 15 min", "1–2 h"]));
 
-    await user.click(screen.getByRole("button", { name: "Alle 1 vormerken" }));
+    await user.click(screen.getByRole("button", { name: "1 vormerken" }));
     expect(await screen.findByText("1 Projekt kann weg")).toBeInTheDocument();
     expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "update_studio_project")).toEqual([
       ["update_studio_project", { path: SKIZZE.path, status: "discard", priority: 0, notes: null }],
@@ -492,7 +492,7 @@ describe("F2 — der Assets-Tab zeigt die Inbox", () => {
   it("sagt es, wenn kein Asset-Pfad gesetzt ist", async () => {
     stubInvoke([]);
     renderAssets({ assetPath: "" });
-    expect(await screen.findByText(/Kein Asset-Pfad gesetzt/)).toBeInTheDocument();
+    expect(await screen.findByText(/Kein Asset-Pfad/)).toBeInTheDocument();
   });
 });
 
@@ -529,7 +529,7 @@ describe("Der Assets-Tab hat keine tab-übergreifende Auswahl mehr", () => {
 
 /** Alle sichtbaren Projektzeilen in DOM-Reihenfolge. */
 function rows(): HTMLElement[] {
-  return screen.queryAllByTitle(/^Details, Notizen und Assets öffnen/);
+  return screen.queryAllByTitle(/^Details · Strg/);
 }
 
 describe("Q1 — Mehrfachauswahl für die Triage", () => {
@@ -701,7 +701,7 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    await userEvent.click(screen.getByTitle(/aus einer vorhandenen FLP/i));
+    await userEvent.click(screen.getByTitle(/Kopie einer FLP/i));
 
     // Keine Template-FLP in den Einstellungen — die Vorlage aus dem Dialog
     // muss trotzdem durchgehen, und der Name kommt weiter aus der Nummernvergabe.
@@ -719,7 +719,7 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    await userEvent.click(screen.getByTitle(/aus einer vorhandenen FLP/i));
+    await userEvent.click(screen.getByTitle(/Kopie einer FLP/i));
     expect(calls["create_project_folder"]).toBeUndefined();
   });
 });

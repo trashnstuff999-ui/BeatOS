@@ -44,7 +44,7 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.onSecondaryFixedVar }} />
         <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", color: C.onSurface }}>IDEEN</h2>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>{total}</span>
-        <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>angefangen, noch nicht exportiert</span>
+        <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>ohne Export</span>
         <div style={{ flex: 1 }} />
         <Segmented
           label="Sortierung der Ideen"
@@ -128,7 +128,7 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
       </button>
       <button
         onClick={onOpen}
-        title="Details, Notizen und Assets öffnen — mit Strg oder Shift auswählen"
+        title="Details · Strg/Shift: auswählen"
         style={{
           flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", gap: 12,
           padding: "0 12px", border: "none", borderRadius: 8, textAlign: "left", color: "inherit",
@@ -164,7 +164,7 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
       {/* Nur beim Drüberfahren — Platz bleibt, damit die Zeile nicht springt */}
       <span style={{ flex: "0 0 auto", opacity: hovered ? 1 : 0, transition: "opacity 0.15s" }}>
         <Button variant="ghost" size="sm" icon={Hourglass} onClick={onAufraeumen} tabIndex={hovered ? 0 : -1}
-          title="Ins Aufräumen schieben — dort entscheiden, ob es bleibt oder weg kann">
+          title="Ins Aufräumen">
           Ins Aufräumen
         </Button>
       </span>

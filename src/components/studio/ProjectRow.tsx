@@ -96,10 +96,10 @@ export function ManualStatusToggles({ project: p, onPatch, variant }: {
               onPatch({ status: active ? deriveStage(p) : s });
             }}
             title={active
-              ? `„${m.label}“ aufheben — dann gilt wieder die automatische Stufe`
+              ? `„${m.label}“ aufheben`
               : s === "wip"
-                ? "Merken: da will ich nochmal ran"
-                : "Zum Löschen vormerken — weg ist der Ordner erst mit dem Papierkorb-Lauf"}
+                ? "Überarbeiten"
+                : "Zum Löschen vormerken"}
             style={{
               padding: gross ? "5px 11px" : "3px 9px", borderRadius: radius.full,
               background: active ? m.bg : "transparent",

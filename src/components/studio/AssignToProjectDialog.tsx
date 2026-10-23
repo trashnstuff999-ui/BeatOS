@@ -143,7 +143,7 @@ export function AssignToProjectDialog({
 
           {isVideo ? (
             <div style={{ fontSize: 12, color: C.onSurfaceVariant }}>
-              Videodatei — geht in den Video-Slot.
+              Video-Slot
             </div>
           ) : (
             <Segmented
@@ -184,7 +184,7 @@ export function AssignToProjectDialog({
         {visible.length === 0 && (
           <div style={{ padding: "28px 16px", textAlign: "center", fontSize: 12, color: C.onSurfaceVariant }}>
             {projects.length === 0
-              ? "Keine Projekte geladen — erst im Projekte-Tab scannen."
+              ? "Keine Projekte geladen"
               : "Kein Projekt passt zur Suche."}
           </div>
         )}
@@ -203,7 +203,7 @@ export function AssignToProjectDialog({
       {/* Stumm abzuschneiden hieß: „mein Projekt ist weg". */}
       {total > visible.length && (
         <div style={{ paddingTop: 10, fontSize: 11, color: C.onSecondaryFixedVar, textAlign: "center" }}>
-          {visible.length} von {total} — für die übrigen die Suche benutzen
+          {visible.length} von {total}
         </div>
       )}
     </Modal>

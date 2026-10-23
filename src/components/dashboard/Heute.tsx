@@ -132,27 +132,27 @@ export function Heute({ actions, recent, refreshKey }: {
   let titel: string;
   let satz: string;
   if (rhythmus.length === 0) {
-    titel = "Noch kein Upload-Rhythmus festgelegt.";
-    satz = "Leg in der Planung im Upload-Tab fest, an welchen Tagen du hochlädst — dann steht hier, wie viele Beats bis dahin fertig werden müssen.";
+    titel = "Kein Upload-Rhythmus";
+    satz = "Upload-Tage im Upload-Tab unter Planung festlegen";
   } else {
-    titel = `Diese Woche: ${draussen} von ${soll} ${mehrzahl(soll, "Upload", "Uploads")} draußen.`;
+    titel = `Diese Woche: ${draussen} von ${soll} ${mehrzahl(soll, "Upload", "Uploads")} draußen`;
     const offen = offenDiese.length ? offenDiese : offenNaechste;
-    const wann = offenDiese.length ? "Diese Woche ist noch" : "Nächste Woche ist";
-    const wannViele = offenDiese.length ? "Diese Woche sind noch" : "Nächste Woche sind";
-    satz = offen.length === 0
-      ? "Diese und nächste Woche sind alle Upload-Tage belegt."
-      : `${offen.length === 1 ? wann : wannViele} ${tageAufzaehlen(offen.map(t => t.wochentag))} frei — dafür ${mehrzahl(offen.length, "muss 1 Beat", `müssen ${offen.length} Beats`)} fertig werden.`;
-    satz += bereit.length === 0 ? " Komplett bereit ist gerade keiner."
-      : bereit.length === 1 ? ` Komplett bereit ist bisher nur ${bereit[0].name}.`
-      : ` Komplett bereit sind ${bereit.length}.`;
+    const tage = tageAufzaehlen(offen.map(t => t.wochentag));
+    satz = [
+      offen.length === 0 ? "Alle Upload-Tage belegt"
+        : offenDiese.length ? `${tage} noch offen` : `Nächste Woche ${tage} offen`,
+      bereit.length === 0 ? "kein Beat bereit"
+        : bereit.length === 1 ? `${bereit[0].name} bereit`
+        : `${bereit.length} Beats bereit`,
+    ].join(" · ");
   }
 
   const serie = actions.current_streak_weeks;
   const hinweis = rhythmus.length === 0 ? null
     : draussen === 0 && diese.every(t => t.beats.length === 0)
-      ? { text: "Serie in Gefahr: diese Woche ist noch nichts draußen", gut: false }
+      ? { text: "Serie in Gefahr", gut: false }
       : naechsteLeer
-        ? { text: "Für nächste Woche ist noch nichts geplant", gut: false }
+        ? { text: "Nächste Woche nichts geplant", gut: false }
         : { text: "Serie gesichert", gut: true };
 
   const einplanen = async (tag = freierTag) => {
@@ -244,7 +244,7 @@ export function Heute({ actions, recent, refreshKey }: {
 
       {ausgeblendet && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, fontSize: 13, color: C.onSurfaceVariant }}>
-          „{ausgeblendet.name}" wird nicht mehr zum Hochladen vorgeschlagen.
+          „{ausgeblendet.name}" ausgeblendet
           <Button size="sm" variant="ghost" onClick={zurueckholen}>Rückgängig</Button>
         </div>
       )}
@@ -290,7 +290,7 @@ export function Heute({ actions, recent, refreshKey }: {
                   <Button variant="primary" loading={planen} onClick={() => einplanen()}>Auf {tagMonat(freierTag)} planen</Button>
                 )}
                 <Button variant="secondary" onClick={() => zumUpload(held.id)}>Zum Upload</Button>
-                <Button variant="ghost" onClick={() => ausblenden(held)} title="Nicht mehr in der Übersicht und in der Planung vorschlagen">Nicht hochladen</Button>
+                <Button variant="ghost" onClick={() => ausblenden(held)} title="Nicht mehr vorschlagen">Nicht hochladen</Button>
               </div>
             </div>
             <Reinhoeren beatId={held.id} name={held.name} cover={held.cover} />
@@ -310,7 +310,7 @@ export function Heute({ actions, recent, refreshKey }: {
               {/* Scrollt waagerecht und schneidet damit auch oben ab — der Rand
                   oben gibt dem Anheben beim Hover Platz. */}
               {regal.map(q => (
-                <button key={q.id} className="ue-hebt" title={`${q.name} oben anhören`}
+                <button key={q.id} className="ue-hebt" title={`${q.name} oben zeigen`}
                   onClick={() => { setGewaehlt(q.id); heldRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }}
                   style={{ flex: "0 0 150px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}>
                   {q.cover
@@ -326,7 +326,7 @@ export function Heute({ actions, recent, refreshKey }: {
           )}
           {(actions.studio_by_status.exported ?? 0) > 0 && (
             <div style={{ marginTop: 18, fontSize: 13, color: C.onSurfaceVariant }}>
-              Davor im Studio: <strong style={{ color: C.onSurface }}>{actions.studio_by_status.exported} {mehrzahl(actions.studio_by_status.exported, "Projekt", "Projekte")} exportiert</strong>, noch nicht archiviert ·{" "}
+              Im Studio: <strong style={{ color: C.onSurface }}>{actions.studio_by_status.exported} {mehrzahl(actions.studio_by_status.exported, "Projekt", "Projekte")} exportiert</strong>, nicht archiviert ·{" "}
               <Button size="sm" variant="ghost" onClick={() => navigate("/studio")}>Zum Studio</Button>
             </div>
           )}
@@ -338,22 +338,22 @@ export function Heute({ actions, recent, refreshKey }: {
         <div>
           <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Liegengeblieben</h2>
           {liegen === null && <Leise>Studio wird gelesen …</Leise>}
-          {liegen?.length === 0 && <Leise>Nichts — alles in Arbeit ist frisch.</Leise>}
+          {liegen?.length === 0 && <Leise>Nichts liegengeblieben</Leise>}
           {liegen?.slice(0, 3).map(p => (
             <Zeile key={p.path} onClick={() => p.newest_flp && openPath(p.newest_flp)} title={p.newest_flp ? "In FL Studio öffnen" : "Keine FLP gefunden"}>
               <span style={{ fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.song_name ?? p.parsed_name ?? p.name}</span>
               <span style={{ color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>seit {Math.floor((jetzt - p.modified_secs) / 86400)} Tagen</span>
             </Zeile>
           ))}
-          {liegen && liegen.length > 3 && <Leise>+ {liegen.length - 3} weitere seit über 30 Tagen in Arbeit</Leise>}
+          {liegen && liegen.length > 3 && <Leise>+ {liegen.length - 3} weitere</Leise>}
         </div>
 
         <div>
           <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Künstler · offen</h2>
           {songs === null && <Leise>Künstler werden gelesen …</Leise>}
-          {songs?.length === 0 && <Leise>Alles abgegeben.</Leise>}
+          {songs?.length === 0 && <Leise>Alles abgegeben</Leise>}
           {songs?.slice(0, 3).map(({ kuenstler, song }) => (
-            <Zeile key={song.path} onClick={() => navigate("/studio", { state: { tab: "artists" } })} title="Im Studio unter Künstler öffnen">
+            <Zeile key={song.path} onClick={() => navigate("/studio", { state: { tab: "artists" } })} title="Im Studio öffnen">
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={{ color: C.onSecondaryFixedVar }}>{kuenstler} · </span>
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{song.name}</span>
@@ -363,14 +363,14 @@ export function Heute({ actions, recent, refreshKey }: {
               </span>
             </Zeile>
           ))}
-          {songs && songs.length > 3 && <Leise>+ {songs.length - 3} weitere offene Songs</Leise>}
+          {songs && songs.length > 3 && <Leise>+ {songs.length - 3} weitere</Leise>}
         </div>
 
         <div>
           <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Diese Woche geschafft</h2>
-          {geschafft.length === 0 && <Leise>Noch nichts — die Woche ist jung.</Leise>}
+          {geschafft.length === 0 && <Leise>Noch nichts</Leise>}
           {geschafft.map(g => (
-            <Zeile key={g.key} onClick={() => zumUpload(g.id)} title={`${g.name} im Upload-Tab öffnen`}>
+            <Zeile key={g.key} onClick={() => zumUpload(g.id)} title="Im Upload öffnen">
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={{ color: g.art === "hoch" ? C.mint : C.primary }}>{g.art === "hoch" ? "↑ " : "+ "}</span>
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{g.name}</span>
@@ -408,7 +408,7 @@ function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
         {KURZ[tag.wochentag]} <span style={{ fontWeight: 500, color: C.onSecondaryFixedVar }}>{Number(tag.iso.slice(8, 10))}.</span>
       </div>
       {beat ? (<>
-        <button className="ue-hebt" onClick={() => onOpen(beat.id)} title={`${beat.name} im Upload-Tab öffnen`}
+        <button className="ue-hebt" onClick={() => onOpen(beat.id)} title="Im Upload öffnen"
           style={{ background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           {beat.cover
             ? <img src={bild(beat.cover)} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, display: "block" }} />
@@ -421,10 +421,10 @@ function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
           </span>
         </button>
         {!beat.hochgeladen && !tag.vorbei && (
-          <Button size="sm" variant="ghost" onClick={() => onLoesen(beat.id)} title={`Termin von ${beat.name} entfernen`}>Termin lösen</Button>
+          <Button size="sm" variant="ghost" onClick={() => onLoesen(beat.id)} title="Termin entfernen">Termin lösen</Button>
         )}
       </>) : tag.uploadTag && !tag.vorbei && planName ? (
-        <button className="ue-hell" onClick={() => onPlan(tag.iso)} title={`${planName} an diesem Tag planen`} style={{
+        <button className="ue-hell" onClick={() => onPlan(tag.iso)} title={`${planName} hier planen`} style={{
           ...quadrat, width: "100%", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600,
           border: `1.5px dashed ${alpha(C.primary, 0.55)}`, color: C.primary, background: alpha(C.primary, 0.05),
         }}>

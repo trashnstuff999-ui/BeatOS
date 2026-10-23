@@ -193,7 +193,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
           // was durchgeht — es ist dieselbe Liste, die der Ordner später liest.
           if (event.payload.paths.length > 0) {
             melde(
-              `Nichts übernommen — in einen Slot passen nur:\n` +
+              `Nicht übernommen. Erlaubt:\n` +
               `${IMAGE_EXT.join(", ")} · ${VIDEO_EXT.join(", ")}`
             );
           }
@@ -289,7 +289,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
               grau auf grau, dazu ein Umbenennen-Stift, den niemand brauchte. */}
           <div
             title={p.song_name?.trim()
-              ? "Titel kommt aus dem Export — zum Ändern die MP3/WAV umbenennen"
+              ? "Titel aus dem Export"
               : undefined}
             style={{ fontSize: 18, fontWeight: 700, color: C.onSurface, lineHeight: 1.25, wordBreak: "break-word" }}
           >
@@ -298,7 +298,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
 
           {duplicate && (
             <div
-              title="Nur ein Hinweis — archivieren lässt sich das Projekt trotzdem"
+              title="Nur Hinweis"
               style={{
                 display: "flex", alignItems: "center", gap: 6, marginTop: 6,
                 fontSize: 12, color: C.primary,
@@ -385,7 +385,7 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
               <button
                 key={flp.path}
                 onClick={() => openPath(flp.path).catch(e => melde(`FLP konnte nicht geöffnet werden: ${String(e)}`))}
-                title={`${flp.name} — in FL Studio öffnen`}
+                title={`${flp.name} öffnen`}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "7px 8px",

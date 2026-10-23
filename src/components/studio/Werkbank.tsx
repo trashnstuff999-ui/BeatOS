@@ -132,7 +132,7 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview, onAu
     >
       <button
         onClick={onOpen}
-        title="Details, Notizen und Assets öffnen — mit Strg oder Shift auswählen"
+        title="Details · Strg/Shift: auswählen"
         style={{
           width: KACHEL, background: "none", border: "none", padding: 0, textAlign: "left",
           color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
@@ -187,7 +187,7 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview, onAu
       <button
         onClick={onAufraeumen}
         aria-label="Ins Aufräumen"
-        title="Ins Aufräumen schieben — dort entscheiden, ob es bleibt oder weg kann"
+        title="Ins Aufräumen"
         tabIndex={hovered ? 0 : -1}
         style={{
           position: "absolute", top: 16, right: 16, width: 30, height: 30, borderRadius: "50%", border: "none",

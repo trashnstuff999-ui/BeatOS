@@ -43,11 +43,11 @@ type ZeilenDrop = {
 
 const BAUSTEINE: { key: keyof Pick<ArtistSong, "flp" | "vocals" | "demo" | "beat" | "mix" | "master">; label: string; titel: string }[] = [
   { key: "flp", label: "FLP", titel: "FL-Projekt in 01_SAVEFILES" },
-  { key: "vocals", label: "Vocals", titel: "In 02_ASSETS eine Audiodatei mit „Vocal\" oder dem Songnamen im Namen (z. B. „Teufelskraut alles\") — oder eine Aufnahme mit „Vocal\" in Audio/" },
-  { key: "demo", label: "Demo", titel: "In 02_ASSETS eine Audiodatei, die genau wie der Song heißt" },
-  { key: "beat", label: "Beat", titel: "In 02_ASSETS eine weitere Audiodatei (weder Vocals noch Demo) — oder ein verknüpfter Beat aus deinem Katalog" },
-  { key: "mix", label: "Mix", titel: "Ein Export in 03_VERSIONS oder neben der FLP" },
-  { key: "master", label: "Master", titel: "Ein Export mit „Master\" im Namen, in 03_VERSIONS oder neben der FLP" },
+  { key: "vocals", label: "Vocals", titel: "Audio mit „Vocal\" oder Songname im Namen" },
+  { key: "demo", label: "Demo", titel: "Audio mit genau dem Songnamen" },
+  { key: "beat", label: "Beat", titel: "Weitere Audiodatei oder verknüpfter Beat" },
+  { key: "mix", label: "Mix", titel: "Export in 03_VERSIONS oder neben der FLP" },
+  { key: "master", label: "Master", titel: "Export mit „Master\" im Namen" },
 ];
 
 export function ArtistsPane({ root, archivePath, active }: { root: string; archivePath: string; active: boolean }) {
@@ -139,7 +139,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       <EmptyState
         icon={Users}
         title="Kein Künstler-Ordner"
-        description="In den Einstellungen einen Archiv-Ordner setzen — der Künstler-Ordner liegt daneben (05_ARTISTS) — oder einen eigenen Künstler-Ordner wählen."
+        description="Archiv- oder Künstler-Ordner in den Einstellungen setzen"
       />
     );
   }
@@ -207,8 +207,8 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     inhalt = (
       <EmptyState
         icon={FolderPlus}
-        title="Den Künstler-Ordner gibt es noch nicht"
-        description={<>Mix- und Master-Projekte für Künstler liegen in <code>{root}</code> — je Künstler ein Ordner, darin je Song einer.</>}
+        title="Künstler-Ordner fehlt"
+        description={<code>{root}</code>}
         action={
           <Button variant="primary" icon={FolderPlus} loading={legtAn} onClick={async () => {
             setLegtAn(true);
@@ -295,7 +295,7 @@ function AufraeumDialog({ songs, onClose }: {
     <Modal
       icon={FolderTree}
       title="Song-Ordner aufräumen"
-      subtitle="Danach zieht BeatOS die Pfade in den FLPs nach — die FLPs vorher in FL schließen"
+      subtitle="FLPs vorher in FL schließen"
       width={640}
       onClose={onClose}
       closeOnBackdrop={!laeuft}
@@ -383,7 +383,7 @@ function UmzugDialog({ altbestand, archivePath, root, onClose }: {
     <Modal
       icon={FolderInput}
       title="Künstler-Ordner aus dem Archiv umziehen"
-      subtitle="Ganze Ordner wandern mit allem darin — gibt es das Ziel schon, wird übersprungen"
+      subtitle="Vorhandene Ziele werden übersprungen"
       width={720}
       onClose={onClose}
       closeOnBackdrop={!laeuft}
@@ -531,7 +531,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
 
   const los = async () => {
     if (!name.trim() || !wer || laeuft) return;
-    if (!vorlage) { setFehler("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen."); return; }
+    if (!vorlage) { setFehler("Keine Template-FLP (Einstellungen → Pfade)"); return; }
     setLaeuft(true);
     setFehler(null);
     try {
@@ -568,7 +568,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
     <Modal
       icon={FolderPlus}
       title="Neuer Song"
-      subtitle="Legt den Song-Ordner an, darin 01_SAVEFILES mit der Template-FLP, 02_ASSETS für das, was der Künstler schickt, und 03_VERSIONS."
+      subtitle="Mit 01_SAVEFILES, 02_ASSETS und 03_VERSIONS"
       width={560}
       onClose={() => onClose(angelegt)}
       footer={angelegt ? (
@@ -685,7 +685,7 @@ function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen, o
         <button
           data-kuenstler={k.path}
           onClick={() => setProfilOffen(true)}
-          title="Profil bearbeiten — oder ein Bild aus dem Explorer hierher ziehen"
+          title="Profil bearbeiten · Bild hierher ziehen"
           style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer", borderRadius: "50%" }}
         >
           <Avatar kuenstler={k} groesse={44} hervorgehoben={ziehen?.kuenstler === k.path} />
@@ -702,7 +702,7 @@ function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen, o
         </div>
         {links.map(p => (
           <IconButton key={p.key} icon={p.icon} size={26} variant="ghost"
-            title={p.key === "discord" ? `Discord: ${k.links.discord} — Klick kopiert den Namen` : `${p.label} öffnen`}
+            title={p.key === "discord" ? `Discord: ${k.links.discord} · kopieren` : `${p.label} öffnen`}
             onClick={() => p.key === "discord"
               ? navigator.clipboard?.writeText(k.links.discord).catch(() => {})
               : openUrl(k.links[p.key]).catch(() => {})} />
@@ -767,7 +767,7 @@ function ProfilDialog({ kuenstler: k, onClose }: { kuenstler: Artist; onClose: (
     <Modal
       icon={Mic2}
       title={k.name}
-      subtitle="Profilbild und Links — liegen im Künstler-Ordner"
+      subtitle="Profilbild und Links"
       width={560}
       onClose={() => onClose(geaendert)}
       footer={<>
@@ -844,7 +844,7 @@ function SongZeile({ song: s, gewaehlt, onWaehlen, zuTun, ziel }: {
           {s.name}
         </span>
         {zuTun && ziel === null && (
-          <span title="Hier ist etwas zu tun — Downloads oder FLP-Pfade" style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
+          <span title="Downloads oder FLP-Pfade offen" style={{ width: 7, height: 7, borderRadius: "50%", background: C.primary, flexShrink: 0 }} />
         )}
         <span style={{ fontSize: 12, fontWeight: 600, color: ziel !== null ? C.primary : farbe, flexShrink: 0 }}>
           {ziel !== null ? `${ziel === 1 ? "1 Datei" : `${ziel} Dateien`} → 02_ASSETS` : stand.text}
@@ -857,7 +857,7 @@ function SongZeile({ song: s, gewaehlt, onWaehlen, zuTun, ziel }: {
           ))}
         </span>
         <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, width: 92, textAlign: "right", flexShrink: 0 }}>
-          {s.fertig && s.abgegeben ? tageRelativ(s.abgegeben) : s.geaendert ? formatRelativeTime(s.geaendert) : "—"}
+          {s.fertig && s.abgegeben ? tageRelativ(s.abgegeben) : s.geaendert ? formatRelativeTime(s.geaendert) : "–"}
         </span>
       </div>
     </div>
@@ -887,7 +887,7 @@ function Reinhoeren({ song: s, kuenstler, bild }: { song: ArtistSong; kuenstler:
     const id = `kuenstler:${pfad}`;
     if (currentBeat?.id === id) { togglePlay(); return; }
     playBeat({
-      id, name: `${s.name} · ${label} — ${kuenstler}`, path: s.path, bpm: null, key: null,
+      id, name: `${s.name} · ${label} · ${kuenstler}`, path: s.path, bpm: null, key: null,
       status: null, tags: null, favorite: null, created_date: null, modified_date: null,
       notes: null, sold_to: null, has_artwork: null, has_video: null,
     }, bild ? convertFileSrc(bild.replace(/\\/g, "/")) : null, undefined, pfad);
@@ -903,7 +903,7 @@ function Reinhoeren({ song: s, kuenstler, bild }: { song: ArtistSong; kuenstler:
             const laeuft = currentBeat?.id === `kuenstler:${neueste.path}` && isPlaying;
             return (
               <Button key={h.art} variant="secondary" size="sm" icon={laeuft ? Pause : Play}
-                title={`${neueste.name}${h.dateien.length > 1 ? ` — die neueste von ${h.dateien.length}` : ""}`}
+                title={`${neueste.name}${h.dateien.length > 1 ? ` (neueste von ${h.dateien.length})` : ""}`}
                 onClick={() => abspielen(neueste.path, h.label)}
               >
                 {h.label}
@@ -997,7 +997,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
           {neue.length > 0 && (
             <Button variant="secondary" size="sm" icon={FolderInput}
-              title={`Aus den Downloads in 02_ASSETS verschieben — die FLP zeigt danach auf die neue Stelle:\n${neue.map(d => d.name).join("\n")}`}
+              title={`Nach 02_ASSETS verschieben:\n${neue.map(d => d.name).join("\n")}`}
               onClick={() => uebernehmen(s.path, neue.map(d => d.path))}
             >
               {neue.length === 1 ? "1 Download zuweisen" : `${neue.length} Downloads zuweisen`}
@@ -1005,8 +1005,8 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
           )}
           {s.reparierbar > 0 && (
             <Button variant="secondary" size="sm" icon={Wrench}
-              title={"Die FLP sucht Dateien noch am alten Ort. BeatOS hat sie gefunden und trägt die neuen Pfade ein — "
-                + "die FLP vorher in FL schließen. Eine Sicherung kommt nach Backup/."}
+              title={"Neue Pfade in die FLP eintragen. "
+                + "FLP vorher schließen, Sicherung in Backup/"}
               onClick={reparieren}
             >
               {s.reparierbar === 1 ? "1 Pfad reparieren" : `${s.reparierbar} Pfade reparieren`}
@@ -1014,7 +1014,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
           )}
           {s.fehlend.length > 0 && (
             <span
-              title={`Die FLP verwendet diese Dateien, BeatOS findet sie nirgends — FL fragt beim Öffnen danach:\n${s.fehlend.map(p => p.split(/[\\/]/).pop()).join("\n")}`}
+              title={`Nicht gefunden:\n${s.fehlend.map(p => p.split(/[\\/]/).pop()).join("\n")}`}
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: C.error }}
             >
               <AlertTriangle size={12} /> {s.fehlend.length === 1 ? "1 Datei fehlt" : `${s.fehlend.length} Dateien fehlen`}
@@ -1028,7 +1028,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
         {BAUSTEINE.map(b => {
           const da = s[b.key];
           return (
-            <span key={b.key} title={`${b.label}: ${da ? "vorhanden" : "fehlt"} — ${b.titel}`} style={{
+            <span key={b.key} title={`${b.label}: ${da ? "vorhanden" : "fehlt"} · ${b.titel}`} style={{
               display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: radius.full,
               fontSize: 11, fontWeight: 600,
               background: da ? alpha(C.mint, 0.12) : "transparent",
@@ -1078,7 +1078,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
         <span style={{ flex: 1 }} />
         {s.fertig ? (
           <Button variant="secondary" size="sm" icon={Undo2}
-            title="Zurück aus _Fertig — wenn der Künstler nach der Abgabe noch etwas will"
+            title="Zurück aus _Fertig"
             onClick={() => api.artists.wiederOeffnen(s.path).then(onGeaendert).catch(e => setFehler(String(e)))}
           >
             Wieder öffnen
@@ -1155,7 +1155,7 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
         <span style={{ fontWeight: 600, color: C.onSurface }}>{daten ? info(daten.beat) : id}</span>
         <span style={{ flex: 1 }} />
         <Button variant="secondary" size="sm" icon={FolderInput} disabled={!wavPfad || schonDa}
-          title={!wav ? "Keine WAV im Beat-Ordner" : schonDa ? `${wav} liegt schon im Song` : `${wav} nach 02_ASSETS kopieren — das Archiv bleibt, wie es ist`}
+          title={!wav ? "Keine WAV im Beat-Ordner" : schonDa ? `${wav} liegt schon im Song` : `${wav} nach 02_ASSETS kopieren`}
           onClick={() => wavPfad && api.artists.beatKopieren(s.path, wavPfad)
             .then(() => { setMeldung({ ok: true, text: `${wav} kopiert` }); onGeaendert(); })
             .catch(e => setMeldung({ ok: false, text: String(e) }))}
@@ -1163,7 +1163,7 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
           WAV kopieren
         </Button>
         <Button variant="secondary" size="sm" icon={FolderTree} disabled={!daten?.assets.flp_path}
-          title={daten?.assets.flp_path ? "Die FLP des Beats in FL öffnen — für Stems" : "Keine FLP im Beat-Ordner"}
+          title={daten?.assets.flp_path ? "FLP des Beats öffnen" : "Keine FLP im Beat-Ordner"}
           onClick={() => daten?.assets.flp_path && openPath(daten.assets.flp_path).catch(e => setMeldung({ ok: false, text: String(e) }))}
         >
           FLP öffnen
@@ -1252,7 +1252,7 @@ function AbgabeDialog({ song: s, kuenstler, onClose }: {
     <Modal
       icon={Send}
       title={`${s.name} abgeben`}
-      subtitle="Der Export bekommt den Abgabe-Namen und landet in 03_VERSIONS, der Song wandert nach _Fertig."
+      subtitle="Export nach 03_VERSIONS, Song nach _Fertig"
       width={560}
       onClose={() => onClose(false)}
       footer={<>

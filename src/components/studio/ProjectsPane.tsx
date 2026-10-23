@@ -45,10 +45,10 @@ const CLEANUP_SECTIONS: SectionKey[] = ["stale", "discard"];
 /** Diese Sektionen stehen in der Projekte-Ansicht als Cover-Regal (Werkbank). */
 const SHELF_SECTIONS: SectionKey[] = ["priority", "ready", "exported", "wip"];
 const SHELF_HINT: Partial<Record<SectionKey, string>> = {
-  priority: "Ideen mit Stern",
-  ready:    "alles da – kann archiviert werden",
-  exported: "MP3 und WAV liegen, Bilder oder Video fehlen",
-  wip:      "von dir vorgemerkt",
+  priority: "Beats mit viel Potenzial",
+  ready:    "bereit zum Hochladen",
+  exported: "fertig, Assets unvollständig",
+  wip:      "brauchen Feinschliff",
 };
 
 /** So viele Ideen zeigt eine Monatsgruppe, bevor „Alle N anzeigen" kommt. */
@@ -152,7 +152,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const scan = useCallback(async () => {
     if (productionPaths.length === 0) {
       setProjects([]);
-      setError("Kein Produktions-Pfad gesetzt — in den Einstellungen unter „Pfade“ hinzufügen.");
+      setError("Kein Produktions-Pfad (Einstellungen → Pfade)");
       return;
     }
     setIsLoading(true);
@@ -245,7 +245,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const handleNewProject = async (vorlage?: string) => {
     const template = vorlage ?? settings.flpTemplatePath.trim();
     if (!template) {
-      melde("Keine Template-FLP gesetzt — in den Einstellungen unter „Pfade“ eine Start-FLP wählen.");
+      melde("Keine Template-FLP (Einstellungen → Pfade)");
       return;
     }
     setIsCreating(true);
@@ -313,8 +313,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
 
   const zeigeNachruecken = (fehler: string[]) => {
     if (fehler.length > 0) {
-      melde(`Nummern sind nicht ganz nachgerückt (Projekt in FL offen?) — ` +
-            `„Lücken schließen" repariert das:\n${fehler.join("\n")}`);
+      melde(`Nicht alle nachgerückt (Projekt in FL offen?):\n${fehler.join("\n")}`);
     }
   };
 
@@ -325,7 +324,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       const r = await api.studio.closeGaps();
       zeigeNachruecken(r.failed);
       if (r.failed.length === 0) {
-        melde(r.moved === 0 ? "Keine Lücken — die Nummern sind schon lückenlos."
+        melde(r.moved === 0 ? "Keine Lücken"
                             : `${r.moved} ${r.moved === 1 ? "Projekt ist" : "Projekte sind"} nachgerückt.`,
               r.moved === 0 ? "info" : "erfolg");
       }
@@ -376,7 +375,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       await frage({
         titel: `${weg.size} im Papierkorb, ${fehler.length} nicht`,
         text: `${fehler.join("\n")}\n\n` +
-              `Die übrigen bleiben markiert — Leiste nochmal drücken, wenn die Ursache weg ist.`,
+              `Die übrigen bleiben markiert.`,
         bestaetigen: "Verstanden",
         nurHinweis: true,
       });
@@ -653,6 +652,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       {/* Kopf: eine Zeile — Suche groß links, rechts die Knöpfe, „Neues Projekt"
           als Hauptknopf. Vorher zwei Leisten (Zähler + Knöpfe, dann Suche +
           Chips + Sortierung); die Regale sind jetzt die Einteilung. */}
+      <div style={{ maxWidth: view === "cleanup" ? 1100 : undefined }}>
       <ProjectsToolbar
         search={search}
         onSearch={setSearch}
@@ -660,37 +660,58 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
         rootFilter={rootFilter}
         onRootFilter={setRootFilter}
       >
-        <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Produktions-Ordner neu einlesen">
+        <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Ordner neu einlesen">
           Scan
         </Button>
-        <Button
-          size="sm" variant="ghost" icon={FolderPlus}
-          onClick={() => navigate("/create")}
-          title="Einen Ordner von aussen archivieren (Übergabe-Ordner, anderer Rechner)"
-        >
-          Ordner archivieren
-        </Button>
-        <Button
-          size="sm" variant="ghost" icon={CopyPlus}
-          onClick={handleNewFromFlp}
-          disabled={productionPaths.length === 0 || isCreating}
-          title="Neues Projekt aus einer vorhandenen FLP — die Kopie bekommt die nächste freie Nummer"
-        >
-          Aus FLP
-        </Button>
-        <Button
-          variant="primary"
-          icon={FilePlus2}
-          onClick={() => handleNewProject()}
-          loading={isCreating}
-          disabled={productionPaths.length === 0}
-          title={`${nextName || "Nächstes Projekt"} in ${newProjectRoot} anlegen und in FL öffnen
-Nummer läuft über alle Produktions-Ordner`}
-        >
-          Neues Projekt
-          {nextName && <span style={{ opacity: 0.65, fontWeight: 600 }}>{nextName}</span>}
-        </Button>
+        {/* Im Aufräumen gehören die Werkzeuge in dieselbe Leiste — keine zweite Knopfreihe */}
+        {view === "cleanup" ? (<>
+          <Button
+            size="sm" variant="ghost" icon={ListOrdered}
+            onClick={handleCloseGaps}
+            loading={isCleaning}
+            disabled={productionPaths.length === 0}
+            title="Nummern lückenlos nachrücken"
+          >
+            Lücken schließen
+          </Button>
+          <Button
+            size="sm" variant="ghost" icon={FolderInput}
+            onClick={() => setShowMerge(true)}
+            disabled={productionPaths.length === 0}
+            title="Ordner zusammenführen, nach Alter nummerieren"
+          >
+            Zusammenführen
+          </Button>
+        </>) : (<>
+          <Button
+            size="sm" variant="ghost" icon={FolderPlus}
+            onClick={() => navigate("/create")}
+            title="Externen Ordner archivieren"
+          >
+            Ordner archivieren
+          </Button>
+          <Button
+            size="sm" variant="ghost" icon={CopyPlus}
+            onClick={handleNewFromFlp}
+            disabled={productionPaths.length === 0 || isCreating}
+            title="Kopie einer FLP als neues Projekt"
+          >
+            Aus FLP
+          </Button>
+          <Button
+            variant="primary"
+            icon={FilePlus2}
+            onClick={() => handleNewProject()}
+            loading={isCreating}
+            disabled={productionPaths.length === 0}
+            title={`${nextName || "Nächstes Projekt"} in ${newProjectRoot} anlegen`}
+          >
+            Neues Projekt
+            {nextName && <span style={{ opacity: 0.65, fontWeight: 600 }}>{nextName}</span>}
+          </Button>
+        </>)}
       </ProjectsToolbar>
+      </div>
 
       {error && (
         <div style={{
@@ -713,12 +734,12 @@ Nummer läuft über alle Produktions-Ordner`}
           variant="inline"
           icon={FolderKanban}
           title="Keine FLP-Projekte gefunden"
-          description="Ein Projekt ist ein Ordner mit mindestens einer .flp-Datei."
+          description="Ordner mit mindestens einer FLP"
         />
       )}
 
       {!error && !isLoading && projects.length > 0 && visible.length === 0 && (
-        <EmptyState variant="inline" title="Kein Projekt passt zu den Filtern." />
+        <EmptyState variant="inline" title="Keine Treffer" />
       )}
 
       {sections.some(s => isShelf(s.key)) && (
@@ -771,25 +792,7 @@ Nummer läuft über alle Produktions-Ordner`}
           skizzenGrenze={skizzenGrenze}
           onSkizzenGrenze={setSkizzenGrenze}
           onSkizzenVormerken={() => patchMany(skizzenVorschlag, () => ({ status: "discard" }))}
-        >
-          <Button
-            size="sm" variant="ghost" icon={ListOrdered}
-            onClick={handleCloseGaps}
-            loading={isCleaning}
-            disabled={productionPaths.length === 0}
-            title="Nach Löschen im Explorer: Nummern lückenlos nachrücken lassen, Reihenfolge bleibt"
-          >
-            Lücken schließen
-          </Button>
-          <Button
-            size="sm" variant="ghost" icon={FolderInput}
-            onClick={() => setShowMerge(true)}
-            disabled={productionPaths.length === 0}
-            title="Produktions-Ordner zusammenführen und nach Alter neu nummerieren"
-          >
-            Zusammenführen
-          </Button>
-        </AufraeumListe>
+        />
       )}
 
       {/* Solange etwas ausgewählt ist, gehört die Fußleiste der Auswahl — sonst
@@ -814,7 +817,7 @@ Nummer läuft über alle Produktions-Ordner`}
           <Button
             size="sm"
             onClick={() => patchSelected(p => ({ status: deriveStage(p), priority: 0 }))}
-            title="Handstatus und Stern entfernen — dann gilt wieder die automatische Stufe"
+            title="Status und Stern entfernen"
           >
             Zurücksetzen
           </Button>
@@ -836,13 +839,8 @@ Nummer läuft über alle Produktions-Ordner`}
           boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
         }}>
           <Trash2 size={14} color={STUDIO_STATUS_CONFIG.discard.color} strokeWidth={1.75} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>
-              {discardable.length} {discardable.length === 1 ? "Projekt kann" : "Projekte können"} weg
-            </div>
-            <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
-              Die Ordner landen im Windows-Papierkorb, die Nummern rücken danach nach.
-            </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
+            {discardable.length} {discardable.length === 1 ? "Projekt kann" : "Projekte können"} weg
           </div>
           <div style={{ flex: 1 }} />
           <Button

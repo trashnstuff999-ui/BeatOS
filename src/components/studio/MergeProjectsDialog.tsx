@@ -92,7 +92,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
 
   const runArchiveCheck = async () => {
     if (!archivePath.trim()) {
-      setError("Kein Archiv-Pfad in den Einstellungen gesetzt — ohne ihn kann nicht abgeglichen werden.");
+      setError("Kein Archiv-Pfad (Einstellungen → Pfade)");
       return;
     }
     setIsChecking(true);
@@ -130,9 +130,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
     const ok = await frage({
       titel: `${kandidaten.length} archivierte Projekte parken?`,
       text: `Ziel: ${parkDir}\n\n` +
-            `Sie sind Byte für Byte mit dem Archiv verglichen — dort fehlt keine einzige ` +
-            `Datei. Gelöscht wird nichts: es ist ein Umzug, mit Protokoll und Rückgängig.\n\n` +
-            `Danach sind sie aus der Studio-Liste raus und liegen an einem Ort beisammen.`,
+            `Byte für Byte mit dem Archiv verglichen. Nur Umzug, mit Protokoll und Rückgängig.`,
       bestaetigen: "Verschieben",
     });
     if (!ok) return;
@@ -175,12 +173,11 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
           : "") +
         (heikel > 0
           ? `ACHTUNG: ${heikel} davon sind bereits archiviert und tragen trotzdem noch ` +
-            `Arbeitsdateien, die es im Archiv nicht gibt. Sie ziehen mit um — es geht ` +
-            `nichts verloren —, aber sieh sie dir hinterher an.\n\n`
+            `Arbeitsdateien, die im Archiv fehlen. Sie ziehen mit um, danach prüfen.\n\n`
           : "") +
-        `FL Studio sollte dabei geschlossen sein.\n` +
-        `Bei vielen Ordnern lohnt es sich, die OneDrive-Synchronisierung zu pausieren.\n\n` +
-        `Ein Protokoll wird geschrieben — der Vorgang lässt sich danach rückgängig machen.`,
+        `FL Studio schließen.\n` +
+        `OneDrive-Sync am besten pausieren.\n\n` +
+        `Mit Protokoll, rückgängig machbar.`,
       bestaetigen: "Nummerieren",
       gefahr: heikel > 0,
     });
@@ -275,10 +272,9 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
           sichtbar sein, wie groß das Problem im Bestand tatsächlich ist. */}
       {plan && plan.duplicates.length > 0 && (
         <Note tone="warn">
-          <strong>{plan.duplicates.length} Nummern sind mehrfach vergeben</strong> —{" "}
+          <strong>{plan.duplicates.length} Nummern doppelt vergeben:</strong>{" "}
           {plan.duplicates.slice(0, 8).map(d => d.number).join(", ")}
-          {plan.duplicates.length > 8 && " …"}. Verschiedene Beats tragen dieselbe ID.
-          Das Umnummerieren nach Alter löst genau das auf.
+          {plan.duplicates.length > 8 && " …"}. Umnummerieren behebt das.
         </Note>
       )}
 
@@ -308,11 +304,9 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
           {plan && (
             <>
               <Note tone="warn">
-                <b>{plan.steps.length} Projekte</b> werden neu nummeriert — der älteste wird
-                Project_0001. Davon wandern <b>{moves.length}</b> in den Zielordner,
-                {" "}{renames.length} liegen schon dort. Es wird nichts überschrieben:
-                ein belegter Name lässt den Schritt scheitern statt Daten zu verlieren.
-                FL Studio vorher schließen.
+                <b>{plan.steps.length} Projekte</b> neu nummeriert, ältestes wird Project_0001.
+                {" "}<b>{moves.length}</b> ziehen um, {renames.length} liegen schon dort.
+                Nichts wird überschrieben. FL Studio vorher schließen.
               </Note>
 
               {/* Der Abgleich ist die Bedingung fürs Ausführen — deshalb steht
@@ -325,12 +319,10 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
                   border: `1px dashed ${C.border30}`,
                 }}>
                   <div style={{ flex: 1, fontSize: 12, lineHeight: 1.6, color: C.onSurfaceVariant }}>
-                    <strong style={{ color: C.onSurface }}>Noch nicht mit dem Archiv abgeglichen.</strong>{" "}
-                    Ohne ihn ist unbekannt, welche dieser Ordner längst fertige Beats sind
-                    und welche davon noch Arbeit tragen, die im Archiv fehlt.
+                    <strong style={{ color: C.onSurface }}>Nicht mit dem Archiv abgeglichen.</strong>
                     {isChecking
-                      ? " Läuft — jede Datei wird gelesen, das dauert ein bis zwei Minuten."
-                      : ` Der Vergleich liest jede Datei: rund ${Math.max(1, Math.round((plan?.steps.length ?? 0) / 650))} Minute${(plan?.steps.length ?? 0) > 975 ? "n" : ""}.`}
+                      ? " Läuft, ca. 1–2 Minuten"
+                      : ` Dauer ca. ${Math.max(1, Math.round((plan?.steps.length ?? 0) / 650))} Minute${(plan?.steps.length ?? 0) > 975 ? "n" : ""}.`}
                   </div>
                   <Button
                     variant="secondary"
@@ -353,11 +345,10 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
                     }}>
                       <div style={{ flex: 1, fontSize: 12, lineHeight: 1.6, color: C.onSurfaceVariant }}>
                         <strong style={{ color: C.onSurface }}>
-                          {counts.archived_complete} fertige Beats liegen noch in der Produktion.
+                          {counts.archived_complete} fertige Beats noch in der Produktion
                         </strong>{" "}
-                        Byte für Byte mit dem Archiv verglichen — dort fehlt nichts. Verschieben
-                        nach <code style={{ fontSize: 12 }}>_ARCHIVIERT</code> holt sie aus der
-                        Studio-Liste und legt sie an einen Ort. Umzug, kein Löschen.
+                        Im Archiv vollständig. Verschieben nach <code style={{ fontSize: 12 }}>_ARCHIVIERT</code>,
+                        kein Löschen.
                       </div>
                       <Button
                         variant="secondary"
@@ -376,11 +367,10 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
                 <Note tone={parked.failed.length ? "warn" : "ok"}>
                   <b>{parked.moved} Projekte</b> nach <code>{parked.park_dir}</code> verschoben.
                   {parked.skipped.length > 0 && (
-                    <> {parked.skipped.length} blieben liegen, weil die erneute Prüfung sie
-                    nicht bestätigt hat.</>
+                    <> {parked.skipped.length} blieben liegen (Prüfung nicht bestanden).</>
                   )}
                   {parked.failed.length > 0 && <> {parked.failed.length} Schritte kamen nicht durch.</>}
-                  {parked.log_path && <><br />Protokoll: <code>{parked.log_path}</code> — rückgängig über die Läufe-Liste unten.</>}
+                  {parked.log_path && <><br />Protokoll: <code>{parked.log_path}</code></>}
                 </Note>
               )}
 
@@ -418,7 +408,7 @@ function PastRuns({ runs, busy, onUndo }: {
   return (
     <details>
       <summary style={{ cursor: "pointer", fontSize: 12, color: C.onSurfaceVariant }}>
-        {runs.length} frühere{runs.length === 1 ? "r Lauf" : " Läufe"} — mit Rückgängig
+        {runs.length} frühere{runs.length === 1 ? "r Lauf" : " Läufe"}
       </summary>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         {runs.map(r => {
@@ -560,16 +550,16 @@ function ClassTable({ rows, checked }: { rows: MergeRow[]; checked: boolean }) {
                 fontFamily: "monospace",
                 color: r.newName ? C.primary : C.onSecondaryFixedVar,
               }}>
-                {r.newName ?? "— bleibt liegen"}
+                {r.newName ?? "bleibt liegen"}
               </td>
               <td style={{ ...cell, color: C.onSecondaryFixedVar }}>
                 {!checked
-                  ? (r.date ?? "—")
+                  ? (r.date ?? "–")
                   : r.missingImportant > 0
                     ? <span style={{ color: C.primary }}>
                         {r.archiveFolder} · {r.missingImportant} Datei(en) nur hier
                       </span>
-                    : (r.archiveFolder ?? "—")}
+                    : (r.archiveFolder ?? "–")}
               </td>
             </tr>
           ))}
@@ -605,7 +595,7 @@ function Report({ report }: { report: MergeReport }) {
             ))}
           </>
         ) : (
-          <div>Kein Protokoll geschrieben — es wurde nichts verschoben.</div>
+          <div>Nichts verschoben, kein Protokoll.</div>
         )}
         {report.summary_path && (
           <div>Lesbare Liste im Zielordner: <code>{report.summary_path}</code></div>
@@ -614,9 +604,7 @@ function Report({ report }: { report: MergeReport }) {
 
       {report.moved > 0 && report.log_copies.length === 0 && (
         <Note tone="warn">
-          Das Protokoll liegt nur an <b>einem</b> Ort. Sichere es, bevor du
-          weiterarbeitest — es ist die einzige Aufzeichnung, welcher Ordner
-          wohin wurde.
+          Protokoll liegt nur an <b>einem</b> Ort. Bitte sichern.
         </Note>
       )}
     </>

@@ -73,7 +73,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
   const scan = useCallback(async () => {
     if (!assetPath.trim()) {
       setAssets([]);
-      setError("Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner wählen.");
+      setError("Kein Asset-Pfad (Einstellungen → Pfade)");
       return;
     }
     setIsLoading(true);
@@ -153,12 +153,12 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
         ) : (
           <>
             <Button size="sm" variant="secondary" icon={ListOrdered} disabled={counts.image === 0}
-              title="Covers und Thumbnails fortlaufend nummerieren — Paare bekommen dieselbe Nummer"
+              title="Fortlaufend nummerieren"
               onClick={() => setNummernOffen(true)}>
               Nummerieren …
             </Button>
             <Button size="sm" variant="secondary" icon={CheckSquare} disabled={assets.length === 0}
-              title="Mehrere Dateien auswählen und in den Papierkorb legen"
+              title="Mehrere auswählen"
               onClick={() => setAuswahl(new Set())}>
               Auswählen
             </Button>
@@ -215,7 +215,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
           variant="inline"
           icon={Images}
           title="Die Inbox ist leer"
-          description="Cover, Thumbnails und Videos, die du in den Asset-Ordner exportierst, tauchen hier auf."
+          description="Exporte im Asset-Ordner erscheinen hier"
         />
       )}
 
@@ -252,7 +252,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
       )}
 
       {!error && assets.length > 0 && visible.length === 0 && (
-        <EmptyState variant="inline" title="Keine Datei dieser Art in der Inbox." />
+        <EmptyState variant="inline" title="Nichts in dieser Kategorie" />
       )}
 
       {picked && (
@@ -289,7 +289,7 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={auswahl !== null ? `${asset.name} — Klick wählt aus` : `${asset.name} — Klick weist die Datei einem Projekt zu`}
+      title={auswahl !== null ? `${asset.name} · auswählen` : `${asset.name} · Projekt zuweisen`}
       style={{
         background: C.surfaceContainerLowest,
         border: `1px solid ${markiert ? C.primary : hovered ? `${C.primary}60` : C.border15}`,
@@ -420,7 +420,7 @@ function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
     <Modal
       icon={ListOrdered}
       title="Covers und Thumbnails nummerieren"
-      subtitle="Lückenlos ab 1, Reihenfolge bleibt, Neues kommt hinten dran. Gleiches Motiv → gleiche Nummer."
+      subtitle="Ab 1, Reihenfolge bleibt, gleiches Motiv gleiche Nummer"
       width={640}
       onClose={() => onClose(!!ergebnis)}
       closeOnBackdrop={!laeuft}
@@ -456,7 +456,7 @@ function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
               <span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.alt}</span>
               <ArrowRight size={12} color={C.onSecondaryFixedVar} />
               <span style={{ color: C.onSurface, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                title={u.unsicher ? "Nur über die Exportzeit gepaart — das Bild sieht anders aus. Prüfen, bevor du es anhakst." : undefined}>
+                title={u.unsicher ? "Nur über Exportzeit gepaart, bitte prüfen" : undefined}>
                 {u.neu}{u.unsicher && <span style={{ color: C.primary, fontWeight: 400 }}> · unsicher</span>}
               </span>
             </label>
