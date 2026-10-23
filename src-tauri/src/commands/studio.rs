@@ -46,6 +46,17 @@ pub fn derive_stage(mp3: bool, wav: bool, cover: bool, thumbnail: bool, video: b
 
 /// Was nach einem Scan gilt: ein von Hand gesetzter Status bleibt stehen, alles
 /// andere rechnet die Automatik aus den Dateien.
+/// Ab so vielen Tagen ohne Änderung steht eine Idee im Aufräumen
+/// (gleicher Wert wie STALE_DAYS in ProjectsPane.tsx).
+const AUFRAEUMEN_NACH_TAGEN: u64 = 30;
+
+/// Wie sectionOf() im Frontend: eine Idee ohne Stern, länger nicht angefasst.
+fn faellt_ins_aufraeumen(status: &str, priority: i64, modified_secs: u64, jetzt: u64) -> bool {
+    status == "idea" && priority == 0
+        && modified_secs > 0
+        && jetzt.saturating_sub(modified_secs) > AUFRAEUMEN_NACH_TAGEN * 86_400
+}
+
 fn resolve_status(stored: Option<&str>, derived: &str) -> String {
     match stored {
         Some(s) if is_manual_status(s) => s.to_string(),
@@ -163,16 +174,27 @@ fn scan_studio_projects_blocking(paths: &[String]) -> Result<Vec<StudioProject>,
         );
     }
 
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     for p in &mut projects {
         let derived = derive_stage(p.has_mp3, p.has_wav, p.has_cover, p.has_thumbnail, p.has_video);
         match db_state.get(&p.path) {
             Some((status, priority, notes, kept)) => {
                 p.priority = *priority;
                 p.notes = notes.clone();
-                // kept: 0 automatisch, 1 Behalten, 2 fest im Aufräumen
-                p.kept = *kept == 1;
-                p.aufraeumen = *kept == 2;
                 p.status = resolve_status(Some(status), derived);
+                // kept: 0 automatisch, 1 Behalten, 2 fest im Aufräumen.
+                // Was einmal ins Aufräumen fällt, bleibt dort, auch wenn FL die
+                // FLP beim Speichern wieder frisch macht. Raus nur per Behalten.
+                let kept = if *kept == 0 && faellt_ins_aufraeumen(&p.status, *priority, p.modified_secs, jetzt) {
+                    let _ = conn.execute(
+                        "UPDATE studio_projects SET kept = 2 WHERE path = ?1",
+                        rusqlite::params![p.path],
+                    );
+                    2
+                } else { *kept };
+                p.kept = kept == 1;
+                p.aufraeumen = kept == 2;
                 // Nur bei Abweichung schreiben — der Scan läuft bei jedem
                 // Fensterwechsel über alle Produktions-Ordner.
                 if p.status != *status {
@@ -184,9 +206,10 @@ fn scan_studio_projects_blocking(paths: &[String]) -> Result<Vec<StudioProject>,
             }
             None => {
                 p.status = resolve_status(None, derived);
+                p.aufraeumen = faellt_ins_aufraeumen(&p.status, 0, p.modified_secs, jetzt);
                 let _ = conn.execute(
-                    "INSERT OR IGNORE INTO studio_projects (path, status) VALUES (?1, ?2)",
-                    rusqlite::params![p.path, p.status],
+                    "INSERT OR IGNORE INTO studio_projects (path, status, kept) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![p.path, p.status, if p.aufraeumen { 2 } else { 0 }],
                 );
             }
         }
@@ -1991,10 +2014,22 @@ fn copy_and_verify_move(src: &Path, dest: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        derive_stage, duplicate_project_ids, ensure_slot_marker, flp_work_minutes_from, is_manual_status, is_orphan_row,
+        derive_stage, duplicate_project_ids, ensure_slot_marker, faellt_ins_aufraeumen, flp_work_minutes_from, is_manual_status, is_orphan_row,
         parse_project_id, repath_studio_rows, resolve_status, scan_project_dir, MergeStep,
         STUDIO_STATUSES,
     };
+
+    #[test]
+    fn nur_alte_ideen_ohne_stern_fallen_ins_aufraeumen() {
+        let jetzt = 100 * 86_400;
+        let alt = jetzt - 31 * 86_400;
+        let frisch = jetzt - 2 * 86_400;
+        assert!(faellt_ins_aufraeumen("idea", 0, alt, jetzt));
+        assert!(!faellt_ins_aufraeumen("idea", 0, frisch, jetzt));
+        assert!(!faellt_ins_aufraeumen("idea", 1, alt, jetzt), "Stern bleibt draußen");
+        assert!(!faellt_ins_aufraeumen("exported", 0, alt, jetzt));
+        assert!(!faellt_ins_aufraeumen("idea", 0, 0, jetzt), "ohne Datum nicht");
+    }
 
     /// Jede Schreibweise, die im echten Bestand vorkommt, muss ihre Nummer
     /// hergeben — sonst fällt der Ordner still aus dem Zusammenführen heraus.
