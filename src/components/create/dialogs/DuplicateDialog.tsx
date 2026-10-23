@@ -52,7 +52,7 @@ export function DuplicateDialog({
         border: `1px solid ${C.border15}`,
         fontSize: 12, color: C.onSurfaceVariant,
       }}>
-        <strong style={{ color: C.onSurface }}>#{existingId}</strong> — {existingName}
+        <strong style={{ color: C.onSurface }}>#{existingId}</strong> {existingName}
       </div>
 
       <p style={{ margin: 0, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.65 }}>

@@ -482,8 +482,8 @@ function GrossesCover({ preview, title, disabled, onPick }: {
     <button
       onClick={onPick}
       disabled={disabled}
-      title={disabled ? "Kein Asset-Pfad gesetzt — Einstellungen → Pfade"
-        : preview ? "Cover ersetzen — das alte geht zurück in den Asset-Ordner" : "Cover aus den Assets holen"}
+      title={disabled ? "Kein Asset-Pfad (Einstellungen → Pfade)"
+        : preview ? "Cover ersetzen" : "Cover zuweisen"}
       style={{
         width: "100%", aspectRatio: "1 / 1", flexShrink: 0,
         padding: 0, overflow: "hidden", borderRadius: radius.card,
@@ -549,8 +549,8 @@ function WegZumUpload({ project: p, assets, noAssetPath, onPick, onOpenDaw }: {
           )}
           {r.slot ? (
             <Button variant="ghost" size="sm" onClick={() => onPick(r.slot!)} disabled={noAssetPath}
-              title={noAssetPath ? "Kein Asset-Pfad gesetzt — Einstellungen → Pfade"
-                : r.da ? "Ersetzen — die alte Datei geht zurück in den Asset-Ordner" : undefined}
+              title={noAssetPath ? "Kein Asset-Pfad (Einstellungen → Pfade)"
+                : r.da ? "Ersetzen" : undefined}
               style={r.da ? undefined : { color: C.primary }}>
               {r.da ? "Ersetzen" : "Aus Assets"}
             </Button>
@@ -674,7 +674,7 @@ function InspectorActions({ archivBeatId, onUpload, canOpenDaw, exportName, onOp
         </Button>
         {archivBeatId ? (
           <Button variant="primary" size="sm" icon={UploadIcon} onClick={onUpload} style={{ flex: 1 }}
-            title={`Schon archiviert als #${archivBeatId} — im Upload-Tab weitermachen`}>
+            title={`Archiviert als #${archivBeatId}`}>
             Im Upload-Tab öffnen
           </Button>
         ) : (

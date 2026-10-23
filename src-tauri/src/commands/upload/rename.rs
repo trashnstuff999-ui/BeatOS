@@ -428,7 +428,7 @@ fn plan_single_kind(
             skipped.push(SkippedFile {
                 file: n.clone(),
                 kind: kind.to_string(),
-                reason: format!("Multiple .{} files — only the newest is renamed", ext),
+                reason: format!("Multiple .{} files, only the newest is renamed", ext),
             });
             continue;
         };
@@ -477,7 +477,7 @@ fn plan_image(
         skipped.push(SkippedFile {
             file: n.clone(),
             kind: kind.to_string(),
-            reason: format!("Multiple {} images — only the newest is renamed", needle),
+            reason: format!("Multiple {} images, only the newest is renamed", needle),
         });
     }
 }

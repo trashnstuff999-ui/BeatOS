@@ -30,7 +30,7 @@ describe("formatRelativeTime", () => {
   });
 
   it("handles invalid input", () => {
-    expect(formatRelativeTime(0, NOW)).toBe("—");
+    expect(formatRelativeTime(0, NOW)).toBe("–");
   });
 });
 

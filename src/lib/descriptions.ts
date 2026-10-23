@@ -158,7 +158,7 @@ export function pruefeBeschreibung(
   if (offen.length) out.push({ stufe: "fehler", text: `Nicht ausgefüllt: ${offen.join(", ")}` });
 
   if (!titel) out.push({ stufe: "fehler", text: "Kein Titel" });
-  else if (titel.length > 100) out.push({ stufe: "fehler", text: `Titel ist ${titel.length} Zeichen lang — erlaubt sind 100` });
+  else if (titel.length > 100) out.push({ stufe: "fehler", text: `Titel ${titel.length}/100 Zeichen` });
 
   // Kein Hinweis auf einen fehlenden BeatStars-Link: vor dem BeatStars-Upload
   // fehlt er immer, und der Release-Assistent rendert danach mit Link neu.
@@ -169,14 +169,14 @@ export function pruefeBeschreibung(
   if (doppelt.length) out.push({ stufe: "hinweis", text: `Doppelte Tags: ${doppelt.join(", ")}` });
 
   if (plattform === "soundcloud" && countTags(tags) > 9) {
-    out.push({ stufe: "fehler", text: `${countTags(tags)} Tags — SoundCloud nimmt nur 9` });
+    out.push({ stufe: "fehler", text: `${countTags(tags)} Tags, SoundCloud max. 9` });
   }
 
   if (plattform === "youtube") {
-    if (tags.length > 500) out.push({ stufe: "fehler", text: `Tags sind ${tags.length} Zeichen lang — YouTube schneidet bei 500 ab` });
+    if (tags.length > 500) out.push({ stufe: "fehler", text: `Tags ${tags.length}/500 Zeichen` });
 
     const hashtags = (text.match(HASHTAG_RE) ?? []).length;
-    if (hashtags > 60) out.push({ stufe: "fehler", text: `${hashtags} Hashtags — ab 60 ignoriert YouTube alle` });
+    if (hashtags > 60) out.push({ stufe: "fehler", text: `${hashtags} Hashtags, YouTube max. 60` });
 
     // Kapitel: dieselben Regeln wie in der Kapitel-Karte
     const marken = text.split(/\r?\n/).map(z => z.match(ZEITMARKE_RE)?.[1]).filter((m): m is string => !!m).map(sekunden);
@@ -191,7 +191,7 @@ export function pruefeBeschreibung(
     // Der Kauflink zählt nur, wenn man ihn sieht, ohne aufzuklappen.
     const sichtbar = text.split(/\r?\n/).slice(0, YT_SICHTBARE_ZEILEN).join("\n");
     if (beatstarsUrl?.trim() && text.includes(beatstarsUrl.trim()) && !sichtbar.includes(beatstarsUrl.trim())) {
-      out.push({ stufe: "hinweis", text: `Der Kauflink steht nicht in den ersten ${YT_SICHTBARE_ZEILEN} Zeilen — man sieht ihn erst nach „…mehr"` });
+      out.push({ stufe: "hinweis", text: `Kauflink nicht in den ersten ${YT_SICHTBARE_ZEILEN} Zeilen` });
     }
   }
   return out;

@@ -176,7 +176,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           <Button
             size="sm" variant="secondary" icon={FileCode2}
             onClick={() => setShowTemplates(true)}
-            title="Vorlagen bearbeiten — mit Vorschau an diesem Beat"
+            title="Vorlagen bearbeiten"
           >
             Vorlagen
           </Button>
@@ -223,7 +223,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                   icon={Pencil} size={28} variant="ghost"
                   onClick={() => setEditor(p)}
                   disabled={!drafts}
-                  title={`${tab.label}-Text von Hand bearbeiten — speichert sich selbst`}
+                  title={`${tab.label}-Text bearbeiten`}
                 />
               </div>
 
@@ -246,7 +246,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                       Von Hand geändert ·{" "}
                       <LinkKnopf
                         onClick={() => gerendert && setDraft(p, gerendert[p], true)}
-                        title="Die eigene Fassung verwerfen — der Text folgt wieder der Vorlage"
+                        title="Zurück zur Vorlage"
                       >
                         Vorlage wiederherstellen
                       </LinkKnopf>
@@ -257,7 +257,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                       {tab.file} weicht ab ·{" "}
                       <LinkKnopf
                         onClick={() => setDraft(p, dateien[p], true)}
-                        title="Den Text aus der Datei im Beat-Ordner als eigene Fassung übernehmen"
+                        title="Text aus der Datei übernehmen"
                       >
                         übernehmen
                       </LinkKnopf>
@@ -275,7 +275,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                 disabled={!bereit || !titel}
               >
                 <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: C.onSurface, lineHeight: 1.45, wordBreak: "break-word" }}>
-                  {isLoading ? <Laedt /> : (titel || <span style={{ color: C.onSecondaryFixedVar }}>—</span>)}
+                  {isLoading ? <Laedt /> : (titel || <span style={{ color: C.onSecondaryFixedVar }}>–</span>)}
                 </span>
               </Kopierfeld>
 
@@ -288,7 +288,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
                     disabled={!bereit || !text}
                   >
                     {isLoading ? <Laedt /> : !text
-                      ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>—</span>
+                      ? <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>–</span>
                       : <Vorschau zeilen={offen ? zeilen : zeilen.slice(0, YT_SICHTBARE_ZEILEN)} youtube={p === "youtube" && offen} />}
                   </Kopierfeld>
                   {bereit && zeilen.length > YT_SICHTBARE_ZEILEN && (
@@ -339,8 +339,8 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
       {/* Volltext im Dialog: speichert sich selbst, wie die Karte. */}
       {editor && editorTab && (
         <Modal
-          title={`Bearbeiten — ${editorTab.label}`}
-          subtitle="Speichert sich selbst · gilt hier und im Release-Assistenten"
+          title={`${editorTab.label} bearbeiten`}
+          subtitle="Speichert automatisch"
           icon={Pencil}
           width={900}
           onClose={() => setEditor(null)}
@@ -409,7 +409,7 @@ function Vorschau({ zeilen, youtube }: { zeilen: string[]; youtube: boolean }) {
         <span key={i} style={{ display: "block" }}>
           {youtube && i === YT_SICHTBARE_ZEILEN && (
             <span
-              title="Bis hierhin sehen Zuschauer die Beschreibung, ohne sie aufzuklappen"
+              title="Sichtbar ohne Aufklappen"
               style={{
                 display: "flex", alignItems: "center", gap: 8, margin: "6px 0",
                 fontSize: 11, color: C.onSecondaryFixedVar,

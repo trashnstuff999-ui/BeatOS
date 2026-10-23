@@ -20,7 +20,7 @@ describe("PlatformDots", () => {
         ]} />
       </div>,
     );
-    fireEvent.click(screen.getByTitle("YouTube: hochgeladen — klicken zum Öffnen"));
+    fireEvent.click(screen.getByTitle("YouTube: hochgeladen · öffnen"));
     expect(openUrl).toHaveBeenCalledWith("https://youtu.be/x");
     expect(zeile).not.toHaveBeenCalled();
     // Ohne Link: kein Knopf, nur der Hinweis

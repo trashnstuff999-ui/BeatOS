@@ -50,7 +50,7 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
       { label: "Titel groß",  name: "TITLE_UPPER", was: "Derselbe Titel in Großbuchstaben",               beispiel: "NOBODY HERE" },
       { label: "Tempo",       name: "BPM",         was: "Tempo als Zahl, ohne Einheit",                   beispiel: "156" },
       { label: "Tonart",      name: "KEY",         was: "Tonart des Beats",                               beispiel: "C#m" },
-      { label: "Jahr",        name: "YEAR",        was: "Das laufende Jahr — für Titel und Tags",         beispiel: "2026" },
+      { label: "Jahr",        name: "YEAR",        was: "Das laufende Jahr",         beispiel: "2026" },
     ],
   },
   {
@@ -60,14 +60,14 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
       { label: "Passt auch zu", name: "ALSO_FITS",      was: "Die zweite Reihe Artists",                       beispiel: "Scorey, Polo G, Convolk" },
       { label: "Genres",        name: "GENRE_TAGS",     was: "Die Genres dieses Beats",                        beispiel: "Sad Guitar | Melodic" },
       { label: "Hashtags",      name: "HASHTAGS",       was: "Fertiger Tag-Block, je Plattform anders gebaut", beispiel: "#lilpeeptypebeat …" },
-      { label: "Kapitel",       name: "TIMECODES",      was: "Überschrift und Kapitelmarken dieses Beats. Ohne Marken verschwindet der ganze Block samt Überschrift — sie gehört deshalb NICHT extra in die Vorlage", beispiel: "CHAPTERS: / 0:00 Intro" },
+      { label: "Kapitel",       name: "TIMECODES",      was: "Überschrift und Kapitelmarken. Ohne Marken fällt der Block weg, Überschrift nicht extra in die Vorlage", beispiel: "CHAPTERS: / 0:00 Intro" },
     ],
   },
   {
     titel: "Du",
     eintraege: [
       { label: "Dein Name",        name: "PRODUCER",       was: "Dein Producer-Name aus den Einstellungen", beispiel: "prod. goodbxy" },
-      { label: "Name mit „prod.“ davor", name: "PRODUCER_PROD",  was: "Setzt „prod. “ davor — steht es im Namen schon, kommt es doppelt", beispiel: "prod. prod. goodbxy" },
+      { label: "Name mit „prod.“ davor", name: "PRODUCER_PROD",  was: "Setzt „prod. “ davor", beispiel: "prod. prod. goodbxy" },
       { label: "E-Mail",           name: "EMAIL",          was: "Deine Kontakt-E-Mail",                     beispiel: "contact@prod404.com" },
       { label: "Instagram",        name: "IG_URL",         was: "Dein Instagram",                           beispiel: "instagram.com/prod.goodbxy" },
       { label: "SoundCloud",       name: "SC_URL",         was: "Dein SoundCloud",                          beispiel: "soundcloud.com/prodgoodbxy" },
@@ -88,7 +88,7 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
 
 /** Was beim Zeigen auf einen Knopf erscheint. */
 function tooltip(p: Platzhalter): string {
-  return `${p.was}\n\nSetzt {{${p.name}}} ein — z.B. ${p.beispiel}`;
+  return `${p.was}\n\n{{${p.name}}}, z. B. ${p.beispiel}`;
 }
 
 interface TemplateEditorDialogProps {
@@ -169,7 +169,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
     try {
       await api.upload.writeTemplate(tab.file, draft);
       setSaved(draft);
-      setNote(`${tab.file} gespeichert — die alte Fassung liegt als ${tab.file}.bak daneben.`);
+      setNote(`${tab.file} gespeichert, alte Fassung als .bak`);
       onSaved();
     } catch (e) {
       setError(String(e));
@@ -181,7 +181,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
   return (
     <Modal
       title="Vorlagen bearbeiten"
-      subtitle="Links bearbeiten, rechts das Ergebnis am aktuellen Beat"
+      subtitle="Links Vorlage, rechts Ergebnis"
       icon={FileCode2}
       onClose={requestClose}
       width={920}
@@ -311,7 +311,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
             overflowY: "auto",
             color: C.onSurfaceVariant,
           }}>
-            {preview || (isLoading ? "" : "—")}
+            {preview || (isLoading ? "" : "–")}
           </div>
         </Pane>
       </div>

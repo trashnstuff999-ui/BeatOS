@@ -336,7 +336,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
                   color: C.onSecondaryFixedVar, fontSize: 12,
                   fontFamily: "monospace", flexShrink: 0,
                 }}>
-                  {b.key || "—"} · {b.bpm ?? "—"}
+                  {b.key || "–"} · {b.bpm ?? "–"}
                 </span>
               </button>
             ))}

@@ -29,8 +29,8 @@ import { useTagManager } from "../contexts/TagManagerContext";
 
 
 const SORT_OPTIONS = [
-  { value: "created_date:desc", label: "Datum — neueste zuerst" },
-  { value: "created_date:asc", label: "Datum — älteste zuerst" },
+  { value: "created_date:desc", label: "Neueste zuerst" },
+  { value: "created_date:asc", label: "Älteste zuerst" },
   { value: "id:desc", label: "Zuletzt archiviert" },
   { value: "id:asc", label: "Zuerst archiviert" },
   { value: "name:asc", label: "Titel A–Z" },
@@ -312,7 +312,7 @@ export default function Browse() {
                   />
 
                   <Button size="sm" variant="secondary" icon={Shuffle} disabled={pagination.totalCount === 0}
-                    title="Zufälligen Beat aus allen Treffern abspielen" style={{ flexShrink: 0 }} onClick={handleRandomBeat}>
+                    title="Zufälliger Beat" style={{ flexShrink: 0 }} onClick={handleRandomBeat}>
                     Zufall
                   </Button>
                 </>

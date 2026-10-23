@@ -39,7 +39,7 @@ fn yt_dlp() -> Command {
 fn ausfuehren(mut c: Command) -> Result<String, String> {
     let out = c.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            "yt-dlp wurde nicht gefunden — installiert und im PATH?".to_string()
+            "yt-dlp wurde nicht gefunden (installiert, im PATH?)".to_string()
         } else {
             format!("yt-dlp ließ sich nicht starten: {e}")
         }

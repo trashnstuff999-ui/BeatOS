@@ -153,7 +153,7 @@ export function MigrateArchiveDialog({ modus, onClose, onDone }: {
 
       {phase === "pruefen" && (
         <p style={{ fontSize: 13, color: C.onSurfaceVariant, margin: 0 }}>
-          Archiv wird geprüft — es wird nichts angefasst …
+          Archiv wird geprüft …
         </p>
       )}
 
@@ -166,11 +166,8 @@ export function MigrateArchiveDialog({ modus, onClose, onDone }: {
           />
 
           <Hinweis ton="info">
-            Danach sind die Dateien für den Namensplan überhaupt erst sichtbar —
-            <strong> „Namen angleichen" gehört als zweiter Schritt hinterher</strong>.
-            Abgelöste MP3/WAV landen in <code>02_OLD/</code> im jeweiligen
-            Beat-Ordner. Gelöscht wird nichts, und es gibt kein Zurück-Protokoll:
-            vorher eine Sicherung ziehen.
+            <strong>Danach „Namen angleichen".</strong> Ältere MP3/WAV nach <code>02_OLD/</code>.
+            Kein Rückgängig, vorher sichern.
           </Hinweis>
 
           {stolpert.length > 0 && (
@@ -198,15 +195,12 @@ export function MigrateArchiveDialog({ modus, onClose, onDone }: {
           <Zeile
             zahl={dateienNeu}
             titel="Dateien werden umbenannt"
-            text="MP3, WAV, MP4, Cover, Thumbnail und FLP bekommen den Namen des Beats — aus „Thumbnail_12.png“ wird „TITEL_Thumbnail_1920x1080.png“."
+            text="„Thumbnail_12.png“ wird „TITEL_Thumbnail_1920x1080.png“"
           />
 
           <Hinweis ton="info">
-            Angefasst wird nur die <strong>Hauptdatei</strong> je Sorte — bei
-            mehreren die neueste, bei WAV die ungetaggte, bei FLP die
-            <code> _master</code>. Ältere MP3/WAV ziehen nach <code>02_OLD/</code>.
-            Liegt ein Beat noch in der alten Ordnerstruktur, findet dieser Lauf
-            seine Dateien nicht — dann erst „Struktur migrieren".
+            Nur die <strong>Hauptdatei</strong> je Sorte. Ältere MP3/WAV nach <code>02_OLD/</code>.
+            Alte Ordnerstruktur vorher migrieren.
           </Hinweis>
 
           {namenFehler.length > 0 && (
@@ -267,7 +261,7 @@ function Uebersprungen({ anzahl, grund, zeilen }: {
   return (
     <div>
       <Hinweis ton="warnung">
-        {anzahl} Beat{anzahl === 1 ? " wird" : "s werden"} übersprungen — {grund}.
+        {anzahl} Beat{anzahl === 1 ? " wird" : "s werden"} übersprungen: {grund}
         Sie bleiben unverändert.
       </Hinweis>
       <ul style={{
@@ -277,7 +271,7 @@ function Uebersprungen({ anzahl, grund, zeilen }: {
       }}>
         {zeilen.slice(0, 20).map(z => (
           <li key={z.id} style={{ fontSize: 12, color: C.onSurfaceVariant, padding: "2px 0" }}>
-            <strong style={{ color: C.onSurface }}>{z.id}</strong>{" — "}{z.text}
+            <strong style={{ color: C.onSurface }}>{z.id}</strong>{" "}{z.text}
           </li>
         ))}
         {zeilen.length > 20 && (

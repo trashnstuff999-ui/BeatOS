@@ -345,9 +345,7 @@ export default function Create() {
               title="Beat-Ordner wählen"
               description={
                 <>
-                  Wähle den Ordner deines fertigen Beats — BeatOS liest Titel, Tonart, BPM,
-                  Audio- und FLP-Dateien automatisch aus. Aus dem Studio-Tab landest du mit
-                  „Archivieren“ direkt hier.
+                  Titel, Tonart, BPM, Audio und FLP werden ausgelesen
                 </>
               }
               action={
@@ -440,7 +438,7 @@ export default function Create() {
             }}>
               <Info size={18} color={C.tertiary} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} />
               <p style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6, margin: 0 }}>
-                Beim Archivieren legt BeatOS die Unterordner selbst an — 01_SAVEFILES für die FLPs, 02_OLD für ältere Exporte. Du musst nichts vorbereiten.
+                Unterordner 01_SAVEFILES und 02_OLD werden automatisch angelegt
               </p>
             </div>
           </div>

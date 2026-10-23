@@ -101,10 +101,10 @@ export function BeatInfoCard({
           <span style={{ fontFamily: "monospace", opacity: 0.8 }}>{yearMonth}</span>
           {yearMonthGeschaetzt && (
             <span
-              title="Keine FLP gefunden, oder die FLP wurde kopiert/entpackt — dann ist ihr Erstelldatum das Kopierdatum, nicht der Produktionsmonat."
+              title="Aus dem Erstelldatum der FLP, kann durch Kopieren falsch sein"
               style={{ color: C.primary, cursor: "help" }}
             >
-              geschätzt — bitte prüfen
+              geschätzt
             </span>
           )}
         </div>

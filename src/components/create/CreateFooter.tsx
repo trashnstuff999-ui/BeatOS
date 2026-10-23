@@ -80,7 +80,7 @@ export function CreateFooter({
 
         {/* Source cleanup toggle — move semantics for the studio workflow */}
         <label
-          title="Nach verifizierter Archivierung wandert der Quellordner in den Papierkorb (wiederherstellbar)"
+          title="Quellordner danach in den Papierkorb"
           style={{
             display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
             fontSize: 12, fontWeight: 600, letterSpacing: "0.05em",

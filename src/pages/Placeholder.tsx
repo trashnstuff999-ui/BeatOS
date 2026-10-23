@@ -153,13 +153,13 @@ export function Support() {
               {[
                 { step: "1. Pfade setzen", desc: "Unter Einstellungen → Pfade das Archiv, die Produktions-Ordner und den Asset-Ordner festlegen." },
                 { step: "2. Im Studio anfangen", desc: "„Neues Projekt“ legt Ordner und Start-FLP an und öffnet FL Studio. Exporte und Cover landen im selben Ordner." },
-                { step: "3. Archivieren", desc: "Im Studio auf „Archivieren“ am Projekt — oder oben „Ordner archivieren“ für einen Ordner von aussen. BeatOS vergibt die Nummer und sortiert ein." },
+                { step: "3. Archivieren", desc: "Im Studio „Archivieren“ am Projekt oder „Ordner archivieren“ für externe Ordner. Nummer wird vergeben." },
                 { step: "4. Archiv durchsuchen", desc: "Im Archiv suchen, nach Tempo, Tonart und Status filtern, Beats direkt abspielen und Angaben im Detailpanel ändern." },
                 { step: "5. Upload vorbereiten", desc: "Im Upload-Tab entstehen Titel, Beschreibung und Tags je Plattform aus den Vorlagen. Die Planungs-Leiste unten setzt Termine." },
                 { step: "6. Fortschritt verfolgen", desc: "Die Übersicht zeigt, was ansteht, den monatlichen Output und die Status-Verteilung auf einen Blick." },
               ].map(({ step, desc }) => (
                 <li key={step} style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.6 }}>
-                  <span style={{ fontWeight: 700, color: C.onSurface }}>{step} — </span>{desc}
+                  <span style={{ fontWeight: 700, color: C.onSurface }}>{step}: </span>{desc}
                 </li>
               ))}
             </ol>
@@ -170,11 +170,11 @@ export function Support() {
             <div>
               <FaqItem
                 question="Meine Beats tauchen im Archiv nicht auf."
-                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Danach in den Einstellungen unter „Wartung“ den System Repair laufen lassen — er liest fehlende Beats aus dem Archiv nach."
+                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Danach in den Einstellungen unter „Wartung“ System Repair starten."
               />
               <FaqItem
                 question="Die Wiedergabe funktioniert nicht."
-                answer="BeatOS liest WAV, MP3, FLAC, AIFF, OGG und M4A. Stelle sicher, dass beim Archivieren eine Audiodatei ausgewählt war. Wurde die Datei danach außerhalb der App verschoben, findet der Player sie nicht mehr — dann den Ordner-Abgleich in den Einstellungen laufen lassen."
+                answer="BeatOS liest WAV, MP3, FLAC, AIFF, OGG und M4A. Stelle sicher, dass beim Archivieren eine Audiodatei ausgewählt war. Wurde die Datei danach außerhalb der App verschoben, findet der Player sie nicht mehr. Dann den Ordner-Abgleich in den Einstellungen starten."
               />
               <FaqItem
                 question="Wie lege ich eigene Tags an?"
@@ -182,7 +182,7 @@ export function Support() {
               />
               <FaqItem
                 question="Kann ich Angaben nach dem Archivieren noch ändern?"
-                answer="Ja. Beat im Archiv auswählen — das Detailpanel rechts ist direkt bearbeitbar. Titel, Tempo, Tonart, Status, Tags und Notizen werden beim Verlassen des Feldes gespeichert, ein eigener Dialog ist dafür nicht nötig."
+                answer="Ja. Beat im Archiv auswählen, das Detailpanel rechts ist direkt bearbeitbar. Titel, Tempo, Tonart, Status, Tags und Notizen werden beim Verlassen des Feldes gespeichert, ein eigener Dialog ist dafür nicht nötig."
               />
               <FaqItem
                 question="Welche Formate sind für Cover und Video möglich?"
@@ -190,7 +190,7 @@ export function Support() {
               />
               <FaqItem
                 question="Warum ist ein Beat im falschen Monat einsortiert?"
-                answer="Der Archivmonat kommt aus dem Erstelldatum der ältesten FLP im Ordner. Kam der Beat über einen Umweg — gezippt, über einen Cloud-Ordner — ist dieses Datum durch das Entpacken auf „jetzt“ gesetzt, und er landet im Monat des Imports."
+                answer="Der Archivmonat kommt aus dem Erstelldatum der ältesten FLP im Ordner. Wurde der Beat gezippt oder über einen Cloud-Ordner kopiert, ist dieses Datum durch das Entpacken auf „jetzt“ gesetzt, und er landet im Monat des Imports."
               />
             </div>
           </Section>

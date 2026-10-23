@@ -742,7 +742,7 @@ export function AllTagsModal({ initialSelected, onConfirm, onClose, editMode = t
 
             {/* Delete staged from DB */}
             {editMode && stagedCount > 0 && (
-              <Button variant="danger" icon={Trash2} title="Vorgemerkte Tags aus der Datenbank löschen" onClick={handleTrashStaged}>
+              <Button variant="danger" icon={Trash2} title="Vorgemerkte Tags löschen" onClick={handleTrashStaged}>
                 Löschen
               </Button>
             )}

@@ -133,7 +133,7 @@ function Fenster({ onClose }: { onClose: () => void }) {
             value={suche}
             onChange={e => setSuche(e.target.value)}
             onKeyDown={taste}
-            placeholder="Beat oder Projekt suchen — Titel, ID, Tonart …"
+            placeholder="Titel, ID, Tonart …"
             aria-label="Schnellsuche"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
@@ -155,7 +155,7 @@ function Fenster({ onClose }: { onClose: () => void }) {
             const Icon = istBeat ? Music : Disc3;
             const titel = istBeat ? t.beat.name : projectDisplayName(t.projekt);
             const neben = istBeat
-              ? `#${t.beat.id} · ${t.beat.key || "—"} · ${t.beat.bpm ?? "—"} BPM`
+              ? `#${t.beat.id} · ${t.beat.key || "–"} · ${t.beat.bpm ?? "–"} BPM`
               : `Projekt · ${t.projekt.name}`;
             return (
               <div

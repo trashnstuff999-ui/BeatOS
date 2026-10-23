@@ -108,13 +108,13 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onM
 
           <IconButton
             icon={Type}
-            title="Namen angleichen — Ordner- und Dateinamen auf das Schema ziehen"
+            title="Namen angleichen"
             onClick={onRename}
           />
 
           <IconButton
             icon={FolderSymlink}
-            title="Struktur migrieren — alte Ordnerstruktur (01_AUDIO, 02_VISUALS, 03_PROJECTS) flachziehen"
+            title="Alte Ordnerstruktur migrieren"
             onClick={onMigrate}
           />
 

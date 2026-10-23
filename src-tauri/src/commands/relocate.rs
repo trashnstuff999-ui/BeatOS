@@ -89,7 +89,7 @@ pub fn relocate_apply(new_anchor: String) -> Result<RelocateResult, String> {
         .ok_or("Kein gemeinsamer Anker in der Datenbank gefunden")?;
 
     if old_anchor.eq_ignore_ascii_case(&new_anchor) {
-        return Err("Alter und neuer Anker sind identisch — nichts zu tun".into());
+        return Err("Alter und neuer Anker sind identisch, nichts zu tun".into());
     }
 
     // Erst sichern, dann schreiben. Die Sicherung liegt neben der Datenbank,

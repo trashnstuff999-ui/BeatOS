@@ -18,7 +18,7 @@ export function NotesCard({ notes, setNotes }: NotesCardProps) {
       <textarea
         value={notes}
         onChange={e => setNotes(e.target.value)}
-        placeholder="Details zu Plugins, Inspiration oder angepeilten Artists …"
+        placeholder="Plugins, Inspiration, Artists …"
         rows={4}
         style={{
           ...commonStyles.input,

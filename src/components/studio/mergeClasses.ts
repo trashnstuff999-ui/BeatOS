@@ -28,12 +28,12 @@ export interface MergeClassMeta {
 export const MERGE_CLASSES: Record<MergeClassKey, MergeClassMeta> = {
   archived_incomplete: {
     label: "Archiviert, trägt neuere Arbeit",
-    action: "Bekommt eine neue Nummer — aber vorher ansehen: hier liegen Dateien, die es im Archiv nicht gibt.",
+    action: "Neue Nummer. Vorher prüfen: Dateien fehlen im Archiv.",
     moves: true,
   },
   archived_complete: {
     label: "Archiviert und vollständig",
-    action: "Bleibt liegen und verbraucht keine Nummer — der Beat steht komplett im Archiv.",
+    action: "Bleibt liegen, komplett im Archiv",
     moves: false,
   },
   live: {
@@ -43,7 +43,7 @@ export const MERGE_CLASSES: Record<MergeClassKey, MergeClassMeta> = {
   },
   no_number: {
     label: "Keine Nummer im Namen",
-    action: "Bleibt unangetastet liegen — von Hand entscheiden.",
+    action: "Bleibt liegen, von Hand entscheiden",
     moves: false,
   },
   no_flp: {
@@ -170,7 +170,7 @@ export function buildPreviewCsv(rows: MergeRow[], plan: MergePlan): string {
       lines.push([
         MERGE_CLASSES[key].label,
         r.name,
-        r.newName ?? "— bleibt liegen",
+        r.newName ?? "bleibt liegen",
         r.date ?? "",
         r.archiveFolder ?? "",
         r.missingImportant || "",

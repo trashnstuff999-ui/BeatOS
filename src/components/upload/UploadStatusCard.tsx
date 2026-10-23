@@ -193,7 +193,7 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
             <Button
               variant="secondary" size="sm" icon={Rocket}
               onClick={() => setReleaseOffen(true)}
-              title="Alle offenen Plattformen nacheinander hochladen: BeatStars, YouTube, SoundCloud"
+              title="Alle offenen Plattformen nacheinander"
             >
               Release starten
             </Button>
@@ -420,7 +420,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
             onBlur={handleUrlBlur}
             // Lange URLs laufen aus dem Feld — der Tooltip zeigt sie ganz
             title={row.platform === "beatstars"
-              ? `Beat-Link — wird als {{BEATSTARS_LINK}} in die Beschreibungen gerendert${urlDraft ? `\n${urlDraft}` : ""}`
+              ? `Beat-Link für die Beschreibungen${urlDraft ? `\n${urlDraft}` : ""}`
               : urlDraft || undefined}
             /* Der Platzhalter sagt, was zu tun ist. Vorher stand hier bei
                Beatstars der Name der Vorlagen-Variable — Maschinensprache in

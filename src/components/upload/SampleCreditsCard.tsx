@@ -97,7 +97,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
   }, [credits, beatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const credit = credits[0] ?? null;
-  const producerName = settings.producerName.trim() || "—";
+  const producerName = settings.producerName.trim() || "–";
 
   const waehle = (wert: string) => {
     if (wert === KEINER) { setCredits([]); return; }
@@ -153,7 +153,7 @@ export function SampleCreditsCard({ beatId, onSaved, bare = false }: SampleCredi
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 180px", minWidth: 0 }}>
           <label style={beschriftung}>Produziert von</label>
-          <div style={{ ...feld, color: C.onSurface, background: C.surfaceContainer }} title="Kommt aus den Einstellungen → Producer">
+          <div style={{ ...feld, color: C.onSurface, background: C.surfaceContainer }} title="Einstellungen → Producer">
             {producerName}
           </div>
         </div>

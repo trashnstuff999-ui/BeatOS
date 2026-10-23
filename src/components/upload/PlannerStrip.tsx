@@ -207,7 +207,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged,
                 key={t}
                 aria-pressed={an}
                 onClick={() => rhythmusUmschalten(t)}
-                title={an ? `${WEEKDAYS[t]} ist Upload-Tag — klicken zum Entfernen` : `${WEEKDAYS[t]} als Upload-Tag festlegen`}
+                title={an ? `${WEEKDAYS[t]} entfernen` : `${WEEKDAYS[t]} als Upload-Tag`}
                 style={{
                   width: 30, padding: "4px 0", borderRadius: radius.control,
                   border: `1px solid ${an ? alpha(C.primary, 0.5) : C.border15}`,
@@ -237,7 +237,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged,
             variant="secondary" size="sm" icon={CalendarPlus}
             loading={isScheduling}
             onClick={() => releaseAm(beatId, vorschlag)}
-            title={`„${beatName}" am nächsten freien Upload-Tag für alle Plattformen einplanen`}
+            title={`„${beatName}" am nächsten freien Tag planen`}
           >
             „{beatName}" am {vorschlagText} planen
           </Button>
@@ -260,7 +260,7 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged,
               <div
                 key={b.id}
                 onMouseDown={starteZiehen(b)}
-                title={`Auf einen Tag ziehen, um „${b.name}" einzuplanen · Klick öffnet den Beat`}
+                title={`Auf einen Tag ziehen · Klick öffnet`}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: 4, borderRadius: radius.control,
@@ -301,8 +301,8 @@ export function PlannerStrip({ refreshKey, beatId, beatName, uploads, onChanged,
                   tabIndex={0}
                   title={
                     busy ? day.beats.map(b => `${b.name} · ${b.plattformen.map(p => PLATFORM_CONFIG[p].label).join(", ")}`).join("\n")
-                    : fehlt ? "Upload-Tag — noch nichts geplant"
-                    : canSchedule ? `frei — klicken, um „${beatName}" hier zu planen` : "frei"
+                    : fehlt ? "Upload-Tag, nichts geplant"
+                    : canSchedule ? `frei · „${beatName}" hier planen` : "frei"
                   }
                   onClick={() => canSchedule && setOpenDay(isOpen ? null : day.iso)}
                   onKeyDown={e => { if (e.key === "Enter" && canSchedule) setOpenDay(isOpen ? null : day.iso); }}

@@ -202,7 +202,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
             fontSize: 12, color: C.onSurface,
           }}>
             <AlertTriangle size={13} color={C.primary} style={{ flexShrink: 0 }} />
-            Noch kein BeatStars-Link — die Beschreibung enthält keinen Link zum Beat.
+            Kein BeatStars-Link in der Beschreibung
           </div>
         )}
 
@@ -237,7 +237,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                 label={label}
                 detail={pieces[key]
                   ? (key === "title" ? pieces[key] : `${pieces[key].slice(0, 90)}${pieces[key].length > 90 ? "…" : ""}`)
-                  : "— nicht vorhanden —"}
+                  : "nicht vorhanden"}
                 action={
                   <StepBtn
                     onClick={() => handleCopy(key)}
@@ -292,7 +292,7 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                   variant="secondary"
                   onClick={weiter}
                   disabled={speichert}
-                  title="Diese Plattform jetzt auslassen — sie bleibt, wie sie ist"
+                  title="Überspringen"
                 >
                   Überspringen
                 </Button>
@@ -304,8 +304,8 @@ export function UploadAssistantDialog({ beatId, uploads, onClose, onChanged }: U
                   style={{ flex: 1 }}
                 >
                   {schritt + 1 < reihe.length
-                    ? `Hochgeladen — weiter zu ${PLATFORM_CONFIG[reihe[schritt + 1]].label}`
-                    : "Hochgeladen — fertig"}
+                    ? `Hochgeladen, weiter zu ${PLATFORM_CONFIG[reihe[schritt + 1]].label}`
+                    : "Hochgeladen, fertig"}
                 </Button>
               </div>
             </div>

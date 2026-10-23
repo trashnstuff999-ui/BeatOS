@@ -503,7 +503,7 @@ pub(crate) fn check_project_dirs(
     let index = read_archive_index(archive_root);
     if index.is_empty() {
         return Err(format!(
-            "Kein Beat im Archiv gefunden unter {} — stimmt der Pfad?",
+            "Kein Beat im Archiv gefunden unter {} (Pfad prüfen)",
             archive_root.display()
         ));
     }

@@ -43,8 +43,8 @@ export const PreviewCard = memo(function PreviewCard({
   hasVideo,
 }: PreviewCardProps) {
   const previewTitle = title || "SONGNAME";
-  const previewKey = keyValue || "—";
-  const previewBpm = bpm || "—";
+  const previewKey = keyValue || "–";
+  const previewBpm = bpm || "–";
   const previewId = catalogId || "#0000";
   const statusMeta = STATUS_CONFIG[normalizeStatus(status)];
 

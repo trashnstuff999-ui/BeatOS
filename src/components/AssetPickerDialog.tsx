@@ -63,7 +63,7 @@ export function AssetPickerDialog({
 
   const scan = useCallback(async () => {
     if (!assetRoot.trim()) {
-      setError("Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner wählen.");
+      setError("Kein Asset-Pfad (Einstellungen → Pfade)");
       return;
     }
     setIsLoading(true);

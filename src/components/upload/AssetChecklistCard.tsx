@@ -208,7 +208,7 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
         ))}
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <SectionIconBtn icon={Wand2} title="Dateinamen auf das Namensschema bringen" onClick={onConvert} />
+          <SectionIconBtn icon={Wand2} title="Dateinamen anpassen" onClick={onConvert} />
           <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
           <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={() => revealItemInDir(beatPath).catch(() => {})} />
         </div>
@@ -222,7 +222,7 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
       }}>
         {ziehen ? (
           <>
-            Loslassen — {ziehen.length - ignoriert === 1 ? "1 Datei" : `${ziehen.length - ignoriert} Dateien`} in den Beat-Ordner
+            Loslassen: {ziehen.length - ignoriert === 1 ? "1 Datei" : `${ziehen.length - ignoriert} Dateien`} in den Beat-Ordner
             {ignoriert > 0 && <span style={{ color: C.onSecondaryFixedVar }}>· {ignoriert} passt nirgends hin</span>}
           </>
         ) : (
@@ -242,7 +242,7 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
                 <Button
                   variant="ghost" size="sm"
                   onClick={aufraeumen}
-                  title="Ältere MP3/WAV nach 02_OLD verschieben — die neueste bleibt"
+                  title="Ältere MP3/WAV nach 02_OLD"
                   style={{ padding: "2px 6px", color: C.primary }}
                 >
                   nach 02_OLD verschieben
@@ -311,7 +311,7 @@ function ExportNamen({ beatId }: { beatId: string }) {
       <Button
         variant="ghost" size="sm"
         onClick={() => setOffen(o => !o)}
-        title="Namen für den Export aus Premiere und Photoshop"
+        title="Exportnamen für Premiere und Photoshop"
         style={{ padding: "2px 6px", color: C.primary }}
       >
         Exportnamen
@@ -328,7 +328,7 @@ function ExportNamen({ beatId }: { beatId: string }) {
           {namen === null && <span style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Lade …</span>}
           {namen?.length === 0 && (
             <span style={{ fontSize: 12, color: C.onSecondaryFixedVar, lineHeight: 1.5 }}>
-              Keine Exportnamen gefunden — sie kommen aus der BeatStars-Vorlage
+              Keine Exportnamen (BeatStars-Vorlage)
               (Zeilen „ÜBERSCHRIFT:" und der Name darunter).
             </span>
           )}
@@ -377,8 +377,8 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
 
   const titel =
     eingehend ? `${dateiname(eingehend)} → ${label}`
-    : !da ? (zuweisbar ? `${label} fehlt — aus dem Asset-Ordner zuweisen oder hierher ziehen` : `${label} fehlt`)
-    : falsch && mass ? `${datei}\n${mass.breite}×${mass.hoehe} — erwartet ${soll}`
+    : !da ? (zuweisbar ? `${label} fehlt · zuweisen oder hierher ziehen` : `${label} fehlt`)
+    : falsch && mass ? `${datei}\n${mass.breite}×${mass.hoehe}, erwartet ${soll}`
     : mass ? `${datei}\n${mass.breite}×${mass.hoehe}`
     : datei ?? label;
 

@@ -587,7 +587,7 @@ fn scan_archive_blocking(archive_base_path: &str) -> Result<ScanResult, String> 
     let archive_dir = Path::new(archive_base_path);
     if archive_base_path.trim().is_empty() || !archive_dir.exists() {
         return Err(format!(
-            "Archive not found: '{}' — bitte Archive Path in den Settings setzen",
+            "Archive not found: '{}' (Einstellungen → Pfade)",
             archive_base_path
         ));
     }

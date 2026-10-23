@@ -729,7 +729,7 @@ pub fn create_project_folder(
     let template = Path::new(&template_flp);
     if !template.is_file() || !is_flp(template) {
         return Err(format!(
-            "Template-FLP nicht gefunden: '{}' — in den Einstellungen unter „Template-FLP\" setzen",
+            "Template-FLP nicht gefunden: '{}' (Einstellungen → Pfade)",
             template_flp
         ));
     }
@@ -1027,7 +1027,7 @@ fn apply_steps(steps: Vec<MergeStep>, was: Option<&str>) -> Result<MergeReport, 
             }
         }
         Err(e) => failed.push(format!(
-            "Datenbank nicht erreichbar ({}) — Ordner sind verschoben, Status/Notizen bleiben am alten Pfad",
+            "Datenbank nicht erreichbar ({}): Ordner sind verschoben, Status/Notizen bleiben am alten Pfad",
             e
         )),
     }
@@ -1502,7 +1502,7 @@ fn merge_steps_on_disk(steps: &[MergeStep]) -> (Vec<MergeStep>, Vec<String>) {
         let to = PathBuf::from(&s.to);
         if to.exists() {
             failed.push(format!(
-                "{}: „{}“ ist belegt — der Ordner liegt jetzt als {}",
+                "{}: „{}“ ist belegt, liegt jetzt als {}",
                 s.old_name,
                 s.new_name,
                 temp.display()
@@ -1511,7 +1511,7 @@ fn merge_steps_on_disk(steps: &[MergeStep]) -> (Vec<MergeStep>, Vec<String>) {
         }
         if let Err(e) = std::fs::rename(&temp, &to) {
             failed.push(format!(
-                "{}: Umbenennen nach „{}“ fehlgeschlagen ({}) — liegt als {}",
+                "{}: Umbenennen nach „{}“ fehlgeschlagen ({}), liegt als {}",
                 s.old_name,
                 s.new_name,
                 e,
@@ -1611,7 +1611,7 @@ fn rewrite_merge_logs(paths: &[String], done: &[MergeStep], failed: &mut Vec<Str
     for path in paths {
         if let Err(e) = std::fs::write(path, &json) {
             failed.push(format!(
-                "Protokoll nicht aktualisierbar ({}) — {} enthält noch den Plan",
+                "Protokoll nicht aktualisierbar ({}): {} enthält noch den Plan",
                 e, path
             ));
         }
@@ -1696,7 +1696,7 @@ fn scan_asset_inbox_blocking(path: &str) -> Result<Vec<AssetFile>, String> {
     let root = Path::new(path);
     if path.trim().is_empty() || !root.is_dir() {
         return Err(format!(
-            "Asset-Ordner nicht gefunden: '{}' — bitte Asset Path in den Settings setzen",
+            "Asset-Ordner nicht gefunden: '{}' (Einstellungen → Pfade)",
             path
         ));
     }

@@ -62,7 +62,7 @@ export function BeatAssetsCard({
           fontSize: 12, color: C.primary,
         }}>
           <AlertTriangle size={13} strokeWidth={2} />
-          Kein Cover zugewiesen — beim Archivieren wird nachgefragt.
+          Kein Cover
         </div>
       )}
 
@@ -108,7 +108,7 @@ export function BeatAssetsCard({
         <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 10, lineHeight: 1.5 }}>
           {noFolder
             ? "Erst einen Ordner wählen."
-            : "Kein Asset-Pfad gesetzt — in den Einstellungen unter „Pfade“ den Export-Ordner eintragen."}
+            : "Kein Asset-Pfad (Einstellungen → Pfade)"}
         </div>
       )}
 
@@ -160,7 +160,7 @@ function AssetSlot({ label, aspect, preview, videoPath, fileName, icon: Icon, di
         disabled={disabled}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        title={filled ? `${fileName} — Klick zum Ersetzen. Die alte Datei geht zurück in den Asset-Ordner.` : disabled ? undefined : `${label} aus dem Asset-Ordner zuweisen`}
+        title={filled ? `${fileName} · ersetzen` : disabled ? undefined : `${label} zuweisen`}
         style={{
           width: "100%",
           aspectRatio: aspect,

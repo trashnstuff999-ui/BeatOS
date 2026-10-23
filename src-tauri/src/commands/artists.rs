@@ -492,7 +492,7 @@ fn assets_verschieben(assets: &Path, dateien: Vec<String>) -> Vec<UmzugErgebnis>
         let quelle = Path::new(&d);
         let Some(name) = quelle.file_name() else { return ergebnis(false, "Kein Dateiname".into()) };
         let ziel = assets.join(name);
-        if ziel.exists() { return ergebnis(false, "liegt schon in Assets/ — übersprungen".into()); }
+        if ziel.exists() { return ergebnis(false, "liegt schon in Assets/, übersprungen".into()); }
         // rename klappt nur auf demselben Laufwerk; sonst kopieren, prüfen, löschen.
         let verschoben = fs::rename(quelle, &ziel).map_err(|e| e.to_string()).or_else(|_| {
             crate::utils::copy_and_verify(quelle, &ziel)?;
@@ -756,7 +756,7 @@ pub fn artists_umziehen(archive_root: String, artists_root: String, umzuege: Vec
         };
         let ziel = Path::new(&artists_root).join(&name);
         if ziel.exists() {
-            return ergebnis(false, format!("{} gibt es schon — übersprungen", ziel.display()));
+            return ergebnis(false, format!("{} gibt es schon, übersprungen", ziel.display()));
         }
         match fs::rename(&quelle, &ziel) {
             Ok(()) => ergebnis(true, format!("→ {}", ziel.display())),

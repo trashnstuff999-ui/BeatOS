@@ -102,7 +102,7 @@ describe("Notbremse beim Laden", () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByTestId("laedt")).toHaveTextContent("nein");
-    expect(screen.getByTestId("fehler")).toHaveTextContent("antwortet nicht");
+    expect(screen.getByTestId("fehler")).toHaveTextContent("Datei nicht gefunden");
   });
 
   it("schweigt, wenn die Datei doch antwortet", async () => {

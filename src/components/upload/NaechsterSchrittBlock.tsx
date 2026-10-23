@@ -65,7 +65,7 @@ export function NaechsterSchrittBlock({ schritt, beatId, beatPath, onChanged, on
   switch (schritt.art) {
     case "infos":
       titel = "Infos ausfüllen";
-      unter = "Artists und Genres fehlen noch";
+      unter = "Artists und Genres fehlen";
       knopf = (
         <Button variant="secondary" size="sm" icon={ArrowDown}
           onClick={() => document.getElementById("upload-infos")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
@@ -95,7 +95,7 @@ export function NaechsterSchrittBlock({ schritt, beatId, beatPath, onChanged, on
       titel = "Bereit · noch kein Termin";
       knopf = vorschlag ? (
         <Button variant="primary" size="sm" icon={CalendarPlus} loading={plant} onClick={() => planenAm(vorschlag)}
-          title="Am nächsten freien Upload-Tag für alle Plattformen einplanen">
+          title="Nächster freier Upload-Tag">
           Am {kurzDatum(vorschlag)} planen
         </Button>
       ) : (

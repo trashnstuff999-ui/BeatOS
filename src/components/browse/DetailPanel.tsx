@@ -262,7 +262,7 @@ export function DetailPanel({
     if (!flpPath || versionBusy) return;
     const roots = parseProductionPaths(settings.productionPath);
     if (roots.length === 0) {
-      melde("Kein Produktions-Ordner gesetzt — Einstellungen → Pfade.", "fehler");
+      melde("Kein Produktions-Ordner (Einstellungen → Pfade)", "fehler");
       return;
     }
     setVersionBusy(true);
@@ -275,7 +275,7 @@ export function DetailPanel({
       // "idea" ist kein Hand-Status — die Automatik rechnet weiter selbst.
       await api.studio.updateProject(ordner, "idea", 0, `Neue Version von „${beat.name}“ (Archiv)`)
         .catch(() => {});  // Notiz ist Beiwerk, das Projekt steht trotzdem
-      melde(`„${name}“ im Studio angelegt — öffnet in FL`, "erfolg");
+      melde(`„${name}“ im Studio angelegt`, "erfolg");
       await openPath(flp).catch(e => melde(`FL öffnet „${name}“ nicht: ${String(e)}`, "fehler"));
     } catch (e) {
       melde(`Neue Version fehlgeschlagen: ${String(e)}`, "fehler");
@@ -455,7 +455,7 @@ export function DetailPanel({
               value={form.name}
               onChange={e => setFeld("name", e.target.value)}
               onKeyDown={tastatur}
-              title="Beat-Name — klicken zum Ändern"
+              title="Umbenennen"
               style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}
             />
             <div style={{
@@ -483,7 +483,7 @@ export function DetailPanel({
               value={form.bpm}
               onChange={e => setFeld("bpm", e.target.value)}
               onKeyDown={tastatur}
-              placeholder="—"
+              placeholder="–"
               inputMode="numeric"
               style={{ width: 58, fontSize: 14, fontWeight: 600 }}
             />
@@ -495,7 +495,7 @@ export function DetailPanel({
               value={form.key}
               onChange={e => setFeld("key", e.target.value)}
               onKeyDown={tastatur}
-              placeholder="—"
+              placeholder="–"
               style={{ width: 72, fontSize: 14, fontWeight: 600 }}
             />
           </div>
@@ -525,7 +525,7 @@ export function DetailPanel({
               </div>
             </div>
             <Button size="sm" variant="secondary" loading={angleichBusy} style={{ flexShrink: 0 }}
-              title="Ordner- und Dateinamen dieses Beats auf das Schema ziehen" onClick={angleichen}>
+              title="Namen angleichen" onClick={angleichen}>
               Angleichen
             </Button>
           </div>
@@ -649,12 +649,12 @@ export function DetailPanel({
         background: C.background,
       }}>
         <Button variant="secondary" icon={FileMusic} disabled={!flpPath} style={{ flex: 1, minWidth: 0 }}
-          title={flpPath ? `${flpPath.split(/[/\\]/).pop()} — in FL Studio öffnen` : "Keine FLP im Beat-Ordner"}
+          title={flpPath ? `${flpPath.split(/[/\\]/).pop()} öffnen` : "Keine FLP im Beat-Ordner"}
           onClick={() => flpPath && openPath(flpPath).catch(() => {})}>
           In FL öffnen
         </Button>
         <Button variant="secondary" icon={CopyPlus} disabled={!flpPath} loading={versionBusy} style={{ flex: 1, minWidth: 0 }}
-          title={flpPath ? "Neues Studio-Projekt mit dieser FLP als Vorlage — für Remixe und neue Fassungen" : "Keine FLP im Beat-Ordner"}
+          title={flpPath ? "Neues Projekt aus dieser FLP" : "Keine FLP im Beat-Ordner"}
           onClick={handleNewVersion}>
           Neue Version
         </Button>
@@ -668,7 +668,7 @@ export function DetailPanel({
         background: C.background,
       }}>
         <Button variant="primary" icon={UploadIcon} disabled={!onOpenInUpload} style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap" }}
-          title="Im Upload-Tab öffnen — Beschreibungen, Type-Beat, Assets"
+          title="Im Upload öffnen"
           onClick={() => onOpenInUpload?.(beat)}>
           Im Upload öffnen
         </Button>
@@ -721,7 +721,7 @@ export function DetailPanel({
                   Diesen Beat löschen?
                 </div>
                 <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
-                  <strong style={{ color: C.onSurface }}>#{beat.id}</strong> — {beat.name}
+                  <strong style={{ color: C.onSurface }}>#{beat.id}</strong> {beat.name}
                 </div>
               </div>
             </div>

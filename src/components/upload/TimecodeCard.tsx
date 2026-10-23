@@ -360,7 +360,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
   const hinweis =
     marken.length === 0 ? null
     : marken.length < 3 ? "YouTube zeigt Kapitel erst ab drei Marken."
-    : zuEng ? `Zwei Marken liegen weniger als ${MIN_ABSTAND} Sekunden auseinander — YouTube verwirft den Block dann.`
+    : zuEng ? `Marken unter ${MIN_ABSTAND} s Abstand, YouTube ignoriert sie`
     : null;
 
   const vorhandeneNamen = marken.map(m => m.label);
@@ -402,7 +402,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
               onClick={analysieren}
               disabled={!beat.bpm || analysiert}
               title={beat.bpm
-                ? "Abschnitte aus dem Audio erkennen — die Namen sind geraten"
+                ? "Abschnitte erkennen (Namen geraten)"
                 : "Braucht das BPM des Beats"}
             >
               Erkennen
@@ -435,7 +435,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             fontSize: 12, fontFamily: "monospace",
             color: laeuftHier ? C.onSurface : C.onSecondaryFixedVar,
           }}>
-            {laeuftHier ? mmss(jetzt) : "—:—"}
+            {laeuftHier ? mmss(jetzt) : "–:–"}
           </span>
           {laeuftHier && (
             <IconButton icon={RotateCw} size={28} onClick={neuLaden} title="Neuesten Export laden" />
@@ -447,7 +447,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
               icon={Magnet}
               onClick={rasterUmschalten}
               aktiv={raster}
-              title={`Neue Marken rasten auf den nächsten Takt ein (${takt.toFixed(1).replace(".", ",")} s bei ${beat.bpm} BPM)`}
+              title={`Auf Takt einrasten (${takt.toFixed(1).replace(".", ",")} s)`}
             >
               Einrasten
             </Knopf>
@@ -455,7 +455,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
           <Button
             variant="secondary" size="sm" icon={Plus}
             onClick={() => hinzufuegen()}
-            title="Marke setzen — beim Hören auch mit der Taste M"
+            title="Marke setzen (M)"
           >
             {marken.length === 0
               ? "Erste Marke bei 0:00"
@@ -485,11 +485,11 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
           }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>Noch keine Kapitel</span>
             <span>
-              Oben <b style={{ color: C.onSurfaceVariant }}>FL-Marker</b> oder <b style={{ color: C.onSurfaceVariant }}>Audio</b> wählen
-              und übernehmen —<br />oder abspielen und an jeder neuen Stelle <kbd style={{
+              <b style={{ color: C.onSurfaceVariant }}>FL-Marker</b> oder <b style={{ color: C.onSurfaceVariant }}>Audio</b> übernehmen,
+              oder beim Abspielen <kbd style={{
                 padding: "1px 6px", borderRadius: 4, border: `1px solid ${C.border20}`,
                 fontFamily: "inherit", color: C.onSurfaceVariant,
-              }}>M</kbd> drücken.
+              }}>M</kbd>
             </span>
           </div>
         )}
@@ -504,7 +504,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {ersteZeile ? (
                 <span
-                  title="Die erste Marke muss bei 0:00 liegen, sonst ignoriert YouTube alle Kapitel"
+                  title="YouTube braucht eine Marke bei 0:00"
                   style={{
                     width: 64, flexShrink: 0, padding: "7px 8px",
                     borderRadius: radius.control,

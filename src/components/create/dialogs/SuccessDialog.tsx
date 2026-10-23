@@ -88,7 +88,7 @@ export function SuccessDialog({
     <Modal
       icon={CheckCircle}
       title="Beat archiviert"
-      subtitle="Der Beat wurde in die Archiv-Struktur einsortiert."
+      subtitle="Im Archiv einsortiert"
       onClose={onClose}
       width={480}
       footer={

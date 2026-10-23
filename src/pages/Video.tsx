@@ -106,7 +106,7 @@ export default function Video() {
       <PageHeader icon={VideoIcon} title="Video" />
       <PageBody width="full">
         {!currentBeat ? (
-          <EmptyState icon={VideoIcon} title="Gerade läuft nichts" description="Spiel einen Beat ab — hier erscheint dann sein Video, synchron zum Ton." />
+          <EmptyState icon={VideoIcon} title="Gerade läuft nichts" description="Beat abspielen, Video erscheint hier" />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 18, alignItems: "center" }}>
             {/* ── Bühne 16:9 ── */}
@@ -165,8 +165,8 @@ export default function Video() {
                     {pfad !== undefined && (
                       <span style={{ fontSize: 14, lineHeight: 1.5, color: C.onSurfaceVariant }}>
                         {fehler
-                          ? "Die MP4 lässt sich nicht abspielen — vermutlich H.265. Als H.264 exportiert läuft sie hier. Der Ton läuft unten weiter."
-                          : "Im Beat-Ordner liegt keine MP4. Der Ton läuft unten weiter — sobald eine da ist, erscheint sie hier."}
+                          ? "MP4 nicht abspielbar (H.265?). Als H.264 exportieren."
+                          : "Keine MP4 im Beat-Ordner"}
                       </span>
                     )}
                   </div>

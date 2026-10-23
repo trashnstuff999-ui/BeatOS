@@ -187,7 +187,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
             <IconBtn
               onClick={playPrev}
               disabled={!hasQueue}
-              title="Von vorn — oder zum vorherigen Beat, wenn er gerade erst läuft"
+              title="Zurück"
             >
               <SkipBack size={18} fill="currentColor" strokeWidth={1.5} />
             </IconBtn>
@@ -229,7 +229,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
             <ZiehLeiste
               anteil={progress / 100}
               onAnteil={a => seekPercent(a * 100)}
-              titel="Zum Springen ziehen — ← → 5 s, mit Shift 30 s"
+              titel="Springen · ← → 5 s, Shift 30 s"
               linie={5}
               griffOben={10}
               griffUnten={10}
@@ -252,7 +252,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
           <ZiehLeiste
             anteil={isMuted ? 0 : volume}
             onAnteil={setVolume}
-            titel="Lautstärke — Shift + ↑ / ↓"
+            titel="Lautstärke · Shift ↑ ↓"
             griffOben={10}
             griffUnten={10}
             knopf

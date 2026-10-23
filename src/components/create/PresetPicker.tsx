@@ -99,7 +99,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
         }}>
           {presets.length === 0 && (
             <div style={{ padding: 12, fontSize: 12, color: C.onSurfaceVariant, textAlign: "center" }}>
-              Noch keine Presets — im Upload-Tab anlegen.
+              Noch keine Presets
             </div>
           )}
           {presets.map(p => (
@@ -128,7 +128,7 @@ export function PresetPicker({ selected, onSelect }: PresetPickerProps) {
       <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
         {selected
           ? "Artists, Genres und Plattform-Tags werden mit archiviert."
-          : "Optional — spart das Nachtragen im Upload-Tab."}
+          : "Optional"}
       </div>
     </div>
     </SectionCard>

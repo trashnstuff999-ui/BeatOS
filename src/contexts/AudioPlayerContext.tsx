@@ -186,7 +186,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     let notbremse: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       notbremse = null;
       setIsLoading(false);
-      setError("Die Datei antwortet nicht — liegt sie noch da, wo sie war?");
+      setError("Datei nicht gefunden");
     }, 15_000);
     /** Irgendein Ladeereignis kam durch — dann war es kein Haenger. */
     const bremseLoesen = () => {

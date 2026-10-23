@@ -67,7 +67,7 @@ export function useCreateBeat({
   const handleCreateBeatstructure = useCallback(async (forceV2 = false, overrideCatalogId?: string) => {
     if (!sourceFolderPath || !title) return;
     if (!settings.archivePath) {
-      setArchiveError("Kein Archiv-Pfad gesetzt — in den Einstellungen unter „Pfade“ nachtragen.");
+      setArchiveError("Kein Archiv-Pfad (Einstellungen → Pfade)");
       return;
     }
 

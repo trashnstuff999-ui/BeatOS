@@ -260,7 +260,7 @@ describe("Uploads im Side-Panel", () => {
 
 describe("Namen angleichen", () => {
   const ZIEL = "0842 - NEU [Am 140]";
-  const nameFeld = () => screen.getByTitle(/Beat-Name/);
+  const nameFeld = () => screen.getByTitle("Umbenennen");
 
   /** Antwortet auf beide Laeufe (Trockenlauf und echt) mit demselben Plan. */
   function syncAntwort(plan: Record<string, unknown>) {

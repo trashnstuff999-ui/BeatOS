@@ -268,11 +268,11 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
 
 function TemplatePreview({ draft }: { draft: AppSettings }) {
   const lines: Array<[string, string]> = [
-    ["{{PRODUCER_PROD}}", draft.producerName ? `prod. ${draft.producerName}` : "—"],
-    ["{{EMAIL}}", draft.contactEmail || "—"],
-    ["{{IG_URL}}", draft.instagramUrl || "—"],
-    ["{{SC_URL}}", draft.soundcloudUrl || "—"],
-    ["{{BS_URL}}", draft.beatstarsUrl || "—"],
+    ["{{PRODUCER_PROD}}", draft.producerName ? `prod. ${draft.producerName}` : "–"],
+    ["{{EMAIL}}", draft.contactEmail || "–"],
+    ["{{IG_URL}}", draft.instagramUrl || "–"],
+    ["{{SC_URL}}", draft.soundcloudUrl || "–"],
+    ["{{BS_URL}}", draft.beatstarsUrl || "–"],
   ];
   return (
     <div style={{
@@ -288,13 +288,13 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
         marginBottom: 10,
       }}>
         <FileText size={10} strokeWidth={2} />
-        Vorschau — so landen die Werte in den Beschreibungen
+        Vorschau
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {lines.map(([placeholder, value]) => (
           <div key={placeholder} style={{ display: "flex", gap: 10, fontSize: 12, fontFamily: "monospace" }}>
             <span style={{ color: C.onSecondaryFixedVar, width: 150, flexShrink: 0 }}>{placeholder}</span>
-            <span style={{ color: value === "—" ? C.onSecondaryFixedVar : C.mint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ color: value === "–" ? C.onSecondaryFixedVar : C.mint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {value}
             </span>
           </div>
@@ -371,8 +371,7 @@ function SampleProducersCard() {
         </span>
       </div>
       <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, lineHeight: 1.5, marginBottom: 12 }}>
-        Wessen Sample du benutzt hast. Einmal hier gepflegt, im Upload-Tab pro Beat
-        ausgewählt — Name und Links landen dann von selbst in der Beschreibung.
+        Sample-Producer für die Credits in der Beschreibung
       </div>
 
       {producers.length > 0 && (
@@ -483,9 +482,7 @@ function RelocateCard() {
       titel: `${plan.total} Pfade umschreiben?`,
       text: `von:  ${plan.old_anchor}\n` +
             `nach: ${plan.new_anchor}\n\n` +
-            `Vorher wird eine Sicherung der Datenbank angelegt. Der Vorgang fasst ` +
-            `ausschließlich die Datenbank an, keine Dateien, und ist umkehrbar — ` +
-            `derselbe Weg zurück stellt den Ausgangszustand her.`,
+            `Nur Datenbank, keine Dateien. Mit Sicherung, umkehrbar.`,
       bestaetigen: "Umschreiben",
     });
     if (!ok) return;
@@ -534,9 +531,7 @@ function RelocateCard() {
 
       {vermisst && (
         <div style={{ fontSize: 11, color: C.error, lineHeight: 1.5, marginBottom: 12 }}>
-          Der Archivordner liegt nicht dort, wo die Datenbank ihn vermutet. Das heißt
-          nicht zwingend, dass etwas umgezogen ist — eine abgezogene Platte oder eine
-          nicht eingebundene Freigabe sieht genauso aus. Erst nachsehen, dann handeln.
+          Archivordner nicht gefunden. Platte oder Freigabe prüfen.
         </div>
       )}
 
@@ -546,7 +541,7 @@ function RelocateCard() {
           background: C.surfaceContainer, border: `1px solid ${C.border15}`, borderRadius: radius.control,
         }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface, marginBottom: 8 }}>
-            Vorschau — es ist noch nichts geschrieben
+            Vorschau, noch nichts geschrieben
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
             {plan.entries.map(e => (
@@ -570,9 +565,7 @@ function RelocateCard() {
           </div>
           {plan.total === 0 && (
             <div style={{ fontSize: 11, color: C.error, marginTop: 6, lineHeight: 1.5 }}>
-              Kein einziger Pfad passt. Vermutlich liegt der gewählte Ordner eine Ebene
-              zu tief oder zu hoch — gesucht ist der Ordner, der die Bibliothek enthält,
-              nicht die Bibliothek selbst.
+              Kein Pfad passt. Den Ordner wählen, der die Bibliothek enthält.
             </div>
           )}
         </div>
@@ -590,7 +583,7 @@ function RelocateCard() {
             <div style={row}><span style={rowLabel}>Sicherung</span><span style={pfad}>{done.backup_path}</span></div>
           </div>
           <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 8, lineHeight: 1.5 }}>
-            Die App arbeitet noch mit den alten Pfaden im Speicher — einmal neu laden.
+            Einmal neu laden
           </div>
         </div>
       )}
@@ -616,9 +609,7 @@ function RelocateCard() {
       </div>
 
       <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 10, lineHeight: 1.5 }}>
-        Getauscht wird nur das gemeinsame Präfix aller Pfade. Es wird ausschließlich die
-        Datenbank geschrieben, keine Datei verschoben — und der Weg zurück stellt den
-        Ausgangszustand wieder her.
+        Nur das gemeinsame Präfix, nur Datenbank, umkehrbar
       </div>
     </div>
   );
@@ -699,7 +690,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
     if (ids.length === 0) return;
     const ok = await frage({
       titel: "Auf der Platte umbenennen?",
-      text: `${ids.length} Beat${ids.length === 1 ? " wird" : "s werden"} umbenannt — Ordner und Dateien.`,
+      text: `${ids.length} Beat${ids.length === 1 ? " wird" : "s werden"} umbenannt (Ordner und Dateien)`,
       bestaetigen: "Umbenennen",
       gefahr: true,
     });
@@ -741,7 +732,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
   return (
     <Section
       title="Wartung"
-      description="Backup, Reparatur und Vorlagen — alles Administrative an einem Ort."
+      description="Backup, Reparatur, Vorlagen"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Backup */}
@@ -816,10 +807,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Ordner-Abgleich</span>
           </div>
           <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5, marginBottom: 12 }}>
-            Benennt Ordner und Dateien im Archiv nach den Werten aus der Datenbank und
-            räumt ältere MP3/WAV nach 02_OLD —
-            für Beats, die in der App längst anders heißen als auf der Platte.
-            Neue Umbenennungen laufen ab jetzt automatisch mit; das hier holt den Altbestand nach.
+            Ordner und Dateien nach der Datenbank benennen, ältere MP3/WAV nach 02_OLD
           </div>
 
           {syncPlan && (
@@ -833,7 +821,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
             }}>
               {syncPlan.length === 0 ? (
                 <span style={{ fontSize: 12, fontFamily: "Inter, sans-serif", color: C.mint }}>
-                  Alles im Reinen — nichts umzubenennen.
+                  Nichts umzubenennen
                 </span>
               ) : syncPlan.map(s => (
                 <div key={s.beat_id} style={{ color: s.error ? C.error : C.onSurfaceVariant, lineHeight: 1.5 }}>
@@ -883,7 +871,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Templates</div>
             <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
-              beatstars / soundcloud / youtube .template — Änderungen wirken beim nächsten Re-Render
+              beatstars / soundcloud / youtube .template
             </div>
           </div>
           <Button variant="secondary" icon={FolderOpen} onClick={handleOpenTemplates}>Ordner öffnen</Button>
@@ -1009,7 +997,7 @@ export function Settings() {
           {section === "paths" && (
           <Section
             title="Pfade"
-            description="Wo BeatOS deine Beat-Dateien liest und ablegt."
+            description="Ordner für Archiv, Produktion und Assets"
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <PathInput
@@ -1099,7 +1087,7 @@ export function Settings() {
           {section === "producer" && (
           <Section
             title="Producer-Infos"
-            description="Werden im Upload-Tab für die Beatstars-, SoundCloud- und YouTube-Beschreibungen eingesetzt."
+            description="Für die Beschreibungen im Upload"
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <TextSetting
@@ -1152,7 +1140,7 @@ export function Settings() {
                   Upload-Erfassung (02/2026) liegen. Liest die Kanäle oben. */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: C.onSecondaryFixedVar }}>
                 <Button variant="ghost" size="sm" icon={History} onClick={() => setNacherfassen(true)}
-                  title="Videos und Tracks der Kanäle oben lesen und fehlende Upload-Einträge ergänzen">
+                  title="Fehlende Uploads aus den Kanälen ergänzen">
                   Uploads von den Kanälen nacherfassen …
                 </Button>
                 <span>für Beats, die vor 02/2026 hochgeladen wurden</span>

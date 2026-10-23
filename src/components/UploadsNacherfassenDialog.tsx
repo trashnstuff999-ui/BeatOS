@@ -63,7 +63,7 @@ export function UploadsNacherfassenDialog({ youtubeUrl, soundcloudUrl, onClose }
       try {
         const kanaele: [Plattform, string][] = ([["youtube", youtubeUrl], ["soundcloud", soundcloudUrl]] as [Plattform, string][])
           .filter(([, u]) => u.trim());
-        if (kanaele.length === 0) throw new Error("Keine Kanal-Links eingetragen — oben YouTube- und SoundCloud-URL ausfüllen.");
+        if (kanaele.length === 0) throw new Error("Keine Kanal-Links eingetragen");
 
         const [alleBeats, ...listen] = await Promise.all([
           api.beats.getAll({ search: null, onlyFavs: false, limit: 5000, offset: 0 }),
@@ -152,7 +152,7 @@ export function UploadsNacherfassenDialog({ youtubeUrl, soundcloudUrl, onClose }
     <Modal
       icon={History}
       title="Uploads nacherfassen"
-      subtitle="Videos und Tracks deiner Kanäle den Beats zuordnen — Vorhandenes bleibt, wie es ist"
+      subtitle="Videos und Tracks den Beats zuordnen"
       width={860}
       onClose={onClose}
       closeOnBackdrop={phase.art !== "eintragen"}
@@ -234,7 +234,7 @@ Klicken zum Öffnen`}
                         colorScheme: "dark",
                       }}
                     >
-                      <option value="">{z.mehrdeutig ? "mehrere Beats heißen so — wählen" : "— nicht zuordnen —"}</option>
+                      <option value="">{z.mehrdeutig ? "mehrdeutig, wählen" : "nicht zuordnen"}</option>
                       {beats.map(b => <option key={b.id} value={b.id}>#{b.id} {b.name}</option>)}
                     </select>
                     {z.erfasst && <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>schon erfasst</span>}

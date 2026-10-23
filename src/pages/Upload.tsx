@@ -340,7 +340,7 @@ function UploadEmptyState() {
     <EmptyState
       icon={UploadIcon}
       title="Kein Beat ausgewählt"
-      description="Wähle oben einen archivierten Beat, um ihn für den Upload vorzubereiten."
+      description="Oben einen Beat wählen"
     />
   );
 }

@@ -149,7 +149,7 @@ function summarizePlan(p: LegacyStructure): string {
     parts.push("03_PROJECTS → 01_SAVEFILES");
   }
   if (p.savefiles_conflict) {
-    parts.push("⚠️ 03_PROJECTS und 01_SAVEFILES existieren beide — muss von Hand zusammengeführt werden");
+    parts.push("03_PROJECTS und 01_SAVEFILES existieren beide, bitte von Hand zusammenführen");
   }
   if (p.collisions.length > 0) {
     parts.push(`⚠️ ${p.collisions.length} Namenskonflikt(e) mit dem Hauptordner`);
@@ -173,7 +173,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
     <Modal
       icon={ArrowRightLeft}
       title="Ordnerstruktur migrieren"
-      subtitle="Dateien werden verschoben (umbenannt), nie kopiert und gelöscht. Nichts wird überschrieben."
+      subtitle="Nur verschieben, nichts wird überschrieben"
       onClose={onCancel}
       width={580}
       // Laeuft die Migration, darf ein Klick daneben nicht schliessen.
@@ -282,8 +282,7 @@ function MigrationDialog({ plan, isMigrating, error, onCancel, onConfirm }: {
           {/* Aufräum-Schritt: läuft immer mit, hat aber keine Vorschau —
               welche Datei die neueste ist, steht erst nach dem Flatten fest. */}
           <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
-            Danach bleibt im Root nur die neueste MP3 und die neueste WAV — ältere
-            Audio-Dateien wandern mit ihrem Originalnamen nach 02_OLD/.
+            Im Root bleiben nur die neueste MP3 und WAV, ältere gehen nach 02_OLD/.
           </div>
 
       {error && (
@@ -337,7 +336,7 @@ function SuccessToast({ text }: { text: string }) {
       fontSize: 12, color: C.mint,
     }}>
       <Check size={14} strokeWidth={2.5} />
-      Migration erfolgreich — {text}
+      Migration erfolgreich: {text}
     </div>
   );
 }

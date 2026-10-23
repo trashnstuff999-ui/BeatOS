@@ -21,7 +21,7 @@ describe("pruefeBeschreibung", () => {
 
   it("Kauflink unterhalb der sichtbaren Zeilen fällt auf", () => {
     const h = pruefeBeschreibung("youtube", yt(`Zeile 1\nZeile 2\nZeile 3\nKaufen: ${LINK}`), LINK);
-    expect(h.some(x => x.text.startsWith("Der Kauflink steht nicht"))).toBe(true);
+    expect(h.some(x => x.text.startsWith("Kauflink nicht"))).toBe(true);
   });
 
   it("ohne BeatStars-Link kein Hinweis — der fehlt vor dem Upload immer", () => {

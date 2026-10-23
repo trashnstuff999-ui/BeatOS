@@ -73,8 +73,8 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
   return (
     <Modal
       icon={Wand2}
-      title="Dateinamen ins Namensschema bringen"
-      subtitle="Dateien werden an Ort und Stelle umbenannt. Nichts wird überschrieben — Konflikte stehen unten."
+      title="Dateinamen anpassen"
+      subtitle="Umbenennen ohne Überschreiben"
       onClose={onClose}
       width={760}
       // Laeuft gerade ein Umbenennen, darf ein Klick daneben nicht schliessen.
@@ -86,7 +86,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
           icon={RefreshCw}
           disabled={isLoading || isApplying}
           onClick={loadPlan}
-          title="Beat-Ordner neu einlesen und Plan neu berechnen"
+          title="Neu einlesen"
         >
           Neu einlesen
         </Button>
@@ -129,7 +129,7 @@ export function ConvertFilenamesDialog({ beatId, onClose, onApplied }: ConvertFi
 
           {/* Collisions */}
           {collisions.length > 0 && (
-            <Section title="Blockiert — Zielname schon vergeben" color={C.error}>
+            <Section title="Blockiert: Zielname vergeben" color={C.error}>
               {collisions.map(op => <OpRow key={`${op.subdir ?? "/"}/${op.from}`} op={op} />)}
             </Section>
           )}

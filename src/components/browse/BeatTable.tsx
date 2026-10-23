@@ -57,7 +57,7 @@ export function PlatformDots({ badges, leer = "strich" }: {
   leer?: "strich" | "ringe";
 }) {
   if ((!badges || badges.length === 0) && leer === "strich") {
-    return <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, opacity: 0.4 }}>—</span>;
+    return <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, opacity: 0.4 }}>–</span>;
   }
   const byPlatform = new Map((badges ?? []).map(b => [b.platform, b]));
   // Ein Punkt mit Link öffnet ihn — mit einer unsichtbaren Trefferfläche von
@@ -77,7 +77,7 @@ export function PlatformDots({ badges, leer = "strich" }: {
             }} />;
         const link = b?.url && /^https?:\/\//i.test(b.url) ? b.url : null;
         const titel = !b ? `${label}: offen`
-          : `${label}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}${link ? " — klicken zum Öffnen" : ""}`;
+          : `${label}: ${b.status === "uploaded" ? "hochgeladen" : "geplant"}${link ? " · öffnen" : ""}`;
         const flaeche: React.CSSProperties = {
           width: 15, height: 16, padding: 0, border: "none", background: "transparent",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -247,12 +247,12 @@ const BeatRow = memo(function BeatRow({
 
       {/* Key */}
       <div style={{ width: 90, flexShrink: 0, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
-        {beat.key || "—"}
+        {beat.key || "–"}
       </div>
 
       {/* BPM */}
       <div style={{ width: 60, flexShrink: 0, fontSize: 12, fontWeight: 500, color: C.onSurfaceVariant }}>
-        {beat.bpm || "—"}
+        {beat.bpm || "–"}
       </div>
 
       {/* Status */}

@@ -116,7 +116,7 @@ export function PresetBar({
           bearbeiten" bei den Beschreibungen. */}
       <button
         onClick={() => setOpen(o => !o)}
-        title="Artists, Genres und Tags auf einen Schlag setzen"
+        title="Artists, Genres und Tags setzen"
         style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: "5px 10px",
@@ -159,7 +159,7 @@ export function PresetBar({
           <div style={{ overflowY: "auto", flex: 1 }}>
             {presets.length === 0 && (
               <div style={{ padding: 14, fontSize: 12, color: C.onSurfaceVariant, textAlign: "center" }}>
-                Noch keine Presets — unten die aktuellen Infos als Preset sichern.
+                Noch keine Presets
               </div>
             )}
             {presets.map(p => (

@@ -24,7 +24,7 @@ export function daysSince(secs: number, now: number = nowSecs()): number {
 /** "gerade eben", "vor 5 Min.", "vor 2 Std.", "gestern", "vor 6 Tagen",
  *  "vor 3 Wochen", "vor 4 Monaten", "vor 2 Jahren" */
 export function formatRelativeTime(secs: number, now: number = nowSecs()): string {
-  if (secs <= 0) return "—";
+  if (secs <= 0) return "–";
   const diff = Math.max(0, now - secs);
 
   if (diff < MIN) return "gerade eben";
