@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { werkbankSatz, fehlt, ideeName, ideenGruppen } from "./werkbank";
+import { fehlt, ideeName, ideenGruppen } from "./werkbank";
 import type { StudioProject } from "../types/studio";
 
 const p = (name: string, status: string, has: number[], modified_secs = 0) => ({
@@ -7,26 +7,7 @@ const p = (name: string, status: string, has: number[], modified_secs = 0) => ({
   has_mp3: !!has[0], has_wav: !!has[1], has_cover: !!has[2], has_thumbnail: !!has[3], has_video: !!has[4],
 }) as unknown as StudioProject;
 
-describe("werkbankSatz", () => {
-  it("zählt Bereite und nennt die zwei, denen am wenigsten fehlt", () => {
-    const s = werkbankSatz([
-      p("CALL ME", "ready", [1, 1, 1, 1, 1]),
-      p("HOLLOW", "ready", [1, 1, 1, 1, 1]),
-      p("SIGNS", "exported", [1, 1, 0, 0, 0]),
-      p("UNTIL I DIE", "exported", [1, 1, 1, 1, 0]),
-      p("DONT WANNA BE", "exported", [1, 1, 1, 0, 0]),
-      p("SANDWATCH", "wip", [1, 0, 0, 0, 0]),
-    ], x => x.name);
-    expect(s.kopf).toBe("2 Beats sind bereit fürs Archiv.");
-    expect(s.unter).toBe(
-      "Bei UNTIL I DIE fehlt nur noch das Video, bei DONT WANNA BE fehlen Thumbnail und Video. " +
-      "Ein Projekt hast du zum Überarbeiten vorgemerkt.");
-  });
-
-  it("bleibt ruhig, wenn nichts ansteht", () => {
-    expect(werkbankSatz([], x => x.name)).toEqual({ kopf: "Gerade ist nichts bereit fürs Archiv.", unter: "" });
-  });
-
+describe("fehlt", () => {
   it("listet fehlende Dateien in Pipeline-Reihenfolge", () => {
     expect(fehlt(p("x", "exported", [1, 1, 0, 1, 0]))).toEqual(["Cover", "Video"]);
   });

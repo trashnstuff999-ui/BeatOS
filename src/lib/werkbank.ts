@@ -1,7 +1,6 @@
 // src/lib/werkbank.ts
 // ═══════════════════════════════════════════════════════════════════════════════
-// Die Werkbank im Studio: was einem Projekt bis zum Upload noch fehlt, und der
-// eine Satz darüber („2 Beats sind bereit fürs Archiv.").
+// Die Werkbank im Studio: was einem Projekt bis zum Upload noch fehlt.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import type { StudioProject } from "../types/studio";
@@ -14,33 +13,6 @@ export const SCHRITTE: Array<[keyof StudioProject, string]> = [
 
 export function fehlt(p: StudioProject): string[] {
   return SCHRITTE.filter(([k]) => !p[k]).map(([, label]) => label);
-}
-
-/** „Cover, Thumbnail und Video" */
-export function aufzaehlen(teile: string[]): string {
-  return teile.length <= 1 ? (teile[0] ?? "") : `${teile.slice(0, -1).join(", ")} und ${teile[teile.length - 1]}`;
-}
-
-export function werkbankSatz(projekte: StudioProject[], titel: (p: StudioProject) => string): { kopf: string; unter: string } {
-  const bereit = projekte.filter(p => p.status === "ready").length;
-  const kopf = bereit === 0 ? "Gerade ist nichts bereit fürs Archiv."
-    : bereit === 1 ? "1 Beat ist bereit fürs Archiv."
-    : `${bereit} Beats sind bereit fürs Archiv.`;
-
-  // Die zwei, denen am wenigsten fehlt — da lohnt der nächste Handgriff.
-  // Cover/Thumbnail/Video sind alle sächlich: „das Video", „das Cover".
-  const fast = projekte
-    .filter(p => p.status === "exported")
-    .map(p => ({ p, f: fehlt(p) }))
-    .sort((a, b) => a.f.length - b.f.length || b.p.modified_secs - a.p.modified_secs)
-    .slice(0, 2)
-    .map(({ p, f }, i) =>
-      `${i === 0 ? "Bei" : "bei"} ${titel(p)} ${f.length === 1 ? `fehlt nur noch das ${f[0]}` : `fehlen ${aufzaehlen(f)}`}`);
-  const teile: string[] = [];
-  if (fast.length > 0) teile.push(`${fast.join(", ")}.`);
-  const wip = projekte.filter(p => p.status === "wip").length;
-  if (wip > 0) teile.push(`${wip === 1 ? "Ein Projekt hast" : `${wip} Projekte hast`} du zum Überarbeiten vorgemerkt.`);
-  return { kopf, unter: teile.join(" ") };
 }
 
 // ─── Ideen-Liste ─────────────────────────────────────────────────────────────

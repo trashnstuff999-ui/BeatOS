@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Play } from "lucide-react";
+import { Disc3, Play } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { arbeitszeit, ideeName } from "../../lib/werkbank";
@@ -33,6 +33,8 @@ interface AufraeumListeProps {
   selected: Set<string>;
   onOpen: (p: StudioProject, e: React.MouseEvent) => void;
   onPreview: (p: StudioProject) => void;
+  /** Ohne Export: Projekt zum Reinhören direkt in FL öffnen */
+  onOpenDaw: (p: StudioProject) => void;
   onKeep: (p: StudioProject) => void;
   onToss: (p: StudioProject) => void;
   /** Vorschlag: alte, kurz angefasste Ideen ohne Export (noch nicht vorgemerkt) */
@@ -46,40 +48,19 @@ interface AufraeumListeProps {
 
 export function AufraeumListe({
   inaktiv, vorgemerkt, filter, onFilter, sort, onSort, gruppen, onMore,
-  inspectorPath, selected, onOpen, onPreview, onKeep, onToss,
+  inspectorPath, selected, onOpen, onPreview, onOpenDaw, onKeep, onToss,
   skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken, children,
 }: AufraeumListeProps) {
-  const kopf = inaktiv === 0 ? "Keine Idee liegt seit über 30 Tagen herum."
-    : inaktiv === 1 ? "1 Idee hast du seit über 30 Tagen nicht angefasst."
-    : `${inaktiv} Ideen hast du seit über 30 Tagen nicht angefasst.`;
   return (
-    <section aria-label="Aufräumen" style={{ padding: "0 16px" }}>
-      <div style={{ padding: "28px 0 20px" }}>
-        <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>{kopf}</div>
-        <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, color: C.onSurfaceVariant, maxWidth: 760 }}>
-          Kurz reinhören, dann entscheiden. Was weg soll, geht gesammelt in den Papierkorb,
-          und die Nummern dahinter rücken von selbst nach.
-        </div>
-      </div>
-
-      {/* Der große Hebel: die offensichtlichen Fälle auf einen Schlag. Gelöscht
-          wird trotzdem erst über die Leiste unten — bis dahin lässt sich jede
-          Zeile einzeln zurücknehmen. */}
-      {filter === "alle" && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
-          marginBottom: 18, padding: "14px 18px", borderRadius: 12,
-          background: C.surfaceContainer, border: `1px solid ${C.border20}`,
-        }}>
-          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.onSurface }}>
-              {skizzen.length === 0 ? "Keine Skizzen mehr übrig"
-                : `${skizzen.length} ${skizzen.length === 1 ? "Skizze" : "Skizzen"}: unter ${skizzenGrenze} min in FL, älter als ein Jahr, nie exportiert`}
-            </div>
-            <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
-              Ideen mit Notiz bleiben draußen. Vorgemerkt heißt noch nicht gelöscht.
-            </div>
-          </div>
+    <section aria-label="Aufräumen" style={{ padding: "20px 16px 0" }}>
+      {/* Die offensichtlichen Fälle auf einen Schlag — als schlichte Zeile, nur
+          wenn es welche gibt. Gelöscht wird erst über die Leiste unten. */}
+      {filter === "alle" && skizzen.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <span title="Ideen mit Notiz bleiben draußen. Vorgemerkt heißt noch nicht gelöscht."
+            style={{ fontSize: 13, color: C.onSurfaceVariant }}>
+            {`${skizzen.length} ${skizzen.length === 1 ? "Skizze" : "Skizzen"}: unter ${skizzenGrenze} min in FL, älter als ein Jahr, nie exportiert`}
+          </span>
           <Segmented
             label="Grenze für Skizzen"
             value={String(skizzenGrenze)}
@@ -90,8 +71,8 @@ export function AufraeumListe({
               { value: "30", label: "30 min" },
             ]}
           />
-          <Button size="sm" variant="secondary" onClick={onSkizzenVormerken} disabled={skizzen.length === 0}>
-            {skizzen.length === 0 ? "Alle vormerken" : `Alle ${skizzen.length} vormerken`}
+          <Button size="sm" variant="ghost" onClick={onSkizzenVormerken}>
+            {`Alle ${skizzen.length} vormerken`}
           </Button>
         </div>
       )}
@@ -137,6 +118,7 @@ export function AufraeumListe({
               markiert={inspectorPath === p.path || selected.has(p.path)}
               onOpen={e => onOpen(p, e)}
               onPreview={() => onPreview(p)}
+              onOpenDaw={() => onOpenDaw(p)}
               onKeep={() => onKeep(p)}
               onToss={() => onToss(p)}
             />
@@ -158,17 +140,21 @@ export function AufraeumListe({
   );
 }
 
-function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onKeep, onToss }: {
+function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onKeep, onToss }: {
   project: StudioProject;
   markiert: boolean;
   onOpen: (e: React.MouseEvent) => void;
   onPreview: () => void;
+  onOpenDaw: () => void;
   onKeep: () => void;
   onToss: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const { nummer, titel } = ideeName(p);
   const canPreview = p.has_mp3 || p.has_wav;
+  // Ohne Export hört man in FL rein — der Knopf öffnet dann die neueste FLP
+  const canDaw = !canPreview && !!p.newest_flp;
+  const kannWas = canPreview || canDaw;
   const weg = p.status === "discard";
   const notiz = p.notes?.split("\n").map(l => l.trim()).find(Boolean) ?? null;
   const kopf = titel ?? notiz ?? "ohne Titel";
@@ -186,19 +172,21 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onKeep, onToss
       style={{ display: "flex", alignItems: "center", gap: 4, opacity: weg ? 0.7 : 1 }}
     >
       <button
-        onClick={() => { if (canPreview) onPreview(); }}
-        disabled={!canPreview}
-        aria-label={canPreview ? "Export anhören" : "Noch kein Export"}
-        title={canPreview ? "Export anhören" : "Kein Audio-Export im Ordner"}
+        onClick={() => { if (canPreview) onPreview(); else if (canDaw) onOpenDaw(); }}
+        disabled={!kannWas}
+        aria-label={canPreview ? "Export anhören" : canDaw ? "In FL öffnen" : "Keine FLP im Ordner"}
+        title={canPreview ? "Export anhören" : canDaw ? "Kein Export — in FL öffnen und reinhören" : "Weder Export noch FLP im Ordner"}
         style={{
           flex: "0 0 36px", width: 36, height: 36, borderRadius: "50%", border: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: canPreview ? alpha(C.mint, 0.10) : "transparent",
-          color: canPreview ? C.mint : C.surfaceContainerHighest,
-          cursor: canPreview ? "pointer" : "default",
+          background: canPreview ? alpha(C.mint, 0.10) : canDaw ? alpha(C.primary, 0.10) : "transparent",
+          color: canPreview ? C.mint : canDaw ? C.primary : C.surfaceContainerHighest,
+          cursor: kannWas ? "pointer" : "default",
         }}
       >
-        <Play size={12} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />
+        {canDaw
+          ? <Disc3 size={14} strokeWidth={1.75} />
+          : <Play size={12} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />}
       </button>
       <button
         onClick={onOpen}

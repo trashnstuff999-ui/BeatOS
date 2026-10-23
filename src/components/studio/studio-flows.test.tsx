@@ -45,7 +45,7 @@ function project(over: Partial<StudioProject> & { name: string }): StudioProject
     modified_date: "2026-08-29", modified_secs: NOW - DAY,
     has_mp3: false, has_wav: false, has_cover: false, cover_path: null,
     has_thumbnail: false, has_video: false,
-    status: "idea", priority: 0, notes: null, kept: false, work_minutes: null,
+    status: "idea", priority: 0, notes: null, kept: false, aufraeumen: false, work_minutes: null,
     ...over,
   };
 }
@@ -280,7 +280,7 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     stubInvoke([], [ALT, RAUS]);
     const user = userEvent.setup();
     renderProjects("cleanup");
-    expect(await screen.findByText("1 Idee hast du seit über 30 Tagen nicht angefasst.")).toBeInTheDocument();
+    expect(await screen.findByText("Staub")).toBeInTheDocument();
     expect(screen.getByText("Lange inaktiv · 2")).toBeInTheDocument();
 
     await user.click(screen.getByText("Kann weg · 1"));
@@ -289,6 +289,41 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
 
     await user.type(screen.getByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "Project_12");
     await waitFor(() => expect(screen.getByText("Kann weg · 0")).toBeInTheDocument());
+  });
+
+  it("ohne Export öffnet der runde Knopf die neueste FLP in FL", async () => {
+    const { openPath } = await import("@tauri-apps/plugin-opener");
+    vi.mocked(openPath).mockClear();
+    stubInvoke([], [ALT]);
+    const user = userEvent.setup();
+    renderProjects("cleanup");
+    await screen.findByText("Staub");
+    await user.click(screen.getByRole("button", { name: "In FL öffnen" }));
+    expect(openPath).toHaveBeenCalledWith(ALT.newest_flp);
+    // …und hält es im Aufräumen fest, damit FL es nicht zu den Ideen schiebt
+    expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_aufraeumen")).toEqual([
+      ["set_studio_aufraeumen", { path: ALT.path }],
+    ]);
+  });
+
+  it("fest im Aufräumen bleibt dort, auch wenn FL es gerade erst geändert hat", async () => {
+    const FRISCH = project({ name: "Project_0050 - Frisch", modified_secs: NOW - 60, aufraeumen: true });
+    stubInvoke([], [FRISCH]);
+    renderProjects("cleanup");
+    expect(await screen.findByText("Frisch")).toBeInTheDocument();
+  });
+
+  it("„Ins Aufräumen“ an der Zeile schiebt ein frisches Projekt dorthin", async () => {
+    const FRISCH = project({ name: "Project_0051 - Neu", modified_secs: NOW - 60 });
+    stubInvoke([], [FRISCH]);
+    const user = userEvent.setup();
+    renderProjects();
+    await screen.findByText("Neu");
+    await user.click(screen.getByRole("button", { name: "Ins Aufräumen" }));
+    await waitFor(() => expect(screen.queryByText("Neu")).not.toBeInTheDocument());
+    expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_aufraeumen")).toEqual([
+      ["set_studio_aufraeumen", { path: FRISCH.path }],
+    ]);
   });
 
   it("„Behalten“ nimmt die Idee aus der Liste und merkt es sich", async () => {

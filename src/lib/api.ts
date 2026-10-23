@@ -333,6 +333,10 @@ export const api = {
     setKept: (path: string, kept: boolean) =>
       invoke<void>("set_studio_kept", { path, kept }),
 
+    /** Fest ins Aufräumen legen — bleibt dort, bis „Behalten" gedrückt wird. */
+    setAufraeumen: (path: string) =>
+      invoke<void>("set_studio_aufraeumen", { path }),
+
     /** „Bereit" und „Überarbeiten" als Zahl — reine DB-Abfrage, kein Ordner-Scan.
      *  Die Roots müssen mit, sonst zählen geparkte Projekte mit, die die Liste
      *  gar nicht mehr zeigt. */

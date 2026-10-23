@@ -30,7 +30,7 @@ import { ProjectInspector } from "./ProjectInspector";
 import { Werkbank } from "./Werkbank";
 import { IdeenListe } from "./IdeenListe";
 import { AufraeumListe, type AufraeumFilter, type AufraeumSort } from "./AufraeumListe";
-import { werkbankSatz, ideenGruppen, jahresGruppen, zeitGruppen, ideeName, skizzen } from "../../lib/werkbank";
+import { ideenGruppen, jahresGruppen, zeitGruppen, ideeName, skizzen } from "../../lib/werkbank";
 import { deriveStage, projectDisplayName, studioBeatId } from "../../types/studio";
 import type { StudioProject, StudioStatus } from "../../types/studio";
 import type { Beat } from "../../types/browse";
@@ -276,6 +276,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
 
   const handleOpenDaw = async (p: StudioProject) => {
     if (!p.newest_flp) return;
+    // Aus dem Aufräumen geöffnet: festhalten, sonst macht FL das Projekt
+    // „frisch" und es rutscht zu den Ideen, bevor entschieden ist.
+    if (sectionOf(p) === "stale" && !p.aufraeumen) handleAufraeumen(p);
     try { await openPath(p.newest_flp); }
     catch (e) { melde(`FLP konnte nicht geöffnet werden: ${String(e)}`); }
   };
@@ -393,6 +396,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     // Aussortiert schlägt den Stern: ein vorgemerktes Projekt gehört nach
     // unten, auch wenn es früher mal eine Priorität war.
     if (p.status === "discard") return "discard";
+    // Fest im Aufräumen: bleibt dort, egal wie frisch FL das Projekt gemacht hat
+    if (p.aufraeumen) return "stale";
     // Seit der Werkbank bleibt ein Stern-Projekt in seinem Regal (vorn, mit
     // Marke); eigene Sektion nur für Ideen mit Stern — die hätten sonst kein Regal.
     if (p.status !== "idea") return p.status;
@@ -494,13 +499,25 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const handleKeep = async (p: StudioProject) => {
     const vorher = projectsRef.current.find(x => x.path === p.path) ?? p;
     const swap = (to: StudioProject) => setProjects(prev => prev.map(x => x.path === p.path ? to : x));
-    swap({ ...vorher, kept: true, status: vorher.status === "discard" ? deriveStage(vorher) : vorher.status });
+    swap({ ...vorher, kept: true, aufraeumen: false, status: vorher.status === "discard" ? deriveStage(vorher) : vorher.status });
     try {
       await api.studio.setKept(p.path, true);
       if (vorher.status === "discard") {
         await api.studio.updateProject(p.path, deriveStage(vorher), vorher.priority, vorher.notes);
       }
     } catch (e) {
+      swap(vorher);
+      melde(`Speichern fehlgeschlagen: ${String(e)}`);
+    }
+  };
+
+  // „Ins Aufräumen": fest dorthin, unabhängig vom Alter. Hebt Behalten auf.
+  const handleAufraeumen = async (p: StudioProject) => {
+    const vorher = projectsRef.current.find(x => x.path === p.path) ?? p;
+    const swap = (to: StudioProject) => setProjects(prev => prev.map(x => x.path === p.path ? to : x));
+    swap({ ...vorher, kept: false, aufraeumen: true });
+    try { await api.studio.setAufraeumen(p.path); }
+    catch (e) {
       swap(vorher);
       melde(`Speichern fehlgeschlagen: ${String(e)}`);
     }
@@ -704,19 +721,6 @@ Nummer läuft über alle Produktions-Ordner`}
         <EmptyState variant="inline" title="Kein Projekt passt zu den Filtern." />
       )}
 
-      {/* Der eine Satz über der Werkbank — nur ungefiltert, sonst stimmt er nicht */}
-      {view === "work" && !q && !rootFilter && projects.length > 0 && (() => {
-        const satz = werkbankSatz(projects.filter(p => p.status !== "discard"), projectDisplayName);
-        return (
-          <div style={{ padding: "28px 16px 8px" }}>
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>{satz.kopf}</div>
-            {satz.unter && (
-              <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, color: C.onSurfaceVariant, maxWidth: 760 }}>{satz.unter}</div>
-            )}
-          </div>
-        );
-      })()}
-
       {sections.some(s => isShelf(s.key)) && (
         <Werkbank
           regale={sections.filter(s => isShelf(s.key)).map(s => ({
@@ -727,6 +731,7 @@ Nummer läuft über alle Produktions-Ordner`}
           selected={selected}
           onOpen={handleRowClick}
           onPreview={handlePreview}
+          onAufraeumen={handleAufraeumen}
         />
       )}
 
@@ -741,6 +746,7 @@ Nummer läuft über alle Produktions-Ordner`}
           selected={selected}
           onOpen={handleRowClick}
           onPreview={handlePreview}
+          onAufraeumen={handleAufraeumen}
         />
       )}
 
@@ -758,6 +764,7 @@ Nummer läuft über alle Produktions-Ordner`}
           selected={selected}
           onOpen={handleRowClick}
           onPreview={handlePreview}
+          onOpenDaw={handleOpenDaw}
           onKeep={handleKeep}
           onToss={handleToss}
           skizzen={skizzenVorschlag}

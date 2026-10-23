@@ -89,6 +89,8 @@ export interface StudioProject {
   notes: string | null;
   /** Im Aufräumen „Behalten" gedrückt */
   kept: boolean;
+  /** Fest im Aufräumen — unabhängig vom Alter, raus nur per „Behalten" */
+  aufraeumen: boolean;
 }
 
 /** Die zwei Zahlen am Studio-Tab. */

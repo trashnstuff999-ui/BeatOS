@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { CoverPlatzhalter } from "./CoverPlatzhalter";
-import { Play, Star } from "lucide-react";
+import { Hourglass, Play, Star } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { SCHRITTE, fehlt } from "../../lib/werkbank";
@@ -32,15 +32,16 @@ interface WerkbankProps {
   selected: Set<string>;
   onOpen: (p: StudioProject, e: React.MouseEvent) => void;
   onPreview: (p: StudioProject) => void;
+  onAufraeumen: (p: StudioProject) => void;
 }
 
 /** So viele Kacheln zeigt ein Regal, bevor „Alle N anzeigen" kommt (~2 Reihen). */
 const REGAL_LIMIT = 12;
 
-export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview }: WerkbankProps) {
+export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview, onAufraeumen }: WerkbankProps) {
   const [offen, setOffen] = useState<Set<string>>(new Set());
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 36, padding: "8px 16px 28px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 36, padding: "24px 16px 28px" }}>
       {regale.map(r => {
         const alle = offen.has(r.key);
         const gezeigt = alle ? r.items : r.items.slice(0, REGAL_LIMIT);
@@ -65,6 +66,7 @@ export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview }:
                 isSelected={selected.has(p.path)}
                 onOpen={e => onOpen(p, e)}
                 onPreview={() => onPreview(p)}
+                onAufraeumen={() => onAufraeumen(p)}
               />
             ))}
           </div>
@@ -90,20 +92,22 @@ export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview }:
   );
 }
 
-function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
+function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview, onAufraeumen }: {
   project: StudioProject;
   color: string;
   isOpen: boolean;
   isSelected: boolean;
   onOpen: (e: React.MouseEvent) => void;
   onPreview: () => void;
+  onAufraeumen: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [bildKaputt, setBildKaputt] = useState(false);
   const title = projectDisplayName(p);
   const canPreview = p.has_mp3 || p.has_wav;
   const bild = p.cover_path && !bildKaputt ? convertFileSrc(p.cover_path.replace(/\\/g, "/")) : null;
-  const meta = [p.key, p.bpm != null ? `${p.bpm} BPM` : null].filter(Boolean).join(" · ") || formatRelativeTime(p.modified_secs);
+  // Kein Datum hier — das steht schon in der Zeile darunter
+  const meta = [p.key, p.bpm != null ? `${p.bpm} BPM` : null].filter(Boolean).join(" · ");
   const fehlend = fehlt(p);
   const notiz = p.notes?.split("\n").map(l => l.trim()).find(Boolean) ?? null;
   const zeile = p.status === "ready" ? `alles da · ${formatRelativeTime(p.modified_secs)}`
@@ -131,12 +135,12 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
         title="Details, Notizen und Assets öffnen — mit Strg oder Shift auswählen"
         style={{
           width: KACHEL, background: "none", border: "none", padding: 0, textAlign: "left",
-          color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 7,
+          color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
           userSelect: "none",
         }}
       >
         <div style={{
-          width: KACHEL, height: KACHEL, borderRadius: 10, overflow: "hidden",
+          position: "relative", width: KACHEL, height: KACHEL, borderRadius: 10, overflow: "hidden",
           transform: hovered ? "translateY(-3px)" : "none", transition: "transform 0.15s",
         }}>
           {bild ? (
@@ -145,16 +149,22 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
           ) : (
             <CoverPlatzhalter />
           )}
+          {/* Die fünf Striche als Leiste an der Cover-Unterkante, nur beim
+              Drüberfahren — sie brauchen so keinen eigenen Platz im Regal. */}
+          <span aria-hidden style={{
+            position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", gap: 2,
+            background: "rgba(14,14,14,0.75)", padding: "3px 0 0",
+            opacity: hovered || markiert ? 1 : 0, transition: "opacity 0.15s",
+          }}>
+            {SCHRITTE.map(([k, label]) => (
+              <span key={label} style={{ flex: 1, height: 4, background: p[k] ? color : C.surfaceContainerHighest }} />
+            ))}
+          </span>
         </div>
-        <span title={title} style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span title={title} style={{ marginTop: 6, fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {title}
         </span>
-        <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{meta}</span>
-        <span aria-hidden style={{ display: "flex", gap: 3 }}>
-          {SCHRITTE.map(([k, label]) => (
-            <span key={label} style={{ flex: 1, height: 4, borderRadius: 2, background: p[k] ? color : C.surfaceContainerHighest }} />
-          ))}
-        </span>
+        {meta && <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{meta}</span>}
         <span title={zeile} style={{
           fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           color: p.status === "ready" ? C.mint : p.status === "exported" ? color : C.onSurfaceVariant,
@@ -172,6 +182,22 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview }: {
           <Star size={13} color={C.primary} fill={C.primary} strokeWidth={1.75} />
         </span>
       )}
+
+      {/* Oben rechts, nur beim Drüberfahren — Gegenstück zum Stern oben links */}
+      <button
+        onClick={onAufraeumen}
+        aria-label="Ins Aufräumen"
+        title="Ins Aufräumen schieben — dort entscheiden, ob es bleibt oder weg kann"
+        tabIndex={hovered ? 0 : -1}
+        style={{
+          position: "absolute", top: 16, right: 16, width: 30, height: 30, borderRadius: "50%", border: "none",
+          background: "rgba(14,14,14,0.75)", color: C.onSurface, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: hovered ? 1 : 0, transition: "opacity 0.15s",
+        }}
+      >
+        <Hourglass size={14} strokeWidth={1.75} />
+      </button>
 
       {canPreview && (
         <button

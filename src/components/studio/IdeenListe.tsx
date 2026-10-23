@@ -6,11 +6,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Play } from "lucide-react";
+import { Hourglass, Play } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { ideeName } from "../../lib/werkbank";
-import { Segmented } from "../ui";
+import { Button, Segmented } from "../ui";
 import type { SortMode } from "./ProjectsToolbar";
 import type { StudioProject } from "../../types/studio";
 
@@ -31,9 +31,10 @@ interface IdeenListeProps {
   selected: Set<string>;
   onOpen: (p: StudioProject, e: React.MouseEvent) => void;
   onPreview: (p: StudioProject) => void;
+  onAufraeumen: (p: StudioProject) => void;
 }
 
-export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspectorPath, selected, onOpen, onPreview }: IdeenListeProps) {
+export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspectorPath, selected, onOpen, onPreview, onAufraeumen }: IdeenListeProps) {
   return (
     <section aria-label="Ideen" style={{ padding: "8px 16px 0" }}>
       <div style={{
@@ -70,6 +71,7 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
               markiert={inspectorPath === p.path || selected.has(p.path)}
               onOpen={e => onOpen(p, e)}
               onPreview={() => onPreview(p)}
+              onAufraeumen={() => onAufraeumen(p)}
             />
           ))}
           {g.total > g.items.length && (
@@ -89,11 +91,12 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
   );
 }
 
-function IdeeZeile({ project: p, markiert, onOpen, onPreview }: {
+function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
   project: StudioProject;
   markiert: boolean;
   onOpen: (e: React.MouseEvent) => void;
   onPreview: () => void;
+  onAufraeumen: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const { nummer, titel } = ideeName(p);
@@ -158,6 +161,13 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview }: {
           {formatRelativeTime(p.modified_secs)}
         </span>
       </button>
+      {/* Nur beim Drüberfahren — Platz bleibt, damit die Zeile nicht springt */}
+      <span style={{ flex: "0 0 auto", opacity: hovered ? 1 : 0, transition: "opacity 0.15s" }}>
+        <Button variant="ghost" size="sm" icon={Hourglass} onClick={onAufraeumen} tabIndex={hovered ? 0 : -1}
+          title="Ins Aufräumen schieben — dort entscheiden, ob es bleibt oder weg kann">
+          Ins Aufräumen
+        </Button>
+      </span>
     </div>
   );
 }
