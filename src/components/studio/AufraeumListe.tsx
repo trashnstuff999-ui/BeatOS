@@ -30,6 +30,8 @@ interface AufraeumListeProps {
   gruppen: GezeigteGruppe[];
   onMore: (key: string) => void;
   inspectorPath: string | null;
+  /** Zuletzt in FL geöffnet, wird wie eine Auswahl markiert */
+  inFlPath: string | null;
   selected: Set<string>;
   onOpen: (p: StudioProject, e: React.MouseEvent) => void;
   onPreview: (p: StudioProject) => void;
@@ -46,7 +48,7 @@ interface AufraeumListeProps {
 
 export function AufraeumListe({
   inaktiv, vorgemerkt, filter, onFilter, sort, onSort, gruppen, onMore,
-  inspectorPath, selected, onOpen, onPreview, onOpenDaw, onKeep, onToss,
+  inspectorPath, inFlPath, selected, onOpen, onPreview, onOpenDaw, onKeep, onToss,
   skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken,
 }: AufraeumListeProps) {
   return (
@@ -106,7 +108,7 @@ export function AufraeumListe({
             <AufraeumZeile
               key={p.path}
               project={p}
-              markiert={inspectorPath === p.path || selected.has(p.path)}
+              markiert={inspectorPath === p.path || inFlPath === p.path || selected.has(p.path)}
               onOpen={e => onOpen(p, e)}
               onPreview={() => onPreview(p)}
               onOpenDaw={() => onOpenDaw(p)}

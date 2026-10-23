@@ -128,6 +128,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
   const [inspectorPath, setInspectorPath] = useState<string | null>(null);
+  /** Zuletzt in FL geöffnet — bleibt markiert, damit man sieht, woran man sitzt */
+  const [inFlPath, setInFlPath] = useState<string | null>(null);
   // Klick daneben — in die Projektliste oder in die Seitenleiste — schliesst
   // den Inspector. Dieselbe Geste wie im Archiv.
   useKlickDaneben(!!inspectorPath, () => setInspectorPath(null));
@@ -279,6 +281,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     // Aus dem Aufräumen geöffnet: festhalten, sonst macht FL das Projekt
     // „frisch" und es rutscht zu den Ideen, bevor entschieden ist.
     if (sectionOf(p) === "stale" && !p.aufraeumen) handleAufraeumen(p);
+    setInFlPath(p.path);
     try { await openPath(p.newest_flp); }
     catch (e) { melde(`FLP konnte nicht geöffnet werden: ${String(e)}`); }
   };
@@ -782,6 +785,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
           gruppen={aufraeumGezeigt}
           onMore={key => setIdeenOffen(prev => new Set(prev).add(key))}
           inspectorPath={inspectorPath}
+          inFlPath={inFlPath}
           selected={selected}
           onOpen={handleRowClick}
           onPreview={handlePreview}
