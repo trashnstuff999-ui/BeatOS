@@ -74,6 +74,12 @@ pub fn parse_audio_filename(filename: &str) -> (String, Option<String>, Option<i
                     }
                 }
                 
+                // Reine Zahl außerhalb des BPM-Bereichs ist keine Tonart —
+                // z.B. die alte Beat-Nummer in „[663] Loyal - 93 C#m.mp3"
+                if token.chars().all(|c| c.is_ascii_digit()) {
+                    continue;
+                }
+
                 // Otherwise it's part of the Key
                 key_parts.push(token);
             }
@@ -178,6 +184,13 @@ mod tests {
         assert_eq!(name, "Trap Beat");
         assert_eq!(key, Some("F#m".to_string()));
         assert_eq!(bpm, Some(165));
+    }
+
+    #[test]
+    fn test_audio_old_beat_number_is_no_key() {
+        let (_, key, bpm) = parse_audio_filename("[663] Loyal - 93 C#m.mp3");
+        assert_eq!(key, None);
+        assert_eq!(bpm, None);
     }
 
     #[test]
