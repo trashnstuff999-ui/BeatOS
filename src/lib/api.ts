@@ -242,6 +242,10 @@ export const api = {
     getCoverPath: (beatPath: string) =>
       invoke<string | null>("get_beat_cover_path", { beatPath }),
 
+    /** Kleine JPG (512 px) fürs Raster — fällt aufs Original zurück. */
+    getCoverThumb: (beatPath: string) =>
+      invoke<string | null>("get_beat_cover_thumb", { beatPath }),
+
     getAudioPath: (beatPath: string) =>
       invoke<string | null>("get_beat_audio_path", { beatPath }),
 

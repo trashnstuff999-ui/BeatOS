@@ -181,7 +181,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     await Promise.allSettled(
       uncached.map(async (beat) => {
         try {
-          const coverPath = await api.audio.getCoverPath(beat.path!);
+          const coverPath = await api.audio.getCoverThumb(beat.path!);
           if (cache.size >= COVER_CACHE_MAX) cache.delete(cache.keys().next().value!); // ältesten raus
           // "" = geprüft, kein Cover da. Verhindert, dass wir es erneut suchen.
           cache.set(beat.id, coverPath ? convertFileSrc(coverPath.replace(/\\/g, "/")) : "");

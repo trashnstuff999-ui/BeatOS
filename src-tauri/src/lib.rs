@@ -51,6 +51,7 @@ use commands::{
     get_beat_audio_path,
     get_beat_video_path,
     get_beat_cover_path,
+    get_beat_cover_thumb,
     get_file_mtime,
     read_flp_markers,
     kanal_liste,
@@ -210,6 +211,8 @@ pub fn run() {
                         .or_else(|| settings.get("archive_path")
                             .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("05_ARTISTS").to_string_lossy().to_string())));
                     dirs.extend(kuenstler);
+                    // Cover-Vorschauen (get_beat_cover_thumb) liegen neben der Datenbank
+                    dirs.extend(db::get_db_path().parent().map(|p| p.join("thumbs").to_string_lossy().to_string()));
                     for dir in dirs {
                         if let Err(e) = scope.allow_directory(&dir, true) {
                             eprintln!("WARNING: cannot extend asset scope for {}: {}", dir, e);
@@ -257,6 +260,7 @@ pub fn run() {
             get_beat_audio_path,
             get_beat_video_path,
             get_beat_cover_path,
+            get_beat_cover_thumb,
             get_file_mtime,
             read_flp_markers,
             kanal_liste,

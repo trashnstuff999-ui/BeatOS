@@ -146,9 +146,61 @@ pub fn get_beat_cover_path(beat_path: String) -> Result<Option<String>, String> 
     Ok(Some(images[0].path().to_string_lossy().to_string()))
 }
 
+/// Kantenlänge der Vorschau. Das Raster zeigt ~190 px, das Detailpanel etwas mehr.
+const VORSCHAU_PX: u32 = 512;
+
+/// Cover als kleine JPG fürs Raster. Die Originale sind PNGs mit 2000 px und
+/// ~4,5 MB — davon 50 pro Seite zu lesen und zu entpacken war der Aufbau, den
+/// man sah. Die Vorschau entsteht einmal und liegt neben der Datenbank in
+/// `thumbs/`; Name aus Pfad, Größe und Änderungszeit, ein ersetztes Cover
+/// bekommt also von selbst eine neue. Klappt etwas nicht, kommt das Original.
+// ponytail: alte Vorschauen ersetzter Cover bleiben liegen (~40 KB je Stück), aufräumen wenn das je zählt
+#[tauri::command(async)]
+pub fn get_beat_cover_thumb(beat_path: String) -> Result<Option<String>, String> {
+    let Some(cover) = get_beat_cover_path(beat_path)? else { return Ok(None) };
+    let dir = crate::db::get_db_path().parent().map(|p| p.join("thumbs"));
+    Ok(Some(dir.and_then(|d| vorschau(Path::new(&cover), &d)).unwrap_or(cover)))
+}
+
+fn vorschau(cover: &Path, dir: &Path) -> Option<String> {
+    use std::hash::{Hash, Hasher};
+    let meta = std::fs::metadata(cover).ok()?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (cover, meta.len(), meta.modified().ok()).hash(&mut h);
+    let ziel = dir.join(format!("{:016x}.jpg", h.finish()));
+    if !ziel.exists() {
+        std::fs::create_dir_all(dir).ok()?;
+        let bild = image::open(cover).ok()?.thumbnail(VORSCHAU_PX, VORSCHAU_PX).into_rgb8();
+        // Erst unter Zwischennamen, damit ein halb geschriebenes Bild nie als fertig gilt
+        let tmp = ziel.with_extension("tmp");
+        bild.save_with_format(&tmp, image::ImageFormat::Jpeg).ok()?;
+        std::fs::rename(&tmp, &ziel).ok()?;
+    }
+    Some(ziel.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vorschau_ist_klein_und_wird_wiederverwendet() {
+        let tmp = std::env::temp_dir().join(format!("beatos-vorschau-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let cover = tmp.join("X_Cover_2000x2000.png");
+        image::RgbImage::from_pixel(2000, 2000, image::Rgb([200, 40, 40])).save(&cover).unwrap();
+
+        let dir = tmp.join("thumbs");
+        let erst = vorschau(&cover, &dir).expect("Vorschau entsteht");
+        assert_eq!(image::image_dimensions(&erst).unwrap(), (VORSCHAU_PX, VORSCHAU_PX));
+        assert_eq!(vorschau(&cover, &dir).unwrap(), erst, "zweiter Aufruf nimmt dieselbe Datei");
+
+        // Kaputtes Bild: keine Vorschau, der Aufrufer nimmt dann das Original
+        let kaputt = tmp.join("kaputt.png");
+        std::fs::write(&kaputt, b"kein png").unwrap();
+        assert!(vorschau(&kaputt, &dir).is_none());
+        std::fs::remove_dir_all(&tmp).ok();
+    }
 
     fn vor(min: u64) -> SystemTime { SystemTime::now() - Duration::from_secs(min * 60) }
 
