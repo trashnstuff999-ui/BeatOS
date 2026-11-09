@@ -191,7 +191,10 @@ fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
             }
             // Sammelordner wie „Beats" oder „Remixes" sind kein Song: nur mit
             // Nummer oder Key/BPM im Namen gibt der Ordner einen Titel her.
-            let eigen = werk_aus_name(&name, false).filter(|w| w.id.is_some() || w.key.is_some() || w.bpm.is_some());
+            // „01_SAVEFILES“, „02_OLD“: BeatOS-Gliederung, keine alte Nummer 1/2
+            let gliederung = name.len() > 3 && name.as_bytes()[..2].iter().all(u8::is_ascii_digit) && name.as_bytes()[2] == b'_'
+                && name[3..].chars().all(|c| c.is_ascii_uppercase() || c == '_');
+            let eigen = werk_aus_name(&name, false).filter(|w| !gliederung && (w.id.is_some() || w.key.is_some() || w.bpm.is_some()));
             sammeln(&p, eigen.as_ref().or(ordner_werk), out);
             continue;
         }
@@ -568,6 +571,9 @@ mod tests {
         datei(&alt.join("[301] Agony - 155 Fm.mp3"), "a");
         datei(&alt.join("[301] Sunset - 140 Am.mp3"), "b");
         datei(&alt.join("[539] YaYa - 140 Em/YaYa - 140 Em.mp3"), "yaya");
+        // Gliederungsordner: nicht „Nr. 1 SAVEFILES“, der Song kommt vom Ordner darüber
+        datei(&alt.join("Kira - Ember [Am 150]/01_SAVEFILES/Ember v2.mp3"), "ember");
+        datei(&alt.join("Kira - Nova [Cm 140]/01_SAVEFILES/Nova.mp3"), "nova");
         datei(&alt.join("Lo-Fi/untitled.mp3"), "u");
         datei(&alt.join("test.mp3"), "t");
         datei(&arch.join("2026/05_MAY/0891 - test [F#m 135]/test.mp3"), "anderer test");
@@ -611,6 +617,8 @@ mod tests {
         assert!(r.iter().any(|f| f.titel == "whynot" && f.ampel == "grau"));
         assert!(r.iter().any(|f| f.ampel == "rot"));
         assert_eq!(finde(539).dateien.len(), 1);
+        assert!(r.iter().all(|f| f.id != Some(1)), "01_SAVEFILES als Nummer gelesen");
+        assert!(r.iter().any(|f| f.dateien.iter().any(|d| d.path.ends_with("Nova.mp3")) && f.titel == "Nova"));
         assert!(r.iter().all(|f| f.titel != "Lo-Fi"));
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
         assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true).unwrap().titel, "Cuthroat");
