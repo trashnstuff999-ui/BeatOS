@@ -150,7 +150,11 @@ fn nur_nummer(s: &str) -> Option<Werk> {
     // „_2 - Bpm 80 Ab": Version weg, dann wie ein Name im alten Schema lesen
     let rest = rest.strip_prefix('_').map(|r| r.trim_start_matches(|c: char| c.is_ascii_digit())).unwrap_or(rest);
     let o = old_system_id_and_title(&format!("[{id}] {}", rest.trim_start_matches(['_', ' ', '-', '.']).trim()))?;
-    let titel = if o.title.to_lowercase().starts_with("bpm") || generisch(&o.title) { String::new() } else { o.title };
+    // „397 . Master", „473_Prototype", „198_Loop": Arbeitsnamen, kein Titel
+    let fuellwort = ["master", "premaster", "pastmaster", "mp3", "wav", "loop", "prototype", "idee", "idea", "beat",
+        "beatcontest", "demo", "demotrack", "mix", "final", "20minbeat", "short", "vocals", "vocal", "instrumental", "acapella", "stems"]
+        .contains(&normalize_title(&o.title).to_lowercase().as_str());
+    let titel = if o.title.to_lowercase().starts_with("bpm") || generisch(&o.title) || fuellwort { String::new() } else { o.title };
     Some(Werk { id: Some(id), titel, key: o.key, bpm: o.bpm })
 }
 
@@ -229,6 +233,50 @@ fn ist_remix(p: &Path) -> bool {
     ["remix", "mashup", "bootleg"].iter().any(|w| s.contains(w))
 }
 
+/// Gleicher Song dem Titel nach? „MISTAKES" passt zu „MISTAKE", „LightsOut"
+/// zu „Lights Out". Leere Titel passen nie.
+pub(crate) fn titel_passt(a: &str, b: &str) -> bool {
+    let (a, b) = (normalize_title(a), normalize_title(b));
+    !a.is_empty() && !b.is_empty() && (a == b || a.contains(&b) || b.contains(&a))
+}
+
+/// Belegt eine byte-gleiche Datei `c` im Archiv-Beat `e`, dass es derselbe
+/// Song ist? Ja, wenn der Titel passt. Sonst nur, wenn `c` dort liegt, wo
+/// Exporte liegen (nicht in 01_SAVEFILES, 03_PROJECTS, Samples, Audio: dort
+/// stecken geteilte Tags und Vocals) und Key/BPM sich nicht widersprechen.
+/// So zählt „GIVING UP [167 Am]" als HEADLIGHTS [Am 167], „BXII Tag.wav" in
+/// Solanium/Samples dagegen nicht, und YaYa (Em 140) nicht als Paralysed (Cm 143).
+pub(crate) fn gleicher_song(titel: &[&str], key: Option<&str>, bpm: Option<i32>, c: &Path, e: &ArchiveEntry) -> bool {
+    // Widersprechen sich Key oder BPM, ist es nie sicher derselbe Song, auch
+    // bei gleichem Titel (Destiny F#m 140 und Destiny Dm 181): dann gelb
+    let gleich = |a: Option<&str>| a.and_then(super::einsammeln::key_schreibweise);
+    let key_widerspruch = matches!((gleich(key), gleich(e.key.as_deref())), (Some(a), Some(b)) if a != b);
+    let bpm_widerspruch = matches!((bpm, e.bpm), (Some(a), Some(b)) if a != b);
+    if key_widerspruch || bpm_widerspruch {
+        return false;
+    }
+    if titel.iter().any(|t| titel_passt(t, &e.title)) {
+        return true;
+    }
+    let rel = c.strip_prefix(&e.path).unwrap_or(c);
+    let im_projekt = rel.parent().into_iter().flat_map(|p| p.components())
+        .any(|k| ["01_savefiles", "03_projects", "samples", "audio"].contains(&k.as_os_str().to_string_lossy().to_lowercase().as_str()));
+    !im_projekt
+}
+
+/// Quelle (Vergleichsform) → (Änderungsdatum beim Archivieren, Protokoll)
+type Herkunft = HashMap<String, (String, PathBuf)>;
+
+fn herkunft_lesen(json: &Path, out: &mut Herkunft) {
+    let Ok(roh) = std::fs::read_to_string(json) else { return };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&roh) else { return };
+    for d in v.get("files").and_then(|f| f.as_array()).into_iter().flatten() {
+        if let (Some(p), Some(m)) = (d.get("original_path").and_then(|x| x.as_str()), d.get("modified_at").and_then(|x| x.as_str())) {
+            out.insert(p.replace('/', "\\").to_lowercase(), (m.to_string(), json.to_path_buf()));
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn scan_fundstuecke(app: tauri::AppHandle, roots: Vec<String>, archive_path: String) -> Result<Vec<Fund>, String> {
     // Zum Reinhören: der Player darf nur freigegebene Ordner lesen, und der
@@ -261,11 +309,20 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
     // Exporte im Archiv nach Größe, für den Inhaltsvergleich
     let mut archiv_dateien = Vec::new();
     collect_files(archive_root, archive_root, &mut archiv_dateien);
+    // Eingesammelte Remixe zählen als „schon da“, sonst stünden sie wieder rot
+    let remixe = archive_root.parent().unwrap_or(archive_root).join("07_REMIXES");
+    collect_files(&remixe, &remixe, &mut archiv_dateien);
     let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
+    // Herkunft aus create_date.json: eingesammelte FLPs sind umbenannt und
+    // umgeschrieben, also nicht mehr byte-gleich. Das Protokoll weiß, woher
+    // sie kamen; gilt, solange die Quelle seitdem nicht geändert wurde.
+    let mut vermerkt: Herkunft = HashMap::new();
     for (size, p, _) in archiv_dateien {
         let ext = endung(&p);
         if ext == "flp" || AUDIO.contains(&ext.as_str()) {
             by_size.entry(size).or_default().push(p);
+        } else if p.file_name().is_some_and(|n| n == "create_date.json") {
+            herkunft_lesen(&p, &mut vermerkt);
         }
     }
 
@@ -307,7 +364,7 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
     let mut out: Vec<Fund> = gruppen
         .into_values()
         .filter(|fs| fs.iter().any(|f| !f.flp)) // nur mit Export
-        .map(|fs| bewerten(fs, &index, &by_title, &by_id, &by_size))
+        .map(|fs| bewerten(fs, &index, &by_title, &by_id, &by_size, &vermerkt))
         .collect();
     let rang = |a: &str| ["gruen", "gelb", "rot", "grau"].iter().position(|x| *x == a).unwrap_or(9);
     out.sort_by(|a, b| {
@@ -322,6 +379,7 @@ fn bewerten(
     by_title: &HashMap<String, Vec<usize>>,
     by_id: &HashMap<u32, Vec<usize>>,
     by_size: &HashMap<u64, Vec<PathBuf>>,
+    vermerkt: &Herkunft,
 ) -> Fund {
     fs.sort_by(|a, b| a.flp.cmp(&b.flp).then(b.modified.cmp(&a.modified)));
     let werke: Vec<&Werk> = fs.iter().filter_map(|f| f.werk.as_ref()).collect();
@@ -333,8 +391,18 @@ fn bewerten(
     // Vergleichstitel nur aus echten Namen, nie aus dem Dateinamen „504"
     let titel_n = werke.iter().map(|w| normalize_title(&w.titel)).find(|t| !t.is_empty()).unwrap_or_default();
     let archiv_name = |i: usize| Some(index[i].folder.clone());
-    let treffer: Vec<Option<&PathBuf>> = fs.iter()
-        .map(|f| if f.size == 0 { None } else { by_size.get(&f.size).and_then(|cs| cs.iter().find(|c| same_content(&f.path, c))) })
+    let treffer: Vec<Option<PathBuf>> = fs.iter()
+        .map(|f| {
+            if f.size == 0 { return None; }
+            if let Some(c) = by_size.get(&f.size).and_then(|cs| cs.iter().find(|c| same_content(&f.path, c))) {
+                return Some(c.clone());
+            }
+            // Im Protokoll vermerkt und seitdem unverändert (gleicher Tag)
+            let tag = crate::utils::secs_to_date(f.modified as u64);
+            vermerkt.get(&f.path.to_string_lossy().replace('/', "\\").to_lowercase())
+                .filter(|(t, _)| *t == tag)
+                .map(|(_, json)| json.clone())
+        })
         .collect();
     let nur_hier = treffer.iter().filter(|t| t.is_none()).count();
     let fertig = fs.iter().filter(|f| !f.flp && f.modified > 0).map(|f| f.modified).min()
@@ -344,12 +412,31 @@ fn bewerten(
         dateien: fs.iter().zip(&treffer).map(|(f, t)| FundDatei { path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some() }).collect(),
     };
 
-    // Grau: dieselbe Datei liegt im Archiv
+    // Grau: dieselbe Datei liegt im Archiv, und zwar in einem Beat mit diesem
+    // Titel. Ein Producer-Tag oder Vocal-Sample steckt in vielen Songs: liegt
+    // es in einem anderen Beat, sagt das über diesen Song nichts.
+    let titel_alle: Vec<&str> = werke.iter().map(|w| w.titel.as_str()).filter(|t| !normalize_title(t).is_empty()).collect();
+    // Zwei Songs gleichen Titels in einem Eintrag (Destiny F#m 140 und Dm 181):
+    // nie automatisch grau, das entscheidest du bei Gelb
+    let uneinheitlich = {
+        let k: HashSet<String> = werke.iter().filter_map(|w| w.key.as_deref().and_then(super::einsammeln::key_schreibweise)).collect();
+        let b: HashSet<i32> = werke.iter().filter_map(|w| w.bpm).collect();
+        k.len() > 1 || b.len() > 1
+    };
     for (f, t) in fs.iter().zip(&treffer) {
-        if let (false, Some(c)) = (f.flp, t) {
-            let ordner = index.iter().find(|e| c.starts_with(&e.path)).map(|e| e.folder.clone());
-            return fund("grau", "gleiche Datei im Archiv", ordner);
+        if let (false, Some(c)) = (f.flp, t.as_ref()) {
+            let beat = index.iter().find(|e| c.starts_with(&e.path));
+            let passt = match beat {
+                None => true, // 07_REMIXES
+                Some(e) => titel_alle.is_empty() || gleicher_song(&titel_alle, key.as_deref(), bpm, c, e),
+            };
+            if passt && !uneinheitlich {
+                return fund("grau", "gleiche Datei im Archiv", beat.map(|e| e.folder.clone()));
+            }
         }
+    }
+    if uneinheitlich {
+        return fund("gelb", "Key/BPM uneinheitlich", None);
     }
     // Grau: Nummer und Titel stimmen
     let mut nummer_belegt = None;
@@ -380,7 +467,7 @@ fn bewerten(
     if titel_set.len() > 1 {
         return fund("gelb", "Nummer mit mehreren Titeln", None);
     }
-    let keys: HashSet<String> = werke.iter().filter_map(|w| w.key.as_ref()).map(|k| k.to_lowercase()).collect();
+    let keys: HashSet<String> = werke.iter().filter_map(|w| w.key.as_deref()).map(|k| super::einsammeln::key_schreibweise(k).unwrap_or_else(|| k.to_lowercase())).collect();
     let bpms: HashSet<i32> = werke.iter().filter_map(|w| w.bpm).collect();
     if keys.len() > 1 || bpms.len() > 1 {
         return fund("gelb", "Key/BPM uneinheitlich", None);
@@ -449,9 +536,14 @@ mod tests {
         // Unterordner Audio ist FL-Material
         datei(&alt.join("[795] Gotta Go Now - Am 140/Audio/rec.wav"), "rec");
 
+        // Geteilter Producer-Tag: liegt in HEAT/Samples, macht Sunrise nicht grau
+        datei(&arch.join("2026/05_MAY/0618 - HEAT [D#m 152]/01_SAVEFILES/Samples/BXII Tag.wav"), "tag");
+        datei(&alt.join("[701] Sunrise - 140 Am/[701] Sunrise - 140 Am.mp3"), "sunrise");
+        datei(&alt.join("[701] Sunrise - 140 Am/BXII Tag.wav"), "tag");
         let r = fundstuecke(&[alt.to_string_lossy().to_string()], &arch).unwrap();
         let finde = |id: u32| r.iter().find(|f| f.id == Some(id)).unwrap_or_else(|| panic!("{id} fehlt: {r:#?}"));
         assert_eq!(finde(233).ampel, "gruen");
+        assert_eq!(finde(701).ampel, "gruen", "{:?}", finde(701));
         assert_eq!(finde(233).dateien.len(), 4);
         assert_eq!(finde(504).grund, "nur Nummer");
         assert_eq!(finde(504).bpm, Some(160));
@@ -463,7 +555,7 @@ mod tests {
         assert_eq!((whynot.nur_hier, whynot.dateien[0].im_archiv), (0, true));
         assert_eq!(finde(233).nur_hier, 4);
         assert_eq!(finde(630).ampel, "gelb");
-        assert_eq!(finde(301).grund, "Nummer mit mehreren Titeln");
+        assert_eq!(finde(301).ampel, "gelb"); // zwei Songs unter einer Nummer
         assert_eq!(finde(795).ampel, "gruen");
         assert_eq!(finde(795).dateien.len(), 1);
         assert!(r.iter().all(|f| f.id != Some(400)));
@@ -473,6 +565,8 @@ mod tests {
         assert!(r.iter().all(|f| f.titel != "Lo-Fi"));
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
         assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true).unwrap().titel, "Cuthroat");
+        assert_eq!(werk_aus_name("397 . Master.mp3", true).unwrap().titel, "");
+        assert_eq!(werk_aus_name("473_Prototype.mp3", true).unwrap().titel, "");
         assert_eq!(ohne_tag("@xP4RA - Forever"), "Forever");
         assert_eq!(ohne_tag("Destiny - "), "Destiny");
         assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");

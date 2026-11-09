@@ -211,9 +211,17 @@ pub(crate) fn einsammeln_mit(
             }
             continue;
         }
+        // Nur ein Beat mit diesem Titel zählt: ein geteiltes Sample (Tag,
+        // Vocals) in einem anderen Beat blockiert den Song nicht
         let doppelt = pfade.iter().filter(|p| ist_audio(p)).find(|p| {
             let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-            im_archiv.get(&size).is_some_and(|cs| cs.iter().any(|c| same_content(p, c)))
+            im_archiv.get(&size).is_some_and(|cs| cs.iter().any(|c| {
+                same_content(p, c) && match index.iter().find(|x| c.starts_with(&x.path)) {
+                    None => true,
+                    Some(x) => super::fundstuecke::gleicher_song(&[e.titel.as_str()],
+                        e.key.as_deref().and_then(key_schreibweise).as_deref(), e.bpm, c, x),
+                }
+            }))
         });
         if let Some(p) = doppelt {
             erg.ausgelassen.push(format!("{name}: {} liegt schon im Archiv", p.display()));
