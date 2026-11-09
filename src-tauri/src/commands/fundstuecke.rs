@@ -120,7 +120,9 @@ fn generisch(titel: &str) -> bool {
 }
 
 /// Song aus einem Datei- oder Ordnernamen. None = nichts Brauchbares.
-fn werk_aus_name(name: &str, ist_datei: bool) -> Option<Werk> {
+/// `nackte_nr`: „536.mp3“ als alte Nummer lesen. Nicht in Produktionsprojekten,
+/// dort ist „1.mp3“ ein Bounce und „100 Tausend“ ein Titel.
+fn werk_aus_name(name: &str, ist_datei: bool, nackte_nr: bool) -> Option<Werk> {
     let stamm = if ist_datei { name.rsplit_once('.').map(|(a, _)| a).unwrap_or(name) } else { name };
     if let Some(o) = old_system_id_and_title(stamm) {
         // „[638] Cuthroat -150 - Gm": die „-150" ist das Tempo, nicht der Titel
@@ -130,7 +132,7 @@ fn werk_aus_name(name: &str, ist_datei: bool) -> Option<Werk> {
         };
         return Some(Werk { id: Some(o.id), titel, key: o.key, bpm: o.bpm });
     }
-    if let Some(w) = nur_nummer(ohne_version(stamm)) {
+    if let Some(w) = nur_nummer(ohne_version(stamm)).filter(|_| nackte_nr) {
         return Some(w);
     }
     // parse_audio_filename schneidet eine Endung ab, Ordnernamen haben keine
@@ -164,6 +166,21 @@ fn nur_nummer(s: &str) -> Option<Werk> {
     Some(Werk { id: Some(id), titel, key: o.key, bpm: o.bpm })
 }
 
+/// „500-599“ → (500, 599)
+fn eimer_bereich(name: &str) -> Option<(u32, u32)> {
+    let (a, b) = name.split_once('-')?;
+    Some((a.parse().ok()?, b.parse().ok()?))
+}
+
+/// Nackte Nummer im Eimer muss in seinen Bereich passen: „1_3.mp3“ in
+/// 800-899 ist ein Bounce, „536.wav“ in 500-599 die alte 536.
+fn passt_in_eimer(w: &Werk, name: &str, eimer: Option<(u32, u32)>) -> bool {
+    match (w.id, eimer) {
+        (Some(id), Some((a, b))) if !name.starts_with('[') => (a..=b).contains(&id),
+        _ => true,
+    }
+}
+
 struct Fundort {
     path: PathBuf,
     werk: Option<Werk>,
@@ -180,6 +197,8 @@ fn endung(p: &Path) -> String {
 /// Titel, z. B. „[795] Gotta Go Now - Am 140". Namenlose Dateien erben ihn.
 fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let eimer = dir.components().rev().find_map(|k| eimer_bereich(&k.as_os_str().to_string_lossy()));
+    let nackte_nr = !dir.components().any(|k| k.as_os_str().to_string_lossy().starts_with("Project_"));
     let mut hier = Vec::new();
     for e in rd.filter_map(|e| e.ok()) {
         let p = e.path();
@@ -194,7 +213,7 @@ fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
             // „01_SAVEFILES“, „02_OLD“: BeatOS-Gliederung, keine alte Nummer 1/2
             let gliederung = name.len() > 3 && name.as_bytes()[..2].iter().all(u8::is_ascii_digit) && name.as_bytes()[2] == b'_'
                 && name[3..].chars().all(|c| c.is_ascii_uppercase() || c == '_');
-            let eigen = werk_aus_name(&name, false).filter(|w| !gliederung && (w.id.is_some() || w.key.is_some() || w.bpm.is_some()));
+            let eigen = werk_aus_name(&name, false, nackte_nr).filter(|w| !gliederung && (w.id.is_some() || w.key.is_some() || w.bpm.is_some()));
             sammeln(&p, eigen.as_ref().or(ordner_werk), out);
             continue;
         }
@@ -212,7 +231,7 @@ fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
             .unwrap_or(0);
         hier.push(Fundort {
             // Im Ordner „[539] YaYa" gehört „YaYa - 140 Em.mp3" zur 539.
-            werk: match (werk_aus_name(&name, true), ordner_werk) {
+            werk: match (werk_aus_name(&name, true, nackte_nr).filter(|w| passt_in_eimer(w, &name, eimer)).or_else(|| werk_aus_name(&name, true, false)), ordner_werk) {
                 (Some(w), _) if w.id.is_some() => Some(w),
                 (_, Some(o)) if o.id.is_some() => Some(o.clone()),
                 (w, o) => w.or_else(|| o.cloned()),
@@ -571,6 +590,10 @@ mod tests {
         datei(&alt.join("[301] Agony - 155 Fm.mp3"), "a");
         datei(&alt.join("[301] Sunset - 140 Am.mp3"), "b");
         datei(&alt.join("[539] YaYa - 140 Em/YaYa - 140 Em.mp3"), "yaya");
+        // Produktion: nackte Zahl ist Bounce oder Titel, keine alte Nummer
+        datei(&alt.join("Project_0753/2.mp3"), "bounce");
+        datei(&alt.join("800-899/1_3.mp3"), "bounce13");
+        datei(&alt.join("Project_0572/100 Tausend_mix.mp3"), "tausend");
         // Gliederungsordner: nicht „Nr. 1 SAVEFILES“, der Song kommt vom Ordner darüber
         datei(&alt.join("Kira - Ember [Am 150]/01_SAVEFILES/Ember v2.mp3"), "ember");
         datei(&alt.join("Kira - Nova [Cm 140]/01_SAVEFILES/Nova.mp3"), "nova");
@@ -617,13 +640,16 @@ mod tests {
         assert!(r.iter().any(|f| f.titel == "whynot" && f.ampel == "grau"));
         assert!(r.iter().any(|f| f.ampel == "rot"));
         assert_eq!(finde(539).dateien.len(), 1);
+        assert!(r.iter().all(|f| f.id != Some(1) && f.id != Some(2)), "Project_0753/2.mp3 als Nummer gelesen");
+        let tausend = r.iter().find(|f| f.dateien[0].path.contains("100 Tausend")).unwrap();
+        assert_eq!((tausend.id, tausend.titel.as_str()), (None, "100 Tausend_mix"));
         assert!(r.iter().all(|f| f.id != Some(1)), "01_SAVEFILES als Nummer gelesen");
         assert!(r.iter().any(|f| f.dateien.iter().any(|d| d.path.ends_with("Nova.mp3")) && f.titel == "Nova"));
         assert!(r.iter().all(|f| f.titel != "Lo-Fi"));
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
-        assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true).unwrap().titel, "Cuthroat");
-        assert_eq!(werk_aus_name("397 . Master.mp3", true).unwrap().titel, "");
-        assert_eq!(werk_aus_name("473_Prototype.mp3", true).unwrap().titel, "");
+        assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true, true).unwrap().titel, "Cuthroat");
+        assert_eq!(werk_aus_name("397 . Master.mp3", true, true).unwrap().titel, "");
+        assert_eq!(werk_aus_name("473_Prototype.mp3", true, true).unwrap().titel, "");
         assert_eq!(ohne_tag("@xP4RA - Forever"), "Forever");
         assert_eq!(ohne_tag("Destiny - "), "Destiny");
         assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");
