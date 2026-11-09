@@ -258,7 +258,8 @@ function Zeile({ f }: { f: Fund }) {
     monat(f.fertig),
     f.grund,
     f.archiv,
-    `${f.dateien.length} ${f.dateien.length === 1 ? "Datei" : "Dateien"}`,
+    // Welche Datei gemeint ist: die, die beim Abspielen läuft
+    `${(audio ?? f.dateien[0]).path.split(/[\\/]/).pop()}${f.dateien.length > 1 ? ` +${f.dateien.length - 1}` : ""}`,
     f.ampel === "grau" && f.nur_hier > 0 ? `${f.nur_hier} nur hier` : null,
   ].filter(Boolean).join(" · ");
 
