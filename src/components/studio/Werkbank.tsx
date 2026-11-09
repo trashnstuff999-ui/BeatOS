@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { CoverPlatzhalter } from "./CoverPlatzhalter";
-import { Hourglass, Play, Star } from "lucide-react";
+import { ChevronDown, Hourglass, Play, Star } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
 import { SCHRITTE, fehlt } from "../../lib/werkbank";
@@ -38,25 +38,52 @@ interface WerkbankProps {
 /** So viele Kacheln zeigt ein Regal, bevor „Alle N anzeigen" kommt (~2 Reihen). */
 const REGAL_LIMIT = 12;
 
+/** Zugeklappte Regale, über Neustarts gemerkt. */
+const LS_ZU = "beatos_werkbank_zu";
+
+function ladeZu(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(LS_ZU) ?? "[]")); } catch { return new Set(); }
+}
+
 export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview, onAufraeumen }: WerkbankProps) {
   const [offen, setOffen] = useState<Set<string>>(new Set());
+  const [zu, setZu] = useState<Set<string>>(ladeZu);
+  const umklappen = (key: string) => setZu(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    try { localStorage.setItem(LS_ZU, JSON.stringify([...next])); } catch { /* nur Komfort */ }
+    return next;
+  });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 36, padding: "24px 16px 28px" }}>
       {regale.map(r => {
         const alle = offen.has(r.key);
+        const eingeklappt = zu.has(r.key);
         const gezeigt = alle ? r.items : r.items.slice(0, REGAL_LIMIT);
         return (
         <section key={r.key} aria-label={r.label}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color, alignSelf: "center" }} />
-            <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurface }}>
-              {r.label}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: eingeklappt ? 0 : 14, flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0 }}>
+              <button
+                onClick={() => umklappen(r.key)}
+                aria-expanded={!eingeklappt}
+                title={eingeklappt ? "Aufklappen" : "Zuklappen"}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: 0, border: "none",
+                  background: "none", cursor: "pointer", fontFamily: "inherit", color: C.onSurface,
+                }}
+              >
+                <ChevronDown size={14} color={C.onSurfaceVariant}
+                  style={{ transition: "transform 0.15s", transform: eingeklappt ? "rotate(-90deg)" : "none" }} />
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color }} />
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{r.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>{r.items.length}</span>
+              </button>
             </h2>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>{r.items.length}</span>
             <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>{r.hint}</span>
           </div>
           {/* Umbrechen statt seitwärts scrollen — Reihen füllen die Breite */}
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, ${KACHEL}px)`, gap: "26px 22px" }}>
+          {!eingeklappt && <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, ${KACHEL}px)`, gap: "26px 22px" }}>
             {gezeigt.map(p => (
               <Kachel
                 key={p.path}
@@ -69,8 +96,8 @@ export function Werkbank({ regale, inspectorPath, selected, onOpen, onPreview, o
                 onAufraeumen={() => onAufraeumen(p)}
               />
             ))}
-          </div>
-          {r.items.length > REGAL_LIMIT && (
+          </div>}
+          {!eingeklappt && r.items.length > REGAL_LIMIT && (
             <button
               onClick={() => setOffen(prev => {
                 const next = new Set(prev);
@@ -123,7 +150,8 @@ function Kachel({ project: p, color, isOpen, isSelected, onOpen, onPreview, onAu
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        position: "relative", width: KACHEL,
+        // content-box: die 8 px Rand kommen zur Kachel dazu, sonst ragt das Cover rechts aus dem Rahmen
+        position: "relative", width: KACHEL, boxSizing: "content-box",
         padding: 8, margin: -8, borderRadius: 14,
         background: markiert ? alpha(C.primary, isSelected ? 0.12 : 0.06) : "transparent",
         boxShadow: markiert ? `inset 0 0 0 1.5px ${C.primary}` : "none",

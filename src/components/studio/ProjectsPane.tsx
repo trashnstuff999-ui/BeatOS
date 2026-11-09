@@ -10,22 +10,24 @@
 // erscheint, sobald etwas als „Kann weg" markiert ist.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered } from "lucide-react";
+import { RefreshCw, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered, AudioLines, Plus, Wrench } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
 import { C, STUDIO_STATUS_CONFIG, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
-import { useSettings } from "../../contexts/SettingsContext";
+import { useSettings, samplesOrdner } from "../../contexts/SettingsContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useKlickDaneben } from "../../hooks/useKlickDaneben";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
-import { EmptyState, Button, IconButton } from "../ui";
+import { EmptyState, Button, IconButton, Dropdown, MenuePunkt } from "../ui";
+import { useNeuesSample } from "./SamplesPane";
 import { MergeProjectsDialog } from "./MergeProjectsDialog";
+import { BenennenDialog } from "./BenennenDialog";
 import { ProjectInspector } from "./ProjectInspector";
 import { Werkbank } from "./Werkbank";
 import { IdeenListe } from "./IdeenListe";
@@ -99,9 +101,12 @@ interface ProjectsPaneProps {
   onInspectorOpen?: (open: boolean) => void;
   /** Arbeitsliste oder Aufräumen — dieselben Daten, ein Scan. */
   view?: StudioView;
+  /** Weitere Knöpfe vor „Neu" (der Assets-Knopf mit Zahl aus der Studio-Seite) */
+  extraActions?: React.ReactNode;
 }
 
-export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspectorOpen, view = "work" }: ProjectsPaneProps) {
+export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspectorOpen, view = "work", extraActions }: ProjectsPaneProps) {
+  const neuesSample = useNeuesSample();
   const [projects, setProjects] = useState<StudioProject[]>([]);
   /** Der aktuelle Stand — auch in einer Closure aus einem älteren Render. */
   const projectsRef = useRef(projects);
@@ -148,6 +153,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [isCreating, setIsCreating] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
+  /** „Beat benennen" offen für dieses Projekt. Liegt hier und nicht im Panel:
+   *  dessen transform würde den Dialog auf die Panelbreite einsperren. */
+  const [benennen, setBenennen] = useState<StudioProject | null>(null);
 
   useEffect(() => { localStorage.setItem(LS_SORT, sortMode); }, [sortMode]);
 
@@ -314,6 +322,46 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     }
   };
 
+  // War eigentlich nur eine Melodie: ab nach 06_SAMPLES als „S0012 Titel".
+  // Danach EIN Nachrücken für alle, wie beim Papierkorb.
+  const handleToSamples = async (targets: StudioProject[]) => {
+    const root = samplesOrdner(settings.archivePath);
+    if (!root) { melde("Kein Archiv-Ordner (Einstellungen → Pfade)"); return; }
+    const n = targets.length;
+    if (n === 0) return;
+    const namen = targets.slice(0, 8).map(p => `• ${projectDisplayName(p)}`).join("\n");
+    const ok = await frage({
+      titel: n === 1 ? "Zu den Samples verschieben?" : `${n} Projekte zu den Samples verschieben?`,
+      text: `${namen}${n > 8 ? `\n… und ${n - 8} weitere` : ""}\n\n` +
+            `Ziel: ${root}\nNotizen und Stern fallen weg. Die Nummern dahinter rücken nach.`,
+      bestaetigen: "Verschieben",
+    });
+    if (!ok) return;
+
+    setSelected(new Set());
+    setIsCleaning(true);
+    const weg = new Set<string>();
+    const fehler: string[] = [];
+    for (const p of targets) {
+      try {
+        await api.studio.moveToSamples(p.path, root, ideeName(p).titel ?? "");
+        weg.add(p.path);
+      } catch (e) {
+        fehler.push(`${projectDisplayName(p)}: ${String(e)}`);
+      }
+    }
+    setProjects(prev => prev.filter(x => !weg.has(x.path)));
+    if (inspectorPath && weg.has(inspectorPath)) setInspectorPath(null);
+    if (weg.size > 0) {
+      try { zeigeNachruecken((await api.studio.closeGaps()).failed); }
+      catch (e) { melde(`Nachrücken fehlgeschlagen: ${String(e)}`); }
+      scan();
+    }
+    setIsCleaning(false);
+    if (fehler.length > 0) melde(`Nicht verschoben:\n${fehler.join("\n")}`);
+    else melde(`${weg.size} ${weg.size === 1 ? "Projekt" : "Projekte"} in Samples`, "erfolg");
+  };
+
   const zeigeNachruecken = (fehler: string[]) => {
     if (fehler.length > 0) {
       melde(`Nicht alle nachgerückt (Projekt in FL offen?):\n${fehler.join("\n")}`);
@@ -414,7 +462,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const inView = (p: StudioProject) =>
     CLEANUP_SECTIONS.includes(sectionOf(p)) === (view === "cleanup");
 
-  // Regale klappen nicht zu und kürzen nicht.
+  // Regale klappen in der Werkbank selbst zu (gemerkt), gefiltert wird hier nicht.
   const isShelf = (key: SectionKey) => view === "work" && SHELF_SECTIONS.includes(key);
 
   const preStatus = projects.filter(p => {
@@ -647,7 +695,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     return () => clearTimeout(t);
   }, [inspectorProject]);
   const panelProject = inspectorProject ?? leaving;
-  useEffect(() => { onInspectorOpen?.(inspectorOpen); }, [inspectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Layout-Effekt: die Seite rückt im selben Frame ein, in dem das Panel
+  // erscheint. Mit useEffect fuhr das Panel einen Frame allein los.
+  useLayoutEffect(() => { onInspectorOpen?.(inspectorOpen); }, [inspectorOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keine Karte drumherum: die Werkbank steht wie im Mockup direkt auf der Seite.
   return (
@@ -663,55 +713,44 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
         rootFilter={rootFilter}
         onRootFilter={setRootFilter}
       >
-        <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Ordner neu einlesen">
-          Scan
-        </Button>
-        {/* Im Aufräumen gehören die Werkzeuge in dieselbe Leiste — keine zweite Knopfreihe */}
-        {view === "cleanup" ? (<>
-          <Button
-            size="sm" variant="ghost" icon={ListOrdered}
-            onClick={handleCloseGaps}
-            loading={isCleaning}
-            disabled={productionPaths.length === 0}
-            title="Nummern lückenlos nachrücken"
+        <IconButton icon={RefreshCw} onClick={scan} disabled={isLoading} title="Ordner neu einlesen" aria-label="Scan" />
+        {/* Selten gebrauchte Ordner-Werkzeuge hinter einem Knopf statt zwei */}
+        {view === "cleanup" ? (
+          <Dropdown
+            label={<><Wrench size={13} strokeWidth={1.75} />Werkzeuge</>}
+            align="right" panelWidth={280}
+            disabled={productionPaths.length === 0 || isCleaning}
           >
-            Lücken schließen
-          </Button>
-          <Button
-            size="sm" variant="ghost" icon={FolderInput}
-            onClick={() => setShowMerge(true)}
-            disabled={productionPaths.length === 0}
-            title="Ordner zusammenführen, nach Alter nummerieren"
-          >
-            Zusammenführen
-          </Button>
-        </>) : (<>
-          <Button
-            size="sm" variant="ghost" icon={FolderPlus}
-            onClick={() => navigate("/create")}
-            title="Externen Ordner archivieren"
-          >
-            Ordner archivieren
-          </Button>
-          <Button
-            size="sm" variant="ghost" icon={CopyPlus}
-            onClick={handleNewFromFlp}
-            disabled={productionPaths.length === 0 || isCreating}
-            title="Kopie einer FLP als neues Projekt"
-          >
-            Aus FLP
-          </Button>
-          <Button
+            {close => (<>
+              <MenuePunkt icon={ListOrdered} label="Lücken schließen" hint="Nummern lückenlos nachrücken"
+                onClick={() => { close(); handleCloseGaps(); }} />
+              <MenuePunkt icon={FolderInput} label="Zusammenführen" hint="Ordner vereinen, nach Alter nummerieren"
+                onClick={() => { close(); setShowMerge(true); }} />
+            </>)}
+          </Dropdown>
+        ) : (<>
+          {extraActions}
+          {/* Alles, was etwas Neues anlegt, unter einem Knopf */}
+          <Dropdown
             variant="primary"
-            icon={FilePlus2}
-            onClick={() => handleNewProject()}
-            loading={isCreating}
-            disabled={productionPaths.length === 0}
-            title={`${nextName || "Nächstes Projekt"} in ${newProjectRoot} anlegen`}
+            label={<><Plus size={14} strokeWidth={2} />Neu</>}
+            align="right" panelWidth={300}
+            disabled={isCreating}
           >
-            Neues Projekt
-            {nextName && <span style={{ opacity: 0.65, fontWeight: 600 }}>{nextName}</span>}
-          </Button>
+            {close => (<>
+              <MenuePunkt icon={FilePlus2} label="Neues Projekt"
+                hint={`${nextName || "Nächste Nummer"} aus der Template-FLP`}
+                disabled={productionPaths.length === 0}
+                onClick={() => { close(); handleNewProject(); }} />
+              <MenuePunkt icon={CopyPlus} label="Aus Vorlage" hint="Kopie einer vorhandenen FLP"
+                disabled={productionPaths.length === 0}
+                onClick={() => { close(); handleNewFromFlp(); }} />
+              <MenuePunkt icon={AudioLines} label="Neues Sample" hint="In 06_SAMPLES"
+                onClick={() => { close(); neuesSample(); }} />
+              <MenuePunkt icon={FolderPlus} label="Ordner archivieren" hint="Externen Ordner ins Archiv"
+                onClick={() => { close(); navigate("/create"); }} />
+            </>)}
+          </Dropdown>
         </>)}
       </ProjectsToolbar>
       </div>
@@ -818,6 +857,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
           <Button size="sm" icon={Trash2} onClick={() => patchSelected(() => ({ status: "discard" }))}>
             Kann weg
           </Button>
+          <Button size="sm" icon={AudioLines} onClick={() => handleToSamples(projectsRef.current.filter(p => selected.has(p.path)))}>
+            Zu Samples
+          </Button>
           <Button
             size="sm"
             onClick={() => patchSelected(p => ({ status: deriveStage(p), priority: 0 }))}
@@ -878,8 +920,26 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
           onArchive={() => handleArchive(panelProject)}
           onOpenDaw={() => handleOpenDaw(panelProject)}
           onTrash={() => handleTrash(panelProject)}
+          onToSamples={() => handleToSamples([panelProject])}
+          onPreview={() => handlePreview(panelProject)}
+          onRename={() => setBenennen(panelProject)}
           onClose={() => setInspectorPath(null)}
           onAssetsChanged={scan}
+        />
+      )}
+
+      {benennen && (
+        <BenennenDialog
+          project={benennen}
+          onClose={() => setBenennen(null)}
+          // Die Zeile sofort auf den neuen Pfad umhängen, sonst gleitet das
+          // Panel bis zum nächsten Scan hinaus und wieder herein.
+          onRenamed={neu => {
+            const alt = benennen.path;
+            setProjects(prev => prev.map(x => x.path === alt ? { ...x, path: neu } : x));
+            if (inspectorPath === alt) setInspectorPath(neu);
+            scan();
+          }}
         />
       )}
     </div>

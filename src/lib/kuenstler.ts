@@ -5,9 +5,11 @@
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 /** Wo ein Song steht — ein Satz statt sechs Häkchen. `schritt` zählt die
- *  erledigten der vier Etappen Vocals → Mix → Master → Abgegeben. */
-export function songStand(s: { fertig: boolean; warten: boolean; vocals: boolean; mix: boolean; master: boolean }):
+ *  erledigten der vier Etappen Vocals → Mix → Master → Abgegeben. Bei „Nur
+ *  Master" gelten Vocals und Mix als erledigt. */
+export function songStand(song: { fertig: boolean; warten: boolean; vocals: boolean; mix: boolean; master: boolean; nur_master?: boolean }):
   { text: string; schritt: number; ton: "fertig" | "warten" | "offen" | "bereit" } {
+  const s = song.nur_master ? { ...song, vocals: true, mix: true } : song;
   const schritt = s.fertig ? 4 : s.master ? 3 : s.mix ? 2 : s.vocals ? 1 : 0;
   if (s.fertig) return { text: "Abgegeben", schritt, ton: "fertig" };
   if (s.warten) return { text: "Warte auf Künstler", schritt, ton: "warten" };

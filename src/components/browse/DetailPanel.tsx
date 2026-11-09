@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
-import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
 import { BROWSE_PANEL_WIDTH } from "../../lib/constants";
 import { PLAYER_HEIGHT } from "../GlobalAudioPlayer";
@@ -368,7 +368,7 @@ export function DetailPanel({
 
   const handleOpenFolder = async () => {
     if (beat.path) {
-      try { await revealItemInDir(beat.path); } catch {}
+      try { await openPath(beat.path); } catch {}
     }
   };
 

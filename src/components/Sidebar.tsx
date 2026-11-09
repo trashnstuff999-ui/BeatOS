@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, LibraryBig, Music, Upload as UploadIcon, Settings, HelpCircle, Pin, PinOff, Video as VideoIcon } from "lucide-react";
+import { LayoutGrid, LibraryBig, Music, Upload as UploadIcon, Settings, HelpCircle, Pin, PinOff, Video as VideoIcon, Users } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../lib/theme";
 import { SIDEBAR_WIDTH } from "../lib/constants";
@@ -17,6 +17,7 @@ const NAV = [
   { to: "/browse", icon: LibraryBig,  label: "Archiv"     },
   { to: "/upload", icon: UploadIcon,  label: "Upload"     },
   { to: "/studio", icon: Music,       label: "Studio"     },
+  { to: "/kuenstler", icon: Users,    label: "Künstler"   },
   { to: "/video",  icon: VideoIcon,   label: "Video"      },
 ];
 

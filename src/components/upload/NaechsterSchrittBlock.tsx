@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, CalendarPlus, ArrowDown, ImagePlus, FolderOpen, Rocket } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { C } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -77,7 +77,7 @@ export function NaechsterSchrittBlock({ schritt, beatId, beatPath, onChanged, on
       titel = "Audio fehlt";
       unter = "Aus FL Studio exportieren oder hierher ziehen";
       knopf = (
-        <Button variant="secondary" size="sm" icon={FolderOpen} onClick={() => revealItemInDir(beatPath).catch(() => {})}>
+        <Button variant="secondary" size="sm" icon={FolderOpen} onClick={() => openPath(beatPath).catch(() => {})}>
           Ordner öffnen
         </Button>
       );

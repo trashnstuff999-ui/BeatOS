@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { FileCode2, FolderOpen, Save, RotateCcw, ShoppingBag, Music2, Youtube } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { Modal, Button, Dropdown, Segmented } from "../ui";
@@ -197,7 +197,7 @@ export function TemplateEditorDialog({ beatId, onClose, onSaved }: TemplateEdito
             variant="ghost"
             icon={FolderOpen}
             title="Template-Ordner im Explorer öffnen"
-            onClick={() => api.upload.getTemplatesDir().then(revealItemInDir).catch(e => setError(String(e)))}
+            onClick={() => api.upload.getTemplatesDir().then(openPath).catch(e => setError(String(e)))}
           >
             Ordner
           </Button>

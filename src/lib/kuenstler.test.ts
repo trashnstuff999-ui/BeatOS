@@ -24,6 +24,7 @@ describe("songStand", () => {
     expect(songStand({ ...s, vocals: true, mix: true, master: true }).ton).toBe("bereit");
     expect(songStand({ ...s, vocals: true, warten: true })).toEqual({ text: "Warte auf Künstler", schritt: 1, ton: "warten" });
     expect(songStand({ ...s, fertig: true, warten: true })).toEqual({ text: "Abgegeben", schritt: 4, ton: "fertig" });
+    expect(songStand({ ...s, nur_master: true })).toEqual({ text: "Master offen", schritt: 2, ton: "offen" });
   });
 });
 

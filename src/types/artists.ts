@@ -38,6 +38,8 @@ export interface ArtistSong {
   beat_id: string | null;
   /** Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag. */
   beat_vorschlag: string | null;
+  /** Nur mastern: keine Vocals, kein Mix nötig. */
+  nur_master: boolean;
 }
 
 export interface Artist {

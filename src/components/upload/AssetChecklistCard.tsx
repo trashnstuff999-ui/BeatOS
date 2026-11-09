@@ -14,7 +14,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   FileAudio, FileVideo, FolderOpen, FolderTree, RefreshCw, Wand2, X, Plus, Archive, Copy, Check,
 } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { C, alpha, radius } from "../../lib/theme";
@@ -210,7 +210,7 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <SectionIconBtn icon={Wand2} title="Dateinamen anpassen" onClick={onConvert} />
           <SectionIconBtn icon={RefreshCw} title="Ordner neu scannen" onClick={onRefresh} />
-          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={() => revealItemInDir(beatPath).catch(() => {})} />
+          <SectionIconBtn icon={FolderOpen} title="Beat-Ordner öffnen" onClick={() => openPath(beatPath).catch(() => {})} />
         </div>
       </div>
 

@@ -514,6 +514,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
 }) {
   const [wer, setWer] = useState(kuenstler[0]?.path ?? "");
   const [name, setName] = useState("");
+  const [nurMaster, setNurMaster] = useState(false);
   const [downloads, setDownloads] = useState<{ name: string; path: string; geaendert: number }[]>([]);
   const [vonHand, setVonHand] = useState<Record<string, boolean>>({});
   const [laeuft, setLaeuft] = useState(false);
@@ -536,8 +537,10 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
     setFehler(null);
     try {
       const flp = await api.artists.createSong(wer, name.trim(), vorlage);
+      // FLP liegt in <Song>/01_SAVEFILES/ — zwei Ebenen hoch.
+      const songPfad = flp.replace(/[\\/][^\\/]+[\\/][^\\/]+$/, "");
+      if (nurMaster) await api.artists.setNurMaster(songPfad, true);
       if (mit.length > 0) {
-        const songPfad = flp.replace(/[\\/][^\\/]+$/, "");
         const erg = await api.artists.assetsFuellen(songPfad, mit.map(d => d.path));
         const schief = erg.filter(e => !e.ok);
         if (schief.length > 0) {
@@ -592,6 +595,11 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
             onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") los(); }} />
         </label>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <Segmented label="Art" value={nurMaster ? "master" : "mixmaster"} onChange={v => setNurMaster(v === "master")}
+          options={[{ value: "mixmaster", label: "Mix & Master" }, { value: "master", label: "Nur Master" }]} />
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -708,7 +716,7 @@ function KuenstlerBlock({ kuenstler: k, auswahl, onWaehlen, downloads, ziehen, o
               : openUrl(k.links[p.key]).catch(() => {})} />
         ))}
         <IconButton icon={FolderOpen} size={26} variant="ghost" title="Künstler-Ordner öffnen"
-          onClick={() => revealItemInDir(k.path).catch(() => {})} />
+          onClick={() => openPath(k.path).catch(() => {})} />
       </div>
       {profilOffen && <ProfilDialog kuenstler={k} onClose={geaendert => { setProfilOffen(false); if (geaendert) onGeaendert(); }} />}
       {offen.length === 0 && (
@@ -975,7 +983,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
           <div style={{ fontSize: 20, fontWeight: 700, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: STAND_FARBE[stand.ton], marginTop: 2 }}>{stand.text}</div>
         </div>
-        <IconButton icon={FolderOpen} size={32} variant="secondary" title="Song-Ordner öffnen" onClick={() => revealItemInDir(s.path).catch(() => {})} />
+        <IconButton icon={FolderOpen} size={32} variant="secondary" title="Song-Ordner öffnen" onClick={() => openPath(s.path).catch(() => {})} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1025,7 +1033,7 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
 
       {/* Bausteine */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {BAUSTEINE.map(b => {
+        {BAUSTEINE.filter(b => !(s.nur_master && (b.key === "vocals" || b.key === "mix"))).map(b => {
           const da = s[b.key];
           return (
             <span key={b.key} title={`${b.label}: ${da ? "vorhanden" : "fehlt"} · ${b.titel}`} style={{
@@ -1073,6 +1081,14 @@ function SongDetail({ song: s, kuenstler, bild, onGeaendert, downloads, ueberneh
               { value: "arbeit", label: "In Arbeit" },
               { value: "warten", label: "Warte auf Künstler", icon: Hourglass, color: C.tertiary },
             ]}
+          />
+        )}
+        {!s.fertig && (
+          <Segmented
+            label="Art"
+            value={s.nur_master ? "master" : "mixmaster"}
+            onChange={v => api.artists.setNurMaster(s.path, v === "master").then(onGeaendert).catch(e => setFehler(String(e)))}
+            options={[{ value: "mixmaster", label: "Mix & Master" }, { value: "master", label: "Nur Master" }]}
           />
         )}
         <span style={{ flex: 1 }} />

@@ -1,0 +1,24 @@
+// src/pages/Kuenstler.tsx
+// ═══════════════════════════════════════════════════════════════════════════════
+// Künstler-Projekte (Mix & Master) als eigene Seite. Stand vorher als Tab im
+// Studio, ist aber eine andere Arbeit: fremde Songs, eigener Ordner (05_ARTISTS).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import { Users } from "lucide-react";
+import { C } from "../lib/theme";
+import { PageHeader, PageBody } from "../components/ui";
+import { useSettings, kuenstlerOrdner } from "../contexts/SettingsContext";
+import { ArtistsPane } from "../components/studio/ArtistsPane";
+
+export default function Kuenstler() {
+  const { settings } = useSettings();
+  return (
+    <div data-app-flaeche style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
+      <PageHeader icon={Users} title="Künstler" />
+      <PageBody width="wide">
+        <ArtistsPane root={kuenstlerOrdner(settings)} archivePath={settings.archivePath} active />
+        <div style={{ height: 40 }} />
+      </PageBody>
+    </div>
+  );
+}

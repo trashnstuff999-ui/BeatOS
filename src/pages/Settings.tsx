@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import {
   FolderOpen, CheckCircle, AlertCircle, HardDrive, Archive, Image, User, Mail,
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, FileText,
@@ -720,7 +720,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
   const handleOpenTemplates = async () => {
     try {
       const dir = await api.upload.getTemplatesDir();
-      await revealItemInDir(dir);
+      await openPath(dir);
     } catch (e) {
       melde(`Template-Ordner konnte nicht geöffnet werden: ${String(e)}`);
     }
@@ -1084,6 +1084,17 @@ export function Settings() {
                 onBrowse={async () => {
                   const p = await pickFlp();
                   if (p) update("flpTemplatePath", p);
+                }}
+              />
+              <PathInput
+                label="Sample-Template"
+                icon={Music2}
+                value={draft.sampleTemplatePath}
+                placeholder="z.B. D:\Beat Library\_TEMPLATE\Sample.flp"
+                onChange={v => update("sampleTemplatePath", v)}
+                onBrowse={async () => {
+                  const p = await pickFlp();
+                  if (p) update("sampleTemplatePath", p);
                 }}
               />
             </div>

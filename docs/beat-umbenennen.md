@@ -1,6 +1,6 @@
 # Beat benennen — Name, Tonart und BPM in Ordner und Dateien
 
-Stand 30.08.2026, Branch `refactor/dashboard`. Geplant, **noch nicht umgesetzt**.
+Geplant 30.08.2026, **umgesetzt 29.10.2026** (`plan_project_rename`, `apply_project_rename`, `BenennenDialog.tsx`). Entscheidung zur offenen Frage unten: ältere FLP-Versionen behalten ihren Namen, nur die neueste wird umbenannt. Der Stift sitzt neben dem Titel im Panel, dazu „Beat benennen" im ⋯-Menü.
 
 Ziel: Ein Knopf im Studio-Sidepanel setzt Beatname, Tonart und BPM. Der
 Projektordner und jede MP3, WAV und FLP darin ziehen mit.

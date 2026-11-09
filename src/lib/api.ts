@@ -296,6 +296,9 @@ export const api = {
     /** Notiz und „Warte auf Künstler" für einen Song. */
     setSong: (path: string, notiz: string | null, warten: boolean) =>
       invoke<void>("set_artist_song", { path, notiz, warten }),
+    /** Song-Art: nur Master (true) oder Mix & Master. */
+    setNurMaster: (path: string, nurMaster: boolean) =>
+      invoke<void>("set_artist_nur_master", { path, nurMaster }),
     /** Neuer Künstler-Ordner; gibt den Pfad zurück. */
     create: (root: string, name: string) => invoke<string>("create_artist", { root, name }),
     /** Neuer Song: 01_SAVEFILES mit Template-FLP, 02_ASSETS, 03_VERSIONS; gibt den FLP-Pfad zurück. */
@@ -356,13 +359,30 @@ export const api = {
     createProject: (root: string, name: string, templateFlp: string) =>
       invoke<string>("create_project_folder", { root, name, templateFlp }),
 
+    /** Alle Sample-Ordner in `root`, ohne DB (kein Status, keine Statistik). */
+    scanSamples: (root: string) =>
+      invoke<StudioProject[]>("scan_samples", { root }),
+
+    /** Projektordner als „S0012 Name" nach `root` verschieben, FLP-Pfade nachziehen. */
+    moveToSamples: (path: string, root: string, name: string) =>
+      invoke<string>("move_to_samples", { path, root, name }),
+
+    /** Neues Sample „S0001 Name" in `root` (wird angelegt), gibt die FLP zurück. */
+    createSample: (root: string, name: string, templateFlp: string) =>
+      invoke<string>("create_sample", { root, name, templateFlp }),
+
     /** Nächste freie Projektnummer über alle Roots ("Project_206"). */
     nextProjectName: (paths: string[]) =>
       invoke<string>("next_project_name", { paths }),
 
-    /** Benennt Ordner + gleichnamige FLPs um, gibt den neuen Pfad zurück. */
-    renameProject: (path: string, newName: string) =>
-      invoke<string>("rename_project_folder", { path, newName }),
+    /** „Beat benennen", Vorschau: Ordner + Exporte + neueste FLP. Ändert nichts. */
+    planRename: (path: string, name: string, key: string | null, bpm: number | null) =>
+      invoke<{ folder_from: string; folder_to: string; files: { from: string; to: string }[] }>(
+        "plan_project_rename", { path, name, key, bpm }),
+
+    /** „Beat benennen" ausführen, gibt den neuen Projektpfad zurück. */
+    applyRename: (path: string, name: string, key: string | null, bpm: number | null) =>
+      invoke<string>("apply_project_rename", { path, name, key, bpm }),
 
     /** Vorschau: welcher Ordner landet unter welchem Namen im Ziel. Ändert nichts. */
     /** `exclude` nimmt Ordner heraus, BEVOR die Nummern vergeben werden —

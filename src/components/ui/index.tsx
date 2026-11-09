@@ -15,7 +15,7 @@ export { PageHeader, PAGE_HEADER_HEIGHT } from "./PageHeader";
 export { PageBody } from "./PageBody";
 export { EmptyState } from "./EmptyState";
 export { SectionCard, SectionIconBtn } from "./SectionCard";
-export { Dropdown, Select } from "./Dropdown";
+export { Dropdown, Select, MenuePunkt } from "./Dropdown";
 export { Segmented } from "./Segmented";
 export type { SegmentedOption } from "./Segmented";
 

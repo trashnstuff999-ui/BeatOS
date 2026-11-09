@@ -314,24 +314,24 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
   });
 
   it("„Ins Aufräumen“ an der Zeile schiebt ein frisches Projekt dorthin", async () => {
-    const FRISCH = project({ name: "Project_0051 - Neu", modified_secs: NOW - 60 });
+    const FRISCH = project({ name: "Project_0051 - Frisch", modified_secs: NOW - 60 });
     stubInvoke([], [FRISCH]);
     const user = userEvent.setup();
     renderProjects();
-    await screen.findByText("Neu");
+    await screen.findByText("Frisch");
     await user.click(screen.getByRole("button", { name: "Ins Aufräumen" }));
-    await waitFor(() => expect(screen.queryByText("Neu")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Frisch")).not.toBeInTheDocument());
     expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_aufraeumen")).toEqual([
       ["set_studio_aufraeumen", { path: FRISCH.path }],
     ]);
   });
 
-  it("„Behalten“ nimmt die Idee aus der Liste und merkt es sich", async () => {
+  it("„Zurück zu Projekte“ nimmt die Idee aus der Liste und merkt es sich", async () => {
     stubInvoke([], [ALT]);
     const user = userEvent.setup();
     renderProjects("cleanup");
     await screen.findByText("Staub");
-    await user.click(screen.getByRole("button", { name: "Behalten" }));
+    await user.click(screen.getByRole("button", { name: "Zurück zu Projekte" }));
 
     await waitFor(() => expect(screen.queryByText("Staub")).not.toBeInTheDocument());
     expect(vi.mocked(invoke).mock.calls.filter(c => c[0] === "set_studio_kept")).toEqual([
@@ -412,6 +412,40 @@ describe("F1 — Zeilenklick öffnet das Projekt", () => {
     // Nochmal klicken schließt wieder
     await user.click(screen.getAllByText("ARE YOU HERE")[0]);
     await waitFor(() => expect(screen.queryByText("FLP-Versionen (1)")).not.toBeInTheDocument());
+  });
+});
+
+describe("Beat benennen aus dem Panel", () => {
+  it("zeigt die Vorschau und benennt mit Name, Tonart und BPM", async () => {
+    const calls = stubInvoke();
+    vi.mocked(invoke).mockImplementation(((orig) => (cmd: string, args?: unknown) => {
+      if (cmd === "plan_project_rename") {
+        (calls[cmd] ??= []).push(args);
+        return Promise.resolve({ folder_from: "0857", folder_to: "Project_0857 - NEU [Am 140]", files: [{ from: "x.mp3", to: "NEU [Am 140].mp3" }] }) as never;
+      }
+      if (cmd === "apply_project_rename") {
+        (calls[cmd] ??= []).push(args);
+        return Promise.resolve("C:\\PROD\\Project_0857 - NEU [Am 140]") as never;
+      }
+      return orig(cmd, args as never);
+    })(vi.mocked(invoke).getMockImplementation()!) as never);
+    const user = userEvent.setup();
+    renderProjects();
+    await user.click(await screen.findByText("ARE YOU HERE"));
+
+    await user.click(await screen.findByRole("button", { name: "Beat benennen" }));
+    const name = await screen.findByPlaceholderText("Beatname");
+    await user.clear(name);
+    await user.type(name, "NEU");
+    await user.clear(screen.getByPlaceholderText("Cm"));
+    await user.type(screen.getByPlaceholderText("Cm"), "Am");
+    await user.clear(screen.getByPlaceholderText("140"));
+    await user.type(screen.getByPlaceholderText("140"), "140");
+
+    expect(await screen.findByText("NEU [Am 140].mp3")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Umbenennen/ }));
+    await waitFor(() => expect(calls["apply_project_rename"]).toBeTruthy());
+    expect(calls["apply_project_rename"][0]).toMatchObject({ path: READY.path, name: "NEU", key: "Am", bpm: 140 });
   });
 });
 
@@ -701,7 +735,8 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    await userEvent.click(screen.getByTitle(/Kopie einer FLP/i));
+    await userEvent.click(screen.getByRole("button", { name: /^Neu$/ }));
+    await userEvent.click(screen.getByText("Aus Vorlage"));
 
     // Keine Template-FLP in den Einstellungen — die Vorlage aus dem Dialog
     // muss trotzdem durchgehen, und der Name kommt weiter aus der Nummernvergabe.
@@ -719,7 +754,8 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
     renderProjects();
     await screen.findByText("ARE YOU HERE");
 
-    await userEvent.click(screen.getByTitle(/Kopie einer FLP/i));
+    await userEvent.click(screen.getByRole("button", { name: /^Neu$/ }));
+    await userEvent.click(screen.getByText("Aus Vorlage"));
     expect(calls["create_project_folder"]).toBeUndefined();
   });
 });

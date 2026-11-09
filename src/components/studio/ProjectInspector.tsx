@@ -12,14 +12,15 @@
 import { useState, useEffect, useRef } from "react";
 import {
   X, Star, StickyNote, Disc3, FolderOpen, Archive, Check, Loader2, FileMusic, Plus, AlertTriangle,
-  Copy, Trash2, Upload as UploadIcon,
+  Copy, Trash2, Upload as UploadIcon, AudioLines, PenLine, Clock, Play, MoreHorizontal,
 } from "lucide-react";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useNavigate } from "react-router-dom";
 import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
-import { Button, IconButton, PAGE_HEADER_HEIGHT } from "../ui";
+import { Button, IconButton, Dropdown, MenuePunkt, PAGE_HEADER_HEIGHT } from "../ui";
+import { arbeitszeit } from "../../lib/werkbank";
 import { formatRelativeTime } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -69,6 +70,12 @@ interface ProjectInspectorProps {
   onOpenDaw: () => void;
   /** Projektordner in den Papierkorb (mit Rückfrage) */
   onTrash: () => void;
+  /** Export im globalen Player abspielen */
+  onPreview: () => void;
+  /** Dialog „Beat benennen" öffnen (Name, Tonart, BPM) */
+  onRename: () => void;
+  /** Projektordner nach 06_SAMPLES (mit Rückfrage) */
+  onToSamples: () => void;
   onClose: () => void;
   /** Nach einer Zuweisung: Projekte neu scannen (Asset-Ampel ändert sich) */
   onAssetsChanged: () => void;
@@ -79,7 +86,7 @@ interface ProjectInspectorProps {
 /** Breite des Panels — die Studio-Seite hält rechts genau so viel frei. */
 export const INSPECTOR_WIDTH = 500;
 
-export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, onTrash, onClose, onAssetsChanged, closing = false }: ProjectInspectorProps) {
+export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, onTrash, onToSamples, onPreview, onRename, onClose, onAssetsChanged, closing = false }: ProjectInspectorProps) {
   const { currentBeat } = useAudioPlayerContext();
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -277,23 +284,29 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
           </div>
         </div>
       )}
-      {/* Header */}
+      {/* Kopf: kleines Cover neben Titel und Angaben. Vorher stand das Cover
+          quadratisch über die ganze Breite und schob Notizen und Versionen
+          aus dem ersten Blick. */}
       <div style={{
-        display: "flex", alignItems: "flex-start", gap: 10,
-        padding: "16px 18px 12px",
+        display: "flex", alignItems: "flex-start", gap: 14,
+        padding: "16px 18px 14px",
         borderBottom: `1px solid ${C.border10}`,
       }}>
+        <KleinesCover
+          preview={folderAssets.assets.coverPreview}
+          title={title}
+          disabled={!settings.assetPath.trim()}
+          onPick={() => setPicker("cover")}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Titel gross, darunter Tonart/BPM als lesbare Plaketten und eine
-              Zeile Ordner · zuletzt bearbeitet. Vorher stand das alles in 10px
-              grau auf grau, dazu ein Umbenennen-Stift, den niemand brauchte. */}
-          <div
-            title={p.song_name?.trim()
-              ? "Titel aus dem Export"
-              : undefined}
-            style={{ fontSize: 18, fontWeight: 700, color: C.onSurface, lineHeight: 1.25, wordBreak: "break-word" }}
-          >
-            {title}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+            <div
+              title={p.song_name?.trim() ? "Titel aus dem Export" : undefined}
+              style={{ fontSize: 18, fontWeight: 700, color: C.onSurface, lineHeight: 1.25, wordBreak: "break-word", minWidth: 0 }}
+            >
+              {title}
+            </div>
+            <IconButton icon={PenLine} size={26} title="Beat benennen" aria-label="Beat benennen" onClick={onRename} />
           </div>
 
           {duplicate && (
@@ -313,12 +326,21 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
 
           {/* Tonart/BPM und Ordner · Alter immer auf zwei Zeilen — in einer
               Zeile hing es vom Platz ab und brach mal so, mal so. */}
-          {(p.key || p.bpm != null) && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              {p.key && <MetaChip>{p.key}</MetaChip>}
-              {p.bpm != null && <MetaChip>{p.bpm} BPM</MetaChip>}
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            {p.key && <MetaChip>{p.key}</MetaChip>}
+            {p.bpm != null && <MetaChip>{p.bpm} BPM</MetaChip>}
+            {/* Ohne Tonart oder BPM gäbe es sonst nichts anzuklicken */}
+            {(!p.key || p.bpm == null) && (
+              <Button variant="ghost" size="sm" onClick={onRename} style={{ color: C.primary, padding: "3px 8px" }}>
+                {!p.key && p.bpm == null ? "Tonart & BPM setzen" : !p.key ? "Tonart setzen" : "BPM setzen"}
+              </Button>
+            )}
+            {p.work_minutes != null && (
+              <span title="Arbeitszeit in FL" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: C.onSurfaceVariant }}>
+                <Clock size={12} strokeWidth={1.75} />{arbeitszeit(p.work_minutes)}
+              </span>
+            )}
+          </div>
           <div
             title={`${p.path}${p.modified_date ? `
 Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
@@ -337,44 +359,60 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
         <IconButton icon={X} size={28} title="Schließen" onClick={onClose} />
       </div>
 
-      {/* Aktionen — alle beschriftet, direkt unter dem Titel. Vorher standen
-          nur „Ordner" und „Archivieren" ganz unten am Rand; In FL, Exportname
-          und Papierkorb gab es nur beim Drüberfahren in der Zeile. */}
+      {/* Eine Knopfreihe: die Hauptwege beschriftet, der Rest hinter „⋯"
+          (Designregel Sammelknöpfe). */}
       <InspectorActions
         archivBeatId={archivBeatId}
         onUpload={() => archivBeatId && navigate("/upload", { state: { beatId: archivBeatId } })}
+        canPreview={p.has_mp3 || p.has_wav}
+        onPreview={onPreview}
         canOpenDaw={Boolean(p.newest_flp)}
         exportName={projectExportName(p)}
         onOpenDaw={onOpenDaw}
         onArchive={onArchive}
-        onOpenFolder={() => revealItemInDir(p.path).catch(() => {})}
+        onRename={onRename}
+        onOpenFolder={() => openPath(p.path).catch(() => {})}
         onTrash={onTrash}
+        onToSamples={onToSamples}
       />
 
       {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 20 }}>
 
-        {/* Werkbank: das Cover groß, darunter der Weg zum Upload als
-            Checkliste. Ersetzt die drei Slots — was fehlt, holt man direkt
-            aus der Zeile, die sagt, dass es fehlt. */}
-        <GrossesCover
-          preview={folderAssets.assets.coverPreview}
-          title={title}
-          disabled={!settings.assetPath.trim()}
-          onPick={() => setPicker("cover")}
-        />
+        {/* Notizen zuerst: das ist, was man hier am häufigsten anfasst. */}
+        <section>
+          <SectionLabel
+              right={
+                saveState === "saving" ? <Loader2 size={10} style={{ animation: "spin 0.8s linear infinite" }} />
+                : saveState === "saved" ? <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.mint }}><Check size={10} strokeWidth={3} /> Gespeichert</span>
+                : null
+              }
+            >
+              <StickyNote size={10} strokeWidth={2} style={{ marginRight: 4 }} />
+              Notizen
+            </SectionLabel>
+          <NotesField
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            // Escape verlässt erst das Feld; der Esc-Handler des Inspectors
+            // hätte sonst mitten im Tippen das ganze Panel zugemacht.
+            onKeyDown={e => {
+              if (e.key === "Escape") { e.stopPropagation(); e.currentTarget.blur(); }
+            }}
+          />
+        </section>
 
-        <WegZumUpload
-          project={p}
-          assets={folderAssets.assets}
-          noAssetPath={!settings.assetPath.trim()}
-          onPick={setPicker}
-          onOpenDaw={onOpenDaw}
-        />
-
-        {/* Status — Pille und die zwei Handschalter. Warum er so ist, sagt
-            jetzt die Checkliste darüber. */}
-        <StatusSection project={p} onPatch={onPatch} />
+        {/* Status und darunter die fünf Dateien als Plaketten. Was fehlt,
+            holt ein Klick auf die Plakette (Assets oder zurück in FL). */}
+        <StatusSection project={p} onPatch={onPatch}>
+          <DateiPlaketten
+            project={p}
+            assets={folderAssets.assets}
+            noAssetPath={!settings.assetPath.trim()}
+            onPick={setPicker}
+            onOpenDaw={onOpenDaw}
+          />
+        </StatusSection>
 
         {/* FLP-Versionen — eine Zeile pro Version statt einer Karte. Meistens
             sind es zwei, und man will nur eine davon öffnen. */}
@@ -425,31 +463,6 @@ Zuletzt bearbeitet: ${p.modified_date}` : ""}`}
             ))}
           </div>
         </section>
-
-        {/* Notizen — das Feld steht immer da. Der Umweg über „Notiz
-            hinzufügen" kostete einen Klick, und ein leer verlassenes Feld
-            blieb trotzdem stehen. Die Höhe gilt für alle Projekte. */}
-        <section>
-          <SectionLabel
-              right={
-                saveState === "saving" ? <Loader2 size={10} style={{ animation: "spin 0.8s linear infinite" }} />
-                : saveState === "saved" ? <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.mint }}><Check size={10} strokeWidth={3} /> Gespeichert</span>
-                : null
-              }
-            >
-              <StickyNote size={10} strokeWidth={2} style={{ marginRight: 4 }} />
-              Notizen
-            </SectionLabel>
-          <NotesField
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            // Escape verlässt erst das Feld; der Esc-Handler des Inspectors
-            // hätte sonst mitten im Tippen das ganze Panel zugemacht.
-            onKeyDown={e => {
-              if (e.key === "Escape") { e.stopPropagation(); e.currentTarget.blur(); }
-            }}
-          />
-        </section>
       </div>
 
       {picker && (
@@ -470,9 +483,9 @@ const SLOT_TITLE: Record<AssetSlotKind, string> = { cover: "Cover", thumbnail: "
 
 const fileNameOf = (path: string | null) => path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
 
-/** Das Cover über die ganze Panelbreite — oder, solange keins da ist, der
- *  Platzhalter mit Note. Klick: Cover aus den Assets holen. */
-function GrossesCover({ preview, title, disabled, onPick }: {
+/** Das Cover klein neben dem Titel, ohne Cover der Platzhalter.
+ *  Klick: Cover aus den Assets holen. */
+function KleinesCover({ preview, title, disabled, onPick }: {
   preview: string | null;
   title: string;
   disabled: boolean;
@@ -485,7 +498,7 @@ function GrossesCover({ preview, title, disabled, onPick }: {
       title={disabled ? "Kein Asset-Pfad (Einstellungen → Pfade)"
         : preview ? "Cover ersetzen" : "Cover zuweisen"}
       style={{
-        width: "100%", aspectRatio: "1 / 1", flexShrink: 0,
+        width: 96, height: 96, flexShrink: 0,
         padding: 0, overflow: "hidden", borderRadius: radius.card,
         background: "transparent", border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
@@ -495,15 +508,16 @@ function GrossesCover({ preview, title, disabled, onPick }: {
       {preview ? (
         <img src={preview} alt={`Cover ${title}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
-        <CoverPlatzhalter gross />
+        <CoverPlatzhalter />
       )}
     </button>
   );
 }
 
-/** Die fünf Dateien bis „Bereit" als Checkliste. Fehlt ein Bild oder das
- *  Video, steht „Aus Assets" in der Zeile; fehlt MP3/WAV, geht's zurück in FL. */
-function WegZumUpload({ project: p, assets, noAssetPath, onPick, onOpenDaw }: {
+/** Die fünf Dateien bis „Bereit" als eine Zeile Plaketten. Vorhandene in Mint
+ *  (Klick bei Bild/Video: ersetzen), fehlende umrandet: Klick holt Bild oder
+ *  Video aus den Assets, bei MP3/WAV geht es zurück in FL. */
+function DateiPlaketten({ project: p, assets, noAssetPath, onPick, onOpenDaw }: {
   project: StudioProject;
   assets: FolderAssets;
   noAssetPath: boolean;
@@ -511,70 +525,58 @@ function WegZumUpload({ project: p, assets, noAssetPath, onPick, onOpenDaw }: {
   onOpenDaw: () => void;
 }) {
   // Bilder und Video aus dem frisch gelesenen Ordner, nicht aus dem Scan —
-  // nach einer Zuweisung hakt die Zeile sofort ab.
-  const rows: Array<{ label: string; da: boolean; datei: string | null; slot?: AssetSlotKind; vorschau?: string | null }> = [
+  // nach einer Zuweisung hakt die Plakette sofort ab.
+  const plaketten: Array<{ label: string; da: boolean; datei: string | null; slot?: AssetSlotKind }> = [
     { label: "MP3", da: p.has_mp3, datei: null },
     { label: "WAV", da: p.has_wav, datei: null },
     { label: "Cover", da: !!assets.coverPath, datei: fileNameOf(assets.coverPath), slot: "cover" },
-    { label: "Thumbnail", da: !!assets.thumbnailPath, datei: fileNameOf(assets.thumbnailPath), slot: "thumbnail", vorschau: assets.thumbnailPreview },
+    { label: "Thumbnail", da: !!assets.thumbnailPath, datei: fileNameOf(assets.thumbnailPath), slot: "thumbnail" },
     { label: "Video", da: !!assets.videoPath, datei: fileNameOf(assets.videoPath), slot: "video" },
   ];
   return (
-    <section>
-      <SectionLabel>Weg zum Upload</SectionLabel>
-      {rows.map(r => (
-        <div key={r.label} style={{
-          display: "flex", alignItems: "center", gap: 12,
-          minHeight: 40, borderTop: `1px solid ${C.border10}`,
-        }}>
-          <span style={{
-            width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: r.da ? alpha(C.mint, 0.15) : "transparent",
-            border: r.da ? "none" : `1.5px solid ${C.outlineVariant}`,
-          }}>
-            {r.da && <Check size={12} strokeWidth={3} color={C.mint} />}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: r.da ? C.onSurface : C.onSurfaceVariant, flexShrink: 0 }}>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+      {plaketten.map(r => {
+        const aktion = r.slot
+          ? (noAssetPath ? undefined : () => onPick(r.slot!))
+          : (!r.da && p.newest_flp ? onOpenDaw : undefined);
+        const titel = r.slot
+          ? (noAssetPath ? "Kein Asset-Pfad (Einstellungen → Pfade)" : r.da ? `${r.datei} · ersetzen` : "Aus Assets")
+          : (r.da ? `${r.label} da` : "In FL exportieren");
+        return (
+          <button
+            key={r.label}
+            type="button"
+            onClick={aktion}
+            disabled={!aktion}
+            title={titel}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "4px 10px", borderRadius: radius.full,
+              fontSize: 12, fontWeight: 700, fontFamily: "inherit",
+              background: r.da ? alpha(C.mint, 0.14) : "transparent",
+              color: r.da ? C.mint : C.onSurfaceVariant,
+              border: r.da ? "1px solid transparent" : `1px dashed ${C.outlineVariant}`,
+              cursor: aktion ? "pointer" : "default",
+            }}
+          >
+            {r.da ? <Check size={11} strokeWidth={3} /> : <Plus size={11} strokeWidth={2.5} />}
             {r.label}
-          </span>
-          <span title={r.datei ?? undefined} style={{
-            flex: 1, minWidth: 0, fontSize: 11, fontFamily: "monospace", color: C.onSecondaryFixedVar,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {r.datei}
-          </span>
-          {r.vorschau && (
-            <img src={r.vorschau} alt="" style={{ width: 48, height: 27, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
-          )}
-          {r.slot ? (
-            <Button variant="ghost" size="sm" onClick={() => onPick(r.slot!)} disabled={noAssetPath}
-              title={noAssetPath ? "Kein Asset-Pfad (Einstellungen → Pfade)"
-                : r.da ? "Ersetzen" : undefined}
-              style={r.da ? undefined : { color: C.primary }}>
-              {r.da ? "Ersetzen" : "Aus Assets"}
-            </Button>
-          ) : !r.da && (
-            <Button variant="ghost" size="sm" onClick={onOpenDaw} disabled={!p.newest_flp}
-              title="In FL Studio exportieren" style={{ color: C.primary }}>
-              In FL öffnen
-            </Button>
-          )}
-        </div>
-      ))}
-    </section>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
 /**
- * Status im Inspector: die gültige Pille, ein Satz warum, und darunter die
- * zwei Markierungen, die du selbst setzt. Der Satz ist der Punkt — im Studio
- * fragt man sich sonst, warum ein Projekt auf „Exportiert" hängenbleibt, und
- * die Antwort ist immer eine fehlende Datei.
+ * Status im Inspector: die gültige Pille, die zwei Markierungen, die du
+ * selbst setzt, und darunter (children) die Dateien, aus denen er entsteht.
+ * Warum er so ist, steht im Tooltip der Pille.
  */
-function StatusSection({ project: p, onPatch }: {
+function StatusSection({ project: p, onPatch, children }: {
   project: StudioProject;
   onPatch: (patch: Partial<Pick<StudioProject, "status" | "priority" | "notes">>) => void;
+  children?: React.ReactNode;
 }) {
   const stage = deriveStage(p);
   const manual = isManualStatus(p.status);
@@ -606,6 +608,7 @@ function StatusSection({ project: p, onPatch }: {
         <div style={{ flex: 1 }} />
         <ManualStatusToggles project={p} onPatch={onPatch} variant="panel" />
       </div>
+      {children}
     </section>
   );
 }
@@ -637,63 +640,70 @@ function MetaChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Die Aktionen des Projekts als beschriftete Knöpfe. Oben die zwei Wege
- *  weiter (zurück in FL, ab ins Archiv), darunter die drei kleinen. */
-function InspectorActions({ archivBeatId, onUpload, canOpenDaw, exportName, onOpenDaw, onArchive, onOpenFolder, onTrash }: {
-  /** Schon archiviert als dieser Beat — dann „Im Upload-Tab öffnen" statt „Archivieren". */
+/** Eine Reihe: Anhören, In FL, Archivieren (oder Upload-Tab) beschriftet,
+ *  alles Seltene hinter „⋯" (Designregel Sammelknöpfe). */
+function InspectorActions({ archivBeatId, onUpload, canPreview, onPreview, canOpenDaw, exportName, onOpenDaw, onArchive, onRename, onOpenFolder, onTrash, onToSamples }: {
+  /** Schon archiviert als dieser Beat — dann „Im Upload-Tab" statt „Archivieren". */
   archivBeatId: string | null;
   onUpload: () => void;
+  canPreview: boolean;
+  onPreview: () => void;
   canOpenDaw: boolean;
   exportName: string;
   onOpenDaw: () => void;
   onArchive: () => void;
+  onRename: () => void;
   onOpenFolder: () => void;
   onTrash: () => void;
+  onToSamples: () => void;
 }) {
   const { melde } = useDialog();
-  const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(exportName);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
+      melde(`Kopiert: ${exportName}`, "erfolg");
     } catch (e) {
       melde(`Kopieren fehlgeschlagen: ${String(e)}`);
     }
   };
   return (
     <div style={{
-      flexShrink: 0,
-      display: "flex", flexDirection: "column", gap: 8,
+      flexShrink: 0, display: "flex", gap: 8, alignItems: "center",
       padding: "12px 18px",
       borderBottom: `1px solid ${C.border10}`,
     }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="secondary" size="sm" icon={Disc3} onClick={onOpenDaw} disabled={!canOpenDaw} style={{ flex: 1 }}>
-          In FL öffnen
+      <Button variant="secondary" size="sm" icon={Play} onClick={onPreview} disabled={!canPreview}
+        title={canPreview ? "Export anhören" : "Kein Audio-Export im Ordner"}>
+        Anhören
+      </Button>
+      <Button variant="secondary" size="sm" icon={Disc3} onClick={onOpenDaw} disabled={!canOpenDaw} style={{ flex: 1 }}>
+        In FL öffnen
+      </Button>
+      {archivBeatId ? (
+        <Button variant="primary" size="sm" icon={UploadIcon} onClick={onUpload} style={{ flex: 1 }}
+          title={`Archiviert als #${archivBeatId}`}>
+          Im Upload-Tab
         </Button>
-        {archivBeatId ? (
-          <Button variant="primary" size="sm" icon={UploadIcon} onClick={onUpload} style={{ flex: 1 }}
-            title={`Archiviert als #${archivBeatId}`}>
-            Im Upload-Tab öffnen
-          </Button>
-        ) : (
-          <Button variant="primary" size="sm" icon={Archive} onClick={onArchive} style={{ flex: 1 }}>
-            Archivieren
-          </Button>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="ghost" size="sm" icon={copied ? Check : Copy} onClick={copy} title={exportName} style={{ flex: 1 }}>
-          {copied ? "Kopiert" : "Exportname"}
+      ) : (
+        <Button variant="primary" size="sm" icon={Archive} onClick={onArchive} style={{ flex: 1 }}>
+          Archivieren
         </Button>
-        <Button variant="ghost" size="sm" icon={FolderOpen} onClick={onOpenFolder} style={{ flex: 1 }}>
-          Ordner
-        </Button>
-        <Button variant="ghost" size="sm" icon={Trash2} onClick={onTrash} style={{ flex: 1, color: C.error }}>
-          Papierkorb
-        </Button>
-      </div>
+      )}
+      <Dropdown label={<MoreHorizontal size={14} />} title="Mehr" align="right" panelWidth={250}
+        triggerStyle={{ padding: "6px 8px" }}>
+        {close => (<>
+          <MenuePunkt icon={PenLine} label="Beat benennen" hint="Name, Tonart und BPM"
+            onClick={() => { close(); onRename(); }} />
+          <MenuePunkt icon={Copy} label="Exportname kopieren" hint={exportName}
+            onClick={() => { close(); copy(); }} />
+          <MenuePunkt icon={FolderOpen} label="Im Explorer zeigen"
+            onClick={() => { close(); onOpenFolder(); }} />
+          <MenuePunkt icon={AudioLines} label="Zu Samples" hint="Nach 06_SAMPLES verschieben"
+            onClick={() => { close(); onToSamples(); }} />
+          <MenuePunkt icon={Trash2} label="In den Papierkorb"
+            onClick={() => { close(); onTrash(); }} />
+        </>)}
+      </Dropdown>
     </div>
   );
 }

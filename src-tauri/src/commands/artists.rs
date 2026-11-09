@@ -65,6 +65,8 @@ pub struct ArtistSong {
     /// Ein Katalog-Beat, dessen Dateien die FLP schon verwendet — Vorschlag
     /// zum Verknüpfen (Heartbreak Highlights nutzt die WAV von SWEET DREAMS).
     pub beat_vorschlag: Option<String>,
+    /// Von Hand, artist_songs: nur mastern — keine Vocals, kein Mix nötig.
+    pub nur_master: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -110,18 +112,19 @@ pub fn scan_artists(root: String) -> Result<ArtistsScan, String> {
     let mut kuenstler = kuenstler_lesen(pfad);
     // Notiz, Warten, Abgabedatum, Beat dazulesen. Ohne Tabelle bleibt es leer.
     if let Ok(conn) = open_db() {
-        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben, beat_id FROM artist_songs") {
-            type Zeile = (Option<String>, bool, Option<String>, Option<String>);
+        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben, beat_id, nur_master FROM artist_songs") {
+            type Zeile = (Option<String>, bool, Option<String>, Option<String>, bool);
             let zeilen: HashMap<String, Zeile> = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?, r.get(4)?))))
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?, r.get(4)?, r.get::<_, i64>(5)? != 0))))
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
             for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
-                if let Some((notiz, warten, abgegeben, beat_id)) = zeilen.get(&s.path) {
+                if let Some((notiz, warten, abgegeben, beat_id, nur_master)) = zeilen.get(&s.path) {
                     s.notiz = notiz.clone();
                     s.warten = *warten;
                     s.abgegeben = abgegeben.clone();
                     s.beat_id = beat_id.clone();
+                    s.nur_master = *nur_master;
                 }
             }
         }
@@ -160,6 +163,18 @@ pub fn set_artist_beat(path: String, beat_id: Option<String>) -> Result<(), Stri
         "INSERT INTO artist_songs (path, beat_id) VALUES (?1, ?2)
          ON CONFLICT(path) DO UPDATE SET beat_id = excluded.beat_id",
         rusqlite::params![path, beat_id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Song-Art setzen: „Nur Master" oder Mix & Master.
+#[tauri::command]
+pub fn set_artist_nur_master(path: String, nur_master: bool) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO artist_songs (path, nur_master) VALUES (?1, ?2)
+         ON CONFLICT(path) DO UPDATE SET nur_master = excluded.nur_master",
+        rusqlite::params![path, nur_master as i64],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -582,7 +597,7 @@ fn pfad_plan(song: &Path) -> PfadPlan {
 
 /// Gefundene Pfade in die FLPs schreiben. Vorher eine Sicherung in Backup/ —
 /// die erste bleibt stehen, sie ist der Stand vor BeatOS.
-fn pfade_reparieren(song: &Path) -> Result<usize, String> {
+pub(crate) fn pfade_reparieren(song: &Path) -> Result<usize, String> {
     let mut gesamt = 0;
     for (flp, ersatz) in pfad_plan(song).ersatz {
         gesamt += crate::commands::flp::flp_umschreiben(&flp, &ersatz, "vor Pfad-Reparatur")?;

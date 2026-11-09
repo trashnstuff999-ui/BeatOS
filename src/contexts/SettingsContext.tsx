@@ -18,6 +18,8 @@ export interface AppSettings {
   importPath: string;
   /** Vorlage, aus der „Neues Projekt" im Studio die FLP kopiert */
   flpTemplatePath: string;
+  /** Vorlage für „Neues Sample" (06_SAMPLES neben dem Archiv) */
+  sampleTemplatePath: string;
   // Producer info (used by Upload-tab templates)
   producerName: string;
   contactEmail: string;
@@ -32,16 +34,17 @@ export interface AppSettings {
   artistsPath: string;
   /** Wo Discord & Browser hinladen. Leer = der Downloads-Ordner von Windows. */
   downloadsPath: string;
-}
-
   /** Alte Song-Ordner für die Fundstücke, einer pro Zeile. */
   altbestandPaths: string;
+}
+
 export const DEFAULTS: AppSettings = {
   archivePath: "",
   productionPath: "",
   assetPath: "",
   importPath: "",
   flpTemplatePath: "",
+  sampleTemplatePath: "",
   producerName: "",
   contactEmail: "",
   instagramUrl: "",
@@ -52,10 +55,10 @@ export const DEFAULTS: AppSettings = {
   uploadDays: "",
   artistsPath: "",
   downloadsPath: "",
+  altbestandPaths: "",
 };
 
 const STORAGE_KEY = "beatos_settings";
-  altbestandPaths: "",
 
 // Map between camelCase frontend keys and snake_case DB keys
 const KEY_MAP: Record<keyof AppSettings, string> = {
@@ -64,6 +67,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   assetPath: "asset_path",
   importPath: "import_path",
   flpTemplatePath: "flp_template_path",
+  sampleTemplatePath: "sample_template_path",
   producerName: "producer_name",
   contactEmail: "contact_email",
   instagramUrl: "instagram_url",
@@ -74,11 +78,11 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   uploadDays: "upload_days",
   artistsPath: "artists_path",
   downloadsPath: "downloads_path",
+  altbestandPaths: "altbestand_paths",
 };
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {
   const out = { ...DEFAULTS };
-  altbestandPaths: "altbestand_paths",
   (Object.keys(KEY_MAP) as Array<keyof AppSettings>).forEach(k => {
     out[k] = map[KEY_MAP[k]] ?? "";
   });
@@ -110,11 +114,18 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
  *  dem Archiv-Ordner (beide liegen in derselben Bibliothek). */
 export function kuenstlerOrdner(s: Pick<AppSettings, "artistsPath" | "archivePath">): string {
   if (s.artistsPath.trim()) return s.artistsPath.trim();
-  const archiv = s.archivePath.trim().replace(/[\\/]+$/, "");
+  return nebenArchiv(s.archivePath, "05_ARTISTS");
+}
+
+/** Samples liegen immer in 06_SAMPLES neben dem Archiv-Ordner. */
+export const samplesOrdner = (archivePath: string) => nebenArchiv(archivePath, "06_SAMPLES");
+
+function nebenArchiv(archivePath: string, ordner: string): string {
+  const archiv = archivePath.trim().replace(/[\\/]+$/, "");
   if (!archiv) return "";
   const sep = archiv.includes("\\") ? "\\" : "/";
   const i = archiv.lastIndexOf(sep);
-  return i > 0 ? `${archiv.slice(0, i)}${sep}05_ARTISTS` : "";
+  return i > 0 ? `${archiv.slice(0, i)}${sep}${ordner}` : "";
 }
 
 /** productionPath stores MULTIPLE roots, one per line (legacy single path = 1 line).

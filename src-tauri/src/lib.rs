@@ -71,6 +71,7 @@ use commands::{
     artist_pfade_reparieren,
     artist_ordner_aufraeumen,
     set_artist_beat,
+    set_artist_nur_master,
     artist_beat_kopieren,
     set_artist_links,
     set_artist_bild,
@@ -97,8 +98,12 @@ use commands::{
     set_studio_aufraeumen,
     studio_status_counts,
     create_project_folder,
+    create_sample,
+    scan_samples,
+    move_to_samples,
+    plan_project_rename,
+    apply_project_rename,
     next_project_name,
-    rename_project_folder,
     plan_production_merge,
     apply_production_merge,
     undo_production_merge,
@@ -107,12 +112,12 @@ use commands::{
     trash_assets,
     assign_asset_to_project,
     match_projects_to_archive,
+    scan_fundstuecke,
     export_merge_preview,
     list_merge_runs,
     park_archived_projects,
     close_project_gaps,
     // Upload commands (Phase A: bootstrap, B: read, C: write, D: render+save)
-    scan_fundstuecke,
     get_templates_dir,
     read_template,
     write_template,
@@ -212,6 +217,9 @@ pub fn run() {
                         .or_else(|| settings.get("archive_path")
                             .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("05_ARTISTS").to_string_lossy().to_string())));
                     dirs.extend(kuenstler);
+                    // Samples zum Reinhören: 06_SAMPLES neben dem Archiv (samplesOrdner())
+                    dirs.extend(settings.get("archive_path")
+                        .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("06_SAMPLES").to_string_lossy().to_string())));
                     // Cover-Vorschauen (get_beat_cover_thumb) liegen neben der Datenbank
                     dirs.extend(db::get_db_path().parent().map(|p| p.join("thumbs").to_string_lossy().to_string()));
                     for dir in dirs {
@@ -221,6 +229,13 @@ pub fn run() {
                     }
                 }
             }
+            // Alte Nummer und Begonnen für Beats nachtragen, die sie noch nicht
+            // haben (Bibliothek-Umbau). Nur lesend auf der Platte, im Hintergrund.
+            std::thread::spawn(|| match commands::herkunft_nachtragen() {
+                Ok(n) if n > 0 => eprintln!("Herkunft nachgetragen: {} Beats", n),
+                Ok(_) => {}
+                Err(e) => eprintln!("WARNING: Herkunft nachtragen: {}", e),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -229,13 +244,6 @@ pub fn run() {
             get_beat_count,
             get_dashboard_actions,
             get_stats_details,
-            // Alte Nummer und Begonnen für Beats nachtragen, die sie noch nicht
-            // haben (Bibliothek-Umbau). Nur lesend auf der Platte, im Hintergrund.
-            std::thread::spawn(|| match commands::herkunft_nachtragen() {
-                Ok(n) if n > 0 => eprintln!("Herkunft nachgetragen: {} Beats", n),
-                Ok(_) => {}
-                Err(e) => eprintln!("WARNING: Herkunft nachtragen: {}", e),
-            });
             // Beat CRUD
             get_beats,
             get_beats_paginated,
@@ -288,6 +296,7 @@ pub fn run() {
             artist_pfade_reparieren,
             artist_ordner_aufraeumen,
             set_artist_beat,
+            set_artist_nur_master,
             artist_beat_kopieren,
             set_artist_links,
             set_artist_bild,
@@ -312,8 +321,12 @@ pub fn run() {
             set_studio_aufraeumen,
             studio_status_counts,
             create_project_folder,
+            create_sample,
+            scan_samples,
+            move_to_samples,
+            plan_project_rename,
+            apply_project_rename,
             next_project_name,
-            rename_project_folder,
             plan_production_merge,
             apply_production_merge,
             undo_production_merge,
@@ -322,6 +335,7 @@ pub fn run() {
             trash_assets,
             assign_asset_to_project,
             match_projects_to_archive,
+            scan_fundstuecke,
             export_merge_preview,
             list_merge_runs,
             park_archived_projects,
@@ -335,7 +349,6 @@ pub fn run() {
             get_upload_schedule,
             get_upload_queue,
             schedule_release,
-            scan_fundstuecke,
             unschedule_release,
             set_upload_skip,
             update_type_beat_info,

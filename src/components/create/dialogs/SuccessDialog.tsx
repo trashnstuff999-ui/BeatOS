@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { CheckCircle, FolderOpen, Trash2, AlertTriangle, Upload } from "lucide-react";
 import { C, radius, alpha } from "../../../lib/theme";
 import { api } from "../../../lib/api";
@@ -57,8 +57,7 @@ export function SuccessDialog({
 
   const handleOpenFolder = async () => {
     try {
-      // revealItemInDir öffnet den Explorer und markiert den Ordner
-      await revealItemInDir(archivePath);
+      await openPath(archivePath);
     } catch (e) {
       melde(`Ordner konnte nicht geöffnet werden: ${String(e)}`);
     }

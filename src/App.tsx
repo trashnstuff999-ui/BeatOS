@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Browse from "./pages/Browse";
 import Create from "./pages/Create";
 import Studio from "./pages/Studio";
+import Kuenstler from "./pages/Kuenstler";
 import Upload from "./pages/Upload";
 import Video from "./pages/Video";
 import { Settings } from "./pages/Settings";
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/" element={<ErrorBoundary fallbackLabel="Fehler in der Übersicht"><Dashboard /></ErrorBoundary>} />
         <Route path="/browse" element={<ErrorBoundary fallbackLabel="Fehler im Archiv"><Browse /></ErrorBoundary>} />
         <Route path="/studio" element={<ErrorBoundary fallbackLabel="Fehler im Studio"><Studio /></ErrorBoundary>} />
+        <Route path="/kuenstler" element={<ErrorBoundary fallbackLabel="Fehler bei den Künstlern"><Kuenstler /></ErrorBoundary>} />
         <Route path="/upload" element={<ErrorBoundary fallbackLabel="Fehler im Upload"><Upload /></ErrorBoundary>} />
         <Route path="/video" element={<ErrorBoundary fallbackLabel="Fehler im Video-Tab"><Video /></ErrorBoundary>} />
         <Route path="/settings"element={<ErrorBoundary fallbackLabel="Fehler in den Einstellungen"><Settings /></ErrorBoundary>} />

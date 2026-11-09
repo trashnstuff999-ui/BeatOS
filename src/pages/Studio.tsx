@@ -1,33 +1,33 @@
 // src/pages/Studio.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Studio — the start of the workflow: every started FLP project across the
-// configured production roots, plus the asset inbox (exports from
-// Photoshop/Premiere waiting to be assigned to a project).
+// Studio: deine eigene Musik in Arbeit. Projekte, Samples und Aufräumen als
+// Tabs. Die Asset-Inbox (Exporte aus Photoshop/Premiere, die einem Projekt
+// zugewiesen werden wollen) ist kein Tab mehr, sondern ein Knopf mit Zahl in
+// der Projekte-Leiste, der nur erscheint, wenn dort etwas liegt.
 // Projekt-Flow: hier starten → exportieren → Assets zuweisen → „Archivieren"
 // springt in den Create-Flow; nach der Archivierung verschwindet das Projekt
 // (Quellordner wandert in den Papierkorb).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useMemo } from "react";
-import { useLocation } from "react-router-dom";
-import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, Users } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, AudioLines } from "lucide-react";
 import { C } from "../lib/theme";
-import { PageHeader, PageBody, Segmented } from "../components/ui";
-import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../contexts/SettingsContext";
-import { ArtistsPane } from "../components/studio/ArtistsPane";
+import { api } from "../lib/api";
+import { PageHeader, PageBody, Segmented, Button } from "../components/ui";
+import { useSettings, parseProductionPaths } from "../contexts/SettingsContext";
+import { useFocusRefresh } from "../hooks/useFocusRefresh";
 import { ProjectsPane } from "../components/studio/ProjectsPane";
 import { AssetsPane } from "../components/studio/AssetsPane";
+import { SamplesPane } from "../components/studio/SamplesPane";
 import { INSPECTOR_WIDTH } from "../components/studio/ProjectInspector";
 import type { StudioProject } from "../types/studio";
 
-type StudioTab = "projects" | "cleanup" | "assets" | "artists";
+type StudioTab = "projects" | "samples" | "cleanup" | "assets";
 
 export default function Studio() {
   const { settings } = useSettings();
-  // Die Übersicht springt direkt in einen Bereich, z. B. „Künstler".
-  const startTab = (useLocation().state as { tab?: StudioTab } | null)?.tab;
-  const [tab, setTab] = useState<StudioTab>(startTab ?? "projects");
-  // Der letzte Scan — der Assets-Tab braucht ihn als Zielliste beim Zuweisen.
+  const [tab, setTab] = useState<StudioTab>("projects");
+  // Der letzte Scan — die Assets-Ansicht braucht ihn als Zielliste beim Zuweisen.
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -36,6 +36,18 @@ export default function Studio() {
     () => parseProductionPaths(settings.productionPath),
     [settings.productionPath],
   );
+
+  // Wie viel in der Asset-Inbox liegt: nur die Zahl für den Knopf. Ein
+  // Ordner-Listing, neu beim Tabwechsel (nach dem Zuweisen) und beim Zurückwechseln.
+  const [assetCount, setAssetCount] = useState(0);
+  const zaehleAssets = useCallback(() => {
+    if (!settings.assetPath.trim()) { setAssetCount(0); return; }
+    api.studio.scanAssetInbox(settings.assetPath)
+      .then(a => setAssetCount(a.length))
+      .catch(() => setAssetCount(0));
+  }, [settings.assetPath]);
+  useEffect(zaehleAssets, [zaehleAssets, tab]);
+  useFocusRefresh(zaehleAssets);
 
   return (
     // data-app-flaeche: ein Klick auf den Hintergrund schliesst den Inspector
@@ -54,9 +66,8 @@ export default function Studio() {
           onChange={setTab}
           options={[
             { value: "projects", label: "Projekte", icon: FolderKanban },
+            { value: "samples", label: "Samples", icon: AudioLines },
             { value: "cleanup", label: "Aufräumen", icon: BrushCleaning },
-            { value: "assets", label: "Assets", icon: ImageIcon },
-            { value: "artists", label: "Künstler", icon: Users },
           ]}
         />
       </PageHeader>
@@ -64,17 +75,19 @@ export default function Studio() {
       {/* Content */}
       {/* Das Projekt-Panel schwebt rechts. Solange es offen ist, rückt der
           Inhalt um seine Breite ein — vorher deckte es den rechten Rand der
-          Liste zu („Sc…", „In den Papierko…"). */}
+          Liste zu („Sc…", „In den Papierko…").
+          Ohne Transition: animiert brach das Cover-Raster (auto-fill) mitten in
+          der Bewegung mehrmals um, die Kacheln sprangen. Jetzt stellt sich die
+          Breite einmal um, und das Panel gleitet darüber. */}
       <div style={{
         flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
         paddingRight: (tab === "projects" || tab === "cleanup") && inspectorOpen ? INSPECTOR_WIDTH : 0,
-        transition: "padding-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
       }}>
       {/* Das Inbox-Raster nutzt die ganze Breite — mehr Kacheln pro Reihe.
           Die Projektlisten bleiben auf Lesebreite. */}
       <PageBody width={tab === "assets" ? "full" : "wide"}>
-        {/* Beide Panes bleiben montiert: der Assets-Tab braucht die Projektliste
-            beim Zuweisen, und ein Tabwechsel darf keinen Scan wegwerfen. */}
+        {/* Beide Panes bleiben montiert: die Assets-Ansicht braucht die
+            Projektliste beim Zuweisen, und ein Tabwechsel darf keinen Scan wegwerfen. */}
         <div style={{ display: tab === "projects" || tab === "cleanup" ? "block" : "none" }}>
           <ProjectsPane
             productionPaths={productionPaths}
@@ -82,6 +95,12 @@ export default function Studio() {
             onProjects={setProjects}
             onInspectorOpen={setInspectorOpen}
             view={tab === "cleanup" ? "cleanup" : "work"}
+            extraActions={assetCount > 0 && (
+              <Button size="sm" variant="secondary" icon={ImageIcon} onClick={() => setTab("assets")} title="Neue Exporte zuweisen">
+                Assets
+                <span style={{ fontWeight: 700, color: C.primary }}>{assetCount}</span>
+              </Button>
+            )}
           />
         </div>
         <div style={{ display: tab === "assets" ? "block" : "none" }}>
@@ -92,10 +111,7 @@ export default function Studio() {
             onAssigned={() => setRefreshKey(k => k + 1)}
           />
         </div>
-        {/* Künstler-Projekte (Mix & Master) — eigener Ordner, eigene Liste. */}
-        {tab === "artists" && (
-          <ArtistsPane root={kuenstlerOrdner(settings)} archivePath={settings.archivePath} active={tab === "artists"} />
-        )}
+        {tab === "samples" && <SamplesPane />}
         <div style={{ height: 40 }} />
       </PageBody>
       </div>

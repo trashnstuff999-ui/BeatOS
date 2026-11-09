@@ -406,14 +406,16 @@ pub fn init_db() -> Result<(), String> {
                 // „Mein Beat" (Scheibe 5): welcher Katalog-Beat im Song steckt.
                 // Nur hier vermerkt — am Beat im Archiv ändert sich nichts.
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN beat_id TEXT", []);
+                // „Nur Master": ein fertiger Track kommt rein, Vocals und Mix entfallen.
+                let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN nur_master INTEGER NOT NULL DEFAULT 0", []);
                 // „Nicht hochladen": der Beat fällt aus der Warteschlange.
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN upload_skip INTEGER NOT NULL DEFAULT 0", []);
-
-                // Studio tab: per-project status/priority, keyed by folder path
                 // Bibliothek-Umbau: alte Nummer ("630", "Project_0121") und wann der
                 // Song begonnen wurde. Bleiben über jede Neu-Nummerierung erhalten.
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN alte_id TEXT", []);
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN begonnen TEXT", []);
+
+                // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(
                     "CREATE TABLE IF NOT EXISTS studio_projects (
                         path       TEXT PRIMARY KEY,

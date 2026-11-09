@@ -1,7 +1,7 @@
 // src/components/studio/AufraeumListe.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// Aufräumen: eine Leiste oben, nach Jahr gruppiert, pro Zeile „Behalten" und
-// „Kann weg". Behalten nimmt die Idee aus der Liste (sie bleibt eine Idee),
+// Aufräumen: eine Leiste oben, nach Jahr gruppiert, pro Zeile „Zurück zu Projekte" und
+// „Kann weg". Zurück nimmt die Idee aus der Liste (sie bleibt eine Idee),
 // Kann weg merkt sie für den Papierkorb vor — gelöscht wird erst gesammelt
 // über die Leiste unten.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -217,7 +217,7 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
       </button>
       <div style={{ display: "flex", gap: 6, flex: "0 0 auto", paddingLeft: 8 }}>
         <Pille onClick={onKeep} farbe={C.mint} an={false} title="Aus dem Aufräumen nehmen">
-          Behalten
+          Zurück zu Projekte
         </Pille>
         <Pille onClick={onToss} farbe={C.error} an={weg} title={weg ? "Nicht löschen" : "Zum Löschen vormerken"}>
           Kann weg

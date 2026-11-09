@@ -9,15 +9,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Images, Play, RefreshCw, Loader2, FolderOpen, Settings, Trash2, ListOrdered, CheckSquare, Check, X, ArrowRight } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Images, Play, RefreshCw, Loader2, FolderOpen, Settings, Trash2, ListOrdered, CheckSquare, Check, X } from "lucide-react";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { useNavigate } from "react-router-dom";
 import { C, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime, zeitText } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { EmptyState, Button, IconButton, Modal, Segmented } from "../ui";
-import { bildHash, nummerAusName, planeNummern, rolleAusMassen, rolleAusName, type Bild, type Umbenennung } from "../../lib/assetNummern";
+import { EmptyState, Button, IconButton, Segmented } from "../ui";
+import { planeNummern, type Rolle } from "../../lib/assetNummern";
 import { AssetImage, AssetVideo } from "../AssetPickerDialog";
 import { AssignToProjectDialog } from "./AssignToProjectDialog";
 import type { AssetFile, StudioProject } from "../../types/studio";
@@ -54,8 +54,25 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
   const [picked, setPicked] = useState<AssetFile | null>(null);
   // Mehrfachauswahl zum Aufräumen (null = aus)
   const [auswahl, setAuswahl] = useState<Set<string> | null>(null);
-  const [nummernOffen, setNummernOffen] = useState(false);
+  const [nummeriertGerade, setNummeriertGerade] = useState(false);
   const [meldung, setMeldung] = useState<string | null>(null);
+
+  // Ein Klick, keine Vorschau: umbenennen ist harmlos und jederzeit wiederholbar.
+  const nummerieren = async () => {
+    const plan = planeNummern(assets
+      .filter(a => a.guessed_role === "cover" || a.guessed_role === "thumbnail")
+      .map(a => ({ pfad: a.path, name: a.name, secs: a.modified_secs, rolle: a.guessed_role as Rolle })));
+    if (plan.length === 0) return;
+    setNummeriertGerade(true);
+    try {
+      const schief = (await api.studio.renameAssets(assetPath, plan.map(u => ({ pfad: u.pfad, neu: u.neu })))).filter(e => !e.ok);
+      setMeldung(schief.length ? `Nicht umbenannt: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} (${e.meldung})`).join("; ")}` : null);
+    } catch (e) {
+      setMeldung(String(e));
+    }
+    setNummeriertGerade(false);
+    scan();
+  };
 
   // In den Papierkorb — wiederholbar, darum ohne Rückfrage. Die Nummern
   // rutschen danach in Rust nach (luecken_schliessen), wie nach dem Zuweisen.
@@ -152,10 +169,11 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
           </>
         ) : (
           <>
-            <Button size="sm" variant="secondary" icon={ListOrdered} disabled={counts.image === 0}
-              title="Fortlaufend nummerieren"
-              onClick={() => setNummernOffen(true)}>
-              Nummerieren …
+            <Button size="sm" variant="secondary" icon={ListOrdered} loading={nummeriertGerade}
+              disabled={!assets.some(a => a.guessed_role === "cover" || a.guessed_role === "thumbnail")}
+              title="Neuestes = 1, Cover und Thumbnails getrennt"
+              onClick={nummerieren}>
+              Nummerieren
             </Button>
             <Button size="sm" variant="secondary" icon={CheckSquare} disabled={assets.length === 0}
               title="Mehrere auswählen"
@@ -168,7 +186,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
         <IconButton
           icon={FolderOpen}
           size={28}
-          onClick={() => { if (assetPath.trim()) revealItemInDir(assetPath).catch(() => {}); }}
+          onClick={() => { if (assetPath.trim()) openPath(assetPath).catch(() => {}); }}
           disabled={!assetPath.trim()}
           title="Asset-Ordner im Explorer öffnen"
         />
@@ -200,14 +218,6 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
           <span style={{ flex: 1 }}>{meldung}</span>
           <IconButton icon={X} size={24} title="Ausblenden" onClick={() => setMeldung(null)} />
         </div>
-      )}
-
-      {nummernOffen && (
-        <NummerDialog
-          bilder={assets.filter(a => a.kind === "image")}
-          assetPath={assetPath}
-          onClose={geaendert => { setNummernOffen(false); if (geaendert) scan(); }}
-        />
       )}
 
       {!error && !isLoading && assets.length === 0 && (
@@ -309,9 +319,13 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
         display: "flex", alignItems: "center", justifyContent: "center",
         overflow: "hidden", position: "relative",
       }}>
-        {asset.kind === "image"
-          ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`} />
-          : <AssetVideo path={asset.path} onDauer={setDauer} />}
+        {/* Absolut, sonst drückt die Bildhöhe die Box aus dem Format */}
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {asset.kind === "image"
+            ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`}
+                fit={asset.guessed_role === "cover" ? "cover" : "contain"} />
+            : <AssetVideo path={asset.path} onDauer={setDauer} />}
+        </div>
 
         {/* Abzeichen unten rechts wie bei YouTube — verdeckt keinen Titel im Bild */}
         {asset.kind === "video" && (
@@ -365,115 +379,5 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Nummerieren: Vorschau, umbenannt wird erst beim Klick ───────────────────
-
-function NummerDialog({ bilder: bilderBeimOeffnen, assetPath, onClose }: {
-  bilder: AssetFile[];
-  assetPath: string;
-  onClose: (geaendert: boolean) => void;
-}) {
-  // Beim Öffnen festhalten — ein Fokus-Refresh im Tab soll nicht neu vergleichen.
-  const [bilder] = useState(bilderBeimOeffnen);
-  const [plan, setPlan] = useState<Umbenennung[] | null>(null);
-  const [an, setAn] = useState<Record<string, boolean>>({});
-  const [laeuft, setLaeuft] = useState(false);
-  const [ergebnis, setErgebnis] = useState<{ pfad: string; ok: boolean; meldung: string }[] | null>(null);
-  const [fehler, setFehler] = useState<string | null>(null);
-
-  // Nur Bilder ohne Nummer werden geladen und verglichen — die mit Nummer
-  // behalten sie ohnehin.
-  useEffect(() => {
-    let ab = false;
-    (async () => {
-      const liste: Bild[] = [];
-      for (const b of bilder) {
-        const bild: Bild = { pfad: b.path, name: b.name, secs: b.modified_secs, rolle: rolleAusName(b.name), hash: null };
-        if (!nummerAusName(b.name)) {
-          try {
-            const m = await bildHash(await api.create.readImageFile(b.path));
-            bild.hash = m.hash;
-            bild.rolle ??= rolleAusMassen(m.breite, m.hoehe);
-          } catch { /* nicht lesbar: bleibt ohne Vergleich, nur Zeit */ }
-        }
-        liste.push(bild);
-      }
-      if (!ab) setPlan(planeNummern(liste));
-    })().catch(e => { if (!ab) setFehler(String(e)); });
-    return () => { ab = true; };
-  }, [bilder]);
-
-  // Unsichere Paare sind Vorschläge — standardmäßig aus.
-  const gewaehlt = (plan ?? []).filter(u => an[u.pfad] ?? !u.unsicher);
-  const standVon = (pfad: string) => { const b = bilder.find(x => x.path === pfad); return b ? `${b.modified_secs}-${b.size}` : undefined; };
-
-  const umbenennen = async () => {
-    setLaeuft(true);
-    try { setErgebnis(await api.studio.renameAssets(assetPath, gewaehlt.map(u => ({ pfad: u.pfad, neu: u.neu })))); }
-    catch (e) { setFehler(String(e)); }
-    finally { setLaeuft(false); }
-  };
-
-  return (
-    <Modal
-      icon={ListOrdered}
-      title="Covers und Thumbnails nummerieren"
-      subtitle="Ab 1, Reihenfolge bleibt, gleiches Motiv gleiche Nummer"
-      width={640}
-      onClose={() => onClose(!!ergebnis)}
-      closeOnBackdrop={!laeuft}
-      footer={ergebnis ? (
-        <Button variant="primary" onClick={() => onClose(true)}>Schließen</Button>
-      ) : (
-        <>
-          <Button variant="ghost" onClick={() => onClose(false)}>Abbrechen</Button>
-          <Button variant="primary" icon={ListOrdered} loading={laeuft} disabled={gewaehlt.length === 0} onClick={umbenennen}>
-            {gewaehlt.length === 1 ? "1 Datei umbenennen" : `${gewaehlt.length} Dateien umbenennen`}
-          </Button>
-        </>
-      )}
-    >
-      {fehler && <div style={{ fontSize: 12, color: C.error, marginBottom: 8 }}>{fehler}</div>}
-      {!plan && !fehler && <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Vergleiche die Bilder …</div>}
-      {plan && plan.length === 0 && !ergebnis && (
-        <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>Alles ist schon nummeriert.</div>
-      )}
-      {plan && plan.length > 0 && !ergebnis && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 380, overflowY: "auto" }}>
-          {plan.map(u => (
-            <label key={u.pfad} style={{
-              display: "grid", gridTemplateColumns: "18px 44px minmax(0, 1fr) 14px minmax(0, 1fr)", alignItems: "center", gap: 10,
-              padding: "6px 10px", borderRadius: radius.control, cursor: "pointer", fontSize: 12,
-              background: C.surfaceContainerLow,
-            }}>
-              <input type="checkbox" checked={an[u.pfad] ?? !u.unsicher} style={{ accentColor: C.primary }}
-                onChange={e => setAn(v => ({ ...v, [u.pfad]: e.target.checked }))} />
-              <span style={{ width: 44, height: 28, borderRadius: 4, overflow: "hidden", background: C.surfaceContainerHigh }}>
-                <AssetImage path={u.pfad} fit="cover" stand={standVon(u.pfad)} />
-              </span>
-              <span style={{ color: C.onSurfaceVariant, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.alt}</span>
-              <ArrowRight size={12} color={C.onSecondaryFixedVar} />
-              <span style={{ color: C.onSurface, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                title={u.unsicher ? "Nur über Exportzeit gepaart, bitte prüfen" : undefined}>
-                {u.neu}{u.unsicher && <span style={{ color: C.primary, fontWeight: 400 }}> · unsicher</span>}
-              </span>
-            </label>
-          ))}
-        </div>
-      )}
-      {ergebnis && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {ergebnis.map(e => (
-            <div key={e.pfad} style={{ display: "flex", gap: 8, fontSize: 12, color: e.ok ? C.mint : C.error }}>
-              {e.ok ? <Check size={13} /> : <X size={13} />}
-              <span style={{ color: C.onSurface }}>{e.pfad.split(/[\/]/).pop()}</span>
-              <span>{e.ok ? `→ ${e.meldung}` : e.meldung}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Modal>
   );
 }

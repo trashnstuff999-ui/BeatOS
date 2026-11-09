@@ -7,6 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { IconButton } from "./Button";
@@ -78,7 +79,8 @@ export function Modal({
 }: ModalProps) {
   useEscapeStack(onClose);
 
-  return (
+  // Portal: ein transform weiter oben (Detail-Panel) sperrte fixed sonst auf dessen Breite ein.
+  return createPortal(
     <div
       onClick={closeOnBackdrop ? e => { if (e.target === e.currentTarget) onClose(); } : undefined}
       // data-modal: was in einem Dialog passiert, geht die Seite darunter
@@ -150,6 +152,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

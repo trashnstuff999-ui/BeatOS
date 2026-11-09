@@ -353,7 +353,7 @@ export function Heute({ actions, recent, refreshKey }: {
           {songs === null && <Leise>Künstler werden gelesen …</Leise>}
           {songs?.length === 0 && <Leise>Alles abgegeben</Leise>}
           {songs?.slice(0, 3).map(({ kuenstler, song }) => (
-            <Zeile key={song.path} onClick={() => navigate("/studio", { state: { tab: "artists" } })} title="Im Studio öffnen">
+            <Zeile key={song.path} onClick={() => navigate("/kuenstler")} title="Öffnen">
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={{ color: C.onSecondaryFixedVar }}>{kuenstler} · </span>
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{song.name}</span>

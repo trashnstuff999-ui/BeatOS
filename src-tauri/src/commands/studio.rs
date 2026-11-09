@@ -653,53 +653,180 @@ fn duplicate_project_ids(paths: &[String]) -> Vec<(u32, Vec<String>)> {
     out
 }
 
-/// Projekt umbenennen: Ordner umbenennen, gleichnamige FLPs mitziehen und die
-/// DB-Zeile (Status/Priorität/Notizen) auf den neuen Pfad umhängen — sonst
-/// räumt der nächste Scan sie als verwaist weg. Gibt den neuen Pfad zurück.
-#[tauri::command]
-pub fn rename_project_folder(path: String, new_name: String) -> Result<String, String> {
-    let new_dir = rename_project_dir(Path::new(&path), &new_name)?;
-    let new_path = new_dir.to_string_lossy().to_string();
+// ─── Beat benennen (docs/beat-umbenennen.md) ─────────────────────────────────
+// Name, Tonart und BPM landen im Ordnernamen (`Project_0796 - NAME [Cm 140]`),
+// der Scan liest sie von dort zurück. Die Exporte im Ordner-Root ziehen mit
+// (`NAME [Cm 140]_untagged.wav`), von den FLPs nur die neueste. Ältere
+// Versionen behalten ihren Namen (Entscheidung 29.10.2026: die Herkunft bleibt
+// erkennbar).
 
-    if new_path != path {
-        let conn = open_db().map_err(|e| e.to_string())?;
-        conn.execute(
-            "UPDATE OR REPLACE studio_projects SET path = ?1 WHERE path = ?2",
-            rusqlite::params![new_path, path],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    Ok(new_path)
+#[derive(Debug, Serialize, PartialEq)]
+pub struct RenameOp {
+    pub from: String,
+    pub to: String,
 }
 
-/// Der Dateisystem-Teil des Umbenennens (ohne DB, damit testbar).
-fn rename_project_dir(dir: &Path, new_name: &str) -> Result<PathBuf, String> {
+#[derive(Debug, Serialize)]
+pub struct ProjectRenamePlan {
+    pub folder_from: String,
+    pub folder_to: String,
+    /// Nur Dateien, deren Name sich ändert. Pfade relativ zum Projektordner.
+    pub files: Vec<RenameOp>,
+}
+
+/// Rollen-Endungen, die beim Umbenennen erhalten bleiben (wie parse_audio_filename).
+const EXPORT_ROLLEN: [&str; 5] = ["untagged", "tagged", "unmastered", "master", "final"];
+
+/// `NAME [Cm 140]`, `NAME [Cm]`, `NAME [140]` oder nur `NAME`.
+fn beat_basisname(name: &str, key: Option<&str>, bpm: Option<i32>) -> String {
+    let klammer = match (key, bpm) {
+        (Some(k), Some(b)) => format!(" [{} {}]", k, b),
+        (Some(k), None) => format!(" [{}]", k),
+        (None, Some(b)) => format!(" [{}]", b),
+        (None, None) => String::new(),
+    };
+    sanitize_filename_part(&format!("{}{}", sanitize_filename_part(name.trim()), klammer))
+}
+
+/// Ordnername: die Nummer bleibt (auf `Project_0796` normalisiert), der Rest
+/// wird ersetzt. Zweimal angewendet ergibt dasselbe.
+fn beat_ordnername(alt: &str, basis: &str) -> String {
+    match parse_project_id(alt) {
+        Some(id) => format!("{}{:04} - {}", PROJECT_PREFIX, id.number, basis),
+        None => basis.to_string(),
+    }
+}
+
+fn plan_rename(dir: &Path, name: &str, key: Option<&str>, bpm: Option<i32>) -> Result<ProjectRenamePlan, String> {
     if !dir.is_dir() {
         return Err(format!("Projektordner nicht gefunden: {}", dir.display()));
     }
-    let folder = sanitize_filename_part(new_name);
-    if folder.is_empty() {
-        return Err("Bitte einen Projektnamen eingeben".to_string());
+    if sanitize_filename_part(name.trim()).is_empty() {
+        return Err("Bitte einen Namen eingeben".to_string());
     }
-    let old_name = dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("Ungültiger Ordnername")?
-        .to_string();
-    if folder == old_name {
+    let key = key.map(str::trim).filter(|k| !k.is_empty());
+    if let Some(k) = key {
+        if !crate::utils::is_valid_key(k) {
+            return Err(format!("„{}\" ist keine Tonart", k));
+        }
+    }
+    if let Some(b) = bpm {
+        if !(40..=300).contains(&b) {
+            return Err("BPM zwischen 40 und 300".to_string());
+        }
+    }
+    let basis = beat_basisname(name, key, bpm);
+    let folder_from = dir.file_name().and_then(|n| n.to_str()).ok_or("Ungültiger Ordnername")?.to_string();
+    let folder_to = beat_ordnername(&folder_from, &basis);
+
+    let mut files = Vec::new();
+    // Exporte im Root: je (Endung, Rolle) bekommt der neueste den sauberen
+    // Namen, ältere _2, _3 … in Altersreihenfolge.
+    let mut gruppen: HashMap<(String, Option<String>), Vec<(u64, String)>> = HashMap::new();
+    for e in std::fs::read_dir(dir).map_err(|e| e.to_string())?.filter_map(|e| e.ok()) {
+        let p = e.path();
+        let Some(ext) = p.extension().and_then(|x| x.to_str()).map(str::to_lowercase) else { continue };
+        if !p.is_file() || !matches!(ext.as_str(), "mp3" | "wav") {
+            continue;
+        }
+        let datei = e.file_name().to_string_lossy().to_string();
+        let stamm = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let rolle = stamm.rsplit_once('_')
+            .map(|(_, r)| r.to_lowercase())
+            .filter(|r| EXPORT_ROLLEN.contains(&r.as_str()));
+        let zeit = e.metadata().and_then(|m| m.modified()).ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+        gruppen.entry((ext, rolle)).or_default().push((zeit, datei));
+    }
+    for ((ext, rolle), mut liste) in gruppen {
+        liste.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        for (i, (_, from)) in liste.into_iter().enumerate() {
+            let rolle = rolle.as_deref().map(|r| format!("_{}", r)).unwrap_or_default();
+            let nr = if i == 0 { String::new() } else { format!("_{}", i + 1) };
+            files.push(RenameOp { to: format!("{}{}{}.{}", basis, rolle, nr, ext), from });
+        }
+    }
+    // Die neueste FLP an ihrem Platz (Root oder 01_SAVEFILES)
+    if let Some(flp) = scan_project_dir(dir, "").and_then(|p| p.newest_flp) {
+        let flp = PathBuf::from(flp);
+        if let (Ok(rel), Some(eltern)) = (flp.strip_prefix(dir), flp.parent()) {
+            let ziel = eltern.join(format!("{}.flp", basis));
+            let from = rel.to_string_lossy().to_string();
+            let to = ziel.strip_prefix(dir).map_err(|e| e.to_string())?.to_string_lossy().to_string();
+            if ziel.exists() && !from.eq_ignore_ascii_case(&to) {
+                return Err(format!("„{}\" gibt es im Projekt schon", to));
+            }
+            files.push(RenameOp { from, to });
+        }
+    }
+    files.retain(|op| op.from != op.to);
+    files.sort_by(|a, b| a.from.cmp(&b.from));
+    Ok(ProjectRenamePlan { folder_from, folder_to, files })
+}
+
+/// Vorschau für den Dialog „Beat benennen". Rein lesend.
+#[tauri::command(async)]
+pub fn plan_project_rename(path: String, name: String, key: Option<String>, bpm: Option<i32>) -> Result<ProjectRenamePlan, String> {
+    plan_rename(Path::new(&path), &name, key.as_deref(), bpm)
+}
+
+/// Benennen ausführen: plant neu (Vorschau und Ausführung können nicht
+/// auseinanderlaufen), Dateien in zwei Phasen über Zwischennamen, den Ordner
+/// zuletzt, dann FLP-Pfade nachziehen und die DB-Zeile umhängen.
+#[tauri::command(async)]
+pub fn apply_project_rename(path: String, name: String, key: Option<String>, bpm: Option<i32>) -> Result<String, String> {
+    let dir = PathBuf::from(&path);
+    let ziel = apply_rename(&dir, &name, key.as_deref(), bpm)?;
+    let neu = ziel.to_string_lossy().to_string();
+    if neu != path {
+        if let Err(e) = crate::commands::artists::pfade_reparieren(&ziel) {
+            eprintln!("WARNING: FLP-Pfade in {} nicht nachgezogen: {}", ziel.display(), e);
+        }
+        let conn = open_db().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE OR REPLACE studio_projects SET path = ?1 WHERE path = ?2",
+            rusqlite::params![neu, path],
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(neu)
+}
+
+/// Der Dateisystem-Teil (ohne DB, damit testbar).
+fn apply_rename(dir: &Path, name: &str, key: Option<&str>, bpm: Option<i32>) -> Result<PathBuf, String> {
+    let plan = plan_rename(dir, name, key, bpm)?;
+    let gesperrt = |e: std::io::Error, datei: &str| format!("„{}\" ließ sich nicht umbenennen (in FL offen?): {}", datei, e);
+    // Phase 1: alles auf Zwischennamen. Schlägt eine fehl, die schon bewegten zurück.
+    let mut zwischen: Vec<(PathBuf, &RenameOp)> = Vec::new();
+    for (i, op) in plan.files.iter().enumerate() {
+        let von = dir.join(&op.from);
+        let tmp = von.with_file_name(format!(".beatos-benennen-{}", i));
+        if let Err(e) = std::fs::rename(&von, &tmp) {
+            for (t, o) in &zwischen { let _ = std::fs::rename(t, dir.join(&o.from)); }
+            return Err(gesperrt(e, &op.from));
+        }
+        zwischen.push((tmp, op));
+    }
+    // Phase 2: auf die Ziele. Ab hier wird nur noch gemeldet.
+    let mut fehler = Vec::new();
+    for (tmp, op) in &zwischen {
+        if let Err(e) = std::fs::rename(tmp, dir.join(&op.to)) {
+            let _ = std::fs::rename(tmp, dir.join(&op.from));
+            fehler.push(gesperrt(e, &op.from));
+        }
+    }
+    if !fehler.is_empty() {
+        return Err(fehler.join("\n"));
+    }
+    // Der Ordner zuletzt
+    if plan.folder_from == plan.folder_to {
         return Ok(dir.to_path_buf());
     }
-
-    let parent = dir.parent().ok_or("Projektordner hat keinen Elternordner")?;
-    let new_dir = parent.join(&folder);
-    if new_dir.exists() {
-        return Err(format!("„{}\" gibt es in diesem Ordner schon", folder));
+    let neu = dir.parent().ok_or("Projektordner hat keinen Elternordner")?.join(&plan.folder_to);
+    if neu.exists() && !plan.folder_from.eq_ignore_ascii_case(&plan.folder_to) {
+        return Err(format!("„{}\" gibt es schon. Dateien sind umbenannt, der Ordner nicht", plan.folder_to));
     }
-    std::fs::rename(dir, &new_dir)
-        .map_err(|e| format!("Ordner konnte nicht umbenannt werden: {}", e))?;
-
-    rename_matching_flps(&new_dir, &old_name, &folder);
-    Ok(new_dir)
+    std::fs::rename(dir, &neu).map_err(|e| format!("Ordner ließ sich nicht umbenennen (in FL offen?): {}", e))?;
+    Ok(neu)
 }
 
 /// FLPs, die genau wie der Ordner hießen, heißen weiter wie der Ordner.
@@ -770,8 +897,95 @@ pub fn create_project_folder(
         let _ = std::fs::remove_dir_all(&dir);
         return Err(e);
     }
+    // Die Kopie erbt das Datum der Vorlage, ein neues Projekt sähe sonst alt
+    // aus und fiele beim nächsten Scan fest ins Aufräumen.
+    if let Ok(f) = std::fs::File::options().write(true).open(&dest) {
+        let _ = f.set_modified(std::time::SystemTime::now());
+    }
 
     Ok(dest.to_string_lossy().to_string())
+}
+
+/// Neues Sample in `06_SAMPLES`: Ordner `S0001 Name` (Name optional) mit einer
+/// Kopie der Sample-Vorlage, sonst wie ein Studio-Projekt. Eigene `S`-Nummern,
+/// damit sie den Projektnummern nicht in die Quere kommen. Den Samples-Ordner
+/// legt der erste Aufruf selbst an.
+#[tauri::command]
+pub fn create_sample(root: String, name: String, template_flp: String) -> Result<String, String> {
+    let ordner = naechster_sample_ordner(&root, &name)?;
+    create_project_folder(root, ordner, template_flp)
+}
+
+/// Projekt (aus Projekte oder Aufräumen) als Sample nach `06_SAMPLES`: Ordner
+/// verschieben und als `S0012 Name` benennen, gleichnamige FLPs mitziehen. FL
+/// speichert Audio mit vollem Pfad, also danach die Pfade in den FLPs
+/// nachziehen (Sicherung in Backup/). Die DB-Zeile fällt weg, Samples haben
+/// keinen Status. Nachrücken der Projektnummern macht das Frontend danach.
+#[tauri::command(async)]
+pub fn move_to_samples(path: String, root: String, name: String) -> Result<String, String> {
+    let ziel = move_dir_to_samples(Path::new(&path), &root, &name)?;
+    if let Err(e) = crate::commands::artists::pfade_reparieren(&ziel) {
+        eprintln!("WARNING: FLP-Pfade in {} nicht nachgezogen: {}", ziel.display(), e);
+    }
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let _ = conn.execute("DELETE FROM studio_projects WHERE path = ?1", rusqlite::params![path]);
+    Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Der Dateisystem-Teil (ohne DB, damit testbar).
+fn move_dir_to_samples(dir: &Path, root: &str, name: &str) -> Result<PathBuf, String> {
+    if !dir.is_dir() {
+        return Err(format!("Projektordner nicht gefunden: {}", dir.display()));
+    }
+    let alt = dir.file_name().and_then(|n| n.to_str()).ok_or("Ungültiger Ordnername")?.to_string();
+    let ordner = sanitize_filename_part(&naechster_sample_ordner(root, name)?);
+    let ziel = Path::new(root).join(&ordner);
+    if ziel.exists() {
+        return Err(format!("„{}\" gibt es in Samples schon", ordner));
+    }
+    std::fs::rename(dir, &ziel)
+        .map_err(|e| format!("„{}\" ließ sich nicht verschieben (in FL offen?): {}", alt, e))?;
+    rename_matching_flps(&ziel, &alt, &ordner);
+    Ok(ziel)
+}
+
+/// `S0013 Name` (oder nur `S0013`) mit der nächsten freien Nummer in `root`.
+/// Legt `root` an, falls es ihn noch nicht gibt.
+fn naechster_sample_ordner(root: &str, name: &str) -> Result<String, String> {
+    std::fs::create_dir_all(root)
+        .map_err(|e| format!("Samples-Ordner konnte nicht angelegt werden: {}", e))?;
+    let naechste = std::fs::read_dir(root)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| sample_number(&e.file_name().to_string_lossy()))
+        .max()
+        .unwrap_or(0) + 1;
+    let name = name.trim();
+    Ok(if name.is_empty() { format!("S{:04}", naechste) } else { format!("S{:04} {}", naechste, name) })
+}
+
+/// Alle Samples in `06_SAMPLES`: derselbe Ordner-Scan wie bei Projekten, aber
+/// ohne Datenbank. Sonst zählten Samples in der Statistik als Ideen und fielen
+/// nach 30 Tagen ins Aufräumen.
+#[tauri::command]
+pub async fn scan_samples(root: String) -> Result<Vec<StudioProject>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Ok(rd) = std::fs::read_dir(&root) else { return Vec::new() };
+        rd.filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            // `_MIDI` und Co. sind Ablagen, keine Samples
+            .filter(|e| !e.file_name().to_string_lossy().starts_with('_'))
+            .filter_map(|e| scan_project_dir(&e.path(), &root))
+            .collect()
+    })
+    .await
+    .map_err(|e| format!("Sample-Scan abgestürzt: {}", e))
+}
+
+/// „S0012 Nachtzug" → 12. Nur ein großes S mit Ziffern direkt dahinter.
+fn sample_number(ordner: &str) -> Option<u32> {
+    let ziffern: String = ordner.strip_prefix('S')?.chars().take_while(|c| c.is_ascii_digit()).collect();
+    ziffern.parse().ok()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1806,22 +2020,38 @@ pub struct AssetUmbenennung {
 
 /// Covers/Thumbnails umbenennen („Nummerieren"). Ein vorhandenes Ziel wird nie
 /// überschrieben; der Plan entsteht im Frontend (lib/assetNummern.ts).
+/// Zwei Schritte: erst alle auf Zwischennamen, dann auf das Ziel. So geht auch
+/// ein Ringtausch (Cover_1 ↔ Cover_2), wenn sich die Reihenfolge nach Alter ändert.
 #[tauri::command]
 pub fn rename_assets(asset_root: String, umbenennungen: Vec<AssetUmbenennung>) -> Vec<AssetErgebnis> {
-    umbenennungen.into_iter().map(|u| {
-        let ergebnis = |ok: bool, meldung: String| AssetErgebnis { pfad: u.pfad.clone(), ok, meldung };
-        let quelle = match im_asset_ordner(&asset_root, &u.pfad) { Ok(p) => p, Err(e) => return ergebnis(false, e) };
+    let mut ergebnisse = Vec::new();
+    // (Ergebnis-Index, Originalpfad, Zwischenpfad, Zielname)
+    let mut zwischen: Vec<(usize, PathBuf, PathBuf, String)> = Vec::new();
+    for (i, u) in umbenennungen.into_iter().enumerate() {
+        let idx = ergebnisse.len();
+        let mut ergebnis = |ok: bool, meldung: String| ergebnisse.push(AssetErgebnis { pfad: u.pfad.clone(), ok, meldung });
+        let quelle = match im_asset_ordner(&asset_root, &u.pfad) { Ok(p) => p, Err(e) => { ergebnis(false, e); continue } };
         let neu = sanitize_filename_part(u.neu.trim());
-        if neu.is_empty() || neu.contains(['/', '\\']) { return ergebnis(false, "Ungültiger Name".into()); }
-        let ziel = quelle.with_file_name(&neu);
-        // Nur Groß/klein anders („cover_9" → „Cover_9") ist dieselbe Datei — erlaubt.
-        let selbe = ziel.to_string_lossy().eq_ignore_ascii_case(&quelle.to_string_lossy());
-        if ziel.exists() && !selbe { return ergebnis(false, format!("{neu} gibt es schon")); }
-        match std::fs::rename(&quelle, &ziel) {
-            Ok(()) => ergebnis(true, neu),
+        if neu.is_empty() || neu.contains(['/', '\\']) { ergebnis(false, "Ungültiger Name".into()); continue }
+        let name = quelle.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let tmp = quelle.with_file_name(format!("~nummerieren_{i}_{name}"));
+        match std::fs::rename(&quelle, &tmp) {
+            Ok(()) => { zwischen.push((idx, quelle, tmp, neu.clone())); ergebnis(true, neu) }
             Err(e) => ergebnis(false, format!("Umbenennen fehlgeschlagen: {e}")),
         }
-    }).collect()
+    }
+    for (idx, quelle, tmp, neu) in zwischen {
+        let ziel = quelle.with_file_name(&neu);
+        let schief = if ziel.exists() { Some(format!("{neu} gibt es schon")) }
+            else { std::fs::rename(&tmp, &ziel).err().map(|e| format!("Umbenennen fehlgeschlagen: {e}")) };
+        if let Some(meldung) = schief {
+            // Zurück auf den alten Namen; ist der inzwischen belegt, bleibt der Zwischenname.
+            let _ = std::fs::rename(&tmp, &quelle);
+            ergebnisse[idx].ok = false;
+            ergebnisse[idx].meldung = meldung;
+        }
+    }
+    ergebnisse
 }
 
 /// Bilder/Videos aus dem Asset-Ordner in den Windows-Papierkorb — weg aus dem
@@ -1836,12 +2066,12 @@ pub fn trash_assets(asset_root: String, pfade: Vec<String>) -> Vec<AssetErgebnis
     erg
 }
 
-/// Die Nummern-Reihe eines Asset-Ordners lückenlos machen: Cover_1, Cover_2 …
-/// in derselben Reihenfolge, ein Paar (Cover_n + Thumbnail_n) bleibt ein Paar.
+/// Die Nummern-Reihen eines Asset-Ordners lückenlos machen: Cover_1, Cover_2 …
+/// in derselben Reihenfolge, Covers und Thumbnails jede für sich (26.10.2026).
 /// Die Nummer heißt nur „wartet auf einen Beat" — wird Cover_1 zugewiesen
-/// oder gelöscht, rutscht der Rest nach (Stephan, 18.10.2026). Dieselbe Regel
-/// steht für den Knopf „Nummerieren" in src/lib/assetNummern.ts. Nicht
-/// nummerierte Dateien und Videos bleiben, wie sie sind.
+/// oder gelöscht, rutscht der Rest nach (Stephan, 18.10.2026). Den Knopf
+/// „Nummerieren" plant src/lib/assetNummern.ts. Nicht nummerierte Dateien und
+/// Videos bleiben, wie sie sind.
 pub(crate) fn luecken_schliessen(dir: &Path) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     // (Rolle "Cover"/"Thumbnail", Nummer, Pfad, Endung)
@@ -1859,12 +2089,17 @@ pub(crate) fn luecken_schliessen(dir: &Path) {
         let Ok(nr) = ziffern.parse::<u32>() else { continue };
         nummeriert.push((rolle, nr, p, ext));
     }
-    let mut reihe: Vec<u32> = nummeriert.iter().map(|n| n.1).collect();
-    reihe.sort_unstable();
-    reihe.dedup();
+    let reihe_von = |rolle: &str| {
+        let mut r: Vec<u32> = nummeriert.iter().filter(|n| n.0 == rolle).map(|n| n.1).collect();
+        r.sort_unstable();
+        r.dedup();
+        r
+    };
+    let (covers, thumbs) = (reihe_von("Cover"), reihe_von("Thumbnail"));
     // Aufsteigend umbenennen: das Ziel ist dann immer schon frei.
-    nummeriert.sort_by_key(|n| (n.1, n.0));
+    nummeriert.sort_by_key(|n| (n.0, n.1));
     for (rolle, alt, pfad, ext) in nummeriert {
+        let reihe = if rolle == "Cover" { &covers } else { &thumbs };
         let neu = reihe.iter().position(|&r| r == alt).map(|i| i as u32 + 1).unwrap_or(alt);
         let ziel = dir.join(format!("{rolle}_{neu}.{ext}"));
         if ziel == pfad { continue; }
@@ -2794,6 +3029,8 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let template = tmp.join("Template.flp");
         std::fs::write(&template, b"flp-bytes").unwrap();
+        let alt = std::time::SystemTime::now() - std::time::Duration::from_secs(400 * 86_400);
+        std::fs::File::options().write(true).open(&template).unwrap().set_modified(alt).unwrap();
 
         let flp = super::create_project_folder(
             root.to_string_lossy().to_string(),
@@ -2808,7 +3045,10 @@ mod tests {
         assert!(!dir.join("01_SAVEFILES").exists());
         assert_eq!(std::fs::read(&flp).unwrap(), b"flp-bytes");
         // Der Scan muss das neue Projekt sofort sehen
-        assert!(scan_project_dir(&dir, "root").is_some());
+        let p = scan_project_dir(&dir, "root").unwrap();
+        // Frisch datiert, nicht mit dem Alter der Vorlage
+        let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        assert!(jetzt - p.modified_secs < 60);
 
         // Zweiter Anlauf mit demselben Namen darf nichts überschreiben
         let again = super::create_project_folder(
@@ -2819,6 +3059,94 @@ mod tests {
         assert!(again.is_err());
 
         std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn create_sample_numbers_on_and_creates_root() {
+        let tmp = std::env::temp_dir().join(format!("beatos_samples_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let root = tmp.join("06_SAMPLES");
+        let template = tmp.join("Sample.flp");
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(&template, b"flp-bytes").unwrap();
+        let r = root.to_string_lossy().to_string();
+        let t = template.to_string_lossy().to_string();
+
+        // Ordner fehlt noch → wird angelegt, Nummer 1, ohne Namen
+        let flp = super::create_sample(r.clone(), "  ".into(), t.clone()).unwrap();
+        assert!(flp.ends_with("S0001.flp"));
+        std::fs::create_dir_all(root.join("Stems")).unwrap();         // kein S mit Zahl
+        std::fs::create_dir_all(root.join("S0009 Alt")).unwrap();
+        let flp = super::create_sample(r, "Nachtzug".into(), t).unwrap();
+        assert!(flp.ends_with("S0010 Nachtzug\\S0010 Nachtzug.flp") || flp.ends_with("S0010 Nachtzug/S0010 Nachtzug.flp"));
+
+        // Projekt rüberschieben: nächste Nummer, gleichnamige FLP zieht mit, Export bleibt
+        let projekt = tmp.join("prod").join("Project_0243");
+        std::fs::create_dir_all(&projekt).unwrap();
+        std::fs::write(projekt.join("Project_0243.flp"), b"flp").unwrap();
+        std::fs::write(projekt.join("MEMORIES - [Am 140].wav"), b"wav").unwrap();
+        let ziel = super::move_dir_to_samples(&projekt, &root.to_string_lossy(), "MEMORIES").unwrap();
+        assert_eq!(ziel, root.join("S0011 MEMORIES"));
+        assert!(!projekt.exists());
+        assert!(ziel.join("S0011 MEMORIES.flp").is_file());
+        assert!(ziel.join("MEMORIES - [Am 140].wav").is_file());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn beat_benennen_ordnername_bleibt_beim_zweiten_mal_gleich() {
+        let basis = super::beat_basisname("MEMORIES", Some("Am"), Some(140));
+        assert_eq!(basis, "MEMORIES [Am 140]");
+        let einmal = super::beat_ordnername("Project_243", &basis);
+        assert_eq!(einmal, "Project_0243 - MEMORIES [Am 140]");
+        assert_eq!(super::beat_ordnername(&einmal, &basis), einmal);
+        assert_eq!(super::beat_ordnername("NO MORE RUNNING", "X [140]"), "X [140]");
+        assert_eq!(super::beat_basisname("X", None, None), "X");
+        assert_eq!(super::beat_basisname("X", Some("Cm"), None), "X [Cm]");
+    }
+
+    #[test]
+    fn beat_benennen_exporte_und_nur_neueste_flp() {
+        use std::time::{Duration, SystemTime};
+        let tmp = std::env::temp_dir().join(format!("beatos_benennen_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let dir = tmp.join("Project_0796");
+        std::fs::create_dir_all(&dir).unwrap();
+        let schreibe = |name: &str, alter_h: u64| {
+            let p = dir.join(name);
+            std::fs::write(&p, b"FLhd").unwrap();
+            let t = SystemTime::now() - Duration::from_secs(alter_h * 3600);
+            std::fs::File::options().write(true).open(&p).unwrap().set_modified(t).unwrap();
+        };
+        schreibe("Project_797.flp", 1);
+        schreibe("hook_v3.flp", 48);
+        schreibe("bounce.mp3", 1);
+        schreibe("alt.mp3", 24);
+        schreibe("mix_untagged.wav", 1);
+        schreibe("cover.png", 1);
+
+        let plan = super::plan_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
+        assert_eq!(plan.folder_to, "Project_0796 - MEMORIES [Am 140]");
+        let ziele: Vec<(&str, &str)> = plan.files.iter().map(|o| (o.from.as_str(), o.to.as_str())).collect();
+        assert_eq!(ziele, vec![
+            ("Project_797.flp", "MEMORIES [Am 140].flp"),
+            ("alt.mp3", "MEMORIES [Am 140]_2.mp3"),
+            ("bounce.mp3", "MEMORIES [Am 140].mp3"),
+            ("mix_untagged.wav", "MEMORIES [Am 140]_untagged.wav"),
+        ]);
+        assert!(super::plan_rename(&dir, "  ", None, None).is_err());
+        assert!(super::plan_rename(&dir, "X", Some("Qm"), None).is_err());
+        assert!(super::plan_rename(&dir, "X", None, Some(20)).is_err());
+
+        let neu = super::apply_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
+        assert_eq!(neu, tmp.join("Project_0796 - MEMORIES [Am 140]"));
+        for f in ["MEMORIES [Am 140].flp", "hook_v3.flp", "MEMORIES [Am 140].mp3", "MEMORIES [Am 140]_2.mp3",
+                  "MEMORIES [Am 140]_untagged.wav", "cover.png"] {
+            assert!(neu.join(f).is_file(), "{f} fehlt");
+        }
+        // Zweimal hintereinander: nichts mehr zu tun
+        assert!(super::plan_rename(&neu, "MEMORIES", Some("Am"), Some(140)).unwrap().files.is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
@@ -2866,32 +3194,6 @@ mod tests {
         assert!(!root.join("Project_0007").exists());
         assert!(root.join("NO MORE RUNNING").is_dir());
         assert!(super::plan_close_gaps(&roots).is_empty());
-
-        std::fs::remove_dir_all(&tmp).unwrap();
-    }
-
-    #[test]
-    fn rename_moves_folder_and_matching_flp() {
-        let tmp = std::env::temp_dir().join(format!("beatos_rename_{}", std::process::id()));
-        let root = tmp.join("root");
-        let proj = root.join("Project_206");
-        let saves = proj.join("01_SAVEFILES");
-        std::fs::create_dir_all(&saves).unwrap();
-        std::fs::write(saves.join("Project_206.flp"), b"flp").unwrap();
-        std::fs::write(saves.join("hook_v3.flp"), b"flp").unwrap();
-
-        let new_dir = super::rename_project_dir(&proj, "MEMORIES").unwrap();
-
-        assert_eq!(new_dir, root.join("MEMORIES"));
-        assert!(!proj.exists());
-        assert!(new_dir.join("01_SAVEFILES").join("MEMORIES.flp").exists(), "FLP zieht mit");
-        assert!(new_dir.join("01_SAVEFILES").join("hook_v3.flp").exists(), "eigener Name bleibt");
-
-        // Auf einen belegten Namen darf nicht umbenannt werden
-        std::fs::create_dir_all(root.join("DRIFT")).unwrap();
-        assert!(super::rename_project_dir(&new_dir, "DRIFT").is_err());
-        // Gleicher Name = kein Fehler, nur nichts zu tun
-        assert_eq!(super::rename_project_dir(&new_dir, "MEMORIES").unwrap(), new_dir);
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }
@@ -3255,6 +3557,24 @@ mod asset_tests {
     }
 
     #[test]
+    fn assets_ringtausch_klappt() {
+        let media = std::env::temp_dir().join(format!("beatos_ringtausch_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&media);
+        std::fs::create_dir_all(&media).unwrap();
+        std::fs::write(media.join("Cover_1.png"), b"alt").unwrap();
+        std::fs::write(media.join("Cover_2.png"), b"neu").unwrap();
+        let p = |n: &str| media.join(n).to_string_lossy().to_string();
+        let erg = rename_assets(media.to_string_lossy().to_string(), vec![
+            AssetUmbenennung { pfad: p("Cover_1.png"), neu: "Cover_2.png".into() },
+            AssetUmbenennung { pfad: p("Cover_2.png"), neu: "Cover_1.png".into() },
+        ]);
+        assert!(erg.iter().all(|e| e.ok), "{erg:?}");
+        assert_eq!(std::fs::read(media.join("Cover_1.png")).unwrap(), b"neu");
+        assert_eq!(std::fs::read(media.join("Cover_2.png")).unwrap(), b"alt");
+        let _ = std::fs::remove_dir_all(&media);
+    }
+
+    #[test]
     fn nach_zuweisen_rutschen_die_nummern_nach() {
         let basis = std::env::temp_dir().join(format!("beatos_nachruecken_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&basis);
@@ -3269,10 +3589,10 @@ mod asset_tests {
             media.join("Cover_1.png").to_string_lossy().to_string(), media.to_string_lossy().to_string(),
             beat.to_string_lossy().to_string(), Some("cover".into()),
         ).unwrap();
-        // Thumbnail_1 wartet noch, darum bleibt die 1 belegt
+        // Covers rutschen für sich nach, die Thumbnails bleiben
         let mut namen: Vec<String> = std::fs::read_dir(&media).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         namen.sort();
-        assert_eq!(namen, vec!["Cover_2.png", "Cover_3.jpg", "Logo.png", "Thumbnail_1.png", "Thumbnail_2.png", "home again_video.mp4"]);
+        assert_eq!(namen, vec!["Cover_1.png", "Cover_2.jpg", "Logo.png", "Thumbnail_1.png", "Thumbnail_2.png", "home again_video.mp4"]);
 
         assign_asset_to_project(
             media.join("Thumbnail_1.png").to_string_lossy().to_string(), media.to_string_lossy().to_string(),
@@ -3281,7 +3601,7 @@ mod asset_tests {
         let mut namen: Vec<String> = std::fs::read_dir(&media).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         namen.sort();
         assert_eq!(namen, vec!["Cover_1.png", "Cover_2.jpg", "Logo.png", "Thumbnail_1.png", "home again_video.mp4"],
-            "Cover_2/Thumbnail_2 rutschen auf 1, Videos und Unnummeriertes bleiben");
+            "Thumbnail_2 rutscht auf 1, Videos und Unnummeriertes bleiben");
         let _ = std::fs::remove_dir_all(&basis);
     }
 }
