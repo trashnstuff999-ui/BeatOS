@@ -13,7 +13,7 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | # | Scheibe | Status |
 |---|---|---|
 | 0 | Datenmüll stoppen | erledigt 09.11. |
-| 1 | Ordnergerüst | offen |
+| 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke (nur lesen) | offen |
 | 3 | Einsammeln | offen |
 | 4 | Neu nummerieren | offen |
@@ -161,9 +161,10 @@ BeatOS:
 - `07_REMIXES` neben dem Archiv, analog zu `kuenstlerOrdner()` und
   `samplesOrdner()`.
 
-Sicherheit: Vorher alle FLPs lesend nach Pfaden in `02_LIBRARY_ASSETS`
-durchsuchen, zum Beispiel FLPs mit Vocals aus `EXTRACTED VOCALS`. Betroffene
-Ordner erst umziehen, wenn klar ist, wie die FLP sie wiederfindet.
+Sicherheit (geprüft 09.11.): Von 4994 FLPs zeigen nur 6 auf `02_LIBRARY_ASSETS`, alle auf
+`EXTRACTED VOCALS`, dazu eine FLP mit totem Pfad (`Vocal Stems`). Sie werden per
+`flp_umschreiben` umgestellt (Sicherung in `Backup/`). Die Premiere-Vorlage verweist
+50-mal auf `MUSIC VIDEO FOOTAGE`; ihre Pfade werden mit umgestellt, Sicherung in `_ALT`.
 
 ## Scheibe 2: Fundstücke (nur lesen)
 

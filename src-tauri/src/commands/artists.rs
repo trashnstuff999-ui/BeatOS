@@ -585,23 +585,7 @@ fn pfad_plan(song: &Path) -> PfadPlan {
 fn pfade_reparieren(song: &Path) -> Result<usize, String> {
     let mut gesamt = 0;
     for (flp, ersatz) in pfad_plan(song).ersatz {
-        let alt = fs::read(&flp).map_err(|e| format!("{} nicht lesbar: {e}", flp.display()))?;
-        let (neu, zahl) = crate::commands::flp::pfade_ersetzen(&alt, &ersatz)
-            .ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
-        if zahl == 0 { continue; }
-        let stamm = flp.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        // Neben die FLP, wo FL seine eigenen Backups ablegt.
-        let backup_dir = flp.parent().unwrap_or(song).join("Backup");
-        let backup = backup_dir.join(format!("{stamm} (vor Pfad-Reparatur).flp"));
-        if !backup.exists() {
-            fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
-            fs::copy(&flp, &backup).map_err(|e| format!("Sicherung fehlgeschlagen: {e}"))?;
-        }
-        // Erst daneben schreiben, dann austauschen — nie eine halbe FLP.
-        let tmp = flp.with_extension("flp.beatos-tmp");
-        fs::write(&tmp, &neu).map_err(|e| format!("Schreiben fehlgeschlagen: {e}"))?;
-        fs::rename(&tmp, &flp).map_err(|e| { let _ = fs::remove_file(&tmp); format!("{} ist gesperrt (in FL offen?): {e}", flp.display()) })?;
-        gesamt += zahl;
+        gesamt += crate::commands::flp::flp_umschreiben(&flp, &ersatz, "vor Pfad-Reparatur")?;
     }
     Ok(gesamt)
 }

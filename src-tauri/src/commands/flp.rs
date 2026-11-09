@@ -186,6 +186,27 @@ pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(V
     Some((out, zahl))
 }
 
+/// Pfade in einer FLP auf der Platte austauschen. Vorher eine Sicherung
+/// `<Name> (<anlass>).flp` in `Backup/` neben der FLP (die erste bleibt stehen),
+/// dann daneben schreiben und tauschen, nie eine halbe FLP.
+pub(crate) fn flp_umschreiben(flp: &std::path::Path, ersatz: &[(String, String)], anlass: &str) -> Result<usize, String> {
+    use std::fs;
+    let alt = fs::read(flp).map_err(|e| format!("{} nicht lesbar: {e}", flp.display()))?;
+    let (neu, zahl) = pfade_ersetzen(&alt, ersatz).ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
+    if zahl == 0 { return Ok(0); }
+    let stamm = flp.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let backup_dir = flp.parent().ok_or("FLP ohne Ordner")?.join("Backup");
+    let backup = backup_dir.join(format!("{stamm} ({anlass}).flp"));
+    if !backup.exists() {
+        fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+        fs::copy(flp, &backup).map_err(|e| format!("Sicherung fehlgeschlagen: {e}"))?;
+    }
+    let tmp = flp.with_extension("flp.beatos-tmp");
+    fs::write(&tmp, &neu).map_err(|e| format!("Schreiben fehlgeschlagen: {e}"))?;
+    fs::rename(&tmp, flp).map_err(|e| { let _ = fs::remove_file(&tmp); format!("{} ist gesperrt (in FL offen?): {e}", flp.display()) })?;
+    Ok(zahl)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,5 +285,55 @@ mod tests {
     fn kaputte_datei_ist_none() {
         assert!(lesen(b"FLhd").is_none());
         assert!(lesen(b"RIFF....").is_none());
+    }
+
+    /// Handprobe (nur lesen): welche FLPs zeigen auf Pfade mit einem Stichwort?
+    /// BEATOS_FLP_ROOTS="a;b" BEATOS_NEEDLE="02_LIBRARY_ASSETS" BEATOS_DUMP=out.tsv
+    /// cargo test --lib flp_handprobe -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn flp_handprobe_verweise() {
+        let (Ok(roots), Ok(needle)) = (std::env::var("BEATOS_FLP_ROOTS"), std::env::var("BEATOS_NEEDLE")) else { return };
+        let needle = needle.to_lowercase();
+        let mut stack: Vec<std::path::PathBuf> = roots.split(';').map(|r| r.trim().into()).collect();
+        let (mut flps, mut out) = (0usize, String::new());
+        while let Some(d) = stack.pop() {
+            let Ok(rd) = std::fs::read_dir(&d) else { continue };
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() { if !p.ends_with("Backup") { stack.push(p); } continue; }
+                if !p.extension().map_or(false, |x| x.eq_ignore_ascii_case("flp")) { continue; }
+                flps += 1;
+                let Ok(b) = std::fs::read(&p) else { continue };
+                for a in audio_pfade(&b) {
+                    if a.to_lowercase().contains(&needle) {
+                        out.push_str(&format!("{}	{}	{}
+", p.display(), a, std::path::Path::new(&a).exists()));
+                    }
+                }
+            }
+        }
+        println!("FLPs gelesen: {}, Verweise: {}", flps, out.lines().count());
+        if let Ok(f) = std::env::var("BEATOS_DUMP") { std::fs::write(f, &out).unwrap(); }
+    }
+    /// Handprobe (schreibt!): Pfade laut Liste umschreiben, mit Sicherung in Backup/.
+    /// Zeilen: FLP <TAB> alter Pfad <TAB> neuer Pfad.
+    /// BEATOS_UMZUG_TSV=liste.tsv cargo test --lib flp_handprobe_umzug -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn flp_handprobe_umzug() {
+        let Ok(liste) = std::env::var("BEATOS_UMZUG_TSV") else { return };
+        let text = std::fs::read_to_string(liste).unwrap();
+        let text = text.trim_start_matches('\u{feff}');
+        let mut je_flp: std::collections::BTreeMap<String, Vec<(String, String)>> = Default::default();
+        for z in text.lines().filter(|z| !z.trim().is_empty()) {
+            let t: Vec<&str> = z.split('\t').collect();
+            assert!(std::path::Path::new(t[2]).is_file(), "Ziel fehlt: {}", t[2]);
+            je_flp.entry(t[0].into()).or_default().push((t[1].into(), t[2].into()));
+        }
+        for (flp, ersatz) in je_flp {
+            let n = flp_umschreiben(std::path::Path::new(&flp), &ersatz, "vor Bibliothek-Umbau").unwrap();
+            println!("{n} ersetzt: {flp}");
+        }
     }
 }
