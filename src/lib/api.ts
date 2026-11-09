@@ -223,6 +223,10 @@ export const api = {
     einsammeln: (eintraege: EinsammelEintrag[], archivePath: string, art: EinsammelArt = "archiv") =>
       invoke<EinsammelErgebnis>("einsammeln", { eintraege, archivePath, art }),
 
+    /** Fundstücke als „Weg“ markieren (bleiben im Altbestand) oder zurückholen. */
+    fundWeg: (paths: string[], weg: boolean) =>
+      invoke<void>("fund_weg", { paths, weg }),
+
     /** Einen Einsammel-Lauf zurücknehmen: nur die angelegten Kopien. */
     einsammelnRueckgaengig: (protokoll: string) =>
       invoke<string[]>("einsammeln_rueckgaengig", { protokoll }),

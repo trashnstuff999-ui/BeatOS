@@ -49,6 +49,18 @@ pub enum Art {
     Remix,
     /// Grau: fehlende Versionen in den bestehenden Archivordner nach 02_OLD
     Reste,
+    /// Gelb „Loop“: nach 06_SAMPLES als S0001, ohne Katalog-Eintrag
+    Sample,
+}
+
+fn sample_ordner(archiv: &Path) -> PathBuf {
+    archiv.parent().unwrap_or(archiv).join("06_SAMPLES")
+}
+
+/// „S0012 - Titel“ / „S0005 Project_0889“ → 12 / 5
+fn praefix_nummer(name: &str, p: char) -> Option<u32> {
+    let z: String = name.strip_prefix(p)?.chars().take_while(|c| c.is_ascii_digit()).collect();
+    z.parse().ok()
 }
 
 /// 07_REMIXES neben dem Archiv, wie 05_ARTISTS und 06_SAMPLES
@@ -150,11 +162,15 @@ pub(crate) fn einsammeln_mit(
 ) -> Result<EinsammelErgebnis, String> {
     let index = read_archive_index(archiv);
     let remixe = remix_ordner(archiv);
+    let samples = sample_ordner(archiv);
     // Nächste freie Nummer: über Archiv-Ordner und DB, damit nichts doppelt wird
     let mut naechste = index.iter().map(|e| e.catalog_id).max().unwrap_or(0);
     if art == Art::Remix {
         naechste = std::fs::read_dir(&remixe).into_iter().flatten().flatten()
             .filter_map(|e| remix_nummer(&e.file_name().to_string_lossy())).max().unwrap_or(0);
+    } else if art == Art::Sample {
+        naechste = std::fs::read_dir(&samples).into_iter().flatten().flatten()
+            .filter_map(|e| praefix_nummer(&e.file_name().to_string_lossy(), 'S')).max().unwrap_or(0);
     } else if let Ok(mut stmt) = conn.prepare("SELECT id FROM beats") {
         let ids = stmt.query_map([], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
         for id in ids.flatten() {
@@ -166,6 +182,7 @@ pub(crate) fn einsammeln_mit(
     let mut alle = Vec::new();
     collect_files(archiv, archiv, &mut alle);
     if art == Art::Remix { collect_files(&remixe, &remixe, &mut alle); }
+    if art == Art::Sample { collect_files(&samples, &samples, &mut alle); }
     for (size, p, _) in alle {
         if ist_audio(&p) { im_archiv.entry(size).or_default().push(p); }
     }
@@ -228,7 +245,11 @@ pub(crate) fn einsammeln_mit(
             continue;
         }
         naechste += 1;
-        let basis = if art == Art::Remix { Some(remixe.as_path()) } else { None };
+        let basis = match art {
+            Art::Remix => Some((remixe.as_path(), 'R')),
+            Art::Sample => Some((samples.as_path(), 'S')),
+            _ => None,
+        };
         match ein_song(conn, &e, &pfade, archiv, naechste, basis) {
             Ok(g) => {
                 erg.fertig.push(g);
@@ -276,7 +297,9 @@ fn reste(pfade: &[PathBuf], ordner: &Path, im_archiv: &HashMap<u64, Vec<PathBuf>
     Ok(Eingesammelt { beat_id: String::new(), ordner: ordner.to_string_lossy().to_string(), dateien: angelegt })
 }
 
-fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf], archiv: &Path, nr: u32, remix: Option<&Path>) -> Result<Eingesammelt, String> {
+/// `flach`: Remix (07_REMIXES, R) oder Sample (06_SAMPLES, S) statt Archiv
+fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf], archiv: &Path, nr: u32, flach: Option<(&Path, char)>) -> Result<Eingesammelt, String> {
+    let remix = flach;
     let key = e.key.as_deref().and_then(key_schreibweise);
     let bpm = e.bpm.filter(|b| (40..=300).contains(b));
     let titel = e.titel.trim();
@@ -297,7 +320,7 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
     let ordner_name = build_archive_folder_name(nr as i32, titel, key.as_deref(), bpm);
     let ziel = match remix {
         // Remixe flach: 07_REMIXES/R0001 - Titel [Key BPM]
-        Some(r) => r.join(format!("R{ordner_name}")),
+        Some((r, p)) => r.join(format!("{p}{ordner_name}")),
         // „2024/11_NOVEMBER“ kommt mit Schrägstrich, im Pfad einheitlich trennen
         None => archiv.join(year_month_from_secs(fertig).replace('/', std::path::MAIN_SEPARATOR_STR)).join(&ordner_name),
     };
@@ -340,7 +363,7 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
     // (App-Neustart, Strom) hinterlässt nie einen halben Beat im Archiv.
     // Der Unterstrich hält ihn aus dem Archiv-Index heraus.
     std::fs::create_dir_all(ziel.parent().unwrap()).map_err(|e| e.to_string())?;
-    let zwischen = ziel.parent().unwrap().join(format!("_einsammeln_{}{nr:04}.tmp", if remix.is_some() { "R" } else { "" }));
+    let zwischen = ziel.parent().unwrap().join(format!("_einsammeln_{}{nr:04}.tmp", match remix { Some((_, p)) => p.to_string(), None => String::new() }));
     if zwischen.exists() {
         // Rest eines abgebrochenen Laufs: den Namen legt nur diese Funktion an
         std::fs::remove_dir_all(&zwischen).map_err(|e| format!("{} lässt sich nicht aufräumen: {e}", zwischen.display()))?;
@@ -413,7 +436,7 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
         angelegt.push((json_pfad.to_string_lossy().to_string(), std::fs::metadata(&json_pfad).map(|m| m.len()).unwrap_or(0)));
 
         if remix.is_some() {
-            return Ok(()); // Remixe stehen nicht im Beat-Katalog
+            return Ok(()); // Remixe und Samples stehen nicht im Beat-Katalog
         }
         let (art, video) = detect_assets(&ziel);
         conn.execute(
@@ -623,6 +646,30 @@ mod tests {
         assert!(beat.join("Bloom [D#m 138].mp3").is_file());
         rueckgaengig_mit(&conn, Path::new(r.protokoll.as_ref().unwrap())).unwrap();
         assert!(!ziel.exists());
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn loop_nach_samples() {
+        let t = std::env::temp_dir().join(format!("beatos_einsammeln_loop_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let arch = t.join("LIB").join("03_ARCHIVE");
+        fs::create_dir_all(&arch).unwrap();
+        fs::create_dir_all(t.join("LIB/06_SAMPLES/S0005 Project_0889")).unwrap();
+        fs::create_dir_all(t.join("LIB/06_SAMPLES/_MIDI")).unwrap();
+        datei(&t.join("alt/198_Loop.mp3"), b"loop");
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE beats (id TEXT PRIMARY KEY, name TEXT, path TEXT, bpm REAL, key TEXT, status TEXT, notes TEXT,
+            created_date TEXT, modified_date TEXT, favorite INTEGER, has_artwork INTEGER, has_video INTEGER, alte_id TEXT, begonnen TEXT);").unwrap();
+        let e = EinsammelEintrag { id: Some(198), titel: "Dark Loop".into(), key: Some("Amin".into()), bpm: Some(140),
+            dateien: vec![t.join("alt/198_Loop.mp3").to_string_lossy().to_string()], archiv: None };
+        let r = einsammeln_mit(&conn, vec![e], &arch, &t.join("_BEATOS"), Art::Sample).unwrap();
+        assert!(r.fehler.is_none(), "{:?}", r.fehler);
+        let ziel = PathBuf::from(&r.fertig[0].ordner);
+        assert_eq!(ziel, t.join("LIB/06_SAMPLES/S0006 - Dark Loop [Am 140]"));
+        assert!(ziel.join("Dark Loop [Am 140].mp3").is_file());
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
         let _ = fs::remove_dir_all(&t);
     }
 

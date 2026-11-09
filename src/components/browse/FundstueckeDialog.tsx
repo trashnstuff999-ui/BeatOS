@@ -13,11 +13,12 @@ import { useSettings, parseProductionPaths } from "../../contexts/SettingsContex
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useDialog } from "../../contexts/DialogContext";
 import type { Ampel, Fund, EinsammelErgebnis, EinsammelArt } from "../../types/fundstuecke";
+import { GelbAnsicht } from "./GelbAnsicht";
 
 const FARBE: Record<Ampel, string> = { gruen: C.mint, gelb: C.primary, rot: C.error, grau: C.onSecondaryFixedVar };
 const NAME: Record<Ampel, string> = { gruen: "Grün", gelb: "Gelb", rot: "Rot", grau: "Im Archiv" };
 
-/** Was der Knopf je Ampelfarbe tut. Gelb entscheidest du pro Eintrag (kommt noch). */
+/** Was der Knopf je Ampelfarbe tut. Gelb entscheidest du pro Eintrag. */
 const AKTION: Partial<Record<Ampel, { art: EinsammelArt; knopf: string; text: string }>> = {
   gruen: { art: "archiv", knopf: "Einsammeln", text: "Kopiert ins Archiv, jede Kopie wird geprüft. Der Altbestand bleibt, Rückgängig ist möglich." },
   rot: { art: "remix", knopf: "Nach Remixe", text: "Kopiert nach 07_REMIXES als R-Nummer, nicht in den Katalog. Der Altbestand bleibt, Rückgängig ist möglich." },
@@ -37,22 +38,79 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
   const [suche, setSuche] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const [letzter, setLetzter] = useState<EinsammelErgebnis | null>(null);
+  // Je Datei: schon entschieden (eingesammelt) oder „Weg“. So verschwinden
+  // Einträge sofort, ohne neuen Scan, und Teile gemischter Einträge einzeln.
+  const [erledigt, setErledigt] = useState<Set<string>>(new Set());
+  const [wegPfade, setWegPfade] = useState<Set<string>>(new Set());
+  const [zeigeWeg, setZeigeWeg] = useState(false);
 
   const laden = useCallback(() => {
     if (roots.length === 0 || !settings.archivePath) return;
     setFunde(null);
-    api.archive.fundstuecke(roots, settings.archivePath).then(setFunde, e => setFehler(String(e)));
+    api.archive.fundstuecke(roots, settings.archivePath).then(fs => {
+      setFunde(fs);
+      setErledigt(new Set());
+      setWegPfade(new Set(fs.filter(f => f.weg).flatMap(f => f.dateien.map(d => d.path))));
+    }, e => setFehler(String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.altbestandPaths, settings.archivePath]);
   useEffect(laden, [laden]);
 
+  const teilmenge = useCallback((weg: boolean) => (funde ?? [])
+    .map(f => ({ ...f, weg, dateien: f.dateien.filter(d => !erledigt.has(d.path) && wegPfade.has(d.path) === weg) }))
+    .filter(f => f.dateien.length > 0), [funde, erledigt, wegPfade]);
   // Suche über Titel, Nummer und Fundort: „600-699" grenzt den Probelauf ein
-  const gefiltert = useMemo(() => {
+  const suchen = useCallback((liste: Fund[]) => {
     const q = suche.trim().toLowerCase();
-    if (!q) return funde ?? [];
-    return (funde ?? []).filter(f =>
+    if (!q) return liste;
+    return liste.filter(f =>
       f.titel.toLowerCase().includes(q) || String(f.id ?? "") === q || f.dateien.some(d => d.path.toLowerCase().includes(q)));
-  }, [funde, suche]);
+  }, [suche]);
+  const gefiltert = useMemo(() => suchen(teilmenge(false)), [suchen, teilmenge]);
+  const weggelegt = useMemo(() => suchen(teilmenge(true)), [suchen, teilmenge]);
+
+  /** Ein Eintrag (oder Teil davon) aus Gelb: Song, Loop oder Gleich wie … */
+  const sammelnEinzeln = async (f: Fund, art: EinsammelArt, titel: string): Promise<boolean> => {
+    try {
+      const r = await api.archive.einsammeln(
+        [{ id: f.id, titel, key: f.key, bpm: f.bpm, dateien: f.dateien.map(d => d.path), archiv: f.archiv }],
+        settings.archivePath, art,
+      );
+      if (r.fehler) { melde(r.fehler, "fehler"); return false; }
+      if (r.fertig.length === 0) { melde(r.ausgelassen[0] ?? "Nichts eingesammelt", "info"); return false; }
+      setLetzter(r);
+      setErledigt(prev => new Set([...prev, ...f.dateien.map(d => d.path)]));
+      const ziel = r.fertig[0].ordner.split(/[\\/]/).pop();
+      melde(`${ziel} angelegt`, "erfolg");
+      onEingesammelt?.();
+      return true;
+    } catch (e) {
+      melde(`Einsammeln fehlgeschlagen: ${String(e)}`, "fehler");
+      return false;
+    }
+  };
+
+  const wegLegen = async (fs: Fund[], weg: boolean) => {
+    const pfade = fs.flatMap(f => f.dateien.map(d => d.path));
+    if (weg && fs.length > 1) {
+      const ok = await frage({
+        titel: `${fs.length} Einträge weglegen`,
+        text: "Sie bleiben im Altbestand und gehen später mit nach _ALT. Zurückholen geht jederzeit.",
+        bestaetigen: "Weglegen",
+      });
+      if (!ok) return;
+    }
+    try {
+      await api.archive.fundWeg(pfade, weg);
+      setWegPfade(prev => {
+        const n = new Set(prev);
+        pfade.forEach(p => (weg ? n.add(p) : n.delete(p)));
+        return n;
+      });
+    } catch (e) {
+      melde(`Weglegen fehlgeschlagen: ${String(e)}`, "fehler");
+    }
+  };
   const zahl = useMemo(() => {
     const z: Record<Ampel, number> = { gruen: 0, gelb: 0, rot: 0, grau: 0 };
     gefiltert.forEach(f => z[f.ampel]++);
@@ -141,6 +199,11 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
               onChange={setAmpel}
               options={(Object.keys(NAME) as Ampel[]).map(a => ({ value: a, label: `${NAME[a]} ${zahl[a]}`, color: FARBE[a] }))}
             />
+            {ampel === "gelb" && (
+              <Button size="sm" variant={zeigeWeg ? "primary" : "ghost"} onClick={() => setZeigeWeg(!zeigeWeg)}>
+                Weggelegt {weggelegt.filter(f => f.ampel === "gelb").length}
+              </Button>
+            )}
             <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
               <Search size={14} color={C.onSecondaryFixedVar} style={{ position: "absolute", left: 9, top: 9 }} />
               <input
@@ -155,8 +218,13 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: "60vh", overflowY: "auto" }}>
-            {liste.map(f => <Zeile key={`${f.id}:${f.titel}:${f.dateien[0].path}`} f={f} />)}
-            {liste.length === 0 && <Hinweis>Nichts in {NAME[ampel]}.</Hinweis>}
+            {ampel === "gelb" ? (
+              <GelbAnsicht
+                funde={zeigeWeg ? weggelegt.filter(f => f.ampel === "gelb") : liste}
+                Zeile={Zeile} sammeln={sammelnEinzeln} weg={wegLegen} zeigeWeg={zeigeWeg}
+              />
+            ) : liste.map(f => <Zeile key={`${f.id}:${f.titel}:${f.dateien[0].path}`} f={f} />)}
+            {ampel !== "gelb" && liste.length === 0 && <Hinweis>Nichts in {NAME[ampel]}.</Hinweis>}
           </div>
         </div>
       )}

@@ -34,6 +34,10 @@ pub struct FundDatei {
     pub modified: i64,
     pub flp: bool,
     pub im_archiv: bool,
+    /// Was der Name dieser Datei hergibt: zum Aufteilen gemischter Einträge
+    pub titel: Option<String>,
+    pub key: Option<String>,
+    pub bpm: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,6 +58,8 @@ pub struct Fund {
     pub fertig: Option<String>,
     /// Exporte zuerst, neueste zuerst
     pub dateien: Vec<FundDatei>,
+    /// Alle Dateien als „Weg“ markiert (bleibt im Altbestand, Scheibe 10)
+    pub weg: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -233,6 +239,37 @@ fn ist_remix(p: &Path) -> bool {
     ["remix", "mashup", "bootleg"].iter().any(|w| s.contains(w))
 }
 
+/// „Weg“: Dateien, die nicht eingesammelt werden. Sie bleiben im Altbestand
+/// und gehen in Scheibe 10 mit nach _ALT. Pfade klein geschrieben.
+fn weg_tabelle(conn: &rusqlite::Connection) -> Result<(), String> {
+    conn.execute("CREATE TABLE IF NOT EXISTS fund_weg (path TEXT PRIMARY KEY, seit TEXT DEFAULT CURRENT_TIMESTAMP)", [])
+        .map(|_| ()).map_err(|e| e.to_string())
+}
+
+fn weg_lesen() -> HashSet<String> {
+    let Ok(conn) = crate::db::open_db() else { return HashSet::new() };
+    if weg_tabelle(&conn).is_err() { return HashSet::new(); }
+    let Ok(mut stmt) = conn.prepare("SELECT path FROM fund_weg") else { return HashSet::new() };
+    stmt.query_map([], |r| r.get::<_, String>(0)).map(|z| z.flatten().collect()).unwrap_or_default()
+}
+
+/// Dateien als „Weg“ markieren oder zurückholen
+#[tauri::command]
+pub fn fund_weg(paths: Vec<String>, weg: bool) -> Result<(), String> {
+    let mut conn = crate::db::open_db().map_err(|e| e.to_string())?;
+    weg_tabelle(&conn)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    for p in paths {
+        let p = p.to_lowercase();
+        if weg {
+            tx.execute("INSERT OR IGNORE INTO fund_weg (path) VALUES (?1)", [p]).map_err(|e| e.to_string())?;
+        } else {
+            tx.execute("DELETE FROM fund_weg WHERE path = ?1", [p]).map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
 /// Gleicher Song dem Titel nach? „MISTAKES" passt zu „MISTAKE", „LightsOut"
 /// zu „Lights Out". Leere Titel passen nie.
 pub(crate) fn titel_passt(a: &str, b: &str) -> bool {
@@ -290,7 +327,14 @@ pub async fn scan_fundstuecke(app: tauri::AppHandle, roots: Vec<String>, archive
             }
         }
     }
-    tauri::async_runtime::spawn_blocking(move || fundstuecke(&roots, Path::new(&archive_path)))
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut out = fundstuecke(&roots, Path::new(&archive_path))?;
+        let weg = weg_lesen();
+        for f in &mut out {
+            f.weg = !weg.is_empty() && f.dateien.iter().all(|d| weg.contains(&d.path.to_lowercase()));
+        }
+        Ok(out)
+    })
         .await
         .map_err(|e| format!("Fundstücke-Scan abgestürzt: {e}"))?
 }
@@ -409,7 +453,12 @@ fn bewerten(
         .map(|s| crate::utils::secs_to_date(s as u64));
     let fund = |ampel, grund: &str, archiv| Fund {
         id, titel: titel.clone(), key: key.clone(), bpm, ampel, grund: grund.to_string(), archiv, nur_hier, fertig: fertig.clone(),
-        dateien: fs.iter().zip(&treffer).map(|(f, t)| FundDatei { path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some() }).collect(),
+        dateien: fs.iter().zip(&treffer).map(|(f, t)| FundDatei {
+            path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some(),
+            titel: f.werk.as_ref().map(|w| w.titel.clone()).filter(|t| !t.is_empty()),
+            key: f.werk.as_ref().and_then(|w| w.key.clone()), bpm: f.werk.as_ref().and_then(|w| w.bpm),
+        }).collect(),
+        weg: false,
     };
 
     // Grau: dieselbe Datei liegt im Archiv, und zwar in einem Beat mit diesem

@@ -9,6 +9,10 @@ export interface FundDatei {
   modified: number;
   flp: boolean;
   im_archiv: boolean;
+  /** Was der Dateiname hergibt: zum Aufteilen gemischter Einträge */
+  titel: string | null;
+  key: string | null;
+  bpm: number | null;
 }
 
 export interface Fund {
@@ -25,6 +29,8 @@ export interface Fund {
   fertig: string | null;
   /** Exporte zuerst, neueste zuerst */
   dateien: FundDatei[];
+  /** Als „Weg“ markiert: bleibt im Altbestand */
+  weg: boolean;
 }
 
 export interface EinsammelEintrag {
@@ -38,7 +44,7 @@ export interface EinsammelEintrag {
 }
 
 /** archiv = Grün ins Archiv, remix = Rot nach 07_REMIXES, reste = Grau nach 02_OLD */
-export type EinsammelArt = "archiv" | "remix" | "reste";
+export type EinsammelArt = "archiv" | "remix" | "reste" | "sample";
 
 export interface EinsammelErgebnis {
   fertig: { beat_id: string; ordner: string; dateien: [string, number][] }[];
