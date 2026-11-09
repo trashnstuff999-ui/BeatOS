@@ -116,10 +116,40 @@ fn herkunft_aus_ordner(beat_path: &Path) -> (Option<String>, Option<String>) {
     let json = flp_subdir(beat_path)
         .and_then(|d| std::fs::read_to_string(d.join("create_date.json")).ok())
         .and_then(|s| serde_json::from_str::<CreateDateJson>(&s).ok());
-    match json {
+    let (alte_id, begonnen) = match json {
         Some(j) => herkunft(&j),
         None => herkunft_ohne_protokoll(beat_path),
+    };
+    // FLs eigenes Anlegedatum, wenn früher: Dateidaten verschieben sich beim
+    // Neuspeichern und Kopieren, das Anlegedatum nie
+    let angelegt = flps_im_beat(beat_path).iter()
+        .filter_map(|p| std::fs::read(p).ok().and_then(|b| crate::commands::flp::flp_angelegt(&b)))
+        .min();
+    let begonnen = match (begonnen, angelegt) {
+        (Some(b), Some(a)) => Some(b.min(a)),
+        (b, a) => b.or(a),
+    };
+    (alte_id, begonnen)
+}
+
+/// Alle FLPs des Beats außer in Samples/ und Audio/ (Backups zählen mit:
+/// auch die tragen das Anlegedatum)
+fn flps_im_beat(beat_path: &Path) -> Vec<PathBuf> {
+    fn sammeln(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.filter_map(|e| e.ok()) {
+            let p = e.path();
+            if p.is_dir() {
+                let n = e.file_name().to_string_lossy().to_lowercase();
+                if n != "samples" && n != "audio" { sammeln(&p, out); }
+            } else if crate::utils::is_flp(&p) {
+                out.push(p);
+            }
+        }
     }
+    let mut out = Vec::new();
+    sammeln(beat_path, &mut out);
+    out
 }
 
 /// Aus dem alten System übernommene Beats haben kein Protokoll. Ihre eigenen
@@ -159,9 +189,14 @@ fn herkunft_ohne_protokoll(beat_path: &Path) -> (Option<String>, Option<String>)
 /// haben. Überschreibt nichts. Läuft beim Start, braucht nur die DB-Pfade.
 pub fn herkunft_nachtragen() -> Result<usize, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT id, path FROM beats WHERE path IS NOT NULL AND (alte_id IS NULL OR begonnen IS NULL)")
-        .map_err(|e| e.to_string())?;
+    // Einmal über alle (FL-Anlegedatum kam am 09.11. dazu), danach nur Lücken
+    let einmal = conn.query_row("SELECT value FROM app_settings WHERE key = 'herkunft_flp_v1'", [], |r| r.get::<_, String>(0)).is_err();
+    let sql = if einmal {
+        "SELECT id, path FROM beats WHERE path IS NOT NULL"
+    } else {
+        "SELECT id, path FROM beats WHERE path IS NOT NULL AND (alte_id IS NULL OR begonnen IS NULL)"
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let zeilen: Vec<(String, String)> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
         .map_err(|e| e.to_string())?
@@ -171,10 +206,17 @@ pub fn herkunft_nachtragen() -> Result<usize, String> {
     for (id, pfad) in zeilen {
         let (alte_id, begonnen) = herkunft_aus_ordner(Path::new(&pfad));
         if alte_id.is_none() && begonnen.is_none() { continue; }
+        // Begonnen darf nur früher werden, nie später; die alte ID bleibt, wie sie ist
         n += conn.execute(
-            "UPDATE beats SET alte_id = COALESCE(alte_id, ?1), begonnen = COALESCE(begonnen, ?2) WHERE id = ?3",
+            "UPDATE beats SET alte_id = COALESCE(alte_id, ?1),
+                              begonnen = CASE WHEN begonnen IS NULL OR ?2 < begonnen THEN ?2 ELSE begonnen END
+             WHERE id = ?3 AND (alte_id IS NULL OR begonnen IS NULL OR ?2 < begonnen)",
             rusqlite::params![alte_id, begonnen, id],
         ).map_err(|e| e.to_string())?;
+    }
+    drop(stmt);
+    if einmal {
+        let _ = conn.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('herkunft_flp_v1', '1')", []);
     }
     Ok(n)
 }

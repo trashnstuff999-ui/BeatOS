@@ -161,6 +161,20 @@ pub(crate) fn audio_pfade(b: &[u8]) -> Vec<String> {
     out
 }
 
+/// Wann FL das Projekt angelegt hat (JJJJ-MM-TT). Ereignis 237, 16 Bytes:
+/// Anlegedatum als f64 in Tagen seit 1899-12-30, dann die Arbeitszeit. Bleibt
+/// beim Kopieren und Neuspeichern gleich, anders als das Dateidatum. Per
+/// Bytefolge gesucht, aus demselben Grund wie die Audio-Pfade oben.
+pub(crate) fn flp_angelegt(b: &[u8]) -> Option<String> {
+    (0..b.len().saturating_sub(18)).find_map(|i| {
+        if b[i] != 237 || b[i + 1] != 16 { return None; }
+        let tage = f64::from_le_bytes(b[i + 2..i + 10].try_into().ok()?);
+        // 1996 bis 2100: alles andere ist kein Datum, sondern Zufall im Byte-Strom
+        (35000.0..75000.0).contains(&tage)
+            .then(|| crate::utils::secs_to_date(((tage - 25569.0) * 86400.0) as u64))
+    })
+}
+
 /// Pfade austauschen (alt → neu). Gibt die neue Datei und die Zahl der
 /// Ersetzungen zurück; None, wenn die Datei kein FLP-Aufbau hat.
 pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(Vec<u8>, usize)> {
@@ -210,6 +224,18 @@ pub(crate) fn flp_umschreiben(flp: &std::path::Path, ersatz: &[(String, String)]
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn anlegedatum_lesen() {
+        // 45333 Tage nach 1899-12-30 = 11.02.2024 (wie 601.flp), davor Rauschen mit 237
+        let mut b = vec![237, 3, 1, 2, 3];
+        b.extend([237, 16]);
+        b.extend(45333.5f64.to_le_bytes());
+        b.extend((47.0f64 / 1440.0).to_le_bytes());
+        b.extend([0; 4]);
+        assert_eq!(flp_angelegt(&b).as_deref(), Some("2024-02-11"));
+        assert_eq!(flp_angelegt(&[237, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), None);
+    }
 
     #[test]
     fn audio_pfade_lesen_und_ersetzen() {

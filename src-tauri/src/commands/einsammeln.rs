@@ -138,6 +138,14 @@ pub(crate) fn einsammeln_mit(
     }
 
     let mut erg = EinsammelErgebnis { fertig: Vec::new(), ausgelassen: Vec::new(), fehler: None, protokoll: None };
+    // Nach jedem Song geschrieben: bricht der Lauf ab (App-Neustart), bleibt
+    // Rückgängig für alles bis dahin möglich
+    let protokoll = protokoll_dir.join(format!("einsammeln_{}.json", chrono_frei_stempel()));
+    let schreiben = |fertig: &Vec<Eingesammelt>| -> Result<(), String> {
+        std::fs::create_dir_all(protokoll_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&protokoll, serde_json::to_string_pretty(fertig).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("Protokoll nicht geschrieben: {e}"))
+    };
     for e in eintraege {
         let name = format!("{}{}", e.id.map(|i| format!("[{i}] ")).unwrap_or_default(), e.titel);
         let pfade: Vec<PathBuf> = e.dateien.iter().map(PathBuf::from).collect();
@@ -159,7 +167,11 @@ pub(crate) fn einsammeln_mit(
         }
         naechste += 1;
         match ein_song(conn, &e, &pfade, archiv, naechste) {
-            Ok(g) => erg.fertig.push(g),
+            Ok(g) => {
+                erg.fertig.push(g);
+                schreiben(&erg.fertig)?;
+                erg.protokoll = Some(protokoll.to_string_lossy().to_string());
+            }
             Err(f) => {
                 erg.fehler = Some(format!("{name}: {f}"));
                 break; // Plan: bei einer Abweichung bricht der Lauf ab
@@ -167,14 +179,6 @@ pub(crate) fn einsammeln_mit(
         }
     }
 
-    if !erg.fertig.is_empty() {
-        let stempel = chrono_frei_stempel();
-        let datei = protokoll_dir.join(format!("einsammeln_{stempel}.json"));
-        std::fs::create_dir_all(protokoll_dir).map_err(|e| e.to_string())?;
-        std::fs::write(&datei, serde_json::to_string_pretty(&erg.fertig).map_err(|e| e.to_string())?)
-            .map_err(|e| format!("Protokoll nicht geschrieben: {e}"))?;
-        erg.protokoll = Some(datei.to_string_lossy().to_string());
-    }
     Ok(erg)
 }
 
@@ -195,6 +199,12 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
     let fertig = pfade.iter().filter(|p| ist_audio(p)).map(|p| datum(p)).min().filter(|&s| s != u64::MAX)
         .ok_or("kein Datum")?;
     let begonnen = pfade.iter().map(|p| datum(p)).min().unwrap_or(fertig).min(fertig);
+    // FLs eigenes Anlegedatum schlägt das Dateidatum: FLPs werden neu gespeichert
+    let begonnen_tag = pfade.iter().filter(|p| ist_flp(p))
+        .filter_map(|p| std::fs::read(p).ok().and_then(|b| crate::commands::flp::flp_angelegt(&b)))
+        .chain([secs_to_date(begonnen)])
+        .min()
+        .unwrap();
 
     let ordner_name = build_archive_folder_name(nr as i32, titel, key.as_deref(), bpm);
     // „2024/11_NOVEMBER“ kommt mit Schrägstrich, im Pfad einheitlich trennen
@@ -234,17 +244,38 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
         }
     }
 
-    let mut angelegt: Vec<(String, u64)> = Vec::new();
-    let ergebnis = (|| -> Result<(), String> {
+    // Erst in einen Zwischenordner, geprüft, dann umbenennen: ein Abbruch
+    // (App-Neustart, Strom) hinterlässt nie einen halben Beat im Archiv.
+    // Der Unterstrich hält ihn aus dem Archiv-Index heraus.
+    let zwischen = ziel.parent().unwrap().join(format!("_einsammeln_{nr:04}.tmp"));
+    if zwischen.exists() {
+        // Rest eines abgebrochenen Laufs: den Namen legt nur diese Funktion an
+        std::fs::remove_dir_all(&zwischen).map_err(|e| format!("{} lässt sich nicht aufräumen: {e}", zwischen.display()))?;
+    }
+    let mut kopiert: Vec<PathBuf> = Vec::new(); // endgültige Pfade
+    let kopieren = (|| -> Result<(), String> {
         for (q, z) in &plan {
-            let z = unique_dest(z.parent().unwrap(), &z.file_name().unwrap().to_string_lossy());
-            std::fs::create_dir_all(z.parent().unwrap()).map_err(|e| e.to_string())?;
-            std::fs::copy(q, &z).map_err(|err| format!("{} nicht kopiert: {err}", q.display()))?;
-            angelegt.push((z.to_string_lossy().to_string(), std::fs::metadata(&z).map(|m| m.len()).unwrap_or(0)));
-            if !same_content(q, &z) {
+            let rel = z.strip_prefix(&ziel).unwrap();
+            let tmp = zwischen.join(rel);
+            let tmp = unique_dest(tmp.parent().unwrap(), &tmp.file_name().unwrap().to_string_lossy());
+            std::fs::create_dir_all(tmp.parent().unwrap()).map_err(|e| e.to_string())?;
+            std::fs::copy(q, &tmp).map_err(|err| format!("{} nicht kopiert: {err}", q.display()))?;
+            if !same_content(q, &tmp) {
                 return Err(format!("Kopie von {} weicht ab", q.display()));
             }
+            kopiert.push(ziel.join(tmp.strip_prefix(&zwischen).unwrap()));
         }
+        std::fs::rename(&zwischen, &ziel).map_err(|e| format!("{} nicht angelegt: {e}", ziel.display()))
+    })();
+    if let Err(f) = kopieren {
+        let _ = std::fs::remove_dir_all(&zwischen);
+        return Err(f);
+    }
+
+    let mut angelegt: Vec<(String, u64)> = kopiert.iter()
+        .map(|z| (z.to_string_lossy().to_string(), std::fs::metadata(z).map(|m| m.len()).unwrap_or(0)))
+        .collect();
+    let ergebnis = (|| -> Result<(), String> {
         // FLP-Verweise auf mitkopierte Dateien auf die Kopien umstellen
         let umzug: HashMap<String, String> = plan.iter().zip(&angelegt)
             .map(|((q, _), (z, _))| (vergleichsform(&q.to_string_lossy()), z.clone()))
@@ -280,7 +311,7 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
                 "accessed_at": secs_to_date(0),
             })).collect::<Vec<_>>(),
             "alte_id": e.id.map(|i| i.to_string()),
-            "begonnen": secs_to_date(begonnen),
+            "begonnen": begonnen_tag,
             "fertig": secs_to_date(fertig),
         });
         let json_pfad = saves.join("create_date.json");
@@ -295,7 +326,7 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
             rusqlite::params![
                 format!("{nr:04}"), titel, ziel.to_string_lossy(), bpm, key,
                 format!("Eingesammelt aus {}", quelle.display()), secs_to_date(fertig),
-                art as i32, video as i32, e.id.map(|i| i.to_string()), secs_to_date(begonnen),
+                art as i32, video as i32, e.id.map(|i| i.to_string()), begonnen_tag,
             ],
         ).map_err(|e| format!("DB: {e}"))?;
         Ok(())
