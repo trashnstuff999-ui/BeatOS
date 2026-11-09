@@ -452,14 +452,28 @@ fn leere_ordner_weg(wurzel: &Path) {
 /// sind wie angelegt, leere Ordner weg, DB-Zeile weg. Was du seitdem
 /// dazugelegt hast (Cover …), bleibt mit seinem Ordner stehen.
 #[tauri::command(async)]
-pub fn einsammeln_rueckgaengig(protokoll: String) -> Result<Vec<String>, String> {
+pub fn einsammeln_rueckgaengig(protokoll: String, beat_ids: Option<Vec<String>>) -> Result<Vec<String>, String> {
+    crate::db::backup_db()?;
     let conn = open_db().map_err(|e| e.to_string())?;
-    rueckgaengig_mit(&conn, Path::new(&protokoll))
+    rueckgaengig_teil(&conn, Path::new(&protokoll), beat_ids.as_deref())
 }
 
 pub(crate) fn rueckgaengig_mit(conn: &rusqlite::Connection, protokoll: &Path) -> Result<Vec<String>, String> {
+    rueckgaengig_teil(conn, protokoll, None)
+}
+
+/// `nur`: nur diese Beats zurücknehmen; die übrigen bleiben im Protokoll,
+/// damit sie später noch zurückgehen
+pub(crate) fn rueckgaengig_teil(conn: &rusqlite::Connection, protokoll: &Path, nur: Option<&[String]>) -> Result<Vec<String>, String> {
     let roh = std::fs::read_to_string(protokoll).map_err(|e| format!("Protokoll nicht lesbar: {e}"))?;
-    let laeufe: Vec<Eingesammelt> = serde_json::from_str(&roh).map_err(|e| e.to_string())?;
+    let alle: Vec<Eingesammelt> = serde_json::from_str(&roh).map_err(|e| e.to_string())?;
+    let (laeufe, bleiben): (Vec<Eingesammelt>, Vec<Eingesammelt>) = alle.into_iter()
+        .partition(|g| nur.is_none_or(|ids| ids.contains(&g.beat_id)));
+    if let Some(ids) = nur {
+        if let Some(fehlt) = ids.iter().find(|i| !laeufe.iter().any(|g| &g.beat_id == *i)) {
+            return Err(format!("{fehlt} steht nicht in diesem Protokoll"));
+        }
+    }
     let mut hinweise = Vec::new();
     for g in &laeufe {
         for (d, groesse) in &g.dateien {
@@ -482,8 +496,16 @@ pub(crate) fn rueckgaengig_mit(conn: &rusqlite::Connection, protokoll: &Path) ->
         conn.execute("DELETE FROM beats WHERE id = ?1 AND path = ?2", rusqlite::params![g.beat_id, g.ordner])
             .map_err(|e| e.to_string())?;
     }
-    let erledigt = protokoll.with_extension("rueckgaengig.json");
-    let _ = std::fs::rename(protokoll, erledigt);
+    if bleiben.is_empty() {
+        let erledigt = protokoll.with_extension("rueckgaengig.json");
+        let _ = std::fs::rename(protokoll, erledigt);
+    } else {
+        // Zurückgenommene getrennt aufheben, der Rest bleibt rücknehmbar
+        let weg = unique_dest(protokoll.parent().unwrap(), &format!("{}.teil-rueckgaengig.json", protokoll.file_stem().unwrap().to_string_lossy()));
+        std::fs::write(&weg, serde_json::to_string_pretty(&laeufe).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        std::fs::write(protokoll, serde_json::to_string_pretty(&bleiben).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("Protokoll nicht aktualisiert: {e}"))?;
+    }
     Ok(hinweise)
 }
 
@@ -602,6 +624,46 @@ mod tests {
         rueckgaengig_mit(&conn, Path::new(r.protokoll.as_ref().unwrap())).unwrap();
         assert!(!ziel.exists());
         let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn teil_rueckgaengig() {
+        let t = std::env::temp_dir().join(format!("beatos_einsammeln_teil_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let arch = t.join("archiv");
+        fs::create_dir_all(&arch).unwrap();
+        let alt = t.join("alt");
+        datei(&alt.join("[630] Bloom - 138 D#m.mp3"), b"b");
+        datei(&alt.join("397 . Master.mp3"), b"m");
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE beats (id TEXT PRIMARY KEY, name TEXT, path TEXT, bpm REAL, key TEXT, status TEXT, notes TEXT,
+            created_date TEXT, modified_date TEXT, favorite INTEGER, has_artwork INTEGER, has_video INTEGER, alte_id TEXT, begonnen TEXT);").unwrap();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+        let ein = |id: u32, titel: &str, d: &str| EinsammelEintrag { id: Some(id), titel: titel.into(), key: None, bpm: None, dateien: vec![s(&alt.join(d))], archiv: None };
+        let r = einsammeln_mit(&conn, vec![ein(630, "Bloom", "[630] Bloom - 138 D#m.mp3"), ein(397, "Master", "397 . Master.mp3")], &arch, &t.join("_BEATOS"), Art::Archiv).unwrap();
+        let p = PathBuf::from(r.protokoll.unwrap());
+        let master = r.fertig.iter().find(|g| g.ordner.contains("Master")).unwrap().clone();
+        let bloom = r.fertig.iter().find(|g| g.ordner.contains("Bloom")).unwrap().clone();
+        rueckgaengig_teil(&conn, &p, Some(&[master.beat_id.clone()])).unwrap();
+        assert!(!Path::new(&master.ordner).exists());
+        assert!(Path::new(&bloom.ordner).exists());
+        // Bloom bleibt im Protokoll und lässt sich weiter zurücknehmen
+        rueckgaengig_mit(&conn, &p).unwrap();
+        assert!(!Path::new(&bloom.ordner).exists());
+        assert!(rueckgaengig_teil(&conn, &p, Some(&["0001".into()])).is_err());
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    /// Einen Teil eines echten Laufs zurücknehmen (echte DB!):
+    /// BEATOS_PROTOKOLL, BEATOS_IDS (mit , getrennt)
+    #[test]
+    #[ignore]
+    fn teil_rueckgaengig_echt() {
+        let db = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap()).join("BeatOS").join("beats.db");
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let ids: Vec<String> = std::env::var("BEATOS_IDS").unwrap().split(',').map(|s| s.trim().to_string()).collect();
+        let hinweise = rueckgaengig_teil(&conn, Path::new(&std::env::var("BEATOS_PROTOKOLL").unwrap()), Some(&ids)).unwrap();
+        println!("{} zurückgenommen, Hinweise: {hinweise:?}", ids.len());
     }
 
     /// Echter Song-Ordner (BEATOS_SONG_DIR), als Kopie in einem Testordner
