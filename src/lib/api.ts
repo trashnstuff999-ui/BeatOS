@@ -20,7 +20,7 @@ import type { Stats, DashboardActions, StatsDetails } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
 import type { ArtistsScan, Altbestand } from "../types/artists";
-import type { Fund, EinsammelEintrag, EinsammelErgebnis } from "../types/fundstuecke";
+import type { Fund, EinsammelEintrag, EinsammelErgebnis, EinsammelArt } from "../types/fundstuecke";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -220,8 +220,8 @@ export const api = {
       invoke<Fund[]>("scan_fundstuecke", { roots, archivePath }),
 
     /** Fundstücke ins Archiv kopieren (Original bleibt). Liefert das Protokoll für Rückgängig. */
-    einsammeln: (eintraege: EinsammelEintrag[], archivePath: string) =>
-      invoke<EinsammelErgebnis>("einsammeln", { eintraege, archivePath }),
+    einsammeln: (eintraege: EinsammelEintrag[], archivePath: string, art: EinsammelArt = "archiv") =>
+      invoke<EinsammelErgebnis>("einsammeln", { eintraege, archivePath, art }),
 
     /** Einen Einsammel-Lauf zurücknehmen: nur die angelegten Kopien. */
     einsammelnRueckgaengig: (protokoll: string) =>

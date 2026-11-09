@@ -34,6 +34,32 @@ pub struct EinsammelEintrag {
     pub key: Option<String>,
     pub bpm: Option<i32>,
     pub dateien: Vec<String>,
+    /// Bei Grau: der Archivordner, in den die Reste gehören
+    #[serde(default)]
+    pub archiv: Option<String>,
+}
+
+/// Wohin ein Lauf sammelt
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Art {
+    /// Grün: neuer Beat im Archiv, mit Katalognummer
+    Archiv,
+    /// Rot: nach 07_REMIXES als R0001, ohne Katalog-Eintrag
+    Remix,
+    /// Grau: fehlende Versionen in den bestehenden Archivordner nach 02_OLD
+    Reste,
+}
+
+/// 07_REMIXES neben dem Archiv, wie 05_ARTISTS und 06_SAMPLES
+fn remix_ordner(archiv: &Path) -> PathBuf {
+    archiv.parent().unwrap_or(archiv).join("07_REMIXES")
+}
+
+/// „R0012 - Titel" → 12
+fn remix_nummer(name: &str) -> Option<u32> {
+    let z: String = name.strip_prefix('R')?.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if z.len() == 4 { z.parse().ok() } else { None }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -105,14 +131,14 @@ fn song_ordner(e: &EinsammelEintrag) -> Option<PathBuf> {
 }
 
 #[tauri::command(async)]
-pub fn einsammeln(eintraege: Vec<EinsammelEintrag>, archive_path: String) -> Result<EinsammelErgebnis, String> {
+pub fn einsammeln(eintraege: Vec<EinsammelEintrag>, archive_path: String, art: Option<Art>) -> Result<EinsammelErgebnis, String> {
     let archiv = Path::new(&archive_path);
     if !archiv.is_dir() {
         return Err(format!("Archiv-Ordner nicht gefunden: {}", archiv.display()));
     }
     crate::db::backup_db()?;
     let conn = open_db().map_err(|e| e.to_string())?;
-    einsammeln_mit(&conn, eintraege, archiv, &crate::db::backup_target_path().parent().map(Path::to_path_buf).unwrap_or_default())
+    einsammeln_mit(&conn, eintraege, archiv, &crate::db::backup_target_path().parent().map(Path::to_path_buf).unwrap_or_default(), art.unwrap_or(Art::Archiv))
 }
 
 pub(crate) fn einsammeln_mit(
@@ -120,10 +146,16 @@ pub(crate) fn einsammeln_mit(
     eintraege: Vec<EinsammelEintrag>,
     archiv: &Path,
     protokoll_dir: &Path,
+    art: Art,
 ) -> Result<EinsammelErgebnis, String> {
+    let index = read_archive_index(archiv);
+    let remixe = remix_ordner(archiv);
     // Nächste freie Nummer: über Archiv-Ordner und DB, damit nichts doppelt wird
-    let mut naechste = read_archive_index(archiv).iter().map(|e| e.catalog_id).max().unwrap_or(0);
-    if let Ok(mut stmt) = conn.prepare("SELECT id FROM beats") {
+    let mut naechste = index.iter().map(|e| e.catalog_id).max().unwrap_or(0);
+    if art == Art::Remix {
+        naechste = std::fs::read_dir(&remixe).into_iter().flatten().flatten()
+            .filter_map(|e| remix_nummer(&e.file_name().to_string_lossy())).max().unwrap_or(0);
+    } else if let Ok(mut stmt) = conn.prepare("SELECT id FROM beats") {
         let ids = stmt.query_map([], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
         for id in ids.flatten() {
             if let Ok(n) = id.trim().parse::<u32>() { naechste = naechste.max(n); }
@@ -133,6 +165,7 @@ pub(crate) fn einsammeln_mit(
     let mut im_archiv: HashMap<u64, Vec<PathBuf>> = HashMap::new();
     let mut alle = Vec::new();
     collect_files(archiv, archiv, &mut alle);
+    if art == Art::Remix { collect_files(&remixe, &remixe, &mut alle); }
     for (size, p, _) in alle {
         if ist_audio(&p) { im_archiv.entry(size).or_default().push(p); }
     }
@@ -140,7 +173,8 @@ pub(crate) fn einsammeln_mit(
     let mut erg = EinsammelErgebnis { fertig: Vec::new(), ausgelassen: Vec::new(), fehler: None, protokoll: None };
     // Nach jedem Song geschrieben: bricht der Lauf ab (App-Neustart), bleibt
     // Rückgängig für alles bis dahin möglich
-    let protokoll = protokoll_dir.join(format!("einsammeln_{}.json", chrono_frei_stempel()));
+    // Nie ein vorhandenes Protokoll überschreiben: zwei Läufe in einer Sekunde
+    let protokoll = unique_dest(protokoll_dir, &format!("einsammeln_{}.json", chrono_frei_stempel()));
     let schreiben = |fertig: &Vec<Eingesammelt>| -> Result<(), String> {
         std::fs::create_dir_all(protokoll_dir).map_err(|e| e.to_string())?;
         std::fs::write(&protokoll, serde_json::to_string_pretty(fertig).map_err(|e| e.to_string())?)
@@ -157,6 +191,26 @@ pub(crate) fn einsammeln_mit(
             erg.ausgelassen.push(format!("{name}: kein Export"));
             continue;
         }
+        if art == Art::Reste {
+            let ordner = e.archiv.as_deref().and_then(|a| {
+                let mut t = index.iter().filter(|x| x.folder == a);
+                match (t.next(), t.next()) { (Some(x), None) => Some(x.path.clone()), _ => None }
+            });
+            let Some(ordner) = ordner else {
+                erg.ausgelassen.push(format!("{name}: Archivordner nicht eindeutig"));
+                continue;
+            };
+            match reste(&pfade, &ordner, &im_archiv) {
+                Ok(g) if g.dateien.is_empty() => erg.ausgelassen.push(format!("{name}: nichts fehlt")),
+                Ok(g) => {
+                    erg.fertig.push(g);
+                    schreiben(&erg.fertig)?;
+                    erg.protokoll = Some(protokoll.to_string_lossy().to_string());
+                }
+                Err(f) => { erg.fehler = Some(format!("{name}: {f}")); break; }
+            }
+            continue;
+        }
         let doppelt = pfade.iter().filter(|p| ist_audio(p)).find(|p| {
             let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
             im_archiv.get(&size).is_some_and(|cs| cs.iter().any(|c| same_content(p, c)))
@@ -166,7 +220,8 @@ pub(crate) fn einsammeln_mit(
             continue;
         }
         naechste += 1;
-        match ein_song(conn, &e, &pfade, archiv, naechste) {
+        let basis = if art == Art::Remix { Some(remixe.as_path()) } else { None };
+        match ein_song(conn, &e, &pfade, archiv, naechste, basis) {
             Ok(g) => {
                 erg.fertig.push(g);
                 schreiben(&erg.fertig)?;
@@ -188,7 +243,32 @@ fn chrono_frei_stempel() -> String {
     format!("{}_{:02}{:02}{:02}", secs_to_date(s).replace('-', ""), (s / 3600) % 24, (s / 60) % 60, s % 60)
 }
 
-fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf], archiv: &Path, nr: u32) -> Result<Eingesammelt, String> {
+/// Grau: die Dateien, die im Archiv noch fehlen, nach `<Ordner>/02_OLD`.
+/// Was schon byte-gleich im Archiv liegt, bleibt aus.
+fn reste(pfade: &[PathBuf], ordner: &Path, im_archiv: &HashMap<u64, Vec<PathBuf>>) -> Result<Eingesammelt, String> {
+    let alt = ordner.join("02_OLD");
+    let mut im_ordner = Vec::new();
+    collect_files(ordner, ordner, &mut im_ordner);
+    let mut angelegt = Vec::new();
+    for p in pfade {
+        let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        // Exporte gegen das ganze Archiv, FLPs gegen den eigenen Ordner
+        let liegt_schon = im_archiv.get(&size).is_some_and(|cs| cs.iter().any(|c| same_content(p, c)))
+            || im_ordner.iter().any(|(s, q, _)| *s == size && same_content(p, q));
+        if liegt_schon { continue; }
+        std::fs::create_dir_all(&alt).map_err(|e| e.to_string())?;
+        let z = unique_dest(&alt, &p.file_name().unwrap().to_string_lossy());
+        std::fs::copy(p, &z).map_err(|err| format!("{} nicht kopiert: {err}", p.display()))?;
+        if !same_content(p, &z) {
+            let _ = std::fs::remove_file(&z);
+            return Err(format!("Kopie von {} weicht ab", p.display()));
+        }
+        angelegt.push((z.to_string_lossy().to_string(), size));
+    }
+    Ok(Eingesammelt { beat_id: String::new(), ordner: ordner.to_string_lossy().to_string(), dateien: angelegt })
+}
+
+fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf], archiv: &Path, nr: u32, remix: Option<&Path>) -> Result<Eingesammelt, String> {
     let key = e.key.as_deref().and_then(key_schreibweise);
     let bpm = e.bpm.filter(|b| (40..=300).contains(b));
     let titel = e.titel.trim();
@@ -207,8 +287,12 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
         .unwrap();
 
     let ordner_name = build_archive_folder_name(nr as i32, titel, key.as_deref(), bpm);
-    // „2024/11_NOVEMBER“ kommt mit Schrägstrich, im Pfad einheitlich trennen
-    let ziel = archiv.join(year_month_from_secs(fertig).replace('/', std::path::MAIN_SEPARATOR_STR)).join(&ordner_name);
+    let ziel = match remix {
+        // Remixe flach: 07_REMIXES/R0001 - Titel [Key BPM]
+        Some(r) => r.join(format!("R{ordner_name}")),
+        // „2024/11_NOVEMBER“ kommt mit Schrägstrich, im Pfad einheitlich trennen
+        None => archiv.join(year_month_from_secs(fertig).replace('/', std::path::MAIN_SEPARATOR_STR)).join(&ordner_name),
+    };
     if ziel.exists() {
         return Err(format!("{} gibt es schon", ziel.display()));
     }
@@ -247,7 +331,8 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
     // Erst in einen Zwischenordner, geprüft, dann umbenennen: ein Abbruch
     // (App-Neustart, Strom) hinterlässt nie einen halben Beat im Archiv.
     // Der Unterstrich hält ihn aus dem Archiv-Index heraus.
-    let zwischen = ziel.parent().unwrap().join(format!("_einsammeln_{nr:04}.tmp"));
+    std::fs::create_dir_all(ziel.parent().unwrap()).map_err(|e| e.to_string())?;
+    let zwischen = ziel.parent().unwrap().join(format!("_einsammeln_{}{nr:04}.tmp", if remix.is_some() { "R" } else { "" }));
     if zwischen.exists() {
         // Rest eines abgebrochenen Laufs: den Namen legt nur diese Funktion an
         std::fs::remove_dir_all(&zwischen).map_err(|e| format!("{} lässt sich nicht aufräumen: {e}", zwischen.display()))?;
@@ -319,6 +404,9 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
         std::fs::write(&json_pfad, serde_json::to_string_pretty(&json).unwrap()).map_err(|e| e.to_string())?;
         angelegt.push((json_pfad.to_string_lossy().to_string(), std::fs::metadata(&json_pfad).map(|m| m.len()).unwrap_or(0)));
 
+        if remix.is_some() {
+            return Ok(()); // Remixe stehen nicht im Beat-Katalog
+        }
         let (art, video) = detect_assets(&ziel);
         conn.execute(
             "INSERT INTO beats (id, name, path, bpm, key, status, notes, created_date, modified_date, favorite, has_artwork, has_video, alte_id, begonnen)
@@ -373,6 +461,12 @@ pub(crate) fn rueckgaengig_mit(conn: &rusqlite::Connection, protokoll: &Path) ->
                 Err(_) => {}
             }
         }
+        // Reste haben keine eigene Nummer (Grün und Rot schon)
+        if g.beat_id.is_empty() {
+            // Reste in einem bestehenden Beat: nur 02_OLD wegräumen, wenn leer
+            let _ = std::fs::remove_dir(Path::new(&g.ordner).join("02_OLD"));
+            continue;
+        }
         leere_ordner_weg(Path::new(&g.ordner));
         if Path::new(&g.ordner).exists() {
             hinweise.push(format!("{} enthält neue Dateien, bleibt", g.ordner));
@@ -426,10 +520,10 @@ mod tests {
         let s = |p: &Path| p.to_string_lossy().to_string();
         let eintraege = vec![
             EinsammelEintrag { id: Some(532), titel: "Stay".into(), key: Some("Emin".into()), bpm: Some(120),
-                dateien: vec![s(&alt.join("[532] Stay - 120 Em_2.mp3")), s(&alt.join("[532] Stay - 120 Em.mp3")), s(&alt.join("532.flp"))] },
-            EinsammelEintrag { id: None, titel: "whynot".into(), key: None, bpm: None, dateien: vec![s(&andere)] },
+                dateien: vec![s(&alt.join("[532] Stay - 120 Em_2.mp3")), s(&alt.join("[532] Stay - 120 Em.mp3")), s(&alt.join("532.flp"))], archiv: None },
+            EinsammelEintrag { id: None, titel: "whynot".into(), key: None, bpm: None, dateien: vec![s(&andere)], archiv: None },
         ];
-        let r = einsammeln_mit(&conn, eintraege, &arch, &t.join("_BEATOS")).unwrap();
+        let r = einsammeln_mit(&conn, eintraege, &arch, &t.join("_BEATOS"), Art::Archiv).unwrap();
         assert!(r.fehler.is_none(), "{:?}", r.fehler);
         assert_eq!(r.fertig.len(), 1);
         assert_eq!(r.ausgelassen.len(), 1, "{:?}", r.ausgelassen);
@@ -452,6 +546,53 @@ mod tests {
         assert!(arch.join("2026/05_MAY/0938 - NO MAN'S LAND [Bm 145]").is_dir());
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 1);
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn remix_und_reste() {
+        let t = std::env::temp_dir().join(format!("beatos_einsammeln_rr_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let arch = t.join("LIB").join("03_ARCHIVE");
+        let beat = arch.join("2024/02_FEBRUARY/0946 - Bloom [D#m 138]");
+        datei(&beat.join("Bloom [D#m 138].mp3"), b"bloom1");
+        datei(&beat.join("02_OLD/alt.txt"), b"x");
+        let alt = t.join("alt");
+        datei(&alt.join("[630] Bloom - 138 D#m.mp3"), b"bloom1");   // schon da
+        datei(&alt.join("[630_3] Bloom - 138 D#m.mp3"), b"bloom3"); // fehlt
+        datei(&alt.join("Remixes/Lil Peep - Star Shopping.wav"), b"peep");
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE beats (id TEXT PRIMARY KEY, name TEXT, path TEXT, bpm REAL, key TEXT, status TEXT, notes TEXT,
+            created_date TEXT, modified_date TEXT, favorite INTEGER, has_artwork INTEGER, has_video INTEGER, alte_id TEXT, begonnen TEXT);").unwrap();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+
+        // Rot: 07_REMIXES/R0001, kein Katalog-Eintrag
+        let rot = vec![EinsammelEintrag { id: None, titel: "Lil Peep - Star Shopping".into(), key: None, bpm: None,
+            dateien: vec![s(&alt.join("Remixes/Lil Peep - Star Shopping.wav"))], archiv: None }];
+        let r = einsammeln_mit(&conn, rot, &arch, &t.join("_BEATOS"), Art::Remix).unwrap();
+        assert!(r.fehler.is_none(), "{:?}", r.fehler);
+        let ziel = PathBuf::from(&r.fertig[0].ordner);
+        assert_eq!(ziel, t.join("LIB/07_REMIXES/R0001 - Lil Peep - Star Shopping"));
+        assert!(ziel.join("Lil Peep - Star Shopping.wav").is_file());
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
+
+        // Grau: nur die fehlende Version nach 02_OLD
+        let grau = vec![EinsammelEintrag { id: Some(630), titel: "Bloom".into(), key: None, bpm: None,
+            dateien: vec![s(&alt.join("[630] Bloom - 138 D#m.mp3")), s(&alt.join("[630_3] Bloom - 138 D#m.mp3"))],
+            archiv: Some("0946 - Bloom [D#m 138]".into()) }];
+        let g = einsammeln_mit(&conn, grau, &arch, &t.join("_BEATOS"), Art::Reste).unwrap();
+        assert!(g.fehler.is_none(), "{:?}", g.fehler);
+        assert_eq!(g.fertig[0].dateien.len(), 1);
+        assert_eq!(fs::read(beat.join("02_OLD/[630_3] Bloom - 138 D#m.mp3")).unwrap(), b"bloom3");
+
+        // Rückgängig: Kopie weg, der Beat und sein 02_OLD bleiben
+        rueckgaengig_mit(&conn, Path::new(g.protokoll.as_ref().unwrap())).unwrap();
+        assert!(!beat.join("02_OLD/[630_3] Bloom - 138 D#m.mp3").exists());
+        assert!(beat.join("02_OLD/alt.txt").is_file());
+        assert!(beat.join("Bloom [D#m 138].mp3").is_file());
+        rueckgaengig_mit(&conn, Path::new(r.protokoll.as_ref().unwrap())).unwrap();
+        assert!(!ziel.exists());
         let _ = fs::remove_dir_all(&t);
     }
 
@@ -489,8 +630,8 @@ mod tests {
         let funde = crate::commands::fundstuecke::fundstuecke(&[t.join("alt").to_string_lossy().to_string()], &arch).unwrap();
         let f = funde.iter().max_by_key(|f| f.dateien.len()).unwrap();
         println!("Fund: {:?} {} {:?} {:?} {} Dateien", f.id, f.titel, f.key, f.bpm, f.dateien.len());
-        let e = EinsammelEintrag { id: f.id, titel: f.titel.clone(), key: f.key.clone(), bpm: f.bpm, dateien: f.dateien.iter().map(|d| d.path.clone()).collect() };
-        let r = einsammeln_mit(&conn, vec![e], &arch, &t.join("_BEATOS")).unwrap();
+        let e = EinsammelEintrag { id: f.id, titel: f.titel.clone(), key: f.key.clone(), bpm: f.bpm, dateien: f.dateien.iter().map(|d| d.path.clone()).collect(), archiv: None };
+        let r = einsammeln_mit(&conn, vec![e], &arch, &t.join("_BEATOS"), Art::Archiv).unwrap();
         println!("fehler {:?} ausgelassen {:?}", r.fehler, r.ausgelassen);
         let ziel = PathBuf::from(&r.fertig[0].ordner);
         println!("Ziel: {}", ziel.display());

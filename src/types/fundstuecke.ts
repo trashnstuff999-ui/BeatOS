@@ -33,7 +33,12 @@ export interface EinsammelEintrag {
   key: string | null;
   bpm: number | null;
   dateien: string[];
+  /** Bei Grau: Archivordner für die Reste */
+  archiv?: string | null;
 }
+
+/** archiv = Grün ins Archiv, remix = Rot nach 07_REMIXES, reste = Grau nach 02_OLD */
+export type EinsammelArt = "archiv" | "remix" | "reste";
 
 export interface EinsammelErgebnis {
   fertig: { beat_id: string; ordner: string; dateien: [string, number][] }[];

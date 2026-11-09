@@ -12,10 +12,17 @@ import { Modal, Segmented, IconButton, Button } from "../ui";
 import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useDialog } from "../../contexts/DialogContext";
-import type { Ampel, Fund, EinsammelErgebnis } from "../../types/fundstuecke";
+import type { Ampel, Fund, EinsammelErgebnis, EinsammelArt } from "../../types/fundstuecke";
 
 const FARBE: Record<Ampel, string> = { gruen: C.mint, gelb: C.primary, rot: C.error, grau: C.onSecondaryFixedVar };
 const NAME: Record<Ampel, string> = { gruen: "Grün", gelb: "Gelb", rot: "Rot", grau: "Im Archiv" };
+
+/** Was der Knopf je Ampelfarbe tut. Gelb entscheidest du pro Eintrag (kommt noch). */
+const AKTION: Partial<Record<Ampel, { art: EinsammelArt; knopf: string; text: string }>> = {
+  gruen: { art: "archiv", knopf: "Einsammeln", text: "Kopiert ins Archiv, jede Kopie wird geprüft. Der Altbestand bleibt, Rückgängig ist möglich." },
+  rot: { art: "remix", knopf: "Nach Remixe", text: "Kopiert nach 07_REMIXES als R-Nummer, nicht in den Katalog. Der Altbestand bleibt, Rückgängig ist möglich." },
+  grau: { art: "reste", knopf: "Reste einsammeln", text: "Kopiert die Versionen, die im Archiv fehlen, in den Archivordner nach 02_OLD. Rückgängig ist möglich." },
+};
 
 const ordnerVon = (p: string) => p.slice(0, Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/")));
 const monat = (iso: string | null) => (iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : null);
@@ -52,19 +59,24 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
     return z;
   }, [gefiltert]);
   const liste = gefiltert.filter(f => f.ampel === ampel);
+  const aktion = AKTION[ampel];
+  // Bei Grau nur, wo wirklich etwas fehlt
+  const auswahl = ampel === "grau" ? liste.filter(f => f.nur_hier > 0) : liste;
 
   const einsammeln = async () => {
+    if (!aktion) return;
     const ok = await frage({
-      titel: `${liste.length} Songs einsammeln`,
-      text: "Kopiert ins Archiv, jede Kopie wird geprüft. Der Altbestand bleibt, Rückgängig ist möglich.",
-      bestaetigen: "Einsammeln",
+      titel: `${aktion.knopf}: ${auswahl.length} Songs`,
+      text: aktion.text,
+      bestaetigen: aktion.knopf,
     });
     if (!ok) return;
     setLaeuft(true);
     try {
       const r = await api.archive.einsammeln(
-        liste.map(f => ({ id: f.id, titel: f.titel, key: f.key, bpm: f.bpm, dateien: f.dateien.map(d => d.path) })),
+        auswahl.map(f => ({ id: f.id, titel: f.titel, key: f.key, bpm: f.bpm, dateien: f.dateien.map(d => d.path), archiv: f.archiv })),
         settings.archivePath,
+        aktion.art,
       );
       setLetzter(r);
       melde(`${r.fertig.length} eingesammelt${r.ausgelassen.length ? `, ${r.ausgelassen.length} ausgelassen` : ""}`, r.fehler ? "fehler" : "erfolg");
@@ -107,9 +119,9 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
       )}
       footer={<>
         {letzter?.protokoll && <Button variant="ghost" icon={Undo2} onClick={rueckgaengig}>Rückgängig</Button>}
-        {ampel === "gruen" && funde && (
-          <Button variant="primary" icon={ArchiveRestore} onClick={einsammeln} disabled={laeuft || liste.length === 0}>
-            {laeuft ? "Sammle …" : `Einsammeln (${liste.length})`}
+        {aktion && funde && (
+          <Button variant="primary" icon={ArchiveRestore} onClick={einsammeln} disabled={laeuft || auswahl.length === 0}>
+            {laeuft ? "Sammle …" : `${aktion.knopf} (${auswahl.length})`}
           </Button>
         )}
       </>}
