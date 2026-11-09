@@ -1018,6 +1018,13 @@ export function Settings() {
                 onChange={v => update("productionPath", v)}
                 browseTitle="Produktions-Ordner hinzufügen"
               />
+              <PathListInput
+                label="Altbestand"
+                icon={History}
+                value={draft.altbestandPaths}
+                onChange={v => update("altbestandPaths", v)}
+                browseTitle="Altbestand-Ordner hinzufügen"
+              />
               <PathInput
                 label="Asset-Ordner"
                 icon={Image}

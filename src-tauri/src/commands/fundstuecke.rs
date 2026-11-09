@@ -1,0 +1,491 @@
+// src-tauri/src/commands/fundstuecke.rs
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fundstücke: fertige Songs im Altbestand, die noch nicht im Archiv sind.
+// Rein lesend. Jede Datei mit Export (MP3/WAV …) wird einem Song zugeordnet,
+// über die alte Nummer „[618] HEAT - 152 - D#m", sonst über den Titel. FLPs
+// hängen nur am Song, Skizzen ohne Export erscheinen nicht.
+//
+// Ampel, absichtlich vorsichtig: lieber Gelb als falsch Grün.
+//   grau  schon im Archiv (gleiche Datei, Nummer + Titel oder Titel eindeutig)
+//   rot   Remix oder Mashup
+//   gelb  unsicher: keine Nummer, kein Titel, Nummer mit mehreren Titeln,
+//         Key/BPM uneinheitlich, gleicher Titel im Archiv mit anderem Key
+//   grün  alte Nummer, eindeutig, nicht im Archiv
+// ═══════════════════════════════════════════════════════════════════════════════
+
+use crate::commands::archive_match::{
+    collect_files, contradicts, normalize_title, old_system_id_and_title, read_archive_index,
+    same_content, ArchiveEntry,
+};
+use crate::utils::parse_audio_filename;
+use serde::Serialize;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+const AUDIO: &[&str] = &["mp3", "wav", "m4a", "ogg", "flac", "aif", "aiff"];
+/// FL-Arbeitsmaterial, Sample-Packs, Vorlagen und Künstler (Scheibe 7).
+const UEBERSPRINGEN: &[&str] = &["audio", "autosaves", "samples", "templates", "template", "coverarts", "files n presets", "artists"];
+
+#[derive(Debug, Serialize)]
+pub struct FundDatei {
+    pub path: String,
+    pub size: u64,
+    /// Sekunden seit 1970
+    pub modified: i64,
+    pub flp: bool,
+    pub im_archiv: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Fund {
+    pub id: Option<u32>,
+    pub titel: String,
+    pub key: Option<String>,
+    pub bpm: Option<i32>,
+    /// gruen | gelb | rot | grau
+    pub ampel: &'static str,
+    pub grund: String,
+    /// Archiv-Ordner bei Grau, oder der ähnliche bei Gelb
+    pub archiv: Option<String>,
+    /// Dateien ohne byte-gleiche Kopie im Archiv. Bei Grau die Reste, die
+    /// Scheibe 3 noch mitnehmen muss.
+    pub nur_hier: usize,
+    /// Exporte zuerst, neueste zuerst
+    pub dateien: Vec<FundDatei>,
+}
+
+#[derive(Debug, Clone)]
+struct Werk {
+    id: Option<u32>,
+    titel: String,
+    key: Option<String>,
+    bpm: Option<i32>,
+}
+
+impl Werk {
+    fn schluessel(&self) -> String {
+        match self.id {
+            Some(id) => format!("#{id}"),
+            None => format!("t:{}", normalize_title(&self.titel)),
+        }
+    }
+}
+
+/// „Ten_2" und „Ten_old" sind Versionen von „Ten".
+fn ohne_version(t: &str) -> &str {
+    let mut t = t.trim();
+    loop {
+        let vorher = t;
+        if t.len() > 4 && t.get(t.len() - 4..).is_some_and(|e| e.eq_ignore_ascii_case("_old")) {
+            t = &t[..t.len() - 4];
+        }
+        if let Some((a, b)) = t.rsplit_once('_') {
+            if !a.is_empty() && !b.is_empty() && b.chars().all(|c| c.is_ascii_digit()) {
+                t = a;
+            }
+        }
+        if t == vorher {
+            return t.trim();
+        }
+    }
+}
+
+/// „@xP4RA - Forever" und „Victory @xP4RA" → der Titel ohne Producer-Tag.
+fn ohne_tag(t: &str) -> &str {
+    let mut t = t.trim();
+    if t.starts_with('@') {
+        if let Some((_, rest)) = t.split_once(" - ") { t = rest; }
+    }
+    if let Some((vorn, hinten)) = t.rsplit_once(" @") {
+        if !hinten.contains(' ') { t = vorn; }
+    }
+    t.trim().trim_end_matches(['-', ' ']).trim()
+}
+
+/// „untitled", „Project_0242", „test44", „2403": daraus lässt sich kein Song lesen.
+fn generisch(titel: &str) -> bool {
+    let n = normalize_title(titel).to_lowercase();
+    n.is_empty()
+        || n.chars().all(|c| c.is_ascii_digit())
+        || ["untitled", "project", "test", "unbenannt", "newproject", "neuesprojekt"].iter().any(|p| n.starts_with(p))
+        || ["beattag", "tag", "template", "starttemplate", "deleteme"].contains(&n.as_str())
+}
+
+/// Song aus einem Datei- oder Ordnernamen. None = nichts Brauchbares.
+fn werk_aus_name(name: &str, ist_datei: bool) -> Option<Werk> {
+    let stamm = if ist_datei { name.rsplit_once('.').map(|(a, _)| a).unwrap_or(name) } else { name };
+    if let Some(o) = old_system_id_and_title(stamm) {
+        return Some(Werk { id: Some(o.id), titel: o.title, key: o.key, bpm: o.bpm });
+    }
+    if let Some(w) = nur_nummer(ohne_version(stamm)) {
+        return Some(w);
+    }
+    // parse_audio_filename schneidet eine Endung ab, Ordnernamen haben keine
+    let (titel, key, bpm) = parse_audio_filename(&format!("{stamm}.x"));
+    let titel = ohne_tag(ohne_version(&titel)).to_string();
+    if generisch(&titel) {
+        return None;
+    }
+    Some(Werk { id: None, titel, key, bpm })
+}
+
+/// „536", „182_2", „504 - Bpm 160 Cm", „17_Seventeen": alte Nummer ohne
+/// Klammern. Höchstens drei Stellen, „2403" ist keine.
+fn nur_nummer(s: &str) -> Option<Werk> {
+    let d: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let rest = &s[d.len()..];
+    // „700-799" ist ein Sammelordner, keine Nummer
+    let bereich = rest.strip_prefix('-').is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()));
+    if d.is_empty() || d.len() > 3 || bereich || !(rest.is_empty() || rest.starts_with(['_', ' ', '-', '.', '('])) {
+        return None;
+    }
+    let id: u32 = d.parse().ok().filter(|&i| i > 0)?;
+    // „_2 - Bpm 80 Ab": Version weg, dann wie ein Name im alten Schema lesen
+    let rest = rest.strip_prefix('_').map(|r| r.trim_start_matches(|c: char| c.is_ascii_digit())).unwrap_or(rest);
+    let o = old_system_id_and_title(&format!("[{id}] {}", rest.trim_start_matches(['_', ' ', '-', '.']).trim()))?;
+    let titel = if o.title.to_lowercase().starts_with("bpm") || generisch(&o.title) { String::new() } else { o.title };
+    Some(Werk { id: Some(id), titel, key: o.key, bpm: o.bpm })
+}
+
+struct Fundort {
+    path: PathBuf,
+    werk: Option<Werk>,
+    flp: bool,
+    size: u64,
+    modified: i64,
+}
+
+fn endung(p: &Path) -> String {
+    p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
+}
+
+/// Rekursiv sammeln. `ordner_werk`: der nächste Elternordner mit Nummer oder
+/// Titel, z. B. „[795] Gotta Go Now - Am 140". Namenlose Dateien erben ihn.
+fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let mut hier = Vec::new();
+    for e in rd.filter_map(|e| e.ok()) {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            let klein = name.to_lowercase();
+            if klein.contains("backup") || UEBERSPRINGEN.contains(&klein.as_str()) {
+                continue;
+            }
+            // Sammelordner wie „Beats" oder „Remixes" sind kein Song: nur mit
+            // Nummer oder Key/BPM im Namen gibt der Ordner einen Titel her.
+            let eigen = werk_aus_name(&name, false).filter(|w| w.id.is_some() || w.key.is_some() || w.bpm.is_some());
+            sammeln(&p, eigen.as_ref().or(ordner_werk), out);
+            continue;
+        }
+        let ext = endung(&p);
+        let flp = ext == "flp";
+        if !flp && !AUDIO.contains(&ext.as_str()) {
+            continue;
+        }
+        let meta = std::fs::metadata(&p).ok();
+        let modified = meta
+            .as_ref()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        hier.push(Fundort {
+            // Im Ordner „[539] YaYa" gehört „YaYa - 140 Em.mp3" zur 539.
+            werk: match (werk_aus_name(&name, true), ordner_werk) {
+                (Some(w), _) if w.id.is_some() => Some(w),
+                (_, Some(o)) if o.id.is_some() => Some(o.clone()),
+                (w, o) => w.or_else(|| o.cloned()),
+            },
+            path: p,
+            flp,
+            size: meta.map(|m| m.len()).unwrap_or(0),
+            modified,
+        });
+    }
+    // Namenlose Datei neben genau einem Song gehört zu ihm
+    // (Produktion: „Project_0242.flp" neben „SWEET DREAMS [Cm 140].wav").
+    // Nur wenn der Song hier selbst einen Export hat; eine FLP allein reicht nicht.
+    let songs: HashSet<String> = hier.iter().filter_map(|f| f.werk.as_ref().map(|w| w.schluessel())).collect();
+    let mit_export = hier.iter().any(|f| !f.flp && f.werk.is_some());
+    if songs.len() == 1 && mit_export {
+        let w = hier.iter().find_map(|f| f.werk.clone());
+        for f in hier.iter_mut().filter(|f| f.werk.is_none()) {
+            f.werk = w.clone();
+        }
+    }
+    out.extend(hier);
+}
+
+fn ist_remix(p: &Path) -> bool {
+    let s = p.to_string_lossy().to_lowercase();
+    ["remix", "mashup", "bootleg"].iter().any(|w| s.contains(w))
+}
+
+#[tauri::command]
+pub async fn scan_fundstuecke(app: tauri::AppHandle, roots: Vec<String>, archive_path: String) -> Result<Vec<Fund>, String> {
+    // Zum Reinhören: der Player darf nur freigegebene Ordner lesen, und der
+    // Altbestand (Music\Songs, Image-Line) liegt außerhalb der Bibliothek.
+    {
+        use tauri::Manager;
+        let scope = app.asset_protocol_scope();
+        for r in &roots {
+            if let Err(e) = scope.allow_directory(r.trim(), true) {
+                eprintln!("WARNING: cannot extend asset scope for {r}: {e}");
+            }
+        }
+    }
+    tauri::async_runtime::spawn_blocking(move || fundstuecke(&roots, Path::new(&archive_path)))
+        .await
+        .map_err(|e| format!("Fundstücke-Scan abgestürzt: {e}"))?
+}
+
+pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<Fund>, String> {
+    if !archive_root.is_dir() {
+        return Err(format!("Archiv-Ordner nicht gefunden: {}", archive_root.display()));
+    }
+    let index = read_archive_index(archive_root);
+    let mut by_title: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut by_id: HashMap<u32, Vec<usize>> = HashMap::new();
+    for (i, e) in index.iter().enumerate() {
+        by_title.entry(normalize_title(&e.title)).or_default().push(i);
+        by_id.entry(e.catalog_id).or_default().push(i);
+    }
+    // Exporte im Archiv nach Größe, für den Inhaltsvergleich
+    let mut archiv_dateien = Vec::new();
+    collect_files(archive_root, archive_root, &mut archiv_dateien);
+    let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
+    for (size, p, _) in archiv_dateien {
+        let ext = endung(&p);
+        if ext == "flp" || AUDIO.contains(&ext.as_str()) {
+            by_size.entry(size).or_default().push(p);
+        }
+    }
+
+    let mut orte = Vec::new();
+    for r in roots {
+        sammeln(Path::new(r.trim()), None, &mut orte);
+    }
+
+    // Gruppieren. Namenlose Exporte bleiben einzeln (Schlüssel = Pfad).
+    let mut gruppen: BTreeMap<String, Vec<Fundort>> = BTreeMap::new();
+    for f in orte {
+        let k = match &f.werk {
+            Some(w) => w.schluessel(),
+            None if f.flp => continue, // Skizze
+            None => format!("?:{}", f.path.display()),
+        };
+        gruppen.entry(k).or_default().push(f);
+    }
+    // Titel ohne Nummer an die eine Nummer mit gleichem Titel hängen.
+    // Mehrere Nummern mit dem Titel: nichts raten, getrennt lassen.
+    let mut nummer_zu_titel: HashMap<String, Vec<String>> = HashMap::new();
+    for (k, fs) in &gruppen {
+        if k.starts_with('#') {
+            for t in fs.iter().filter_map(|f| f.werk.as_ref()).map(|w| normalize_title(&w.titel)).collect::<HashSet<_>>() {
+                if !t.is_empty() {
+                    nummer_zu_titel.entry(t).or_default().push(k.clone());
+                }
+            }
+        }
+    }
+    for (t, nummern) in nummer_zu_titel {
+        if let [ziel] = nummern.as_slice() {
+            if let Some(fs) = gruppen.remove(&format!("t:{t}")) {
+                gruppen.get_mut(ziel).unwrap().extend(fs);
+            }
+        }
+    }
+
+    let mut out: Vec<Fund> = gruppen
+        .into_values()
+        .filter(|fs| fs.iter().any(|f| !f.flp)) // nur mit Export
+        .map(|fs| bewerten(fs, &index, &by_title, &by_id, &by_size))
+        .collect();
+    let rang = |a: &str| ["gruen", "gelb", "rot", "grau"].iter().position(|x| *x == a).unwrap_or(9);
+    out.sort_by(|a, b| {
+        rang(a.ampel).cmp(&rang(b.ampel)).then(a.id.cmp(&b.id)).then(a.titel.to_lowercase().cmp(&b.titel.to_lowercase()))
+    });
+    Ok(out)
+}
+
+fn bewerten(
+    mut fs: Vec<Fundort>,
+    index: &[ArchiveEntry],
+    by_title: &HashMap<String, Vec<usize>>,
+    by_id: &HashMap<u32, Vec<usize>>,
+    by_size: &HashMap<u64, Vec<PathBuf>>,
+) -> Fund {
+    fs.sort_by(|a, b| a.flp.cmp(&b.flp).then(b.modified.cmp(&a.modified)));
+    let werke: Vec<&Werk> = fs.iter().filter_map(|f| f.werk.as_ref()).collect();
+    let id = werke.iter().find_map(|w| w.id);
+    let titel = werke.iter().map(|w| w.titel.clone()).find(|t| !t.is_empty())
+        .unwrap_or_else(|| fs[0].path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
+    let key = werke.iter().find_map(|w| w.key.clone());
+    let bpm = werke.iter().find_map(|w| w.bpm);
+    // Vergleichstitel nur aus echten Namen, nie aus dem Dateinamen „504"
+    let titel_n = werke.iter().map(|w| normalize_title(&w.titel)).find(|t| !t.is_empty()).unwrap_or_default();
+    let archiv_name = |i: usize| Some(index[i].folder.clone());
+    let treffer: Vec<Option<&PathBuf>> = fs.iter()
+        .map(|f| if f.size == 0 { None } else { by_size.get(&f.size).and_then(|cs| cs.iter().find(|c| same_content(&f.path, c))) })
+        .collect();
+    let nur_hier = treffer.iter().filter(|t| t.is_none()).count();
+    let fund = |ampel, grund: &str, archiv| Fund {
+        id, titel: titel.clone(), key: key.clone(), bpm, ampel, grund: grund.to_string(), archiv, nur_hier,
+        dateien: fs.iter().zip(&treffer).map(|(f, t)| FundDatei { path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some() }).collect(),
+    };
+
+    // Grau: dieselbe Datei liegt im Archiv
+    for (f, t) in fs.iter().zip(&treffer) {
+        if let (false, Some(c)) = (f.flp, t) {
+            let ordner = index.iter().find(|e| c.starts_with(&e.path)).map(|e| e.folder.clone());
+            return fund("grau", "gleiche Datei im Archiv", ordner);
+        }
+    }
+    // Grau: Nummer und Titel stimmen
+    let mut nummer_belegt = None;
+    if let Some(hits) = id.and_then(|i| by_id.get(&i)) {
+        if let Some(&i) = hits.iter().find(|&&i| { let a = normalize_title(&index[i].title); !a.is_empty() && !titel_n.is_empty() && (a == titel_n || a.contains(&titel_n) || titel_n.contains(&a)) }) {
+            return fund("grau", "Nummer und Titel im Archiv", archiv_name(i));
+        }
+        nummer_belegt = Some(hits[0]);
+    }
+    // Grau oder Gelb über den Titel
+    let mut aehnlich = None;
+    if let Some(hits) = by_title.get(&titel_n).filter(|_| !titel_n.is_empty() && !werke.is_empty()) {
+        let passend: Vec<usize> = hits.iter().copied().filter(|&i| !contradicts(key.as_deref(), bpm, &index[i])).collect();
+        match passend.as_slice() {
+            [i] => return fund("grau", "Titel im Archiv", archiv_name(*i)),
+            [] => aehnlich = Some(hits[0]),
+            [i, ..] => return fund("gelb", "Titel mehrfach im Archiv", archiv_name(*i)),
+        }
+    }
+
+    if fs.iter().any(|f| ist_remix(&f.path)) {
+        return fund("rot", "Remix oder Mashup", None);
+    }
+    if let Some(i) = aehnlich {
+        return fund("gelb", "gleicher Titel im Archiv, anderer Key/BPM", archiv_name(i));
+    }
+    let titel_set: HashSet<String> = werke.iter().map(|w| normalize_title(&w.titel)).filter(|t| !t.is_empty()).collect();
+    if titel_set.len() > 1 {
+        return fund("gelb", "Nummer mit mehreren Titeln", None);
+    }
+    let keys: HashSet<String> = werke.iter().filter_map(|w| w.key.as_ref()).map(|k| k.to_lowercase()).collect();
+    let bpms: HashSet<i32> = werke.iter().filter_map(|w| w.bpm).collect();
+    if keys.len() > 1 || bpms.len() > 1 {
+        return fund("gelb", "Key/BPM uneinheitlich", None);
+    }
+    if werke.is_empty() {
+        return fund("gelb", "ohne Titel", None);
+    }
+    if id.is_none() {
+        return fund("gelb", "ohne Nummer", None);
+    }
+    if titel_n.is_empty() {
+        return fund("gelb", "nur Nummer", None);
+    }
+    if let Some(i) = nummer_belegt {
+        return fund("gelb", "Nummer im Archiv mit anderem Titel", archiv_name(i));
+    }
+    fund("gruen", "nicht im Archiv", None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn datei(p: &Path, inhalt: &str) {
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, inhalt).unwrap();
+    }
+
+    #[test]
+    fn ampel_fuer_altbestand() {
+        let t = std::env::temp_dir().join(format!("beatos_fund_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let arch = t.join("archiv");
+        datei(&arch.join("2026/05_MAY/0618 - HEAT [D#m 152]/HEAT [D#m 152].mp3"), "heat");
+        datei(&arch.join("2026/05_MAY/0700 - Bloom [Am 120]/Bloom [Am 120].mp3"), "bloom-neu");
+        let alt = t.join("alt");
+        // Grün, mit Version und FLP
+        datei(&alt.join("[233] Dynastie - Dark Trap Beat - Bpm130 - A#.mp3"), "dyn");
+        datei(&alt.join("[233_2] Dynastie - Dark Trap Beat - Bpm130 - A#.mp3"), "dyn2");
+        datei(&alt.join("Beats/[233] Dynastie.flp"), "flp");
+        // Grau über Nummer + Titel
+        datei(&alt.join("[618] HEAT - 152 - D#m.mp3"), "anders");
+        // Grau über gleiche Datei, obwohl der Name nichts sagt
+        datei(&alt.join("whynot.mp3"), "heat");
+        // Gelb: gleicher Titel, anderer Key
+        datei(&alt.join("[630] Bloom - 138 D#m.mp3"), "bloom-alt");
+        // Gelb: eine Nummer, zwei Songs
+        datei(&alt.join("[301] Agony - 155 Fm.mp3"), "a");
+        datei(&alt.join("[301] Sunset - 140 Am.mp3"), "b");
+        datei(&alt.join("[539] YaYa - 140 Em/YaYa - 140 Em.mp3"), "yaya");
+        datei(&alt.join("Lo-Fi/untitled.mp3"), "u");
+        datei(&alt.join("test.mp3"), "t");
+        datei(&arch.join("2026/05_MAY/0891 - test [F#m 135]/test.mp3"), "anderer test");
+        datei(&alt.join("Beats/200-299/233_2.mp3"), "dyn3");
+        datei(&alt.join("Beats/500-599/504 - Bpm 160 Cm.mp3"), "504");
+        datei(&alt.join("Beats/2403.mp3"), "x");
+        datei(&alt.join("700-799/lilpeep remix.mp3"), "lp");
+        datei(&alt.join("700-799/[733] I Just Wanna - 136 Cm.mp3"), "ijw");
+        // Rot
+        datei(&alt.join("Remixes/Juice WRLD - Deprived Remix.mp3"), "r");
+        // Skizze ohne Export: erscheint nicht
+        datei(&alt.join("[400] Nur FLP.flp"), "s");
+        // Ordner gibt den Namen, Datei darin ist namenlos
+        datei(&alt.join("[795] Gotta Go Now - Am 140/untitled.mp3"), "go");
+        // Unterordner Audio ist FL-Material
+        datei(&alt.join("[795] Gotta Go Now - Am 140/Audio/rec.wav"), "rec");
+
+        let r = fundstuecke(&[alt.to_string_lossy().to_string()], &arch).unwrap();
+        let finde = |id: u32| r.iter().find(|f| f.id == Some(id)).unwrap_or_else(|| panic!("{id} fehlt: {r:#?}"));
+        assert_eq!(finde(233).ampel, "gruen");
+        assert_eq!(finde(233).dateien.len(), 4);
+        assert_eq!(finde(504).grund, "nur Nummer");
+        assert_eq!(finde(504).bpm, Some(160));
+        assert!(r.iter().all(|f| f.id != Some(700)));
+        assert_eq!(finde(733).dateien.len(), 1);
+        assert!(r.iter().any(|f| f.titel == "2403" && f.grund == "ohne Titel"));
+        assert_eq!(finde(618).ampel, "grau");
+        let whynot = r.iter().find(|f| f.titel == "whynot").unwrap();
+        assert_eq!((whynot.nur_hier, whynot.dateien[0].im_archiv), (0, true));
+        assert_eq!(finde(233).nur_hier, 4);
+        assert_eq!(finde(630).ampel, "gelb");
+        assert_eq!(finde(301).grund, "Nummer mit mehreren Titeln");
+        assert_eq!(finde(795).ampel, "gruen");
+        assert_eq!(finde(795).dateien.len(), 1);
+        assert!(r.iter().all(|f| f.id != Some(400)));
+        assert!(r.iter().any(|f| f.titel == "whynot" && f.ampel == "grau"));
+        assert!(r.iter().any(|f| f.ampel == "rot"));
+        assert_eq!(finde(539).dateien.len(), 1);
+        assert!(r.iter().all(|f| f.titel != "Lo-Fi"));
+        assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
+        assert_eq!(ohne_tag("@xP4RA - Forever"), "Forever");
+        assert_eq!(ohne_tag("Destiny - "), "Destiny");
+        assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    /// Echte Zahlen: BEATOS_FUND_ROOTS (mit ; getrennt), BEATOS_ARCHIVE, BEATOS_DUMP
+    #[test]
+    #[ignore]
+    fn fund_handprobe() {
+        let roots: Vec<String> = std::env::var("BEATOS_FUND_ROOTS").unwrap().split(';').map(String::from).collect();
+        let r = fundstuecke(&roots, Path::new(&std::env::var("BEATOS_ARCHIVE").unwrap())).unwrap();
+        let mut zahl: BTreeMap<&str, usize> = BTreeMap::new();
+        for f in &r { *zahl.entry(f.ampel).or_default() += 1; }
+        println!("{zahl:?}");
+        let mut grund: BTreeMap<(&str, &str), usize> = BTreeMap::new();
+        for f in &r { *grund.entry((f.ampel, f.grund.as_str())).or_default() += 1; }
+        for (k, v) in grund { println!("{k:?}: {v}"); }
+        if let Ok(p) = std::env::var("BEATOS_DUMP") {
+            let zeilen: Vec<String> = r.iter().map(|f| format!("{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                f.ampel, f.id.map(|i| i.to_string()).unwrap_or_default(), f.titel, format!("{} (nur hier {})", f.grund, f.nur_hier),
+                f.archiv.clone().unwrap_or_default(), f.dateien.len(), f.dateien[0].path)).collect();
+            fs::write(p, zeilen.join("\n")).unwrap();
+        }
+    }
+}

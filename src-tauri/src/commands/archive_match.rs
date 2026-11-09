@@ -34,7 +34,7 @@ pub struct ArchiveEntry {
 
 /// Vergleichsform eines Titels: Groß-/Kleinschreibung, Leerzeichen und
 /// Satzzeichen fallen weg. „DEVIL EYES" und „DevilEyes" sind derselbe Song.
-fn normalize_title(s: &str) -> String {
+pub(crate) fn normalize_title(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric())
         .flat_map(|c| c.to_uppercase())
@@ -117,10 +117,11 @@ pub struct OldSystemName {
     pub bpm: Option<i32>,
 }
 
-fn old_system_id_and_title(folder: &str) -> Option<OldSystemName> {
+pub(crate) fn old_system_id_and_title(folder: &str) -> Option<OldSystemName> {
     let rest = folder.trim().strip_prefix('[')?;
     let (digits, after) = rest.split_once(']')?;
-    let id: u32 = digits.trim().parse().ok()?;
+    // „[206_2]" ist Version 2 von 206: nur die führenden Ziffern zählen.
+    let id: u32 = digits.trim().chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok()?;
     if id == 0 {
         return None; // "[000]Samples" ist kein Beat
     }
@@ -132,7 +133,9 @@ fn old_system_id_and_title(folder: &str) -> Option<OldSystemName> {
     let mut key = None;
     let mut bpm = None;
     for token in after.split([' ', '-']).filter(|t| !t.is_empty()) {
-        if let Ok(n) = token.parse::<i32>() {
+        // „Bpm155" wie „155"
+        let zahl = token.strip_prefix("Bpm").or_else(|| token.strip_prefix("BPM")).or_else(|| token.strip_prefix("bpm")).unwrap_or(token);
+        if let Ok(n) = zahl.parse::<i32>() {
             if (40..=300).contains(&n) && bpm.is_none() {
                 bpm = Some(n);
                 continue;
@@ -150,7 +153,7 @@ fn old_system_id_and_title(folder: &str) -> Option<OldSystemName> {
 /// Ein Titel allein reicht nicht: „Dream" gibt es zweimal, einmal in C#m mit
 /// 165 und einmal in Am mit 160 — das sind verschiedene Beats. Wo beide Seiten
 /// einen Wert tragen und die Werte auseinandergehen, ist der Treffer keiner.
-fn contradicts(key: Option<&str>, bpm: Option<i32>, e: &ArchiveEntry) -> bool {
+pub(crate) fn contradicts(key: Option<&str>, bpm: Option<i32>, e: &ArchiveEntry) -> bool {
     let key_conflict = matches!(
         (key, e.key.as_deref()),
         (Some(a), Some(b)) if !a.eq_ignore_ascii_case(b)
@@ -312,7 +315,7 @@ fn find_archive_entry<'a>(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Alle Dateien unter `dir`, rekursiv, als (Größe, Pfad).
-fn collect_files(dir: &Path, base: &Path, out: &mut Vec<(u64, PathBuf, String)>) {
+pub(crate) fn collect_files(dir: &Path, base: &Path, out: &mut Vec<(u64, PathBuf, String)>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.filter_map(|e| e.ok()) {
         let p = e.path();
@@ -332,7 +335,7 @@ fn collect_files(dir: &Path, base: &Path, out: &mut Vec<(u64, PathBuf, String)>)
 
 /// Inhaltsvergleich in Blöcken. Kein Hash-Crate nötig: verglichen wird nur bei
 /// gleicher Größe, und dann bricht der erste abweichende Block sofort ab.
-fn same_content(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_content(a: &Path, b: &Path) -> bool {
     let (Ok(mut fa), Ok(mut fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else {
         return false;
     };

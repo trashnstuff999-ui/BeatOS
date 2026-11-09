@@ -20,6 +20,7 @@ import type { Stats, DashboardActions, StatsDetails } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
 import type { ArtistsScan, Altbestand } from "../types/artists";
+import type { Fund } from "../types/fundstuecke";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -213,6 +214,10 @@ export const api = {
      *  Liefert, was beim Nachrücken nicht geklappt hat. */
     trashSourceFolder: (sourceFolder: string, archiveBasePath: string, nachruecken?: boolean) =>
       invoke<string[]>("trash_source_folder", { sourceFolder, archiveBasePath, nachruecken }),
+
+    /** Songs im Altbestand, die noch nicht im Archiv sind. Nur lesend. */
+    fundstuecke: (roots: string[], archivePath: string) =>
+      invoke<Fund[]>("scan_fundstuecke", { roots, archivePath }),
 
     /** Relative archive path preview — shares the exact folder-name logic of archive_beat. */
     previewPath: (catalogId: number, title: string, key: string | null, bpm: number | null, yearMonth: string) =>

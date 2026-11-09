@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef } from "react";
-import { RefreshCw, Search, LibraryBig, FolderSymlink, Type, X } from "lucide-react";
+import { RefreshCw, Search, LibraryBig, FolderSymlink, Type, X, PackageSearch } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { PageHeader, IconButton } from "../ui";
 
@@ -15,11 +15,13 @@ interface BrowseHeaderProps {
   isLoading?: boolean;
   /** Alte Ordnerstruktur flachziehen — einmalige Sache am Altbestand. */
   onMigrate: () => void;
+  /** Fundstücke im Altbestand */
+  onFundstuecke: () => void;
   /** Namen auf das Schema ziehen — läuft im Alltag, nach jedem nachgelegten Cover. */
   onRename: () => void;
 }
 
-export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onMigrate, onRename }: BrowseHeaderProps) {
+export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onMigrate, onRename, onFundstuecke }: BrowseHeaderProps) {
   const feld = useRef<HTMLInputElement>(null);
 
   // „/" springt ins Suchfeld, Esc leert und geht wieder raus — beides nur,
@@ -116,6 +118,12 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onM
             icon={FolderSymlink}
             title="Alte Ordnerstruktur migrieren"
             onClick={onMigrate}
+          />
+
+          <IconButton
+            icon={PackageSearch}
+            title="Fundstücke im Altbestand"
+            onClick={onFundstuecke}
           />
 
           <IconButton

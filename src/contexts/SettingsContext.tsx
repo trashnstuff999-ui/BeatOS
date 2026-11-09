@@ -34,6 +34,8 @@ export interface AppSettings {
   downloadsPath: string;
 }
 
+  /** Alte Song-Ordner für die Fundstücke, einer pro Zeile. */
+  altbestandPaths: string;
 export const DEFAULTS: AppSettings = {
   archivePath: "",
   productionPath: "",
@@ -53,6 +55,7 @@ export const DEFAULTS: AppSettings = {
 };
 
 const STORAGE_KEY = "beatos_settings";
+  altbestandPaths: "",
 
 // Map between camelCase frontend keys and snake_case DB keys
 const KEY_MAP: Record<keyof AppSettings, string> = {
@@ -75,6 +78,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {
   const out = { ...DEFAULTS };
+  altbestandPaths: "altbestand_paths",
   (Object.keys(KEY_MAP) as Array<keyof AppSettings>).forEach(k => {
     out[k] = map[KEY_MAP[k]] ?? "";
   });

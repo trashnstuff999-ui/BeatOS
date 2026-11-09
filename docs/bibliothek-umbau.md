@@ -14,7 +14,7 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 |---|---|---|
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
-| 2 | Fundstücke (nur lesen) | offen |
+| 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
 | 3 | Einsammeln | offen |
 | 4 | Neu nummerieren | offen |
 | 5 | FL-Templates über „Neu“ | offen |
@@ -190,6 +190,21 @@ Kopiert noch nichts.
   und wandern in Scheibe 10 mit nach `_ALT`.
 
 **Abnahme:** Du siehst die Zahlen pro Ampelfarbe und hörst Stichproben.
+
+**Gebaut (09.11.):** `fundstuecke.rs`, Archiv → Knopf „Fundstücke“, Einstellung
+„Altbestand“. Gemessen über die vier Ordner (8 s): 80 grün, 339 gelb, 16 rot,
+113 grau. Gelb: 144 ohne Titel (meist `Project_163.mp3`-Bounces), 103 ohne
+Nummer, 71 nur Nummer, 14 Nummer mit mehreren Titeln. Bei 33 grauen liegen
+noch Dateien nur im Altbestand (`nur_hier`), die nimmt Scheibe 3 mit.
+
+- Nummer auch ohne Klammern: `536.wav`, `182_2.mp3`, höchstens drei Stellen.
+  Sammelordner wie `700-799` sind keine Nummer.
+- Datei ohne Nummer im Nummernordner gehört zu dessen Nummer.
+- Namenlose Datei neben genau einem Song mit Export gehört zu ihm.
+- Übersprungen: `Audio`, `Backup`, `Autosaves`, `Samples`, `Templates`,
+  `Coverarts`, `Artists` (Scheibe 7).
+- Grau zuerst über byte-gleiche Datei, dann Nummer + Titel, dann eindeutigen
+  Titel. Namenlose Dateien nie über den Titel.
 
 ## Scheibe 3: Einsammeln
 

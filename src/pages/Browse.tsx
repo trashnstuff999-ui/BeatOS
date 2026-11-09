@@ -20,6 +20,7 @@ import {
   type AngleichModus,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
+import { FundstueckeDialog } from "../components/browse/FundstueckeDialog";
 import { PageBody, EmptyState, Button, Select, Segmented } from "../components/ui";
 import type { Beat, SortColumn } from "../types/browse";
 import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
@@ -84,6 +85,7 @@ export default function Browse() {
   const { isOpen: tagManagerOpen } = useTagManager();
 
   const [angleich, setAngleich] = useState<AngleichModus | null>(null);
+  const [fundstuecke, setFundstuecke] = useState(false);
 
   // ─── View Mode: Tabelle ⇄ Cover-Grid (persistiert) ─────────────────────────
   const [viewMode, setViewMode] = useState<"table" | "grid">(
@@ -258,6 +260,7 @@ export default function Browse() {
         isLoading={isLoading}
         onMigrate={() => setAngleich("struktur")}
         onRename={() => setAngleich("namen")}
+        onFundstuecke={() => setFundstuecke(true)}
       />
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -442,6 +445,8 @@ export default function Browse() {
       {/* ═══════════════════════════════════════════════════════════════════════
           Angleichen — Struktur und Namen als zwei getrennte Läufe
       ═══════════════════════════════════════════════════════════════════════ */}
+      {fundstuecke && <FundstueckeDialog onClose={() => setFundstuecke(false)} />}
+
       {angleich && (
         <MigrateArchiveDialog
           modus={angleich}

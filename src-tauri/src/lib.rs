@@ -112,6 +112,7 @@ use commands::{
     park_archived_projects,
     close_project_gaps,
     // Upload commands (Phase A: bootstrap, B: read, C: write, D: render+save)
+    scan_fundstuecke,
     get_templates_dir,
     read_template,
     write_template,
@@ -327,6 +328,7 @@ pub fn run() {
             get_upload_schedule,
             get_upload_queue,
             schedule_release,
+            scan_fundstuecke,
             unschedule_release,
             set_upload_skip,
             update_type_beat_info,
