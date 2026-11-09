@@ -15,7 +15,7 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
-| 3 | Einsammeln | 3a Herkunft gebaut 09.11., Kopierlauf offen |
+| 3 | Einsammeln | 3a erledigt, 3b Probelauf 09.11.: 23 Songs aus 600-699 (0939–0961), Rest Grün, Rot, Gelb, Grau-Reste offen |
 | 4 | Neu nummerieren | offen |
 | 4b | Alte Ideen + „Aus den Anfängen“ | offen |
 | 5 | FL-Templates über „Neu“ | offen |
@@ -228,9 +228,10 @@ noch Dateien nur im Altbestand (`nur_hier`), die nimmt Scheibe 3 mit.
   (`Amin` → `Am`), seltsame Werte (`125-140`, `Cm-Gm`) bleiben leer.
 - Grau mit `nur_hier`: die fehlenden Dateien in den bestehenden Archivordner
   nach `02_OLD`.
-- **Datumsprüfung:** passt das Datum nicht zu den Nachbarn mit ähnlicher alter
-  Nummer (in `500-599` liegen 28 Exporte von 10/2021 und 7 von 02/2026), wird
-  der Eintrag gelb „Datum passt nicht zur Nummer“.
+- **Datum:** Fertig ist der älteste Export. Die Ausreißer in `500-599` waren
+  Sample-Packs (zählen nicht) und neuere Versionen `_2`, `_3` von 02/2026
+  (ändern den ältesten Export nicht). Eine Nachbarn-Prüfung braucht es nicht;
+  die Liste zeigt das Fertig-Datum vor dem Einsammeln.
 - Gelb „ohne Titel“ bleibt sichtbar, alle Einträge sollen zu sehen sein.
 
 ### 3a: Herkunft (gebaut 09.11.)
@@ -243,6 +244,20 @@ noch Dateien nur im Altbestand (`nur_hier`), die nimmt Scheibe 3 mit.
 - Beim Start für alle Beats nachgetragen, überschreibt nichts. Gemessen: 119
   mit alter Nummer, 69 mit Projektordner, 44 ohne (2025/26 direkt mit
   Katalognummer entstanden), alle mit Begonnen.
+
+### 3b: Kopierlauf Grün (gebaut 09.11.)
+
+- `einsammeln.rs`: Fundstücke → Grün → Suche → „Einsammeln (N)“. Nummern ab
+  der höchsten in Archiv und DB (jetzt 0939).
+- Eigener Song-Ordner (`[532] Stay - 120 Em/`): sein Rest (`Samples/`,
+  `Backup/`) kommt mit nach `01_SAVEFILES`. Verweise der kopierten FLPs auf
+  mitkopierte Dateien werden auf die Kopien umgeschrieben. Handprobe Stay:
+  11 Verweise, 9 ins Archiv, 0 auf den Altbestand, 2 tot (USB-Stick `G:`,
+  schon im Original).
+- Byte-Vergleich je Kopie, Abbruch bei Abweichung. Datei schon byte-gleich im
+  Archiv → Song ausgelassen. Protokoll `_BEATOS/einsammeln_*.json`,
+  Rückgängig löscht nur unveränderte Kopien.
+- Probelauf: Suche `Beats\600-699`, 16 Songs (619 Focus bis 660 Masculine).
 
 **Abnahme:** Die Grün-Liste ist leer, die Gelb-Liste ist abgearbeitet oder
 bewusst vertagt.

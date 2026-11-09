@@ -21,6 +21,24 @@ export interface Fund {
   archiv: string | null;
   /** Dateien ohne byte-gleiche Kopie im Archiv */
   nur_hier: number;
+  /** Ältester Export (JJJJ-MM-TT) */
+  fertig: string | null;
   /** Exporte zuerst, neueste zuerst */
   dateien: FundDatei[];
+}
+
+export interface EinsammelEintrag {
+  id: number | null;
+  titel: string;
+  key: string | null;
+  bpm: number | null;
+  dateien: string[];
+}
+
+export interface EinsammelErgebnis {
+  fertig: { beat_id: string; ordner: string; dateien: [string, number][] }[];
+  /** „Titel: Grund" */
+  ausgelassen: string[];
+  fehler: string | null;
+  protokoll: string | null;
 }

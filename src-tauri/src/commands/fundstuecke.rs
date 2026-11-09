@@ -50,6 +50,8 @@ pub struct Fund {
     /// Dateien ohne byte-gleiche Kopie im Archiv. Bei Grau die Reste, die
     /// Scheibe 3 noch mitnehmen muss.
     pub nur_hier: usize,
+    /// Ältester Export (JJJJ-MM-TT): wann der Song fertig war
+    pub fertig: Option<String>,
     /// Exporte zuerst, neueste zuerst
     pub dateien: Vec<FundDatei>,
 }
@@ -115,7 +117,12 @@ fn generisch(titel: &str) -> bool {
 fn werk_aus_name(name: &str, ist_datei: bool) -> Option<Werk> {
     let stamm = if ist_datei { name.rsplit_once('.').map(|(a, _)| a).unwrap_or(name) } else { name };
     if let Some(o) = old_system_id_and_title(stamm) {
-        return Some(Werk { id: Some(o.id), titel: o.title, key: o.key, bpm: o.bpm });
+        // „[638] Cuthroat -150 - Gm": die „-150" ist das Tempo, nicht der Titel
+        let titel = match (o.title.rsplit_once(' '), o.bpm) {
+            (Some((vorn, zahl)), Some(b)) if zahl.trim_start_matches('-') == b.to_string() => vorn.trim().to_string(),
+            _ => o.title,
+        };
+        return Some(Werk { id: Some(o.id), titel, key: o.key, bpm: o.bpm });
     }
     if let Some(w) = nur_nummer(ohne_version(stamm)) {
         return Some(w);
@@ -330,8 +337,10 @@ fn bewerten(
         .map(|f| if f.size == 0 { None } else { by_size.get(&f.size).and_then(|cs| cs.iter().find(|c| same_content(&f.path, c))) })
         .collect();
     let nur_hier = treffer.iter().filter(|t| t.is_none()).count();
+    let fertig = fs.iter().filter(|f| !f.flp && f.modified > 0).map(|f| f.modified).min()
+        .map(|s| crate::utils::secs_to_date(s as u64));
     let fund = |ampel, grund: &str, archiv| Fund {
-        id, titel: titel.clone(), key: key.clone(), bpm, ampel, grund: grund.to_string(), archiv, nur_hier,
+        id, titel: titel.clone(), key: key.clone(), bpm, ampel, grund: grund.to_string(), archiv, nur_hier, fertig: fertig.clone(),
         dateien: fs.iter().zip(&treffer).map(|(f, t)| FundDatei { path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some() }).collect(),
     };
 
@@ -463,6 +472,7 @@ mod tests {
         assert_eq!(finde(539).dateien.len(), 1);
         assert!(r.iter().all(|f| f.titel != "Lo-Fi"));
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
+        assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true).unwrap().titel, "Cuthroat");
         assert_eq!(ohne_tag("@xP4RA - Forever"), "Forever");
         assert_eq!(ohne_tag("Destiny - "), "Destiny");
         assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");

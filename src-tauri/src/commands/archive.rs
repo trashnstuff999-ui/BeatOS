@@ -247,7 +247,7 @@ fn date_from_archive_path(beat_path: &Path) -> Option<String> {
 
 /// Detect whether a beat folder contains artwork (image) / video files.
 /// Checks the flat root and the legacy 02_VISUALS/ subfolder.
-fn detect_assets(beat_root: &Path) -> (bool, bool) {
+pub(crate) fn detect_assets(beat_root: &Path) -> (bool, bool) {
     let mut has_artwork = false;
     let mut has_video = false;
     for dir in [beat_root.to_path_buf(), beat_root.join("02_VISUALS")] {

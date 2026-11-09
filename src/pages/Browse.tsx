@@ -447,7 +447,7 @@ export default function Browse() {
       {/* ═══════════════════════════════════════════════════════════════════════
           Angleichen — Struktur und Namen als zwei getrennte Läufe
       ═══════════════════════════════════════════════════════════════════════ */}
-      {fundstuecke && <FundstueckeDialog onClose={() => setFundstuecke(false)} />}
+      {fundstuecke && <FundstueckeDialog onClose={() => setFundstuecke(false)} onEingesammelt={refresh} />}
 
       {angleich && (
         <MigrateArchiveDialog
