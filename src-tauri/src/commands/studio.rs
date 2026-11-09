@@ -1031,10 +1031,9 @@ fn apply_steps(steps: Vec<MergeStep>, was: Option<&str>) -> Result<MergeReport, 
     // stürzt die App mittendrin ab, ist die Zuordnung trotzdem nachvollziehbar.
     let log_paths = write_merge_log(&steps);
 
-    // Der Zielordner steckt in den Schritten; die lesbare Liste landet dort.
-    let target_dir = steps
-        .first()
-        .and_then(|s| Path::new(&s.to).parent().map(|p| p.to_path_buf()));
+    // Die lesbare Liste landet neben den Protokollen in `_BEATOS`, nicht
+    // zwischen den Projektordnern.
+    let target_dir = crate::db::backup_target_path().parent().map(|p| p.to_path_buf());
 
     let (done, mut failed) = merge_steps_on_disk(&steps);
 

@@ -20,7 +20,14 @@ static DB_PATH: OnceLock<PathBuf> = OnceLock::new();
 /// Windows bleibt bei `%LOCALAPPDATA%\BeatOS`: dort liegt der Bestand, und ein
 /// Umzug an einen „saubereren" Ort würde nur Daten bewegen, die längst am
 /// richtigen Platz sind.
-#[cfg(windows)]
+/// Tests bekommen eine eigene Datenbank im Temp-Ordner. Mit der echten
+/// schrieben sie Protokolle und Sicherungen in die Bibliothek.
+#[cfg(test)]
+fn data_dir() -> Option<PathBuf> {
+    Some(std::env::temp_dir().join(format!("beatos_test_{}", std::process::id())))
+}
+
+#[cfg(all(windows, not(test)))]
 fn data_dir() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
         .filter(|v| !v.is_empty())
@@ -29,7 +36,7 @@ fn data_dir() -> Option<PathBuf> {
 
 /// macOS. Linux ist kein Ziel dieser App — käme es dazu, gehört hier
 /// `$XDG_DATA_HOME` hin.
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(test)))]
 fn data_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|v| !v.is_empty())
@@ -60,7 +67,7 @@ fn resolve_db_path() -> PathBuf {
     let new_path = dir.join("beats.db");
     let legacy = Path::new(LEGACY_DB_PATH);
 
-    if !new_path.exists() && legacy.exists() {
+    if !cfg!(test) && !new_path.exists() && legacy.exists() {
         match migrate_legacy_db(legacy, &new_path) {
             Ok(()) => {
                 // Keep the old file around, but renamed so nothing keeps
@@ -143,7 +150,11 @@ fn backup_dir() -> PathBuf {
                 |row| row.get(0),
             )
             .ok()?;
-        library_dir_from_archive(&archive).filter(|p| p.is_dir())
+        let lib = library_dir_from_archive(&archive).filter(|p| p.is_dir())?;
+        // Alles, was die App selbst schreibt, in einem Ordner statt lose im Root
+        let dir = lib.join("_BEATOS");
+        std::fs::create_dir_all(&dir).ok()?;
+        Some(dir)
     });
 
     from_settings.unwrap_or_else(|| {

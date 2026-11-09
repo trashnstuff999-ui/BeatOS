@@ -798,6 +798,9 @@ mod tests {
         let paths: Vec<String> = roots.split(';').map(|s| s.trim().to_string()).collect();
 
         let res = match_projects_blocking(&paths, Path::new(&archive), deep).unwrap();
+        if let Ok(p) = std::env::var("BEATOS_DUMP") {
+            std::fs::write(p, serde_json::to_string_pretty(&res).unwrap()).unwrap();
+        }
         let archived = res.iter().filter(|r| r.archive_folder.is_some()).count();
         let unvollstaendig = res.iter().filter(|r| r.missing_important > 0).count();
         let mehrdeutig = res
