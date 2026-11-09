@@ -249,6 +249,10 @@ pub fn get_beats_paginated(
         // Ohne Datum ans Ende, sonst stuenden sie je nach Richtung vorne.
         "created_date" => "COALESCE(created_date, '0000-00-00')",
         "key" => "COALESCE(LOWER(key), 'zzz')",
+        // Ohne Wert ans Ende, wie beim Datum
+        "begonnen" => "COALESCE(begonnen, '9999-99-99')",
+        // Alte Nummern als Zahl, Projektordner („Project_0121") danach
+        "alte_id" => "CASE WHEN alte_id GLOB '[0-9]*' THEN printf('%07d', CAST(alte_id AS INTEGER)) ELSE 'z' || COALESCE(alte_id, 'zz') END",
         // Nach Workflow, nicht nach Alphabet — alphabetisch kaeme
         // finished/idea/sold/wip heraus, was keiner Reihenfolge entspricht.
         // Leeres/unbekanntes Status sortiert ans Ende.

@@ -463,7 +463,12 @@ export function DetailPanel({
               fontSize: 12, fontFamily: "monospace",
               color: "rgba(255,255,255,0.6)",
             }}>
-              #{beat.id}{beat.created_date ? ` · ${datumKurz(beat.created_date)}` : ""}
+              {/* Begonnen schlägt das FLP-Datum: übernommene Beats tragen dort den Kopiertag */}
+              {[
+                `#${beat.id}`,
+                beat.begonnen ? `begonnen ${datumKurz(beat.begonnen)}` : beat.created_date ? datumKurz(beat.created_date) : null,
+                beat.alte_id ? `alt ${/^d+$/.test(beat.alte_id) ? "#" : ""}${beat.alte_id}` : null,
+              ].filter(Boolean).join(" · ")}
             </div>
           </div>
         </div>

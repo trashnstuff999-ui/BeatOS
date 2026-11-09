@@ -26,6 +26,10 @@ pub struct Beat {
     pub sold_to: Option<String>,
     pub has_artwork: Option<i64>,
     pub has_video: Option<i64>,
+    /// Alte Nummer oder Projektordner, aus dem der Beat stammt
+    pub alte_id: Option<String>,
+    /// Wann der Song begonnen wurde (JJJJ-MM-TT)
+    pub begonnen: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -186,7 +190,7 @@ pub struct UpdateBeatParams {
 /// Canonical beats column list — must stay in sync with `row_to_beat` below.
 pub const BEAT_COLUMNS: &str =
     "id, name, path, bpm, key, status, tags, favorite, \
-     created_date, modified_date, notes, sold_to, has_artwork, has_video";
+     created_date, modified_date, notes, sold_to, has_artwork, has_video, alte_id, begonnen";
 
 /// Convert a database row to a Beat struct
 pub fn row_to_beat(row: &rusqlite::Row) -> SqlResult<Beat> {
@@ -205,5 +209,7 @@ pub fn row_to_beat(row: &rusqlite::Row) -> SqlResult<Beat> {
         sold_to:       row.get(11).ok(),
         has_artwork:   row.get(12).ok(),
         has_video:     row.get(13).ok(),
+        alte_id:       row.get(14).ok().flatten(),
+        begonnen:      row.get(15).ok().flatten(),
     })
 }

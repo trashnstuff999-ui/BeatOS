@@ -83,6 +83,100 @@ struct CreateDateJson {
     archived_at: String,
     source_folder: String,
     files: Vec<FileMetadata>,
+    /// Alte Nummer (`630` aus „[630] Bloom") oder der Projektordner. Fehlt in
+    /// älteren Dateien, dann rechnet herkunft() sie aus den Feldern oben aus.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    alte_id: Option<String>,
+    /// Frühestes Dateidatum: wann der Song angefangen wurde (JJJJ-MM-TT)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    begonnen: Option<String>,
+}
+
+/// Herkunft eines Beats: alte Nummer und Begonnen-Datum.
+///
+/// Alte Nummer: `[630]` im Quellordner oder in einem Dateinamen, sonst der
+/// Projektordner (`Project_0121`). Begonnen: das früheste Datum aller
+/// Dateien. Felder, die in der Datei schon stehen, gehen vor.
+fn herkunft(json: &CreateDateJson) -> (Option<String>, Option<String>) {
+    let name_von = |p: &str| Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let ordner = name_von(&json.source_folder);
+    let alte_nr = std::iter::once(ordner.clone())
+        .chain(json.files.iter().map(|f| name_von(&f.original_path)))
+        .find_map(|n| crate::commands::archive_match::old_system_id_and_title(&n).map(|o| o.id.to_string()));
+    let projekt = ordner.split(" - ").next().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+    let begonnen = json.files.iter()
+        .flat_map(|f| [&f.created_at, &f.modified_at])
+        .filter(|d| d.len() == 10 && !d.starts_with("1970"))
+        .min()
+        .cloned();
+    (json.alte_id.clone().or(alte_nr).or(projekt), json.begonnen.clone().or(begonnen))
+}
+
+fn herkunft_aus_ordner(beat_path: &Path) -> (Option<String>, Option<String>) {
+    let json = flp_subdir(beat_path)
+        .and_then(|d| std::fs::read_to_string(d.join("create_date.json")).ok())
+        .and_then(|s| serde_json::from_str::<CreateDateJson>(&s).ok());
+    match json {
+        Some(j) => herkunft(&j),
+        None => herkunft_ohne_protokoll(beat_path),
+    }
+}
+
+/// Aus dem alten System übernommene Beats haben kein Protokoll. Ihre eigenen
+/// FLPs und Exporte tragen aber die Nummer („[703] Solanium - 119 Am.flp")
+/// und ein echtes Änderungsdatum. `Samples/` und `Audio/` zählen nicht: dort
+/// liegen Sample-Packs, die älter sind als der Song.
+fn herkunft_ohne_protokoll(beat_path: &Path) -> (Option<String>, Option<String>) {
+    fn sammeln(dir: &Path, out: &mut Vec<(String, u64)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.filter_map(|e| e.ok()) {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() {
+                if !["samples", "audio"].contains(&name.to_lowercase().as_str()) {
+                    sammeln(&p, out);
+                }
+                continue;
+            }
+            let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+            if ext == "flp" || is_audio_extension(&ext) {
+                if let Some(m) = file_modified_secs(&p) {
+                    out.push((name, m));
+                }
+            }
+        }
+    }
+    let mut dateien = Vec::new();
+    sammeln(beat_path, &mut dateien);
+    let alte_id = dateien.iter().find_map(|(n, _)| {
+        crate::commands::archive_match::old_system_id_and_title(n).map(|o| o.id.to_string())
+    });
+    let begonnen = dateien.iter().map(|(_, m)| *m).filter(|&m| m > 0).min().map(secs_to_date);
+    (alte_id, begonnen)
+}
+
+/// Alte Nummer und Begonnen für alle Beats nachtragen, die sie noch nicht
+/// haben. Überschreibt nichts. Läuft beim Start, braucht nur die DB-Pfade.
+pub fn herkunft_nachtragen() -> Result<usize, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, path FROM beats WHERE path IS NOT NULL AND (alte_id IS NULL OR begonnen IS NULL)")
+        .map_err(|e| e.to_string())?;
+    let zeilen: Vec<(String, String)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    let mut n = 0;
+    for (id, pfad) in zeilen {
+        let (alte_id, begonnen) = herkunft_aus_ordner(Path::new(&pfad));
+        if alte_id.is_none() && begonnen.is_none() { continue; }
+        n += conn.execute(
+            "UPDATE beats SET alte_id = COALESCE(alte_id, ?1), begonnen = COALESCE(begonnen, ?2) WHERE id = ?3",
+            rusqlite::params![alte_id, begonnen, id],
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(n)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -484,7 +578,11 @@ fn archive_beat_inner(
         archived_at: secs_to_date(now_secs),
         source_folder: params.source_folder.clone(),
         files: file_metadata,
+        alte_id: None,
+        begonnen: None,
     };
+    let (alte_id, begonnen) = herkunft(&create_date_json);
+    let create_date_json = CreateDateJson { alte_id: alte_id.clone(), begonnen: begonnen.clone(), ..create_date_json };
     
     let json_content = serde_json::to_string_pretty(&create_date_json)
         .map_err(|e| format!("Cannot create JSON: {}", e))?;
@@ -528,6 +626,8 @@ fn archive_beat_inner(
             params.soundcloud_tags,
         ],
     ).map_err(|e| format!("DB insert error: {}", e))?;
+    tx.execute("UPDATE beats SET alte_id = ?1, begonnen = ?2 WHERE id = ?3", rusqlite::params![alte_id, begonnen, beat_id])
+        .map_err(|e| format!("DB insert error: {}", e))?;
     tx.commit().map_err(|e| format!("DB commit error: {}", e))?;
 
     // Auto-rename: apply the same filename convention as the Upload-tab
@@ -750,4 +850,54 @@ fn fix_dates_blocking(archive_base_path: &str) -> Result<FixDatesResult, String>
     }
 
     Ok(FixDatesResult { updated, not_found, no_flp, errors })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn datei(pfad: &str, erstellt: &str, geaendert: &str) -> FileMetadata {
+        FileMetadata { original_path: pfad.into(), created_at: erstellt.into(), modified_at: geaendert.into(), accessed_at: "2026-11-09".into() }
+    }
+
+    #[test]
+    fn herkunft_aus_protokoll() {
+        // Alte Nummer steckt im Dateinamen, der Ordner ist eine Projektnummer
+        let j = CreateDateJson {
+            archived_at: "2026-05-25".into(),
+            source_folder: r"C:\PROD\Project_0003 - Not Myself -140 Bm".into(),
+            files: vec![
+                datei(r"C:\PROD\Project_0003 - Not Myself -140 Bm\[665] Not Myself - 140 Bm.mp3", "2026-02-01", "2023-04-02"),
+                datei(r"C:\PROD\Project_0003 - Not Myself -140 Bm\Project_3.flp", "2026-02-01", "2023-03-30"),
+                datei(r"C:\PROD\Project_0003 - Not Myself -140 Bm\kaputt.txt", "1970-01-01", "1970-01-01"),
+            ],
+            alte_id: None,
+            begonnen: None,
+        };
+        assert_eq!(herkunft(&j), (Some("665".into()), Some("2023-03-30".into())));
+
+        // Ohne alte Nummer: der Projektordner. Stehende Felder gehen vor.
+        let j = CreateDateJson {
+            source_folder: r"C:\PROD\Project_121".into(),
+            files: vec![datei(r"C:\PROD\Project_121\BETTER DAYS.mp3", "2026-05-23", "2026-05-25")],
+            begonnen: Some("2021-01-01".into()),
+            ..j
+        };
+        assert_eq!(herkunft(&j), (Some("Project_121".into()), Some("2021-01-01".into())));
+    }
+
+    /// Was beim Start nachgetragen würde, ohne zu schreiben: BEATOS_ARCHIVE
+    #[test]
+    #[ignore]
+    fn herkunft_handprobe() {
+        let index = crate::commands::archive_match::read_archive_index(Path::new(&std::env::var("BEATOS_ARCHIVE").unwrap()));
+        let (mut nr, mut projekt, mut ohne_id, mut ohne_datum) = (0, 0, 0, 0);
+        for e in &index {
+            let (id, datum) = herkunft_aus_ordner(&e.path);
+            match &id { Some(i) if i.chars().all(|c| c.is_ascii_digit()) => nr += 1, Some(_) => projekt += 1, None => ohne_id += 1 }
+            if datum.is_none() { ohne_datum += 1; }
+            println!("{}\t{}\t{}", e.folder, id.unwrap_or_default(), datum.unwrap_or_default());
+        }
+        println!("Beats {}: alte Nummer {nr}, Projektordner {projekt}, ohne ID {ohne_id}, ohne Datum {ohne_datum}", index.len());
+    }
 }

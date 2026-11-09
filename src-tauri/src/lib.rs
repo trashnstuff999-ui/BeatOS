@@ -229,6 +229,13 @@ pub fn run() {
             get_beat_count,
             get_dashboard_actions,
             get_stats_details,
+            // Alte Nummer und Begonnen für Beats nachtragen, die sie noch nicht
+            // haben (Bibliothek-Umbau). Nur lesend auf der Platte, im Hintergrund.
+            std::thread::spawn(|| match commands::herkunft_nachtragen() {
+                Ok(n) if n > 0 => eprintln!("Herkunft nachgetragen: {} Beats", n),
+                Ok(_) => {}
+                Err(e) => eprintln!("WARNING: Herkunft nachtragen: {}", e),
+            });
             // Beat CRUD
             get_beats,
             get_beats_paginated,

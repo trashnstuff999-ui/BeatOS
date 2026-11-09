@@ -34,6 +34,8 @@ const SORT_OPTIONS = [
   { value: "created_date:asc", label: "Älteste zuerst" },
   { value: "id:desc", label: "Zuletzt archiviert" },
   { value: "id:asc", label: "Zuerst archiviert" },
+  { value: "begonnen:asc", label: "Zuerst begonnen" },
+  { value: "alte_id:asc", label: "Alte Nummer" },
   { value: "name:asc", label: "Titel A–Z" },
   { value: "bpm:asc", label: "Tempo aufsteigend" },
   { value: "bpm:desc", label: "Tempo absteigend" },

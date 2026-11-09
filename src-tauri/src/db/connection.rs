@@ -410,6 +410,10 @@ pub fn init_db() -> Result<(), String> {
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN upload_skip INTEGER NOT NULL DEFAULT 0", []);
 
                 // Studio tab: per-project status/priority, keyed by folder path
+                // Bibliothek-Umbau: alte Nummer ("630", "Project_0121") und wann der
+                // Song begonnen wurde. Bleiben über jede Neu-Nummerierung erhalten.
+                let _ = conn.execute("ALTER TABLE beats ADD COLUMN alte_id TEXT", []);
+                let _ = conn.execute("ALTER TABLE beats ADD COLUMN begonnen TEXT", []);
                 if let Err(e) = conn.execute(
                     "CREATE TABLE IF NOT EXISTS studio_projects (
                         path       TEXT PRIMARY KEY,

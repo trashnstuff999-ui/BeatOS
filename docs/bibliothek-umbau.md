@@ -15,8 +15,9 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
-| 3 | Einsammeln | offen |
+| 3 | Einsammeln | 3a Herkunft gebaut 09.11., Kopierlauf offen |
 | 4 | Neu nummerieren | offen |
+| 4b | Alte Ideen + „Aus den Anfängen“ | offen |
 | 5 | FL-Templates über „Neu“ | offen |
 | 6 | Ohne Nummer | offen |
 | 7 | Künstler | offen |
@@ -222,6 +223,26 @@ noch Dateien nur im Altbestand (`nur_hier`), die nimmt Scheibe 3 mit.
 - **Probelauf:** nur `Music\Songs\Beats\600-699`. Danach siehst du dir das
   Archiv in BeatOS an, dann kommt der Rest.
 - Rückgängig löscht nur die Kopien.
+- Neuester Export und neueste FLP heißen nach Schema `Titel [Key BPM]`, ältere
+  Versionen behalten in `02_OLD` ihre Originalnamen. Key wird angeglichen
+  (`Amin` → `Am`), seltsame Werte (`125-140`, `Cm-Gm`) bleiben leer.
+- Grau mit `nur_hier`: die fehlenden Dateien in den bestehenden Archivordner
+  nach `02_OLD`.
+- **Datumsprüfung:** passt das Datum nicht zu den Nachbarn mit ähnlicher alter
+  Nummer (in `500-599` liegen 28 Exporte von 10/2021 und 7 von 02/2026), wird
+  der Eintrag gelb „Datum passt nicht zur Nummer“.
+- Gelb „ohne Titel“ bleibt sichtbar, alle Einträge sollen zu sehen sein.
+
+### 3a: Herkunft (gebaut 09.11.)
+
+- `beats.alte_id` und `beats.begonnen`, auch in `create_date.json`. Sortierbar
+  im Archiv („Zuerst begonnen“, „Alte Nummer“), angezeigt im Detail-Panel.
+- Alte ID: `[630]` aus Quellordner oder Dateinamen, sonst der Projektordner
+  (`Project_0121`). Begonnen: frühestes Datum der eigenen FLPs und Exporte,
+  `Samples/` und `Audio/` zählen nicht (Sample-Packs sind älter als der Song).
+- Beim Start für alle Beats nachgetragen, überschreibt nichts. Gemessen: 119
+  mit alter Nummer, 69 mit Projektordner, 44 ohne (2025/26 direkt mit
+  Katalognummer entstanden), alle mit Begonnen.
 
 **Abnahme:** Die Grün-Liste ist leer, die Gelb-Liste ist abgearbeitet oder
 bewusst vertagt.
@@ -234,6 +255,10 @@ Anzahl der Songs.
 - Reihenfolge nach Fertig-Datum: `create_date.json` in `01_SAVEFILES`, sonst
   Archivmonat, sonst Dateidatum.
 - Umbenannt wird nur der Ordnername, nicht die Dateien darin.
+- Vorher die heutige Katalognummer als `frueher_nr` sichern (DB und
+  `create_date.json`). Für 44 Beats ist sie die einzige ID.
+- Was erst nach dem Umbau fertig wird, bekommt die nächste Nummer, auch wenn
+  es alt begonnen ist. Das Alter zeigt `begonnen`.
 - DB in einem Lauf: Beat-Einträge plus `beat_uploads`, `beat_sample_credits`
   und `beat_description_overrides` (alle per `beat_id`).
 - BeatOS versteht danach überall `B0012`. Vorher alle Stellen prüfen, die
@@ -335,6 +360,9 @@ dem Beat zu.
 | 09.11. | A-Nummer pro Release, nicht pro Künstler |
 | 09.11. | 67 Test-Protokolle nach `_ALT` |
 | 09.11. | Alte Songs nie verlieren: kopieren, nie zusammenlegen, Ampel statt Einzeldurchsicht |
+| 09.11. | Nummer = wann fertig. Alte ID und Begonnen als eigene DB-Spalten, sortierbar |
+| 09.11. | Unfertige alte Ideen: Liste „Alte Ideen“ (nach Alter, „In Produktion holen“), Filter „Aus den Anfängen“; Scheibe 4b |
+| 09.11. | Gelb „ohne Titel“ bleibt sichtbar |
 
 ## Offene Fragen
 

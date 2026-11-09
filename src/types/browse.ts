@@ -20,13 +20,17 @@ export interface Beat {
   sold_to: string | null;
   has_artwork: number | null;
   has_video: number | null;
+  /** Alte Nummer („703") oder Projektordner („Project_0121") */
+  alte_id?: string | null;
+  /** Wann der Song begonnen wurde (JJJJ-MM-TT) */
+  begonnen?: string | null;
 }
 
 export type BeatStatus = "idea" | "wip" | "finished" | "sold";
 
 // ─── Sort State ─────────────────────────────────────────────────────────────
 
-export type SortColumn = "id" | "name" | "key" | "bpm" | "status" | "created_date";
+export type SortColumn = "id" | "name" | "key" | "bpm" | "status" | "created_date" | "begonnen" | "alte_id";
 export type SortDirection = "asc" | "desc";
 
 export interface SortState {
