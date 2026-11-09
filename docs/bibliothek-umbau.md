@@ -15,7 +15,7 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
-| 3 | Einsammeln | 3a erledigt, 3b Probelauf 09.11.: 23 Songs aus 600-699 (0939–0961). 10.11.: Rot R0001–R0016, Teil-Rückgängig (9f824b2), Gelb-Ansicht mit Song/Loop/Gleich wie/Weg (c4659f8). Offen: Grün-Rest (Oh, YaYa, Glassy, Narcotic), Grau-Reste (26), Gelb abarbeiten |
+| 3 | Einsammeln | 3a erledigt, 3b Probelauf 09.11.: 23 Songs aus 600-699 (0939–0961). 10.11.: Rot R0001–R0016, Teil-Rückgängig (9f824b2), Gelb-Ansicht mit Song/Loop/Gleich wie/Weg (c4659f8). Grün leer, Grau-Reste 26 Beats/52 Dateien nach 02_OLD (10.11.). Offen: Gelb abarbeiten (364) |
 | 4 | Neu nummerieren | offen |
 | 4b | Alte Ideen + „Aus den Anfängen“ | offen |
 | 5 | FL-Templates über „Neu“ | offen |
