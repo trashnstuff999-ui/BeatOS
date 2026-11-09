@@ -24,6 +24,19 @@ describe("aufteilen", () => {
     expect(teile.find(t => t.dateien[0].flp)?.dateien).toHaveLength(1);
   });
 
+  it("blendet Teile aus, die schon ganz im Archiv liegen, und hängt FLPs an ihren Ordner", () => {
+    const imArchiv = (p: string): FundDatei => ({ ...datei(p, "Destiny", "Dm", 181), im_archiv: true });
+    const teile = aufteilen(fund("Key/BPM uneinheitlich", [
+      imArchiv(String.raw`C:\P0455\Destiny [181 Dm].mp3`),
+      imArchiv(String.raw`C:\P0455\Destiny [181 Dm]_2.mp3`),
+      datei(String.raw`C:\P0209\Destiny [140 F#m].mp3`, "Destiny", "F#m", 140),
+      datei(String.raw`C:\P0209\Destiny.flp`, "Destiny", null, null, true),
+    ]));
+    expect(teile).toHaveLength(1);
+    expect(teile[0].key).toBe("F#m");
+    expect(teile[0].dateien.map(d => d.path)).toEqual([String.raw`C:\P0209\Destiny [140 F#m].mp3`, String.raw`C:\P0209\Destiny.flp`]);
+  });
+
   it("lässt andere Gründe zusammen", () => {
     const f = fund("ohne Nummer", [datei("a.mp3", "X", "Am", 120), datei("b.mp3", "X", "Cm", 120)]);
     expect(aufteilen(f)).toEqual([f]);

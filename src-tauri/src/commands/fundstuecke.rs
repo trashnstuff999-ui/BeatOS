@@ -671,7 +671,7 @@ mod tests {
         if let Ok(p) = std::env::var("BEATOS_DUMP") {
             let zeilen: Vec<String> = r.iter().map(|f| format!("{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 f.ampel, f.id.map(|i| i.to_string()).unwrap_or_default(), f.titel, format!("{} (nur hier {})", f.grund, f.nur_hier),
-                f.archiv.clone().unwrap_or_default(), f.dateien.len(), f.dateien[0].path)).collect();
+                f.archiv.clone().unwrap_or_default(), f.dateien.len(), f.dateien.iter().map(|d| format!("{}{}", if d.im_archiv { "A:" } else { "" }, d.path)).collect::<Vec<_>>().join(" | "))).collect();
             fs::write(p, zeilen.join("\n")).unwrap();
         }
     }

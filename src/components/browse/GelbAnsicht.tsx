@@ -9,7 +9,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { C, radius } from "../../lib/theme";
 import { Button } from "../ui";
-import type { Fund, EinsammelArt } from "../../types/fundstuecke";
+import type { Fund, FundDatei, EinsammelArt } from "../../types/fundstuecke";
 
 /** Reihenfolge der Gruppen; was hier fehlt, kommt vor „ohne Titel“ */
 const GRUPPEN: { grund: string; name: string }[] = [
@@ -25,17 +25,25 @@ const ZULETZT = { grund: "ohne Titel", name: "Ohne Titel (Bounces)" };
 const AUFTEILEN = new Set(["Key/BPM uneinheitlich", "Nummer mit mehreren Titeln"]);
 
 /** Gemischte Einträge in Teile mit gleichem Titel/Key/BPM zerlegen.
- *  FLPs ohne Angabe bilden einen eigenen Teil: wohin sie gehören, weiß nur das Ohr. */
+ *  Datei ohne Key/BPM (meist FLP) kommt zum einzigen Teil aus ihrem Ordner,
+ *  sonst bildet sie einen eigenen Teil: wohin sie gehört, weiß nur das Ohr.
+ *  Teile, die schon ganz im Archiv liegen, fallen weg. */
 export function aufteilen(f: Fund): Fund[] {
   if (!AUFTEILEN.has(f.grund)) return [f];
   const teile = new Map<string, Fund["dateien"]>();
-  for (const d of f.dateien) {
-    const k = [d.titel?.toLowerCase() ?? "", d.key?.toLowerCase() ?? "", d.bpm ?? ""].join("|");
-    teile.set(k, [...(teile.get(k) ?? []), d]);
+  const dazu = (k: string, d: FundDatei) => teile.set(k, [...(teile.get(k) ?? []), d]);
+  const ohne = f.dateien.filter(d => !d.key && !d.bpm);
+  for (const d of f.dateien) if (d.key || d.bpm) dazu([d.titel?.toLowerCase() ?? "", d.key?.toLowerCase() ?? "", d.bpm].join("|"), d);
+  const ordner = (p: string) => p.replace(/[\\/][^\\/]*$/, "");
+  for (const d of ohne) {
+    const passend = [...teile.keys()].filter(k => !k.startsWith("?") && teile.get(k)!.some(x => ordner(x.path) === ordner(d.path)));
+    dazu(passend.length === 1 ? passend[0] : "?" + ordner(d.path), d);
   }
-  if (teile.size <= 1) return [f];
-  return [...teile.values()].map(dateien => {
-    const d = dateien.find(x => x.titel || x.key || x.bpm) ?? dateien[0];
+  for (const [k, ds] of teile) if (ds.every(d => d.im_archiv)) teile.delete(k);
+  const liste = [...teile.values()];
+  if (liste.length === 1 && liste[0].length === f.dateien.length) return [f];
+  return liste.map(dateien => {
+    const d = dateien.find(x => x.key || x.bpm) ?? dateien[0];
     return { ...f, titel: d.titel ?? f.titel, key: d.key, bpm: d.bpm, dateien };
   });
 }
