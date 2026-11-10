@@ -139,7 +139,14 @@ fn song_ordner(e: &EinsammelEintrag) -> Option<PathBuf> {
             !t.is_empty() && normalize_title(&name).starts_with(&t)
         }
     };
-    passt.then_some(erster)
+    // Sammelordner wie „Music\Songs\Lo-Fi“ (Name passt zu „LoFi“) enthalten
+    // andere Songs: eigener Ordner nur, wenn jede FLP/jeder Export darin dazugehört
+    let gelistet: Vec<String> = e.dateien.iter().map(|d| vergleichsform(d)).collect();
+    let fremd = std::fs::read_dir(&erster).into_iter().flatten().flatten().any(|x| {
+        let p = x.path();
+        p.is_file() && (ist_flp(&p) || ist_audio(&p)) && !gelistet.contains(&vergleichsform(&p.to_string_lossy()))
+    });
+    (passt && !fremd).then_some(erster)
 }
 
 #[tauri::command(async)]
@@ -659,6 +666,32 @@ mod tests {
     }
 
     #[test]
+    fn sammelordner_wird_nicht_mitkopiert() {
+        let t = std::env::temp_dir().join(format!("beatos_einsammeln_lofi_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let arch = t.join("archiv");
+        fs::create_dir_all(&arch).unwrap();
+        let lofi = t.join("alt/Lo-Fi");
+        datei(&lofi.join("[239] LoFi - Bpm75 - D#m.mp3"), b"lofi");
+        datei(&lofi.join("[239] LoFi - Bpm75 - D#m.flp"), b"lofi-flp");
+        datei(&lofi.join("[280] Paris - Bpm92 - Amin.mp3"), b"paris");
+        datei(&lofi.join("untitled.flp"), b"fremd");
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE beats (id TEXT PRIMARY KEY, name TEXT, path TEXT, bpm REAL, key TEXT, status TEXT, notes TEXT,
+            created_date TEXT, modified_date TEXT, favorite INTEGER, has_artwork INTEGER, has_video INTEGER, alte_id TEXT, begonnen TEXT);").unwrap();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+        let e = EinsammelEintrag { id: Some(239), titel: "LoFi".into(), key: Some("D#m".into()), bpm: Some(75), archiv: None,
+            dateien: vec![s(&lofi.join("[239] LoFi - Bpm75 - D#m.mp3")), s(&lofi.join("[239] LoFi - Bpm75 - D#m.flp"))] };
+        let r = einsammeln_mit(&conn, vec![e], &arch, &t.join("_BEATOS"), Art::Archiv).unwrap();
+        assert!(r.fehler.is_none(), "{:?}", r.fehler);
+        let mut alle = Vec::new();
+        collect_files(Path::new(&r.fertig[0].ordner), Path::new(&r.fertig[0].ordner), &mut alle);
+        let namen: Vec<String> = alle.iter().map(|(_, _, rel)| rel.clone()).collect();
+        assert!(!namen.iter().any(|n| n.contains("Paris") || n.contains("untitled")), "{namen:?}");
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
     fn loop_nach_samples() {
         let t = std::env::temp_dir().join(format!("beatos_einsammeln_loop_{}", std::process::id()));
         let _ = fs::remove_dir_all(&t);
@@ -730,9 +763,14 @@ mod tests {
         let db = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap()).join("BeatOS").join("beats.db");
         let conn = rusqlite::Connection::open(&db).unwrap();
         let arch = PathBuf::from(std::env::var("BEATOS_ARCHIVE").unwrap());
-        let e = EinsammelEintrag { id: None, titel: String::new(), key: None, bpm: None, archiv: Some(std::env::var("BEATOS_ARCHIV_ORDNER").unwrap()),
+        // Ohne BEATOS_ARCHIV_ORDNER: als neuer Song (BEATOS_TITEL, _ID, _KEY, _BPM)
+        let v = |k: &str| std::env::var(k).ok().filter(|s| !s.is_empty());
+        let archiv = v("BEATOS_ARCHIV_ORDNER");
+        let art = if archiv.is_some() { Art::Reste } else { Art::Archiv };
+        let e = EinsammelEintrag { id: v("BEATOS_ID").and_then(|s| s.parse().ok()), titel: v("BEATOS_TITEL").unwrap_or_default(),
+            key: v("BEATOS_KEY"), bpm: v("BEATOS_BPM").and_then(|s| s.parse().ok()), archiv,
             dateien: std::env::var("BEATOS_DATEIEN").unwrap().split(';').map(|s| s.trim().to_string()).collect() };
-        let r = einsammeln_mit(&conn, vec![e], &arch, &arch.parent().unwrap().join("_BEATOS"), Art::Reste).unwrap();
+        let r = einsammeln_mit(&conn, vec![e], &arch, &arch.parent().unwrap().join("_BEATOS"), art).unwrap();
         println!("{:?} {:?} {:?}", r.fertig.iter().map(|g| &g.dateien).collect::<Vec<_>>(), r.ausgelassen, r.fehler);
     }
 
