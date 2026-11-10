@@ -15,9 +15,9 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
-| 3 | Einsammeln | 3a erledigt, 3b Probelauf 09.11.: 23 Songs aus 600-699 (0939–0961). 10.11.: Rot R0001–R0016, Teil-Rückgängig (9f824b2), Gelb-Ansicht mit Song/Loop/Gleich wie/Weg (c4659f8). Grün leer, Grau-Reste 26 Beats/52 Dateien nach 02_OLD (10.11.). Offen: Gelb abarbeiten (364) |
+| 3 | Einsammeln | 3a, 3b, Rot, Grau-Reste erledigt. 3c Gelb-Ansicht gebaut 10.11. **Offen: Gelb abarbeiten (215, Stand 10.11. nachts)**, siehe 3c |
 | 4 | Neu nummerieren | offen |
-| 4b | Alte Ideen + „Aus den Anfängen“ | offen |
+| 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | offen |
 | 5 | FL-Templates über „Neu“ | offen |
 | 6 | Ohne Nummer | offen |
 | 7 | Künstler | offen |
@@ -259,8 +259,72 @@ noch Dateien nur im Altbestand (`nur_hier`), die nimmt Scheibe 3 mit.
   Rückgängig löscht nur unveränderte Kopien.
 - Probelauf: Suche `Beats\600-699`, 16 Songs (619 Focus bis 660 Masculine).
 
-**Abnahme:** Die Grün-Liste ist leer, die Gelb-Liste ist abgearbeitet oder
-bewusst vertagt.
+### 3c: Gelb (gebaut 10.11.)
+
+Gelb = BeatOS findet den Song nicht im Archiv, will aber nicht raten.
+
+- **Gruppen** in dieser Reihenfolge: Mehrere Songs unter einem Titel, Eine
+  Nummer mehrere Titel, Titel schon im Archiv anderer Key, Nur Nummer, Ohne
+  Nummer, Ohne Titel. Jede zuklappbar, je Gruppe „Alle weg“.
+- **Knöpfe je Zeile:** Song (Titel eintippen, ins Archiv), Loop (nach
+  `06_SAMPLES` als S-Nummer), Gleich wie <Nr> (fehlende Dateien in den
+  Archiv-Beat nach `02_OLD`), Weg (bleibt im Altbestand, geht in Scheibe 10
+  nach `_ALT`, über „Weggelegt“ zurückholbar). Zeilen nur mit FLPs haben kein
+  Song/Loop.
+- **Mehrere Fassungen** (Try 132 + 85 BPM): oben der ganze Song, eine Nummer
+  für alle; darunter eingerückt jede Fassung einzeln, falls es doch
+  verschiedene Songs sind (Destiny F#m 140 / Dm 181).
+- **Zeile** zeigt den Dateinamen der Datei, die beim Abspielen läuft (`+N`
+  für weitere). Tooltip listet alle Pfade.
+- **Weg** wird pro Datei gespeichert (Tabelle `fund_weg`, Pfade klein).
+
+**Regeln, die beim Durchgehen dazukamen (alle mit Test):**
+
+| Fall | Regel | Commit |
+|---|---|---|
+| `01_SAVEFILES` als „Nr. 1 SAVEFILES“ gelesen | Gliederungsordner (`NN_GROSS`) geben keinen Song her | e2b92d2 |
+| `1.mp3` in Project_0753, `1_3.mp3` in 800-899, `100 Tausend_mix` | Nackte Zahl nur außerhalb `Project_*` und nur, wenn sie in den Eimer `a-b` passt | 0e1f66a |
+| Destiny Dm 181 schon in 0814, trotzdem offen | Teile ganz im Archiv ausblenden; FLP ohne Angabe zum einzigen Teil im selben Ordner | 9be9de1 |
+| Louis V: nur neuere `Project_78.flp` fehlt, kein Gleich wie | Jede Datei kennt ihren Archiv-Beat; Reste nehmen auch reine FLPs | dec30a1 |
+| Weg nach Neustart vergessen | Weg pro Datei statt pro Eintrag | bc8cfee |
+| Daydreams2…9, Show Off - 3, Ten4 als Einzel-Einträge | Eine Ziffer 2–9 direkt am Wort oder nach „ - “ ist Version. Nicht: `Destiny 2`, `Blink182`, `Area51`, `mp3` | 6e60c69 |
+| 128 namenlose Bounces offener Projekte | ausgeblendet (Stephan: ja), kommen beim Archivieren mit | 8d2b55c |
+| 239 LoFi: Skizzen-FLP `Bpm140` machte „mehrere Songs“ | Key/BPM-Abweichung zählt nur über Exporte; geerbte Angaben vom Export | 148e62c |
+| Try, Louis V nach Einsammeln weiter gelb | Alle Dateien im Archiv → Grau | 148e62c |
+| 1029 LoFi bekam den ganzen Ordner `MusicSongsLo-Fi` (Paris, Piano LoFi …) | Eigener Songordner nur, wenn jede FLP/jeder Export darin zum Song gehört | 82810b4 |
+
+**Reparaturen 10.11.:** Victory doppelt (1026 = 0770, Tippfehler F# statt F#m):
+1026 zurückgenommen, Dateien nach `0770/02_OLD`. 1026 ist jetzt eine Lücke.
+1029 LoFi zurückgenommen und sauber neu (3 Dateien). Prüfung aller Läufe:
+sonst niemand betroffen. `1027 - Lost Not Found/01_SAVEFILES/206.flp` hat
+Stephan selbst gelegt. 0770 heißt noch `F# 156`, ggf. in BeatOS umbenennen.
+
+**Stand 10.11. nachts:** Grün 0, Grau 197 (alle komplett), Gelb 215:
+
+| Gruppe | Anzahl |
+|---|---|
+| Mehrere Songs unter einem Titel | 6 |
+| Eine Nummer, mehrere Titel | 5 |
+| Titel schon im Archiv, anderer Key | 4 |
+| Nur Nummer | 88 |
+| Ohne Nummer | 89 |
+| Ohne Titel | 23 |
+
+Bisher eingesammelt (Archiv 0939–1029, Lücke 1026), Rot R0001–R0016.
+
+**Werkzeuge ohne App (ignorierte Tests, `src-tauri`):**
+- Scan echter Daten: `cargo test --lib fund_handprobe -- --ignored --nocapture`
+  mit `BEATOS_FUND_ROOTS` (= Einstellung `altbestand_paths`, `;`-getrennt),
+  `BEATOS_ARCHIVE`, optional `BEATOS_DUMP=<tsv>` (alle Dateien, `A:` = im Archiv).
+- Teil-Rückgängig: `teil_rueckgaengig_echt` mit `BEATOS_PROTOKOLL`, `BEATOS_IDS`.
+- Einsammeln von Hand: `reste_echt` mit `BEATOS_DATEIEN` (`;`), `BEATOS_ARCHIVE`
+  und entweder `BEATOS_ARCHIV_ORDNER` (Gleich wie) oder
+  `BEATOS_TITEL/_ID/_KEY/_BPM` (neuer Song).
+- DB lesen: `node:sqlite` auf `%LOCALAPPDATA%BeatOSeats.db` (kein sqlite3).
+
+**Abnahme:** Grün leer. Gelb: jeder **Song** ist im Archiv, bevor Scheibe 4
+nummeriert (sonst bekommt ein Beat von 2020 eine hohe Nummer, und B-Nummern
+sind fest). Loops und Müll dürfen vertagt werden.
 
 ## Scheibe 4: Neu nummerieren
 
@@ -378,7 +442,17 @@ dem Beat zu.
 | 09.11. | Nummer = wann fertig. Alte ID und Begonnen als eigene DB-Spalten, sortierbar |
 | 09.11. | Unfertige alte Ideen: Liste „Alte Ideen“ (nach Alter, „In Produktion holen“), Filter „Aus den Anfängen“; Scheibe 4b |
 | 09.11. | Gelb „ohne Titel“ bleibt sichtbar |
+| 10.11. | Namenlose Bounces in `Project_*` aus Gelb ausgeblendet |
+| 10.11. | Mehrere Fassungen eines Songs (andere BPM/Key) dürfen in einen Archiv-Beat, eine Nummer |
+| 10.11. | „Nur Nummer“ sind oft ganze Beats: vor Scheibe 4 durchhören, nicht vertagen |
+| 10.11. | „Alte Ideen“ (4b) gilt für alles Alte, nicht nur für Nummern ohne Namen |
+| 10.11. | Titel sind beim Einsammeln zweitrangig: Umbenennen ändert die Nummer nicht |
+| 10.11. | Kein Durchhör-Modus mit Tasten (Stephan: nein) |
 
 ## Offene Fragen
 
 - Kommt „Neu mixen“ als Markierung im Archiv (nach Scheibe 4)?
+- **Gelb schneller durchbekommen (morgen zuerst):** 215 Einträge, davon 177 in
+  „Nur Nummer“ und „Ohne Nummer“. Durchhör-Modus abgelehnt. Ideen, noch nicht
+  besprochen: Sammel-Auswahl mit Häkchen und ein Knopf „Ausgewählte als Song“,
+  Titel = alte Nummer, Umbenennen später; „Ohne Titel“ (23) per „Alle weg“.
