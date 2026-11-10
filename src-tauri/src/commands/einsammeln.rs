@@ -204,7 +204,8 @@ pub(crate) fn einsammeln_mit(
             erg.ausgelassen.push(format!("{name}: {} fehlt", p.display()));
             continue;
         }
-        if !pfade.iter().any(|p| ist_audio(p)) {
+        // Reste dürfen nur FLPs sein (neuere Projektdatei zu einem Archiv-Beat)
+        if art != Art::Reste && !pfade.iter().any(|p| ist_audio(p)) {
             erg.ausgelassen.push(format!("{name}: kein Export"));
             continue;
         }
@@ -638,6 +639,14 @@ mod tests {
         assert!(g.fehler.is_none(), "{:?}", g.fehler);
         assert_eq!(g.fertig[0].dateien.len(), 1);
         assert_eq!(fs::read(beat.join("02_OLD/[630_3] Bloom - 138 D#m.mp3")).unwrap(), b"bloom3");
+
+        // Gleich wie mit nur einer FLP (Louis V: neuere Projektdatei)
+        datei(&alt.join("Project_78.flp"), b"flp-neu");
+        let flp = vec![EinsammelEintrag { id: None, titel: "Bloom".into(), key: None, bpm: None,
+            dateien: vec![s(&alt.join("Project_78.flp"))], archiv: Some("0946 - Bloom [D#m 138]".into()) }];
+        let f = einsammeln_mit(&conn, flp, &arch, &t.join("_BEATOS"), Art::Reste).unwrap();
+        assert!(f.ausgelassen.is_empty(), "{:?}", f.ausgelassen);
+        assert_eq!(fs::read(beat.join("02_OLD/Project_78.flp")).unwrap(), b"flp-neu");
 
         // Rückgängig: Kopie weg, der Beat und sein 02_OLD bleiben
         rueckgaengig_mit(&conn, Path::new(g.protokoll.as_ref().unwrap())).unwrap();

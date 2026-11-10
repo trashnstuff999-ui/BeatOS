@@ -42,9 +42,17 @@ export function aufteilen(f: Fund): Fund[] {
   for (const [k, ds] of teile) if (ds.every(d => d.im_archiv)) teile.delete(k);
   const liste = [...teile.values()];
   if (liste.length === 1 && liste[0].length === f.dateien.length) return [f];
+  // Archiv-Beat für „Gleich wie“: der eine, in dem Dateien dieses Teils
+  // liegen, sonst der eine, in dem Dateien aus denselben Ordnern liegen
+  const einziger = (ds: FundDatei[]) => {
+    const a = new Set(ds.map(d => d.archiv).filter(Boolean));
+    return a.size === 1 ? [...a][0]! : null;
+  };
   return liste.map(dateien => {
     const d = dateien.find(x => x.key || x.bpm) ?? dateien[0];
-    return { ...f, titel: d.titel ?? f.titel, key: d.key, bpm: d.bpm, dateien };
+    const ordnerHier = new Set(dateien.map(x => ordner(x.path)));
+    const archiv = einziger(dateien) ?? einziger(f.dateien.filter(x => ordnerHier.has(ordner(x.path))));
+    return { ...f, titel: d.titel ?? f.titel, key: d.key, bpm: d.bpm, archiv, dateien };
   });
 }
 

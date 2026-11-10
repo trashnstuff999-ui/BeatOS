@@ -13,6 +13,8 @@ export interface FundDatei {
   titel: string | null;
   key: string | null;
   bpm: number | null;
+  /** Archiv-Beat, in dem diese Datei schon liegt */
+  archiv: string | null;
 }
 
 export interface Fund {

@@ -38,6 +38,8 @@ pub struct FundDatei {
     pub titel: Option<String>,
     pub key: Option<String>,
     pub bpm: Option<i32>,
+    /// Archiv-Beat, in dem diese Datei schon liegt („0776 - Louis V [Dm 165]“)
+    pub archiv: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -479,6 +481,7 @@ fn bewerten(
             path: f.path.to_string_lossy().to_string(), size: f.size, modified: f.modified, flp: f.flp, im_archiv: t.is_some(),
             titel: f.werk.as_ref().map(|w| w.titel.clone()).filter(|t| !t.is_empty()),
             key: f.werk.as_ref().and_then(|w| w.key.clone()), bpm: f.werk.as_ref().and_then(|w| w.bpm),
+            archiv: t.as_ref().and_then(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()),
         }).collect(),
         weg: false,
     };
