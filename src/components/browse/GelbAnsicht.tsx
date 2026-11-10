@@ -155,8 +155,11 @@ function GelbZeile({ f, Zeile, sammeln, weg }: { f: Fund } & Pick<Props, "Zeile"
     <div style={{ borderRadius: radius.control, background: modus ? C.surfaceContainer : undefined }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}><Zeile f={f} /></div>
-        <Button size="sm" variant={modus === "archiv" ? "primary" : "secondary"} onClick={() => setModus(modus === "archiv" ? null : "archiv")}>Song</Button>
-        <Button size="sm" variant={modus === "sample" ? "primary" : "secondary"} onClick={() => setModus(modus === "sample" ? null : "sample")}>Loop</Button>
+        {/* Nur FLPs ohne Export: kein eigener Song, nur Gleich wie oder Weg */}
+        {f.dateien.some(d => !d.flp) && <>
+          <Button size="sm" variant={modus === "archiv" ? "primary" : "secondary"} onClick={() => setModus(modus === "archiv" ? null : "archiv")}>Song</Button>
+          <Button size="sm" variant={modus === "sample" ? "primary" : "secondary"} onClick={() => setModus(modus === "sample" ? null : "sample")}>Loop</Button>
+        </>}
         {f.archiv && (
           <Button size="sm" variant="secondary" title={`Fehlende Dateien nach ${f.archiv}/02_OLD`} disabled={laeuft}
             onClick={async () => { setLaeuft(true); await sammeln(f, "reste", f.titel); setLaeuft(false); }}>

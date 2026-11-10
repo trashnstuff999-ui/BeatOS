@@ -263,7 +263,7 @@ fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
     let songs: HashSet<String> = hier.iter().filter_map(|f| f.werk.as_ref().map(|w| w.schluessel())).collect();
     let mit_export = hier.iter().any(|f| !f.flp && f.werk.is_some());
     if songs.len() == 1 && mit_export {
-        let w = hier.iter().find_map(|f| f.werk.clone());
+        let w = hier.iter().filter(|f| !f.flp).find_map(|f| f.werk.clone()); // Angaben vom Export, nicht von einer Skizzen-FLP
         for f in hier.iter_mut().filter(|f| f.werk.is_none()) {
             f.werk = w.clone();
         }
@@ -511,9 +511,12 @@ fn bewerten(
     let titel_alle: Vec<&str> = werke.iter().map(|w| w.titel.as_str()).filter(|t| !normalize_title(t).is_empty()).collect();
     // Zwei Songs gleichen Titels in einem Eintrag (Destiny F#m 140 und Dm 181):
     // nie automatisch grau, das entscheidest du bei Gelb
+    // Nur Exporte zählen: eine Skizzen-FLP „LoFi - Bpm140" neben dem fertigen
+    // „LoFi - Bpm75 - D#m" macht noch keinen zweiten Song
     let uneinheitlich = {
-        let k: HashSet<String> = werke.iter().filter_map(|w| w.key.as_deref().and_then(super::einsammeln::key_schreibweise)).collect();
-        let b: HashSet<i32> = werke.iter().filter_map(|w| w.bpm).collect();
+        let export: Vec<&Werk> = fs.iter().filter(|f| !f.flp).filter_map(|f| f.werk.as_ref()).collect();
+        let k: HashSet<String> = export.iter().filter_map(|w| w.key.as_deref().and_then(super::einsammeln::key_schreibweise)).collect();
+        let b: HashSet<i32> = export.iter().filter_map(|w| w.bpm).collect();
         k.len() > 1 || b.len() > 1
     };
     for (f, t) in fs.iter().zip(&treffer) {
@@ -529,6 +532,13 @@ fn bewerten(
         }
     }
     if uneinheitlich {
+        // Jede Datei liegt schon im Archiv (Try mit 132 und 85 BPM eingesammelt):
+        // nichts mehr zu entscheiden
+        if nur_hier == 0 {
+            let beats: HashSet<String> = treffer.iter().flatten()
+                .filter_map(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()).collect();
+            return fund("grau", "gleiche Datei im Archiv", (beats.len() == 1).then(|| beats.into_iter().next().unwrap()));
+        }
         return fund("gelb", "Key/BPM uneinheitlich", None);
     }
     // Grau: Nummer und Titel stimmen
@@ -559,11 +569,6 @@ fn bewerten(
     let titel_set: HashSet<String> = werke.iter().map(|w| normalize_title(&w.titel)).filter(|t| !t.is_empty()).collect();
     if titel_set.len() > 1 {
         return fund("gelb", "Nummer mit mehreren Titeln", None);
-    }
-    let keys: HashSet<String> = werke.iter().filter_map(|w| w.key.as_deref()).map(|k| super::einsammeln::key_schreibweise(k).unwrap_or_else(|| k.to_lowercase())).collect();
-    let bpms: HashSet<i32> = werke.iter().filter_map(|w| w.bpm).collect();
-    if keys.len() > 1 || bpms.len() > 1 {
-        return fund("gelb", "Key/BPM uneinheitlich", None);
     }
     if werke.is_empty() {
         return fund("gelb", "ohne Titel", None);
@@ -614,6 +619,10 @@ mod tests {
         datei(&alt.join("[539] YaYa - 140 Em/YaYa - 140 Em.mp3"), "yaya");
         // Produktion: nackte Zahl ist Bounce oder Titel, keine alte Nummer
         datei(&alt.join("Project_0753/2.mp3"), "bounce");
+        // Skizzen-FLP mit anderem BPM macht keinen zweiten Song
+        datei(&alt.join("LoFi239/[239] LoFi - Bpm75 - D#m.mp3"), "lofi");
+        datei(&alt.join("LoFi239/[239] LoFi - Bpm75 - D#m.flp"), "lofi-flp");
+        datei(&alt.join("LoFi239/[239] LoFi - Bpm140.flp"), "lofi-140");
         datei(&alt.join("800-899/1_3.mp3"), "bounce13");
         datei(&alt.join("Project_0572/100 Tausend_mix.mp3"), "tausend");
         // Gliederungsordner: nicht „Nr. 1 SAVEFILES“, der Song kommt vom Ordner darüber
@@ -663,6 +672,7 @@ mod tests {
         assert!(r.iter().any(|f| f.ampel == "rot"));
         assert_eq!(finde(539).dateien.len(), 1);
         assert!(r.iter().all(|f| f.id != Some(1) && f.id != Some(2)), "Project_0753/2.mp3 als Nummer gelesen");
+        assert_eq!((finde(239).ampel, finde(239).dateien.len()), ("gruen", 3), "{:?}", finde(239));
         // Namenloser Bounce im offenen Projekt: gar nicht in den Fundstücken
         assert!(r.iter().all(|f| !f.dateien.iter().any(|d| d.path.contains("Project_0753"))));
         let tausend = r.iter().find(|f| f.dateien[0].path.contains("100 Tausend")).unwrap();
