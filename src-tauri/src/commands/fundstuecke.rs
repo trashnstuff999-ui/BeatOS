@@ -96,6 +96,17 @@ fn ohne_version(t: &str) -> &str {
                 t = a;
             }
         }
+        // „Daydreams2“, „Show Off - 3“: eine Ziffer 2–9 am Ende. Mehr Stellen
+        // nicht („Blink182“, „Area51“), mit Leerzeichen nicht („Destiny 2“).
+        if t.len() > 3 && t.ends_with(|c: char| ('2'..='9').contains(&c)) {
+            let a = &t[..t.len() - 1];
+            if let Some(v) = a.strip_suffix(" - ").filter(|v| !v.trim().is_empty()) {
+                t = v;
+            // mindestens drei Buchstaben davor: „Ten4“ ja, „146_4mp3“ nein
+            } else if a.chars().rev().take_while(|c| c.is_alphabetic()).count() >= 3 && !a.to_lowercase().ends_with("mp") {
+                t = a;
+            }
+        }
         if t == vorher {
             return t.trim();
         }
@@ -657,6 +668,11 @@ mod tests {
         assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true, true).unwrap().titel, "Cuthroat");
         assert_eq!(werk_aus_name("397 . Master.mp3", true, true).unwrap().titel, "");
         assert_eq!(werk_aus_name("473_Prototype.mp3", true, true).unwrap().titel, "");
+        // Versionen ohne Unterstrich, aber keine echten Zahlentitel
+        for (roh, titel) in [("Daydreams9", "Daydreams"), ("Show Off - 3", "Show Off"), ("Ten4", "Ten"), ("Nine - LoFi2", "Nine - LoFi"),
+            ("Blink182", "Blink182"), ("Area51", "Area51"), ("Destiny 2", "Destiny 2"), ("Ten", "Ten"), ("UP2", "UP2"), ("146_4mp3", "146_4mp3"), ("Bump3", "Bump3")] {
+            assert_eq!(ohne_version(roh), titel, "{roh}");
+        }
         assert_eq!(ohne_tag("@xP4RA - Forever"), "Forever");
         assert_eq!(ohne_tag("Destiny - "), "Destiny");
         assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");
