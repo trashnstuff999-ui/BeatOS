@@ -20,7 +20,7 @@ import type { Stats, DashboardActions, StatsDetails } from "../types/stats";
 import { effektiv } from "./descriptions";
 import type { KanalEintrag } from "./nacherfassen";
 import type { ArtistsScan, Altbestand } from "../types/artists";
-import type { Fund, EinsammelEintrag, EinsammelErgebnis, EinsammelArt } from "../types/fundstuecke";
+import type { Fund, EinsammelEintrag, EinsammelErgebnis, EinsammelArt, AltArtistSong, KopierErgebnis } from "../types/fundstuecke";
 import type {
   StudioProject, StudioStatusCounts, AssetFile, StudioStatus, MergePlan, MergeStep, MergeReport,
   MergeRun,
@@ -226,6 +226,18 @@ export const api = {
     /** Fundstücke als „Weg“ markieren (bleiben im Altbestand) oder zurückholen. */
     fundWeg: (paths: string[], weg: boolean) =>
       invoke<void>("fund_weg", { paths, weg }),
+
+    /** Fundstück nach 05_ARTISTS/<Artist>/<Song> kopieren. Liefert den Song-Ordner. */
+    fundZumArtist: (artistsRoot: string, artist: string, song: string, dateien: string[], assets = false) =>
+      invoke<string>("fund_zum_artist", { artistsRoot, artist, song, dateien, assets }),
+
+    /** Artist-Ordner im Altbestand (Ordner „Artists“): je Artist/Song ein Eintrag. */
+    artistOrdnerAltbestand: (roots: string[], artistsRoot: string) =>
+      invoke<AltArtistSong[]>("artist_ordner_altbestand", { roots, artistsRoot }),
+
+    /** Song-Ordner komplett nach 05_ARTISTS kopieren, nichts überschreiben. */
+    artistOrdnerKopieren: (pfad: string, artistsRoot: string, artist: string, song: string) =>
+      invoke<KopierErgebnis>("artist_ordner_kopieren", { pfad, artistsRoot, artist, song }),
 
     /** Einen Einsammel-Lauf zurücknehmen: nur die angelegten Kopien. */
     einsammelnRueckgaengig: (protokoll: string) =>

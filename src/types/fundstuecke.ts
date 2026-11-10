@@ -57,3 +57,22 @@ export interface EinsammelErgebnis {
   fehler: string | null;
   protokoll: string | null;
 }
+
+/** Song-Ordner (oder lose Datei) in einem Altbestand-Ordner „Artists“ */
+export interface AltArtistSong {
+  artist: string;
+  song: string;
+  pfad: string;
+  dateien: number;
+  flps: number;
+  /** So viele liegen byte-gleich schon in 05_ARTISTS */
+  da: number;
+}
+
+export interface KopierErgebnis {
+  ordner: string;
+  kopiert: number;
+  gleich: number;
+  /** Gleicher Name, anderer Inhalt: nicht überschrieben */
+  konflikte: string[];
+}

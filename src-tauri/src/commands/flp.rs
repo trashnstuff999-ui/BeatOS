@@ -347,6 +347,25 @@ mod tests {
     /// BEATOS_UMZUG_TSV=liste.tsv cargo test --lib flp_handprobe_umzug -- --ignored --nocapture
     #[test]
     #[ignore]
+    /// Pfade mit Präfix ALT in den FLPs direkt in BEATOS_FLP_DIR auf NEU umbiegen
+    /// (BEATOS_ALT, BEATOS_NEU). Zeigt vorher und nachher, was fehlt.
+    fn flp_praefix_umbiegen() {
+        let (Ok(dir), Ok(alt), Ok(neu)) = (std::env::var("BEATOS_FLP_DIR"), std::env::var("BEATOS_ALT"), std::env::var("BEATOS_NEU")) else { return };
+        for e in std::fs::read_dir(&dir).unwrap().flatten() {
+            let p = e.path();
+            if !p.extension().is_some_and(|x| x.eq_ignore_ascii_case("flp")) { continue; }
+            let pfade = audio_pfade(&std::fs::read(&p).unwrap());
+            let ersatz: Vec<(String, String)> = pfade.iter()
+                .filter(|a| a.to_lowercase().starts_with(&alt.to_lowercase()))
+                .map(|a| (a.clone(), format!("{neu}{}", &a[alt.len()..]))).collect();
+            let zahl = flp_umschreiben(&p, &ersatz, "vor Umzug ins Archiv").unwrap();
+            let fehlt: Vec<String> = audio_pfade(&std::fs::read(&p).unwrap()).into_iter().filter(|a| !std::path::Path::new(a).is_file()).collect();
+            println!("{}: {} von {} Pfaden umgebogen, danach fehlen {}: {:?}", p.display(), zahl, pfade.len(), fehlt.len(), fehlt);
+        }
+    }
+
+    #[test]
+    #[ignore]
     fn flp_handprobe_umzug() {
         let Ok(liste) = std::env::var("BEATOS_UMZUG_TSV") else { return };
         let text = std::fs::read_to_string(liste).unwrap();

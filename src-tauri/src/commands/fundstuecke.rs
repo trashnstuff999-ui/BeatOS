@@ -23,8 +23,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 const AUDIO: &[&str] = &["mp3", "wav", "m4a", "ogg", "flac", "aif", "aiff"];
-/// FL-Arbeitsmaterial, Sample-Packs, Vorlagen und Künstler (Scheibe 7).
-const UEBERSPRINGEN: &[&str] = &["audio", "autosaves", "samples", "templates", "template", "coverarts", "files n presets", "artists"];
+/// FL-Arbeitsmaterial, Sample-Packs, Vorlagen, Künstler (Scheibe 7) und der eigene Beattag.
+const UEBERSPRINGEN: &[&str] = &["audio", "beattag", "autosaves", "samples", "templates", "template", "coverarts", "files n presets", "artists"];
 
 #[derive(Debug, Serialize)]
 pub struct FundDatei {
@@ -151,7 +151,18 @@ fn werk_aus_name(name: &str, ist_datei: bool, nackte_nr: bool) -> Option<Werk> {
         return Some(w);
     }
     // parse_audio_filename schneidet eine Endung ab, Ordnernamen haben keine
-    let (titel, key, bpm) = parse_audio_filename(&format!("{stamm}.x"));
+    // „ANGER - 160 Am_2": Versionsnummer hinter dem Key, sonst wird der Key nicht erkannt
+    let stamm = match stamm.rsplit_once('_') {
+        Some((a, v)) if !a.is_empty() && !v.is_empty() && v.chars().all(|c| c.is_ascii_digit()) => a,
+        _ => stamm,
+    };
+    let (mut titel, mut key, mut bpm) = parse_audio_filename(&format!("{stamm}.x"));
+    // Altes Schema ohne Nummer: „ANGER - 160 Am“, gelesen wie „[1] ANGER - 160 Am“
+    if key.is_none() && bpm.is_none() {
+        if let Some(o) = old_system_id_and_title(&format!("[1] {stamm}")).filter(|o| o.key.is_some() || o.bpm.is_some()) {
+            (titel, key, bpm) = (o.title, o.key, o.bpm);
+        }
+    }
     let titel = ohne_tag(ohne_version(&titel)).to_string();
     if generisch(&titel) {
         return None;
@@ -202,6 +213,14 @@ struct Fundort {
     flp: bool,
     size: u64,
     modified: i64,
+}
+
+/// `…\01_ACTIVE_PRODUCTION\Project_0646` für jede Datei darunter
+fn projekt_ordner(p: &Path) -> Option<&Path> {
+    p.ancestors().find(|a| {
+        a.file_name().is_some_and(|n| n.to_string_lossy().starts_with("Project_"))
+            && a.parent().and_then(|e| e.file_name()).is_some_and(|n| n.eq_ignore_ascii_case("01_ACTIVE_PRODUCTION"))
+    })
 }
 
 fn endung(p: &Path) -> String {
@@ -307,6 +326,157 @@ pub fn fund_weg(paths: Vec<String>, weg: bool) -> Result<(), String> {
     tx.commit().map_err(|e| e.to_string())
 }
 
+/// Gelb „Artist“: Dateien nach `<Künstler>/<Song>/` kopieren, FLPs nach
+/// 01_SAVEFILES, Exporte nach 03_VERSIONS (`assets`: nach 02_ASSETS, für Vocals).
+/// Byte-gleiche Kopien, so erkennt der Scan sie danach als „schon da“. Der
+/// Altbestand bleibt. Gibt den Song-Ordner zurück.
+#[tauri::command(async)]
+pub fn fund_zum_artist(artists_root: String, artist: String, song: String, dateien: Vec<String>, assets: Option<bool>) -> Result<String, String> {
+    let ziel = artist_song_ordner(&artists_root, &artist, &song)?;
+    zum_artist(&ziel, &dateien, assets.unwrap_or(false))
+}
+
+/// `<root>/<Artist>/<Song>`, oder `<Artist>/_Fertig/<Song>`, wenn der Song schon abgegeben ist
+fn artist_song_ordner(artists_root: &str, artist: &str, song: &str) -> Result<PathBuf, String> {
+    let artist = crate::utils::sanitize_filename_part(artist.trim());
+    let song = crate::utils::sanitize_filename_part(song.trim());
+    if artist.is_empty() || song.is_empty() { return Err("Artist und Song angeben".into()); }
+    let kuenstler = Path::new(artists_root).join(artist);
+    let fertig = kuenstler.join("_Fertig").join(&song);
+    Ok(if fertig.is_dir() { fertig } else { kuenstler.join(song) })
+}
+
+/// Song-Ordner (oder lose Datei) aus einem Altbestand-„Artists“-Ordner
+#[derive(Debug, Serialize)]
+pub struct AltArtistSong {
+    pub artist: String,
+    pub song: String,
+    pub pfad: String,
+    pub dateien: usize,
+    pub flps: usize,
+    /// So viele liegen byte-gleich schon in 05_ARTISTS
+    pub da: usize,
+}
+
+/// Alle Ordner namens „Artists“ in den Altbestand-Wurzeln (bis Tiefe 4): je
+/// `<Artist>/<Song>` ein Eintrag, lose Dateien je ein eigener Song. Diese
+/// Ordner überspringt der Fundstücke-Scan, sie ziehen hier als Ganzes um.
+#[tauri::command(async)]
+pub fn artist_ordner_altbestand(roots: Vec<String>, artists_root: String) -> Result<Vec<AltArtistSong>, String> {
+    let mut vorhanden = Vec::new();
+    collect_files(Path::new(&artists_root), Path::new(&artists_root), &mut vorhanden);
+    let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
+    for (s, p, _) in vorhanden { by_size.entry(s).or_default().push(p); }
+    let mut wurzeln = Vec::new();
+    for r in &roots { artists_ordner_finden(Path::new(r.trim()), 0, &mut wurzeln); }
+    let mut out = Vec::new();
+    for a in wurzeln {
+        for e in std::fs::read_dir(&a).into_iter().flatten().flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() {
+                for s in std::fs::read_dir(&p).into_iter().flatten().flatten() {
+                    let sp = s.path();
+                    let sn = s.file_name().to_string_lossy().to_string();
+                    if sp.is_dir() && sn.eq_ignore_ascii_case("backup") { continue; }
+                    if sp.is_file() && !ist_musik(&sp) { continue; }
+                    out.push(alt_song(&name, &sp, &by_size));
+                }
+            } else if ist_musik(&p) {
+                out.push(alt_song("", &p, &by_size)); // lose Datei ohne Artist
+            }
+        }
+    }
+    out.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()).then(a.song.to_lowercase().cmp(&b.song.to_lowercase())));
+    Ok(out)
+}
+
+fn ist_musik(p: &Path) -> bool {
+    let e = endung(p);
+    e == "flp" || AUDIO.contains(&e.as_str())
+}
+
+fn artists_ordner_finden(dir: &Path, tiefe: usize, out: &mut Vec<PathBuf>) {
+    if tiefe > 4 { return; }
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if !p.is_dir() { continue; }
+        let n = e.file_name().to_string_lossy().to_lowercase();
+        if n == "artists" { out.push(p); } else if !n.contains("backup") && n != "audio" { artists_ordner_finden(&p, tiefe + 1, out); }
+    }
+}
+
+fn alt_song(artist: &str, p: &Path, by_size: &HashMap<u64, Vec<PathBuf>>) -> AltArtistSong {
+    let mut alle = Vec::new();
+    if p.is_dir() { collect_files(p, p, &mut alle); } else if let Ok(m) = std::fs::metadata(p) { alle.push((m.len(), p.to_path_buf(), String::new())); }
+    let musik: Vec<&(u64, PathBuf, String)> = alle.iter().filter(|(_, f, _)| ist_musik(f)).collect();
+    let da = musik.iter().filter(|(s, f, _)| by_size.get(s).is_some_and(|cs| cs.iter().any(|c| same_content(f, c)))).count();
+    let song = if p.is_dir() { p.file_name() } else { p.file_stem() }.map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    AltArtistSong {
+        artist: artist.to_string(), song, pfad: p.to_string_lossy().to_string(),
+        dateien: musik.len(), flps: musik.iter().filter(|(_, f, _)| endung(f) == "flp").count(), da,
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct KopierErgebnis {
+    pub ordner: String,
+    pub kopiert: usize,
+    pub gleich: usize,
+    /// Gleicher Name, anderer Inhalt: nicht überschrieben
+    pub konflikte: Vec<String>,
+}
+
+/// Song-Ordner komplett nach `05_ARTISTS/<Artist>/<Song>/` kopieren, mit
+/// Unterordnern (Audio, Samples, Backup), jede Kopie geprüft. Liegt eine Datei
+/// schon da: gleich → übersprungen, anders → nicht überschrieben, gemeldet.
+/// Eine lose Datei kommt wie bei „Artist“ nach 01_SAVEFILES/03_VERSIONS.
+#[tauri::command(async)]
+pub fn artist_ordner_kopieren(pfad: String, artists_root: String, artist: String, song: String) -> Result<KopierErgebnis, String> {
+    let ziel = artist_song_ordner(&artists_root, &artist, &song)?;
+    let quelle = Path::new(&pfad);
+    if quelle.is_file() {
+        zum_artist(&ziel, &[pfad.clone()], false)?;
+        return Ok(KopierErgebnis { ordner: ziel.to_string_lossy().to_string(), kopiert: 1, gleich: 0, konflikte: vec![] });
+    }
+    let mut alle = Vec::new();
+    collect_files(quelle, quelle, &mut alle);
+    let mut erg = KopierErgebnis { ordner: ziel.to_string_lossy().to_string(), kopiert: 0, gleich: 0, konflikte: vec![] };
+    for (_, f, rel) in alle {
+        let d = ziel.join(&rel);
+        if d.exists() {
+            if same_content(&f, &d) { erg.gleich += 1; } else { erg.konflikte.push(rel); }
+            continue;
+        }
+        std::fs::create_dir_all(d.parent().unwrap()).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))?;
+        crate::utils::copy_and_verify(&f, &d)?;
+        erg.kopiert += 1;
+    }
+    Ok(erg)
+}
+
+fn zum_artist(ziel: &Path, dateien: &[String], assets: bool) -> Result<String, String> {
+    for d in dateien {
+        let quelle = Path::new(d);
+        let ordner = ziel.join(if endung(quelle) == "flp" { "01_SAVEFILES" } else if assets { "02_ASSETS" } else { "03_VERSIONS" });
+        std::fs::create_dir_all(&ordner).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))?;
+        // Gleicher Name, anderer Inhalt (drei verschiedene „Daydreams.flp“): daneben als „(2)“
+        let Some(datei) = freier_name(quelle, &ordner.join(quelle.file_name().ok_or("Datei ohne Namen")?)) else { continue };
+        crate::utils::copy_and_verify(quelle, &datei)?;
+    }
+    Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Wohin die Kopie kommt: der Name selbst, sonst „Name (2).ext“, „(3)“ …
+/// `None`: dieselbe Datei liegt dort schon (unter einem dieser Namen).
+fn freier_name(quelle: &Path, ziel: &Path) -> Option<PathBuf> {
+    let stamm = ziel.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = ziel.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    (1..).map(|i| if i == 1 { ziel.to_path_buf() } else { ziel.with_file_name(format!("{stamm} ({i}){ext}")) })
+        .find_map(|k| if !k.exists() { Some(Some(k)) } else if same_content(quelle, &k) { Some(None) } else { None })
+        .flatten()
+}
+
 /// Gleicher Song dem Titel nach? „MISTAKES" passt zu „MISTAKE", „LightsOut"
 /// zu „Lights Out". Leere Titel passen nie.
 pub(crate) fn titel_passt(a: &str, b: &str) -> bool {
@@ -391,9 +561,12 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
     // Exporte im Archiv nach Größe, für den Inhaltsvergleich
     let mut archiv_dateien = Vec::new();
     collect_files(archive_root, archive_root, &mut archiv_dateien);
-    // Eingesammelte Remixe zählen als „schon da“, sonst stünden sie wieder rot
-    let remixe = archive_root.parent().unwrap_or(archive_root).join("07_REMIXES");
-    collect_files(&remixe, &remixe, &mut archiv_dateien);
+    // Eingesammelte Remixe, Loops und Artist-Songs zählen als „schon da“, sonst stünden sie wieder da
+    // ponytail: 05_ARTISTS fest neben dem Archiv, die Einstellung artists_path zählt hier nicht
+    for nebenan in ["07_REMIXES", "06_SAMPLES", "05_ARTISTS"] {
+        let d = archive_root.parent().unwrap_or(archive_root).join(nebenan);
+        collect_files(&d, &d, &mut archiv_dateien);
+    }
     let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
     // Herkunft aus create_date.json: eingesammelte FLPs sind umbenannt und
     // umgeschrieben, also nicht mehr byte-gleich. Das Protokoll weiß, woher
@@ -416,10 +589,13 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
     // Gruppieren. Namenlose Exporte bleiben einzeln (Schlüssel = Pfad).
     let mut gruppen: BTreeMap<String, Vec<Fundort>> = BTreeMap::new();
     for f in orte {
-        let k = match &f.werk {
-            Some(w) => w.schluessel(),
-            None if f.flp => continue, // Skizze
-            None => format!("?:{}", f.path.display()),
+        let k = match (projekt_ordner(&f.path), &f.werk) {
+            // Projektordner der Produktion: alles darin ist ein Projekt, auch
+            // namenlose FLPs und Bounces (Artist live da: Beat + Song in einem)
+            (Some(p), _) => format!("p:{}", p.to_string_lossy().to_lowercase()),
+            (None, Some(w)) => w.schluessel(),
+            (None, None) if f.flp => continue, // Skizze
+            (None, None) => format!("?:{}", f.path.display()),
         };
         gruppen.entry(k).or_default().push(f);
     }
@@ -440,6 +616,28 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
             if let Some(fs) = gruppen.remove(&format!("t:{t}")) {
                 gruppen.get_mut(ziel).unwrap().extend(fs);
             }
+        }
+    }
+    // FLPs ohne Export (lose oder in einem eigenen Projektordner) an den einen
+    // Eintrag mit Export hängen, der dieselbe Nummer oder denselben Titel trägt.
+    // Sonst fielen sie raus, seit Projektordner eigene Einträge sind.
+    // ponytail: O(Gruppen²), bei ein paar hundert Gruppen egal
+    let merkmale = |fs: &[Fundort]| -> HashSet<String> {
+        fs.iter().filter_map(|f| f.werk.as_ref()).flat_map(|w| {
+            let t = normalize_title(&w.titel);
+            [w.id.map(|i| format!("#{i}")), (!t.is_empty()).then(|| format!("t:{t}"))]
+        }).flatten().collect()
+    };
+    let nur_flp: Vec<String> = gruppen.iter().filter(|(_, fs)| fs.iter().all(|f| f.flp)).map(|(k, _)| k.clone()).collect();
+    for k in nur_flp {
+        let m = merkmale(&gruppen[&k]);
+        if m.is_empty() { continue; }
+        let ziele: Vec<String> = gruppen.iter()
+            .filter(|(k2, fs)| **k2 != k && fs.iter().any(|f| !f.flp) && !merkmale(fs).is_disjoint(&m))
+            .map(|(k2, _)| k2.clone()).collect();
+        if let [ziel] = ziele.as_slice() {
+            let fs = gruppen.remove(&k).unwrap();
+            gruppen.get_mut(ziel).unwrap().extend(fs);
         }
     }
 
@@ -479,7 +677,8 @@ fn bewerten(
     let archiv_name = |i: usize| Some(index[i].folder.clone());
     let treffer: Vec<Option<PathBuf>> = fs.iter()
         .map(|f| {
-            if f.size == 0 { return None; }
+            // Leere Datei (0 Bytes): da geht nichts verloren, zählt als „schon da“
+            if f.size == 0 { return Some(f.path.clone()); }
             if let Some(c) = by_size.get(&f.size).and_then(|cs| cs.iter().find(|c| same_content(&f.path, c))) {
                 return Some(c.clone());
             }
@@ -519,11 +718,35 @@ fn bewerten(
         let b: HashSet<i32> = export.iter().filter_map(|w| w.bpm).collect();
         k.len() > 1 || b.len() > 1
     };
+    let titel_set: HashSet<String> = werke.iter().map(|w| normalize_title(&w.titel)).filter(|t| !t.is_empty()).collect();
+    let einziger_beat = || {
+        let beats: HashSet<String> = treffer.iter().flatten()
+            .filter_map(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()).collect();
+        (beats.len() == 1).then(|| beats.into_iter().next().unwrap())
+    };
+    // Jede Datei liegt schon im Archiv: nichts mehr zu entscheiden
+    if nur_hier == 0 {
+        return fund("grau", "gleiche Datei im Archiv", einziger_beat());
+    }
+    // Projektordner, dessen Exporte in genau einem Archiv-Beat liegen: archiviert.
+    // Was dort fehlt (die Projekt-FLP, neuere Versionen), holt „Reste einsammeln“
+    // nach. Die Archiv-FLP ist umgeschrieben und daher nie byte-gleich.
+    if projekt_ordner(&fs[0].path).is_some() {
+        let beats: HashSet<String> = fs.iter().zip(&treffer).filter(|(f, _)| !f.flp).filter_map(|(_, t)| t.as_ref())
+            .filter_map(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()).collect();
+        if beats.len() == 1 {
+            return fund("grau", "Projekt im Archiv", beats.into_iter().next());
+        }
+    }
+    // Ein Projektordner mit mehreren Titeln bleibt ein Eintrag, nie aufteilen
+    if (uneinheitlich || titel_set.len() > 1) && projekt_ordner(&fs[0].path).is_some() {
+        return fund("gelb", "mehrere Titel im Projekt", einziger_beat());
+    }
     for (f, t) in fs.iter().zip(&treffer) {
         if let (false, Some(c)) = (f.flp, t.as_ref()) {
             let beat = index.iter().find(|e| c.starts_with(&e.path));
             let passt = match beat {
-                None => true, // 07_REMIXES
+                None => true, // 07_REMIXES, 06_SAMPLES
                 Some(e) => titel_alle.is_empty() || gleicher_song(&titel_alle, key.as_deref(), bpm, c, e),
             };
             if passt && !uneinheitlich {
@@ -532,13 +755,6 @@ fn bewerten(
         }
     }
     if uneinheitlich {
-        // Jede Datei liegt schon im Archiv (Try mit 132 und 85 BPM eingesammelt):
-        // nichts mehr zu entscheiden
-        if nur_hier == 0 {
-            let beats: HashSet<String> = treffer.iter().flatten()
-                .filter_map(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()).collect();
-            return fund("grau", "gleiche Datei im Archiv", (beats.len() == 1).then(|| beats.into_iter().next().unwrap()));
-        }
         return fund("gelb", "Key/BPM uneinheitlich", None);
     }
     // Grau: Nummer und Titel stimmen
@@ -566,7 +782,6 @@ fn bewerten(
     if let Some(i) = aehnlich {
         return fund("gelb", "gleicher Titel im Archiv, anderer Key/BPM", archiv_name(i));
     }
-    let titel_set: HashSet<String> = werke.iter().map(|w| normalize_title(&w.titel)).filter(|t| !t.is_empty()).collect();
     if titel_set.len() > 1 {
         return fund("gelb", "Nummer mit mehreren Titeln", None);
     }
@@ -649,6 +864,9 @@ mod tests {
         datei(&arch.join("2026/05_MAY/0618 - HEAT [D#m 152]/01_SAVEFILES/Samples/BXII Tag.wav"), "tag");
         datei(&alt.join("[701] Sunrise - 140 Am/[701] Sunrise - 140 Am.mp3"), "sunrise");
         datei(&alt.join("[701] Sunrise - 140 Am/BXII Tag.wav"), "tag");
+        // Als Loop eingesammelt: liegt in 06_SAMPLES, also schon da
+        datei(&alt.join("No Names.mp3"), "loop");
+        datei(&t.join("06_SAMPLES/S0001 - No Names/No Names.mp3"), "loop");
         let r = fundstuecke(&[alt.to_string_lossy().to_string()], &arch).unwrap();
         let finde = |id: u32| r.iter().find(|f| f.id == Some(id)).unwrap_or_else(|| panic!("{id} fehlt: {r:#?}"));
         assert_eq!(finde(233).ampel, "gruen");
@@ -669,6 +887,42 @@ mod tests {
         assert_eq!(finde(795).dateien.len(), 1);
         assert!(r.iter().all(|f| f.id != Some(400)));
         assert!(r.iter().any(|f| f.titel == "whynot" && f.ampel == "grau"));
+        assert!(r.iter().any(|f| f.titel == "No Names" && f.ampel == "grau"), "Loop aus 06_SAMPLES nicht erkannt");
+        // Artist: kopieren, danach grau
+        datei(&alt.join("JarnoGm/Behind her mind.wav"), "bhm");
+        datei(&alt.join("JarnoGm/Behind her mind.flp"), "bhm-flp");
+        let vorher = fundstuecke(&[alt.to_string_lossy().to_string()], &arch).unwrap();
+        let bhm = vorher.iter().find(|f| f.titel == "Behind her mind").unwrap();
+        assert_eq!(bhm.ampel, "gelb");
+        let pfade: Vec<String> = bhm.dateien.iter().map(|d| d.path.clone()).collect();
+        let song = t.join("05_ARTISTS/JarnoGm/Behind her mind");
+        zum_artist(&song, &pfade, false).unwrap();
+        zum_artist(&song, &pfade, false).unwrap(); // zweimal: nichts doppelt, kein Fehler
+        assert!(song.join("01_SAVEFILES/Behind her mind.flp").is_file() && song.join("03_VERSIONS/Behind her mind.wav").is_file());
+        let nachher = fundstuecke(&[alt.to_string_lossy().to_string()], &arch).unwrap();
+        assert_eq!(nachher.iter().find(|f| f.titel == "Behind her mind").unwrap().ampel, "grau");
+        // Produktion: ein Projektordner ist ein Eintrag, auch mit Artist-Song,
+        // namenloser FLP und Bounce. Beattag-Ordner erscheint nicht.
+        let prod = t.join("01_ACTIVE_PRODUCTION");
+        datei(&prod.join("Project_0572/100 Tausend_mix.mp3"), "ht");
+        datei(&prod.join("Project_0572/JarnoGm - NACH VORN.mp3"), "nv");
+        datei(&prod.join("Project_0572/Project_193.flp"), "p193");
+        datei(&prod.join("Project_0572/2.mp3"), "bounce");
+        datei(&alt.join("700-799/Beattag/BXII Tag.wav"), "eigener tag");
+        // DISAPPEAR: Exporte im Archiv, nur die Projekt-FLP nicht (die Archiv-FLP
+        // ist umgeschrieben): grau mit Reste, nicht gelb
+        datei(&arch.join("2026/06_JUNE/0900 - DISAPPEAR [F#m 135]/DISAPPEAR [F#m 135].mp3"), "dis");
+        datei(&prod.join("Project_0807/DISAPPEAR [F#m 135].mp3"), "dis");
+        datei(&prod.join("Project_0807/DISAPEAR [F#m 135]_untagged.wav"), "dis-wav-neu");
+        datei(&prod.join("Project_0807/Project_0807.flp"), "flp");
+        let p = fundstuecke(&[prod.to_string_lossy().to_string(), alt.to_string_lossy().to_string()], &arch).unwrap();
+        let dis = p.iter().find(|f| f.dateien.iter().any(|d| d.path.contains("Project_0807"))).unwrap();
+        assert_eq!((dis.ampel, dis.archiv.as_deref(), dis.nur_hier, dis.dateien.len()), ("grau", Some("0900 - DISAPPEAR [F#m 135]"), 2, 3), "{dis:#?}");
+        let im_projekt: Vec<&Fund> = p.iter().filter(|f| f.dateien.iter().any(|d| d.path.contains("Project_0572"))
+            && f.dateien.iter().any(|d| d.path.contains("01_ACTIVE_PRODUCTION"))).collect();
+        assert_eq!(im_projekt.len(), 1, "{im_projekt:#?}");
+        assert_eq!((im_projekt[0].ampel, im_projekt[0].grund.as_str(), im_projekt[0].dateien.len()), ("gelb", "mehrere Titel im Projekt", 4));
+        assert!(p.iter().all(|f| f.dateien.iter().all(|d| !d.path.contains("Beattag"))));
         assert!(r.iter().any(|f| f.ampel == "rot"));
         assert_eq!(finde(539).dateien.len(), 1);
         assert!(r.iter().all(|f| f.id != Some(1) && f.id != Some(2)), "Project_0753/2.mp3 als Nummer gelesen");
@@ -683,6 +937,8 @@ mod tests {
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
         assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true, true).unwrap().titel, "Cuthroat");
         assert_eq!(werk_aus_name("397 . Master.mp3", true, true).unwrap().titel, "");
+        let anger = werk_aus_name("ANGER - 160 Am_2.mp3", true, true).unwrap();
+        assert_eq!((anger.titel.as_str(), anger.key.as_deref(), anger.bpm), ("ANGER", Some("Am"), Some(160)));
         assert_eq!(werk_aus_name("473_Prototype.mp3", true, true).unwrap().titel, "");
         // Versionen ohne Unterstrich, aber keine echten Zahlentitel
         for (roh, titel) in [("Daydreams9", "Daydreams"), ("Show Off - 3", "Show Off"), ("Ten4", "Ten"), ("Nine - LoFi2", "Nine - LoFi"),
@@ -693,6 +949,77 @@ mod tests {
         assert_eq!(ohne_tag("Destiny - "), "Destiny");
         assert_eq!(ohne_tag("Victory @xP4RA"), "Victory");
         let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn artist_ordner_umziehen() {
+        let t = std::env::temp_dir().join(format!("beatos_artord_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let alt = t.join("Projects/Songs/Artists");
+        datei(&alt.join("JarnoGm/Downbad high/Downbad high.flp"), "flp");
+        datei(&alt.join("JarnoGm/Downbad high/Audio/vocals.wav"), "voc");
+        datei(&alt.join("JarnoGm/Downbad high/notizen.txt"), "txt");
+        datei(&alt.join("JarnoGm/Backup/x.flp"), "backup");
+        datei(&alt.join("JarnoGm/Struggle.mp3"), "str");
+        datei(&alt.join("Female Vocalist.mp3"), "fv");
+        let ziel = t.join("05_ARTISTS");
+        let r = artist_ordner_altbestand(vec![t.join("Projects").to_string_lossy().to_string()], ziel.to_string_lossy().to_string()).unwrap();
+        let namen: Vec<(String, String, usize)> = r.iter().map(|s| (s.artist.clone(), s.song.clone(), s.dateien)).collect();
+        assert_eq!(namen, vec![("".into(), "Female Vocalist".into(), 1), ("JarnoGm".into(), "Downbad high".into(), 2), ("JarnoGm".into(), "Struggle".into(), 1)]);
+        let dh = &r[1];
+        let e = artist_ordner_kopieren(dh.pfad.clone(), ziel.to_string_lossy().to_string(), "JarnoGm".into(), "Downbad high".into()).unwrap();
+        assert_eq!((e.kopiert, e.gleich), (3, 0)); // alles, auch die Notiz
+        assert!(ziel.join("JarnoGm/Downbad high/Audio/vocals.wav").is_file());
+        // nochmal: nichts doppelt; anderer Inhalt wird nicht überschrieben
+        fs::write(ziel.join("JarnoGm/Downbad high/notizen.txt"), "anders").unwrap();
+        let e = artist_ordner_kopieren(dh.pfad.clone(), ziel.to_string_lossy().to_string(), "JarnoGm".into(), "Downbad high".into()).unwrap();
+        assert_eq!((e.kopiert, e.gleich, e.konflikte.len()), (0, 2, 1));
+        let r = artist_ordner_altbestand(vec![t.join("Projects").to_string_lossy().to_string()], ziel.to_string_lossy().to_string()).unwrap();
+        assert_eq!(r[1].da, 2);
+        // Vocals in 02_ASSETS
+        fund_zum_artist(ziel.to_string_lossy().to_string(), "JarnoGm".into(), "Struggle".into(), vec![r[2].pfad.clone()], Some(true)).unwrap();
+        assert!(ziel.join("JarnoGm/Struggle/02_ASSETS/Struggle.mp3").is_file());
+        // Drei verschiedene „Daydreams.flp“: keine bricht ab, keine überschreibt, zweimal nichts doppelt
+        let dd: Vec<String> = ["a", "b", "c"].iter().map(|x| {
+            let p = t.join(format!("dd_{x}/Daydreams.flp")); datei(&p, x); p.to_string_lossy().to_string()
+        }).collect();
+        let song = ziel.join("GOODBXY/Daydreams");
+        zum_artist(&song, &dd, false).unwrap();
+        zum_artist(&song, &dd, false).unwrap();
+        let mut namen: Vec<String> = fs::read_dir(song.join("01_SAVEFILES")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        namen.sort();
+        assert_eq!(namen, ["Daydreams (2).flp", "Daydreams (3).flp", "Daydreams.flp"]);
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    /// Echte Artist-Ordner: BEATOS_FUND_ROOTS, BEATOS_ARTISTS (nur lesend)
+    #[test]
+    #[ignore]
+    fn artist_ordner_handprobe() {
+        let roots: Vec<String> = std::env::var("BEATOS_FUND_ROOTS").unwrap().split(';').map(String::from).collect();
+        let r = artist_ordner_altbestand(roots, std::env::var("BEATOS_ARTISTS").unwrap()).unwrap();
+        for s in &r { println!("{:<22} {:<45} {:>3} Dateien {:>2} FLP {:>3} da  {}", s.artist, s.song, s.dateien, s.flps, s.da, s.pfad); }
+        println!("{} Einträge, {} offen", r.len(), r.iter().filter(|s| s.da < s.dateien).count());
+    }
+
+    /// Alle offenen Artist-Ordner kopieren (schreibt!): BEATOS_FUND_ROOTS, BEATOS_ARTISTS.
+    /// Ohne Artist → „Ohne Artist“.
+    #[test]
+    #[ignore]
+    fn artist_ordner_alle_echt() {
+        let roots: Vec<String> = std::env::var("BEATOS_FUND_ROOTS").unwrap().split(';').map(String::from).collect();
+        let ziel = std::env::var("BEATOS_ARTISTS").unwrap();
+        let (mut ok, mut fehler) = (0, 0);
+        for s in artist_ordner_altbestand(roots, ziel.clone()).unwrap() {
+            if s.dateien > 0 && s.da >= s.dateien { continue; }
+            let artist = if s.artist.is_empty() { "Ohne Artist".to_string() } else { s.artist.clone() };
+            match artist_ordner_kopieren(s.pfad.clone(), ziel.clone(), artist.clone(), s.song.clone()) {
+                Ok(e) if e.konflikte.is_empty() => { ok += 1; println!("ok    {artist} / {}: {} kopiert, {} gleich", s.song, e.kopiert, e.gleich); }
+                Ok(e) => { fehler += 1; println!("KONFL {artist} / {}: {} kopiert, nicht überschrieben: {:?}", s.song, e.kopiert, e.konflikte); }
+                Err(e) => { fehler += 1; println!("FEHLER {artist} / {}: {e}", s.song); }
+            }
+        }
+        println!("{ok} ok, {fehler} mit Problemen");
     }
 
     /// Echte Zahlen: BEATOS_FUND_ROOTS (mit ; getrennt), BEATOS_ARCHIVE, BEATOS_DUMP

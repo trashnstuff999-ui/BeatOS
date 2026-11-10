@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aufteilen, ganzerSong } from "./GelbAnsicht";
+import { aufteilen, ganzerSong, artistVorschlag, auswahlUmschalten, zusammenlegen } from "./GelbAnsicht";
 import type { Fund, FundDatei } from "../../types/fundstuecke";
 
 const datei = (path: string, titel: string | null, key: string | null, bpm: number | null, flp = false): FundDatei =>
@@ -67,5 +67,42 @@ describe("ganzerSong", () => {
     const ganz = ganzerSong({ f, teile });
     expect(ganz.dateien).toHaveLength(2);
     expect(ganz.titel).toBe("Try");
+  });
+});
+
+describe("artistVorschlag", () => {
+  const artists = ["CHIA B", "JarnoGm", "Yoghi"];
+  it("liest den Artist vorn aus dem Titel", () => {
+    expect(artistVorschlag({ ...fund("ohne Nummer", [datei("x.mp3", null, null, null)]), titel: "JarnoGm - NACH VORN" }, artists))
+      .toEqual({ artist: "JarnoGm", song: "NACH VORN" });
+  });
+  it("nimmt sonst den Ordner, ohne Treffer bleibt der Artist leer", () => {
+    const bhm = { ...fund("ohne Nummer", [datei(String.raw`C:\Projects\JarnoGm\Behind her mind.wav`, null, null, null)]), titel: "Behind her mind" };
+    expect(artistVorschlag(bhm, artists)).toEqual({ artist: "JarnoGm", song: "Behind her mind" });
+    expect(artistVorschlag({ ...bhm, dateien: [datei("C:/Songs/x.mp3", null, null, null)] }, artists).artist).toBe("");
+  });
+});
+
+describe("auswahlUmschalten", () => {
+  it("ganzer Song und seine Fassung schließen sich aus, verschiedene Songs nicht", () => {
+    const a = datei("a.mp3", "Destiny", "F#m", 140), b = datei("b.mp3", "Destiny", "Dm", 181);
+    const ganz = fund("Key/BPM uneinheitlich", [a, b]), teil = fund("Key/BPM uneinheitlich", [a]);
+    const anderer = { ...fund("nur Nummer", [datei("536.wav", null, null, null)]), titel: "536" };
+    let m = auswahlUmschalten(new Map(), [ganz, anderer], true);
+    expect(m.size).toBe(2);
+    m = auswahlUmschalten(m, [teil], true);
+    expect([...m.values()]).toEqual([anderer, teil]);
+    expect(auswahlUmschalten(m, [teil], false).size).toBe(1);
+  });
+});
+
+describe("zusammenlegen", () => {
+  it("nimmt alle Dateien, den kürzesten Titel und Key/BPM, wo vorhanden", () => {
+    const a = { ...fund("ohne Nummer", [datei("P0572/100 Tausend_4.mp3", "100 Tausend", null, null), datei("P0572/100 Tausend_3.mp3", "100 Tausend", null, null)]), titel: "100 Tausend" };
+    const b = { ...fund("ohne Nummer", [datei("P0572/100 Tausend_mix.mp3", "100 Tausend_mix", "Am", 140)]), titel: "100 Tausend_mix", key: "Am", bpm: 140 };
+    const z = zusammenlegen([b, a]);
+    expect(z.titel).toBe("100 Tausend");
+    expect(z.dateien).toHaveLength(3);
+    expect([z.key, z.bpm, z.nur_hier, z.archiv]).toEqual(["Am", 140, 3, null]);
   });
 });

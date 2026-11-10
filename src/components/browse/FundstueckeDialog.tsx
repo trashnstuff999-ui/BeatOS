@@ -9,11 +9,12 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { api } from "../../lib/api";
 import { C, radius } from "../../lib/theme";
 import { Modal, Segmented, IconButton, Button } from "../ui";
-import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
+import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../../contexts/SettingsContext";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useDialog } from "../../contexts/DialogContext";
 import type { Ampel, Fund, EinsammelErgebnis, EinsammelArt } from "../../types/fundstuecke";
 import { GelbAnsicht } from "./GelbAnsicht";
+import { ArtistOrdnerAnsicht } from "./ArtistOrdnerAnsicht";
 
 const FARBE: Record<Ampel, string> = { gruen: C.mint, gelb: C.primary, rot: C.error, grau: C.onSecondaryFixedVar };
 const NAME: Record<Ampel, string> = { gruen: "Grün", gelb: "Gelb", rot: "Rot", grau: "Im Archiv" };
@@ -43,6 +44,8 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
   const [erledigt, setErledigt] = useState<Set<string>>(new Set());
   const [wegPfade, setWegPfade] = useState<Set<string>>(new Set());
   const [zeigeWeg, setZeigeWeg] = useState(false);
+  // Artist-Ordner aus dem Altbestand statt der Ampel-Liste
+  const [artistOrdner, setArtistOrdner] = useState(false);
 
   const laden = useCallback(() => {
     if (roots.length === 0 || !settings.archivePath) return;
@@ -86,6 +89,49 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
       return true;
     } catch (e) {
       melde(`Einsammeln fehlgeschlagen: ${String(e)}`, "fehler");
+      return false;
+    }
+  };
+
+  /** Mehrfachauswahl in Gelb: jeder Eintrag ein eigener Song, mit Rückgängig */
+  const sammelnViele = async (fs: Fund[]) => {
+    const ok = await frage({
+      titel: `${fs.length} Songs ins Archiv`,
+      text: "Jeder bekommt eine eigene Nummer, mit dem Titel wie angezeigt. Der Altbestand bleibt, Rückgängig ist möglich.",
+      bestaetigen: "Ins Archiv",
+    });
+    if (!ok) return;
+    try {
+      const r = await api.archive.einsammeln(
+        fs.map(f => ({ id: f.id, titel: f.titel, key: f.key, bpm: f.bpm, dateien: f.dateien.map(d => d.path), archiv: f.archiv })),
+        settings.archivePath, "archiv",
+      );
+      setLetzter(r);
+      melde(`${r.fertig.length} eingesammelt${r.ausgelassen.length ? `, ${r.ausgelassen.length} ausgelassen` : ""}`, r.fehler ? "fehler" : "erfolg");
+      onEingesammelt?.();
+      laden();
+    } catch (e) {
+      melde(`Einsammeln fehlgeschlagen: ${String(e)}`, "fehler");
+    }
+  };
+
+  // Artists für den Gelb-Knopf „Artist“
+  const artistsRoot = kuenstlerOrdner(settings);
+  const [artists, setArtists] = useState<string[]>([]);
+  useEffect(() => {
+    if (!artistsRoot) return;
+    api.artists.scan(artistsRoot).then(s => setArtists(s.kuenstler.map(k => k.name)), () => {});
+  }, [artistsRoot]);
+
+  const zumArtist = async (f: Fund, artist: string, song: string, assets: boolean): Promise<boolean> => {
+    try {
+      const ordner = await api.archive.fundZumArtist(artistsRoot, artist, song, f.dateien.map(d => d.path), assets);
+      setErledigt(prev => new Set([...prev, ...f.dateien.map(d => d.path)]));
+      if (!artists.some(a => a.toLowerCase() === artist.toLowerCase())) setArtists(prev => [...prev, artist]);
+      melde(`${ordner.split(/[\\/]/).slice(-2).join(" / ")} angelegt`, "erfolg");
+      return true;
+    } catch (e) {
+      melde(`Kopieren fehlgeschlagen: ${String(e)}`, "fehler");
       return false;
     }
   };
@@ -199,7 +245,11 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
               onChange={setAmpel}
               options={(Object.keys(NAME) as Ampel[]).map(a => ({ value: a, label: `${NAME[a]} ${zahl[a]}`, color: FARBE[a] }))}
             />
-            {ampel === "gelb" && (
+            <Button size="sm" variant={artistOrdner ? "primary" : "ghost"} onClick={() => setArtistOrdner(!artistOrdner)}
+              title="Ordner „Artists“ im Altbestand nach 05_ARTISTS">
+              Artist-Ordner
+            </Button>
+            {ampel === "gelb" && !artistOrdner && (
               <Button size="sm" variant={zeigeWeg ? "primary" : "ghost"} onClick={() => setZeigeWeg(!zeigeWeg)}>
                 Weggelegt {weggelegt.filter(f => f.ampel === "gelb").length}
               </Button>
@@ -218,13 +268,16 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: "60vh", overflowY: "auto" }}>
-            {ampel === "gelb" ? (
+            {artistOrdner ? (
+              <ArtistOrdnerAnsicht roots={roots} artistsRoot={artistsRoot} artists={artists} />
+            ) : ampel === "gelb" ? (
               <GelbAnsicht
                 funde={zeigeWeg ? weggelegt.filter(f => f.ampel === "gelb") : liste}
                 Zeile={Zeile} sammeln={sammelnEinzeln} weg={wegLegen} zeigeWeg={zeigeWeg}
+                artists={artists} zumArtist={zumArtist} sammelnViele={sammelnViele}
               />
             ) : liste.map(f => <Zeile key={`${f.id}:${f.titel}:${f.dateien[0].path}`} f={f} />)}
-            {ampel !== "gelb" && liste.length === 0 && <Hinweis>Nichts in {NAME[ampel]}.</Hinweis>}
+            {!artistOrdner && ampel !== "gelb" && liste.length === 0 && <Hinweis>Nichts in {NAME[ampel]}.</Hinweis>}
           </div>
         </div>
       )}

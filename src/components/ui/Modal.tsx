@@ -6,7 +6,7 @@
 // fuellt nur noch Inhalt und Fusszeile.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { C, radius } from "../../lib/theme";
@@ -36,6 +36,8 @@ export function useEscapeStack(onClose: () => void) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (STAPEL[STAPEL.length - 1] !== ich) return;
+      // Felder mit eigenem Esc (Titel beim Einsammeln) schliessen nur sich selbst
+      if ((e.target as HTMLElement | null)?.closest?.("[data-eigenes-esc]")) return;
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -78,11 +80,15 @@ export function Modal({
   closeOnBackdrop = true,
 }: ModalProps) {
   useEscapeStack(onClose);
+  // Nur schliessen, wenn der Klick auch auf dem Hintergrund begann: Text im
+  // Feld markieren und ausserhalb loslassen ist sonst ein „Hintergrund-Klick“.
+  const druckAufHintergrund = useRef(false);
 
   // Portal: ein transform weiter oben (Detail-Panel) sperrte fixed sonst auf dessen Breite ein.
   return createPortal(
     <div
-      onClick={closeOnBackdrop ? e => { if (e.target === e.currentTarget) onClose(); } : undefined}
+      onMouseDown={e => { druckAufHintergrund.current = e.target === e.currentTarget; }}
+      onClick={closeOnBackdrop ? e => { if (e.target === e.currentTarget && druckAufHintergrund.current) onClose(); } : undefined}
       // data-modal: was in einem Dialog passiert, geht die Seite darunter
       // nichts an — sonst schliesst ein Klick im Dialog das Panel dahinter.
       data-modal
