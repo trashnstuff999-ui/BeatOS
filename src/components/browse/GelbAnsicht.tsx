@@ -82,12 +82,13 @@ export function GelbAnsicht({ funde, Zeile, sammeln, weg, zeigeWeg }: Props) {
       </div>
     );
   }
-  const offen = funde.filter(f => !f.weg).flatMap(aufteilen);
+  // Je Eintrag seine Teile; ganz im Archiv liegende Einträge fallen weg
+  const offen = funde.filter(f => !f.weg).map(f => ({ f, teile: aufteilen(f) })).filter(e => e.teile.length > 0);
   const bekannt = new Set([...GRUPPEN, ZULETZT].map(g => g.grund));
   const gruppen = [
-    ...GRUPPEN.map(g => ({ ...g, liste: offen.filter(f => f.grund === g.grund) })),
-    { grund: "", name: "Sonstige", liste: offen.filter(f => !bekannt.has(f.grund)) },
-    { ...ZULETZT, liste: offen.filter(f => f.grund === ZULETZT.grund) },
+    ...GRUPPEN.map(g => ({ ...g, liste: offen.filter(e => e.f.grund === g.grund) })),
+    { grund: "", name: "Sonstige", liste: offen.filter(e => !bekannt.has(e.f.grund)) },
+    { ...ZULETZT, liste: offen.filter(e => e.f.grund === ZULETZT.grund) },
   ].filter(g => g.liste.length > 0);
 
   return (
@@ -97,7 +98,17 @@ export function GelbAnsicht({ funde, Zeile, sammeln, weg, zeigeWeg }: Props) {
   );
 }
 
-function Gruppe({ name, liste, Zeile, sammeln, weg }: { name: string; liste: Fund[] } & Pick<Props, "Zeile" | "sammeln" | "weg">) {
+type Eintrag = { f: Fund; teile: Fund[] };
+
+/** Mehrere Fassungen: oben der ganze Song (eine Nummer für alle), darunter
+ *  jede Fassung einzeln, falls es doch verschiedene Songs sind. */
+export function ganzerSong(e: Eintrag): Fund {
+  const dateien = e.teile.flatMap(t => t.dateien);
+  const archive = new Set(e.teile.map(t => t.archiv).filter(Boolean));
+  return { ...e.f, dateien, archiv: archive.size === 1 ? [...archive][0]! : null };
+}
+
+function Gruppe({ name, liste, Zeile, sammeln, weg }: { name: string; liste: Eintrag[] } & Pick<Props, "Zeile" | "sammeln" | "weg">) {
   const [zu, setZu] = useState(false);
   return (
     <div>
@@ -110,9 +121,19 @@ function Gruppe({ name, liste, Zeile, sammeln, weg }: { name: string; liste: Fun
           {name} <span style={{ color: C.onSecondaryFixedVar, fontWeight: 600 }}>{liste.length}</span>
         </button>
         <span style={{ flex: 1 }} />
-        <Button size="sm" variant="ghost" onClick={() => weg(liste, true)}>Alle weg</Button>
+        <Button size="sm" variant="ghost" onClick={() => weg(liste.flatMap(e => e.teile), true)}>Alle weg</Button>
       </div>
-      {!zu && liste.map(f => <GelbZeile key={zeilenSchluessel(f)} f={f} Zeile={Zeile} sammeln={sammeln} weg={weg} />)}
+      {!zu && liste.map(e => e.teile.length === 1
+        ? <GelbZeile key={zeilenSchluessel(e.teile[0])} f={e.teile[0]} Zeile={Zeile} sammeln={sammeln} weg={weg} />
+        : (
+          <div key={"ganz:" + zeilenSchluessel(e.f)}>
+            <GelbZeile f={ganzerSong(e)} Zeile={Zeile} sammeln={sammeln} weg={weg} />
+            <div style={{ marginLeft: 28, borderLeft: `2px solid ${C.border20}`, paddingLeft: 6 }}>
+              <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, padding: "2px 8px" }}>{e.teile.length} Fassungen einzeln</div>
+              {e.teile.map(t => <GelbZeile key={zeilenSchluessel(t)} f={t} Zeile={Zeile} sammeln={sammeln} weg={weg} />)}
+            </div>
+          </div>
+        ))}
     </div>
   );
 }

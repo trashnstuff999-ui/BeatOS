@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aufteilen } from "./GelbAnsicht";
+import { aufteilen, ganzerSong } from "./GelbAnsicht";
 import type { Fund, FundDatei } from "../../types/fundstuecke";
 
 const datei = (path: string, titel: string | null, key: string | null, bpm: number | null, flp = false): FundDatei =>
@@ -53,5 +53,19 @@ describe("aufteilen", () => {
   it("lässt andere Gründe zusammen", () => {
     const f = fund("ohne Nummer", [datei("a.mp3", "X", "Am", 120), datei("b.mp3", "X", "Cm", 120)]);
     expect(aufteilen(f)).toEqual([f]);
+  });
+});
+
+describe("ganzerSong", () => {
+  it("Try: 132 und 85 BPM zusammen als ein Song, eine Nummer", () => {
+    const f = { ...fund("Key/BPM uneinheitlich", [
+      datei("Try [132 C#m].mp3", "Try", "C#m", 132),
+      datei("Try [85 C#m].mp3", "Try", "C#m", 85),
+    ]), titel: "Try" };
+    const teile = aufteilen(f);
+    expect(teile).toHaveLength(2);
+    const ganz = ganzerSong({ f, teile });
+    expect(ganz.dateien).toHaveLength(2);
+    expect(ganz.titel).toBe("Try");
   });
 });
