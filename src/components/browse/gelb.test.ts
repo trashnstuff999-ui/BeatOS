@@ -3,7 +3,7 @@ import { aufteilen } from "./GelbAnsicht";
 import type { Fund, FundDatei } from "../../types/fundstuecke";
 
 const datei = (path: string, titel: string | null, key: string | null, bpm: number | null, flp = false): FundDatei =>
-  ({ path, size: 1, modified: 0, flp, im_archiv: false, titel, key, bpm, archiv: null });
+  ({ path, size: 1, modified: 0, flp, im_archiv: false, titel, key, bpm, archiv: null, weg: false });
 const fund = (grund: string, dateien: FundDatei[]): Fund => ({
   id: null, titel: "Destiny", key: null, bpm: null, ampel: "gelb", grund, archiv: null, nur_hier: dateien.length,
   fertig: null, dateien, weg: false,

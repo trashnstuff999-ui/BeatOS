@@ -40,6 +40,8 @@ pub struct FundDatei {
     pub bpm: Option<i32>,
     /// Archiv-Beat, in dem diese Datei schon liegt („0776 - Louis V [Dm 165]“)
     pub archiv: Option<String>,
+    /// Als „Weg“ markiert (gilt pro Datei, auch für Teile aufgeteilter Einträge)
+    pub weg: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -355,7 +357,8 @@ pub async fn scan_fundstuecke(app: tauri::AppHandle, roots: Vec<String>, archive
         let mut out = fundstuecke(&roots, Path::new(&archive_path))?;
         let weg = weg_lesen();
         for f in &mut out {
-            f.weg = !weg.is_empty() && f.dateien.iter().all(|d| weg.contains(&d.path.to_lowercase()));
+            for d in &mut f.dateien { d.weg = weg.contains(&d.path.to_lowercase()); }
+            f.weg = f.dateien.iter().all(|d| d.weg);
         }
         Ok(out)
     })
@@ -482,6 +485,7 @@ fn bewerten(
             titel: f.werk.as_ref().map(|w| w.titel.clone()).filter(|t| !t.is_empty()),
             key: f.werk.as_ref().and_then(|w| w.key.clone()), bpm: f.werk.as_ref().and_then(|w| w.bpm),
             archiv: t.as_ref().and_then(|c| index.iter().find(|e| c.starts_with(&e.path))).map(|e| e.folder.clone()),
+            weg: false,
         }).collect(),
         weg: false,
     };

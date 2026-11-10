@@ -15,6 +15,8 @@ export interface FundDatei {
   bpm: number | null;
   /** Archiv-Beat, in dem diese Datei schon liegt */
   archiv: string | null;
+  /** Als „Weg“ markiert */
+  weg: boolean;
 }
 
 export interface Fund {

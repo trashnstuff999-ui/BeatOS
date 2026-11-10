@@ -50,7 +50,7 @@ export function FundstueckeDialog({ onClose, onEingesammelt }: { onClose: () => 
     api.archive.fundstuecke(roots, settings.archivePath).then(fs => {
       setFunde(fs);
       setErledigt(new Set());
-      setWegPfade(new Set(fs.filter(f => f.weg).flatMap(f => f.dateien.map(d => d.path))));
+      setWegPfade(new Set(fs.flatMap(f => f.dateien.filter(d => d.weg).map(d => d.path))));
     }, e => setFehler(String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.altbestandPaths, settings.archivePath]);
