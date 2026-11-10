@@ -465,7 +465,7 @@ export function DetailPanel({
             }}>
               {/* Begonnen schlägt das FLP-Datum: übernommene Beats tragen dort den Kopiertag */}
               {[
-                `#${beat.id}`,
+                `B${beat.id}`,
                 beat.begonnen ? `begonnen ${datumKurz(beat.begonnen)}` : beat.created_date ? datumKurz(beat.created_date) : null,
                 beat.alte_id ? `alt ${/^d+$/.test(beat.alte_id) ? "#" : ""}${beat.alte_id}` : null,
               ].filter(Boolean).join(" · ")}
@@ -726,7 +726,7 @@ export function DetailPanel({
                   Diesen Beat löschen?
                 </div>
                 <div style={{ fontSize: 12, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
-                  <strong style={{ color: C.onSurface }}>#{beat.id}</strong> {beat.name}
+                  <strong style={{ color: C.onSurface }}>B{beat.id}</strong> {beat.name}
                 </div>
               </div>
             </div>

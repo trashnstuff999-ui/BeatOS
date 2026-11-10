@@ -164,7 +164,7 @@ export default function Create() {
   // logic as archive_beat, so preview and result can never diverge.
   const [previewPath, setPreviewPath] = useState("");
   useEffect(() => {
-    const id = parseInt(catalogId.replace("#", "")) || 0;
+    const id = parseInt(catalogId.replace(/^[#Bb]/, "")) || 0;
     const ym = yearMonth || getYearMonthFolder(new Date());
     let cancelled = false;
     api.archive
@@ -233,7 +233,7 @@ export default function Create() {
       setTitle(parsed.name);
       setKey(parsed.key || "");
       setBpm(parsed.bpm?.toString() || "");
-      setCatalogId(`#${String(parsed.suggested_id).padStart(4, "0")}`);
+      setCatalogId(`B${String(parsed.suggested_id).padStart(4, "0")}`);
       setCreatedDate(parsed.created_date);
       setYearMonth(parsed.year_month);
       setYmGeschaetzt(parsed.year_month_geschaetzt);

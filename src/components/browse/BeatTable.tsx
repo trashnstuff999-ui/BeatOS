@@ -231,7 +231,7 @@ const BeatRow = memo(function BeatRow({
 
       {/* ID */}
       <div style={{ width: 80, flexShrink: 0, fontSize: 12, fontFamily: "monospace", color: C.primary, fontWeight: 700 }}>
-        #{beat.id}
+        B{beat.id}
       </div>
 
       {/* Name */}

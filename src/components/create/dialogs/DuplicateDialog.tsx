@@ -41,7 +41,7 @@ export function DuplicateDialog({
     >
       <p style={{ margin: 0, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.65 }}>
         {istIdTreffer
-          ? <>Unter <strong style={{ color: C.primary }}>#{existingId}</strong> liegt bereits ein Beat im Archiv:</>
+          ? <>Unter <strong style={{ color: C.primary }}>B{existingId}</strong> liegt bereits ein Beat im Archiv:</>
           : <>Ein Beat mit ähnlichem Titel, gleicher Tonart und gleichem Tempo liegt schon im Archiv:</>}
       </p>
 
@@ -52,7 +52,7 @@ export function DuplicateDialog({
         border: `1px solid ${C.border15}`,
         fontSize: 12, color: C.onSurfaceVariant,
       }}>
-        <strong style={{ color: C.onSurface }}>#{existingId}</strong> {existingName}
+        <strong style={{ color: C.onSurface }}>B{existingId}</strong> {existingName}
       </div>
 
       <p style={{ margin: 0, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 1.65 }}>

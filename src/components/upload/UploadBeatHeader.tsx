@@ -213,7 +213,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
           <div style={{ fontSize: 12, color: C.onSurfaceVariant, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {beatId
               ? [
-                  <span key="id" style={{ fontFamily: "monospace" }}>#{beatId}</span>,
+                  <span key="id" style={{ fontFamily: "monospace" }}>B{beatId}</span>,
                   key && <span key="key">{key}</span>,
                   bpm != null && <span key="bpm">{bpm} BPM</span>,
                   laenge && <span key="len" style={{ fontVariantNumeric: "tabular-nums" }}>{laenge}</span>,
@@ -303,7 +303,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
               <button
                 key={b.id}
                 onClick={() => handlePick(b)}
-                title={`#${b.id} ${b.name} auswählen`}
+                title={`B${b.id} ${b.name} auswählen`}
                 style={{
                   padding: "10px 14px",
                   display: "flex",

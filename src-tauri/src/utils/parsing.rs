@@ -113,9 +113,13 @@ pub fn parse_beat_folder(folder_name: &str) -> Option<(String, String, Option<St
         return parse_name_key_bpm(id, remainder);
     }
     
-    // Try pattern: ID - Name [Key BPM]
+    // Try pattern: ID - Name [Key BPM] — „B0145“ (Katalog ab Scheibe 4) liest sich wie „0145“
     if let Some((id_part, remainder)) = s.split_once(" - ") {
         let id = id_part.trim().trim_start_matches('#');
+        let id = match id.strip_prefix('B') {
+            Some(z) if !z.is_empty() && z.chars().all(|c| c.is_ascii_digit()) => z,
+            _ => id,
+        };
         return parse_name_key_bpm(id, remainder);
     }
     
@@ -225,6 +229,15 @@ mod tests {
         assert_eq!(name, "PIECES");
         assert_eq!(key, Some("Bm".to_string()));
         assert_eq!(bpm, Some(135.0));
+    }
+
+    #[test]
+    fn b_nummer_im_ordner() {
+        let (id, name, key, bpm) = parse_beat_folder("B0145 - ANGER [Am 160]").unwrap();
+        assert_eq!((id.as_str(), name.as_str(), key.as_deref(), bpm), ("0145", "ANGER", Some("Am"), Some(160.0)));
+        // Ein Titel, der mit B anfängt, bleibt Titel; „Bxyz“ ist keine Nummer
+        assert_eq!(parse_beat_folder("Bounce - Night [140]").unwrap().0, "Bounce");
+        assert_eq!(crate::commands::build_archive_folder_name(145, "ANGER", Some("Am"), Some(160)), "B0145 - ANGER [Am 160]");
     }
 
     #[test]

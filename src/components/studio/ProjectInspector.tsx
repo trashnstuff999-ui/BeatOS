@@ -168,7 +168,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
     api.archive.checkDuplicate(0, title, p.key, p.bpm)
       .then(r => {
         if (abgelöst || !r.has_duplicate || r.duplicate_type === "id") return;
-        setDuplicate(`#${r.existing_id} „${r.existing_name}“`);
+        setDuplicate(`B${r.existing_id} „${r.existing_name}“`);
       })
       .catch(() => {});
     return () => { abgelöst = true; };
@@ -681,7 +681,7 @@ function InspectorActions({ archivBeatId, onUpload, canPreview, onPreview, canOp
       </Button>
       {archivBeatId ? (
         <Button variant="primary" size="sm" icon={UploadIcon} onClick={onUpload} style={{ flex: 1 }}
-          title={`Archiviert als #${archivBeatId}`}>
+          title={`Archiviert als B${archivBeatId}`}>
           Im Upload-Tab
         </Button>
       ) : (

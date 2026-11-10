@@ -511,8 +511,10 @@ fn liegt_in_roots(path: &str, roots: &[String]) -> bool {
         .any(|root| p.starts_with(&format!("{}\\", norm_path(root))))
 }
 
-/// Namensschema der Projektordner: Project_1, Project_2, …
-const PROJECT_PREFIX: &str = "Project_";
+/// Namensschema der Projektordner: P0001, P0002 … (seit Scheibe 4, 10.11.2026)
+const PROJECT_PREFIX: &str = "P";
+/// Das alte Schema „Project_0001“ wird weiter gelesen; „Lücken schließen“ stellt es auf P um.
+const PROJECT_PREFIX_ALT: &str = "Project_";
 
 /// Nächster freier Projektname über ALLE Produktions-Roots — eine laufende
 /// Nummer wie beim Archiv, aber aus den Ordnernamen statt aus der Datenbank.
@@ -580,12 +582,12 @@ fn parse_project_id(folder: &str) -> Option<ProjectId> {
         return build_project_id(digits, after);
     }
 
-    // Optionales '#', dann optional das Wort "Project_", dann die Ziffern
+    // Optionales '#', dann optional „Project_“ (alt) oder „P“, dann die Ziffern
     let s = s.strip_prefix('#').unwrap_or(s);
-    let after_prefix = match s.get(..PROJECT_PREFIX.len()) {
-        Some(head) if head.eq_ignore_ascii_case(PROJECT_PREFIX) => &s[PROJECT_PREFIX.len()..],
-        _ => s,
-    };
+    let ohne = |p: &str| s.get(..p.len()).filter(|h| h.eq_ignore_ascii_case(p)).map(|_| &s[p.len()..]);
+    let after_prefix = ohne(PROJECT_PREFIX_ALT)
+        .or_else(|| ohne(PROJECT_PREFIX).filter(|r| r.starts_with(|c: char| c.is_ascii_digit())))
+        .unwrap_or(s);
 
     let digits_len = after_prefix.chars().take_while(|c| c.is_ascii_digit()).count();
     if digits_len == 0 {
@@ -1251,6 +1253,14 @@ fn apply_steps(steps: Vec<MergeStep>, was: Option<&str>) -> Result<MergeReport, 
 
     let (done, mut failed) = merge_steps_on_disk(&steps);
 
+    // FL speichert volle Pfade: Aufnahmen in Audio/ zeigen nach dem Umbenennen
+    // auf den alten Ordnernamen. Im eigenen Ordner wiederfinden und umbiegen.
+    for s in &done {
+        if let Err(e) = crate::commands::pfadreparatur::eigener_ordner(Path::new(&s.to)) {
+            failed.push(format!("{}: FLP-Pfade nicht nachgezogen ({})", s.new_name, e));
+        }
+    }
+
     // Status/Priorität/Notizen auf die neuen Pfade umhängen
     match open_db() {
         Ok(mut conn) => {
@@ -1346,8 +1356,9 @@ fn plan_close_gaps(roots: &[String]) -> Vec<MergeStep> {
     found
         .into_iter()
         .enumerate()
-        // Stimmt die Nummer schon, bleibt auch die Schreibweise unangetastet
-        .filter(|(i, (n, ..))| *n != *i as u32 + 1)
+        // Stimmt die Nummer schon, bleibt auch die Schreibweise unangetastet —
+        // außer beim alten Schema „Project_0001“: das wird zu „P0001“
+        .filter(|(i, (n, _, old_name, _))| *n != *i as u32 + 1 || !old_name.starts_with(&format!("{}{:04}", PROJECT_PREFIX, n)))
         .map(|(i, (_, dir, old_name, id))| {
             let number = format!("{}{:04}", PROJECT_PREFIX, i + 1);
             let new_name = match &id.name {
@@ -2558,9 +2569,9 @@ mod tests {
         assert_eq!(
             namen,
             vec![
-                ("Project_1", "Project_0001"),
-                ("Project_3", "Project_0002"),
-                ("Project_4", "Project_0003"),
+                ("Project_1", "P0001"),
+                ("Project_3", "P0002"),
+                ("Project_4", "P0003"),
             ],
             "lückenlos durchnummeriert, der ausgenommene zählt nicht mit"
         );
@@ -3098,7 +3109,7 @@ mod tests {
         let basis = super::beat_basisname("MEMORIES", Some("Am"), Some(140));
         assert_eq!(basis, "MEMORIES [Am 140]");
         let einmal = super::beat_ordnername("Project_243", &basis);
-        assert_eq!(einmal, "Project_0243 - MEMORIES [Am 140]");
+        assert_eq!(einmal, "P0243 - MEMORIES [Am 140]");
         assert_eq!(super::beat_ordnername(&einmal, &basis), einmal);
         assert_eq!(super::beat_ordnername("NO MORE RUNNING", "X [140]"), "X [140]");
         assert_eq!(super::beat_basisname("X", None, None), "X");
@@ -3126,7 +3137,7 @@ mod tests {
         schreibe("cover.png", 1);
 
         let plan = super::plan_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
-        assert_eq!(plan.folder_to, "Project_0796 - MEMORIES [Am 140]");
+        assert_eq!(plan.folder_to, "P0796 - MEMORIES [Am 140]");
         let ziele: Vec<(&str, &str)> = plan.files.iter().map(|o| (o.from.as_str(), o.to.as_str())).collect();
         assert_eq!(ziele, vec![
             ("Project_797.flp", "MEMORIES [Am 140].flp"),
@@ -3139,7 +3150,7 @@ mod tests {
         assert!(super::plan_rename(&dir, "X", None, Some(20)).is_err());
 
         let neu = super::apply_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
-        assert_eq!(neu, tmp.join("Project_0796 - MEMORIES [Am 140]"));
+        assert_eq!(neu, tmp.join("P0796 - MEMORIES [Am 140]"));
         for f in ["MEMORIES [Am 140].flp", "hook_v3.flp", "MEMORIES [Am 140].mp3", "MEMORIES [Am 140]_2.mp3",
                   "MEMORIES [Am 140]_untagged.wav", "cover.png"] {
             assert!(neu.join(f).is_file(), "{f} fehlt");
@@ -3161,11 +3172,11 @@ mod tests {
         std::fs::create_dir_all(b.join("Project_192")).unwrap();
 
         let roots = vec![a.to_string_lossy().to_string(), b.to_string_lossy().to_string()];
-        assert_eq!(super::next_project_name(roots).unwrap(), "Project_0206");
+        assert_eq!(super::next_project_name(roots).unwrap(), "P0206");
         // Leerer Ordner → fängt bei 1 an
         assert_eq!(
             super::next_project_name(vec![tmp.join("leer").to_string_lossy().to_string()]).unwrap(),
-            "Project_0001"
+            "P0001"
         );
 
         std::fs::remove_dir_all(&tmp).unwrap();
@@ -3183,18 +3194,51 @@ mod tests {
 
         let steps = super::plan_close_gaps(&roots);
         let neu: Vec<&str> = steps.iter().map(|s| s.new_name.as_str()).collect();
-        assert_eq!(neu, ["Project_0002 - MEMORIES", "Project_0003", "Project_0004"]);
+        assert_eq!(neu, ["P0001", "P0002 - MEMORIES", "P0003", "P0004"]);
 
         // Kette 3→2, 4→3, 7→4 auf der Platte — die Zwischennamen fangen das ab
         let (done, failed) = super::merge_steps_on_disk(&steps);
         assert!(failed.is_empty(), "{:?}", failed);
-        assert_eq!(done.len(), 3);
-        assert!(root.join("Project_0003").join("Project_0003.flp").is_file());
-        assert!(root.join("Project_0004").is_dir());
-        assert!(!root.join("Project_0007").exists());
+        // Alle vier: drei Nummern rücken, und Project_0001 bekommt das neue Schema
+        assert_eq!(done.len(), 4);
+        assert!(root.join("P0003").join("P0003.flp").is_file());
+        assert!(root.join("P0001").is_dir() && root.join("P0002 - MEMORIES").is_dir() && root.join("P0004").is_dir());
+        assert!(["Project_0001", "Project_0003 - MEMORIES", "Project_0004", "Project_0007"].iter().all(|d| !root.join(d).exists()));
         assert!(root.join("NO MORE RUNNING").is_dir());
         assert!(super::plan_close_gaps(&roots).is_empty());
 
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn nachruecken_zieht_flp_pfade_mit() {
+        let tmp = std::env::temp_dir().join(format!("beatos_gaps_flp_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let root = tmp.join("prod");
+        // P0001 ist frei: Project_0002 rückt nach. Daneben ein Projekt, das nach dem Nachrücken
+        // den alten Namen trägt und eine gleichnamige Datei hat — die darf es nie werden.
+        let alt = root.join("Project_0002");
+        std::fs::create_dir_all(alt.join("Audio")).unwrap();
+        std::fs::write(alt.join("Audio").join("Pattern 1 (consolidated).wav"), b"meins").unwrap();
+        std::fs::create_dir_all(root.join("Project_0003").join("Audio")).unwrap();
+        std::fs::write(root.join("Project_0003").join("Audio").join("Pattern 1 (consolidated).wav"), b"fremd").unwrap();
+        let verweis = alt.join("Audio").join("Pattern 1 (consolidated).wav").to_string_lossy().to_string();
+        let mut flp = b"FLhd".to_vec();
+        flp.extend(6u32.to_le_bytes()); flp.extend([0u8; 6]);
+        let ev = crate::commands::flp::pfad_ereignis(&verweis);
+        flp.extend(b"FLdt"); flp.extend((ev.len() as u32).to_le_bytes()); flp.extend(ev);
+        std::fs::write(alt.join("Project_0002.flp"), &flp).unwrap();
+
+        let steps = super::plan_close_gaps(&[root.to_string_lossy().to_string()]);
+        let (done, failed) = super::merge_steps_on_disk(&steps);
+        assert!(failed.is_empty(), "{failed:?}");
+        for s in &done { crate::commands::pfadreparatur::eigener_ordner(std::path::Path::new(&s.to)).unwrap(); }
+
+        let neu = root.join("P0001");
+        let flp = std::fs::read_dir(&neu).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "flp")).unwrap();
+        let pfade = crate::commands::flp::audio_pfade(&std::fs::read(flp).unwrap());
+        assert_eq!(pfade.len(), 1);
+        assert_eq!(std::fs::read(&pfade[0]).unwrap(), b"meins", "zeigt auf die eigene Aufnahme: {}", pfade[0]);
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 
@@ -3261,11 +3305,11 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                ("Project_5", "Project_0001"),
-                ("[701] One Sided Love - 125 Cm", "Project_0002 - One Sided Love - 125 Cm"),
-                ("Project_236", "Project_0003"),
-                ("#Project_1", "Project_0004"),
-                ("Project_9", "Project_0005"),
+                ("Project_5", "P0001"),
+                ("[701] One Sided Love - 125 Cm", "P0002 - One Sided Love - 125 Cm"),
+                ("Project_236", "P0003"),
+                ("#Project_1", "P0004"),
+                ("Project_9", "P0005"),
             ],
             "ältester Beat bekommt die 1, und der Namensteil zieht mit"
         );
@@ -3306,9 +3350,9 @@ mod tests {
         assert_eq!(done.len(), 2);
 
         // Der alte Beat steht vorn, der junge dahinter — samt FLP-Namen
-        assert!(target.join("Project_0001/01_SAVEFILES/Project_0001.flp").exists());
-        assert!(target.join("Project_0002/01_SAVEFILES/Project_0002.flp").exists());
-        assert!(target.join("Project_0002/notiz.txt").exists(), "Inhalt zieht mit");
+        assert!(target.join("P0001/01_SAVEFILES/P0001.flp").exists());
+        assert!(target.join("P0002/01_SAVEFILES/P0002.flp").exists());
+        assert!(target.join("P0002/notiz.txt").exists(), "Inhalt zieht mit");
         assert!(!other.join("Project_42").exists());
         // Keine Zwischennamen übrig
         assert!(!std::fs::read_dir(&target).unwrap().filter_map(|e| e.ok())

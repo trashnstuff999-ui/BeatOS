@@ -169,7 +169,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
                 {[
                   currentBeat.key,
                   currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
-                  isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
+                  isStudioBeatId(currentBeat.id) ? null : `B${currentBeat.id}`,
                 ].filter(Boolean).join(" · ")}
               </div>
             )}

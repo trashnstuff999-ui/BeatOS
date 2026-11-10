@@ -66,7 +66,7 @@ export function BeatInfoCard({
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, marginTop: 24 }}>
         <SmallInput label="Tonart" value={keyValue} onChange={setKey} placeholder="Cm" width={80} />
         <SmallInput label="BPM" value={bpm} onChange={setBpm} placeholder="140" width={80} />
-        <SmallInput label="Katalog-ID" value={catalogId} onChange={setCatalogId} placeholder="#0042" width={96} mono />
+        <SmallInput label="Katalog-ID" value={catalogId} onChange={setCatalogId} placeholder="B0042" width={96} mono />
       </div>
 
       {/* Archivmonat: wohin der Beat im Archiv kommt. Vorher nur Anzeige —

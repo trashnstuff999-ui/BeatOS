@@ -15,12 +15,12 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 0 | Datenmüll stoppen | erledigt 09.11. |
 | 1 | Ordnergerüst | erledigt 09.11. (7 FLPs, Premiere-Vorlage und 3 Einstellungen umgestellt) |
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
-| 3 | Einsammeln | 3a, 3b, Rot, Grau-Reste erledigt. 3c Gelb-Ansicht gebaut 10.11. **Offen: Gelb abarbeiten (215, Stand 10.11. nachts)**, siehe 3c |
-| 4 | Neu nummerieren | offen |
-| 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | offen |
+| 3 | Einsammeln | erledigt 10.11. (Gelb leer, Grau ohne Reste, Reparaturen siehe unten) |
+| 4 | Neu nummerieren | erledigt 10.11.: Katalog B0001–B0403, Produktion P0001–P0770 (117 fertige nach `_ARCHIVIERT`) |
+| 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | offen, nach 4 (≈590 Ideen, Ziel `01_ACTIVE_PRODUCTION/_IDEEN/`) |
 | 5 | FL-Templates über „Neu“ | offen |
 | 6 | Ohne Nummer | offen |
-| 7 | Künstler | offen |
+| 7 | Künstler | teils: 64 Artist-Ordner am 10.11. nach 05_ARTISTS kopiert. Offen: Release-Schema, A-Nummern |
 | 8 | Samples | offen |
 | 9 | Upload-Ablage | offen |
 | 10 | Abschluss: Altbestand nach `_ALT` | offen |
@@ -322,6 +322,14 @@ Bisher eingesammelt (Archiv 0939–1029, Lücke 1026), Rot R0001–R0016.
   `BEATOS_TITEL/_ID/_KEY/_BPM` (neuer Song).
 - DB lesen: `node:sqlite` auf `%LOCALAPPDATA%\BeatOS\beats.db` (kein sqlite3).
 
+**Stand 10.11. abends:** Gelb leer (Rest auf Weg), Grau ohne Reste, Archiv
+403 Beats = 403 Ordner. Repariert: Paralysed → 1131 und Evolve 152 → 1132
+(lagen ohne DB unter 0748/0737), CANT BE SAVED in 0851, Taurus 0823 in 0853,
+LONELY WORLD-FLP aus Project_0654 (hieß „0855“, per Tempo 148 erkannt), Smoke-FLP.
+Ohne FLP, nie eine gehabt: 1058, 1117, 1130. DB-Sicherung
+`beats.db.vor-reparatur-2026-11-10`. **Lehre für Scheibe 10:** Produktionsordner
+nur mit FLPs sieht der Fundstücke-Scan nicht, sie können fertige Songs sein.
+
 **Abnahme:** Grün leer. Gelb: jeder **Song** ist im Archiv, bevor Scheibe 4
 nummeriert (sonst bekommt ein Beat von 2020 eine hohe Nummer, und B-Nummern
 sind fest). Loops und Müll dürfen vertagt werden.
@@ -343,11 +351,60 @@ Anzahl der Songs.
 - BeatOS versteht danach überall `B0012`. Vorher alle Stellen prüfen, die
   Nummern aus Ordnernamen lesen: Archiv-Index, Upload, Browse, Studio.
 - Danach Produktion als P, Samples als S, Remixe als R.
-- Sicherheit: Zuerst ein Beat mit `Audio/`-Ordner (103 Stück) umbenennen und
-  in FL öffnen. Bei Produktionsordnern dasselbe.
+- FLP-Pfade (gemessen 10.11.): nur 4 Beats (22 Verweise, meist
+  `01_SAVEFILES/Samples`) zeigen in den eigenen Ordner, die schreibt der Lauf
+  mit um. Vorher eigene Reparatur: 111 Beats zeigen auf Dateien an alten Orten
+  (Produktion/Altbestand), die meist in `01_SAVEFILES/Audio` liegen. Danach
+  einen reparierten Beat in FL öffnen.
 
 **Abnahme:** Browse, Upload und Statistik zeigen dieselben Songs wie vorher,
 nur mit neuen Nummern.
+
+**Gelaufen 10.11.:** Probelauf 0929 → B0396 und 0763 → B0209 (in App und FL
+geprüft), dann 401 Beats. B-Präfix nur im Ordner und in der Anzeige, DB-ID
+bleibt Zahl, `frueher_nr` hält die alte. 403 Ordner, 205 Uploads, Credits und
+Artist-Verknüpfungen umgestellt und gegen die Sicherung geprüft; alle Beat-Felder
+gleich. FLPs: 214 im Lauf, 85 nachgezogen (gemischte Schrägstriche aus der
+Pfad-Reparatur), danach 0 Verweise auf alte Ordner; Pfad-Probe wie vorher
+(2 mehrdeutig, 37 fehlen). Werkzeug `commands/nummerieren.rs`, Protokolle
+`_BEATOS/Scheibe4/` (probelauf, lauf, nachgezogen), Sicherungen
+`beats.db.vor-scheibe4-2026-11-10`, `…nach-probelauf-scheibe4-…`.
+
+**Produktion (10.11. abends):**
+- Fix im Nachrücken (`apply_steps`): nach jedem Umbenennen biegt
+  `pfadreparatur::eigener_ordner` die FLPs auf Dateien im **eigenen** Ordner um
+  (nie ein Nachbarprojekt, das den alten Namen trägt). Vorher verlor jedes
+  nachgerückte Projekt seine Verweise auf `Audio/` (so LONELY WORLD).
+- Vorab repariert: 131 Projekte, 1623 Verweise (Sicherung
+  `_BEATOS/Sicherung/produktion-pfade-2026-11-10`).
+- P-Präfix: `PROJECT_PREFIX = "P"`, `Project_` wird weiter gelesen;
+  „Lücken schließen“ stellt um. 887 umgestellt, Status/Notizen gleich.
+- Archiv/Artists hingen an der Produktion (788 Verweise, vor allem `02_OLD` aus
+  Reste-Einsammeln): 467 Dateien in die Songs geholt (`unsichere_holen`,
+  Sicherung `…/holen-2026-11-10`). Sample-Bibliothek auf D: bleibt.
+- 117 komplett archivierte Projekte nach `_ARCHIVIERT` (Protokoll
+  `_BEATOS/Scheibe4/geparkt.json`, DB `beats.db.vor-parken-2026-11-10`),
+  danach nachgerückt: P0001–P0770, alle FLP-Verweise ins eigene Projekt da.
+- Nebenwirkungen behoben: `P0039` als Platzhalter (Fundstücke), 5 Weg-Marken
+  umgehängt, reparierte FLPs neben die Artist-Kopien gelegt.
+- Offen: 3 Projekte mit Status „Exportiert“ nur mit namenlosen Bounces
+  (P0376, P0549, P0583 vor dem Nachrücken), P0002 Myself (Remix-Idee).
+
+## Scheibe 4b: Alte Ideen
+
+**Ziel:** Jede FLP ohne Export aus dem Altbestand ist in BeatOS sichtbar und
+kann in die Produktion geholt werden.
+
+- Gemessen 10.11.: 884 FLPs im Altbestand, 245 hängen an Fundstücken, 4 schon in
+  der Bibliothek, **635 offen ≈ 590 Ideen** (2021: 122, 2022: 144, 2023: 154,
+  2024: 117, 2025: 22, 2026: 5). Etwa 26 sind vermutlich ältere Stände von
+  Archiv-Songs: über Tempo (FLP-Event 156) und Datum zuordnen, nicht über die
+  alte Nummer (Eimer-Kollisionen).
+- Kopie nach `01_ACTIVE_PRODUCTION/_IDEEN/<Jahr>/`, eine Idee = ein Ordner
+  (Versionen `123.flp`, `123_2.flp` zusammen). Altbestand bleibt bis Scheibe 10.
+- Liste „Alte Ideen“ nach Alter, Knopf „In Produktion holen“ gibt eine P-Nummer.
+- Dazu: Produktionsordner nur mit FLPs (wie Project_0654 = LONELY WORLD) gegen
+  das Archiv prüfen.
 
 ## Scheibe 5: FL-Templates über „Neu“
 
@@ -448,11 +505,11 @@ dem Beat zu.
 | 10.11. | „Alte Ideen“ (4b) gilt für alles Alte, nicht nur für Nummern ohne Namen |
 | 10.11. | Titel sind beim Einsammeln zweitrangig: Umbenennen ändert die Nummer nicht |
 | 10.11. | Kein Durchhör-Modus mit Tasten (Stephan: nein) |
+| 10.11. | Alte Ideen (FLPs ohne Export) in eigenen Ordner `01_ACTIVE_PRODUCTION/_IDEEN/<Jahr>/`, nicht als P-Projekte; nach Scheibe 4 |
+| 10.11. | Vor Scheibe 4: FLP-Pfade reparieren. Umbenennen selbst trifft nur 4 Beats, die schreibt Scheibe 4 mit um |
+| 10.11. | **Pfad-Reparatur gelaufen** (`commands/pfadreparatur.rs`): 253 Beats, 472 FLPs, 3559 Verweise umgebogen, 235 Dateien aus Downloads/D:/Produktion nach `01_SAVEFILES/Samples` kopiert. Probe 0763/0828 in FL ok. Sicherung `_BEATOS/Sicherung/pfadreparatur-2026-11-10` (alle FLPs + `lauf.json`). Danach 6 Mehrdeutige von Hand zugeordnet (0839, 1011, 1032, 1037, 1040, 1126). Rest laut Stephan egal: EDGE II, TEXT ME BACK, fehlende Acapellas, Bounces, Renders, E:/G: |
 
 ## Offene Fragen
 
 - Kommt „Neu mixen“ als Markierung im Archiv (nach Scheibe 4)?
-- **Gelb schneller durchbekommen (morgen zuerst):** 215 Einträge, davon 177 in
-  „Nur Nummer“ und „Ohne Nummer“. Durchhör-Modus abgelehnt. Ideen, noch nicht
-  besprochen: Sammel-Auswahl mit Häkchen und ein Knopf „Ausgewählte als Song“,
-  Titel = alte Nummer, Umbenennen später; „Ohne Titel“ (23) per „Alle weg“.
+- Vor Scheibe 10: Produktionsordner nur mit FLPs gegen das Archiv prüfen (Tempo + Datum), siehe Stand 3c.

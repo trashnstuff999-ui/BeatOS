@@ -45,7 +45,7 @@ export const PreviewCard = memo(function PreviewCard({
   const previewTitle = title || "SONGNAME";
   const previewKey = keyValue || "–";
   const previewBpm = bpm || "–";
-  const previewId = catalogId || "#0000";
+  const previewId = catalogId || "B0000";
   const statusMeta = STATUS_CONFIG[normalizeStatus(status)];
 
   // Cover fehlt = wichtig (orange Warnung), Rest = neutral grau, wenn leer.

@@ -223,7 +223,7 @@ export function MergeProjectsDialog({ roots, archivePath, onClose, onDone }: Mer
   return (
     <Modal
       title="Produktions-Ordner zusammenführen"
-      subtitle="Alle Project_-Ordner in einen Ordner, neu nummeriert nach Alter"
+      subtitle="Alle Projektordner in einen Ordner, neu nummeriert nach Alter"
       icon={FolderInput}
       onClose={onClose}
       width={720}

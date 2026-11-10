@@ -128,7 +128,7 @@ fn varint(mut n: usize) -> Vec<u8> {
     }
 }
 
-fn pfad_ereignis(pfad: &str) -> Vec<u8> {
+pub(crate) fn pfad_ereignis(pfad: &str) -> Vec<u8> {
     let daten: Vec<u8> = pfad.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect();
     let mut e = vec![PFAD];
     e.extend(varint(daten.len()));

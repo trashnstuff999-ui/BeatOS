@@ -94,7 +94,7 @@ export function useCreateBeat({
 
     try {
       const idToUse = overrideCatalogId ?? catalogId;
-      const catalogIdNum = parseInt(idToUse.replace("#", "")) || 0;
+      const catalogIdNum = parseInt(idToUse.replace(/^[#Bb]/, "")) || 0;
       const bpmNum = bpm ? parseInt(bpm) : null;
       const keyVal = key || null;
 
@@ -183,8 +183,8 @@ export function useCreateBeat({
 
   const handleDuplicateCreateV2 = useCallback(() => {
     setDuplicateDialog(null);
-    const currentId = parseInt(catalogId.replace("#", "")) || 0;
-    const newId = `#${String(currentId + 1).padStart(4, "0")}`;
+    const currentId = parseInt(catalogId.replace(/^[#Bb]/, "")) || 0;
+    const newId = `B${String(currentId + 1).padStart(4, "0")}`;
     setCatalogId(newId);                          // update display state
     handleCreateBeatstructure(true, newId);       // pass directly — avoids async state timing bug
   }, [catalogId, setCatalogId, handleCreateBeatstructure]);

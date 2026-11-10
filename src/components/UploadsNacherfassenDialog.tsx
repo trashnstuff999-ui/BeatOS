@@ -235,7 +235,7 @@ Klicken zum Öffnen`}
                       }}
                     >
                       <option value="">{z.mehrdeutig ? "mehrdeutig, wählen" : "nicht zuordnen"}</option>
-                      {beats.map(b => <option key={b.id} value={b.id}>#{b.id} {b.name}</option>)}
+                      {beats.map(b => <option key={b.id} value={b.id}>B{b.id} {b.name}</option>)}
                     </select>
                     {z.erfasst && <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>schon erfasst</span>}
                   </div>

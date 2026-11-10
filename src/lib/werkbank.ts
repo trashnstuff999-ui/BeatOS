@@ -21,7 +21,7 @@ export function fehlt(p: StudioProject): string[] {
  *  Ohne Export-Titel und ohne Namen im Ordner: titel = null („ohne Titel"). */
 export function ideeName(p: StudioProject): { nummer: string | null; titel: string | null } {
   const ordner = p.parsed_name || p.name;
-  const m = ordner.match(/^#?(?:project_)?(\d+)\s*[-–_]?\s*(.*)$/i);
+  const m = ordner.match(/^#?(?:project_|p(?=\d))?(\d+)\s*[-–_]?\s*(.*)$/i);
   const rest = m ? m[2].trim() : ordner;
   return { nummer: m ? m[1] : null, titel: p.song_name?.trim() || rest || null };
 }

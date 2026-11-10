@@ -19,7 +19,7 @@
 //     die, und nur, wenn sie noch unverändert sind.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-use crate::commands::archive::{build_archive_folder_name, detect_assets};
+use crate::commands::archive::{build_archive_folder_name, detect_assets, ordnername_mit};
 use crate::commands::archive_match::{collect_files, normalize_title, old_system_id_and_title, read_archive_index, same_content};
 use crate::db::open_db;
 use crate::utils::{file_modified_secs, is_audio_extension, is_valid_key, sanitize_filename_part, secs_to_date, unique_dest, year_month_from_secs};
@@ -325,17 +325,19 @@ fn ein_song(conn: &rusqlite::Connection, e: &EinsammelEintrag, pfade: &[PathBuf]
         .min()
         .unwrap();
 
-    let ordner_name = build_archive_folder_name(nr as i32, titel, key.as_deref(), bpm);
     let ziel = match remix {
-        // Remixe flach: 07_REMIXES/R0001 - Titel [Key BPM]
-        Some((r, p)) => r.join(format!("{p}{ordner_name}")),
+        // Remixe/Samples flach: 07_REMIXES/R0001 - Titel [Key BPM]
+        Some((r, p)) => r.join(ordnername_mit(p, nr as i32, titel, key.as_deref(), bpm)),
         // „2024/11_NOVEMBER“ kommt mit Schrägstrich, im Pfad einheitlich trennen
-        None => archiv.join(year_month_from_secs(fertig).replace('/', std::path::MAIN_SEPARATOR_STR)).join(&ordner_name),
+        None => archiv.join(year_month_from_secs(fertig).replace('/', std::path::MAIN_SEPARATOR_STR))
+            .join(build_archive_folder_name(nr as i32, titel, key.as_deref(), bpm)),
     };
     if ziel.exists() {
         return Err(format!("{} gibt es schon", ziel.display()));
     }
-    let schema = sanitize_filename_part(&build_archive_folder_name(0, titel, key.as_deref(), bpm)["0000 - ".len()..]);
+    // Dateiname ohne Nummer: „Titel [Key BPM]“ (Teil hinter „B0000 - “)
+    let ordner0 = build_archive_folder_name(0, titel, key.as_deref(), bpm);
+    let schema = sanitize_filename_part(ordner0.split_once(" - ").map_or(ordner0.as_str(), |(_, r)| r));
 
     // Was wohin: (Quelle, Ziel)
     let mut plan: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -589,7 +591,7 @@ mod tests {
         assert_eq!(r.fertig.len(), 1);
         assert_eq!(r.ausgelassen.len(), 1, "{:?}", r.ausgelassen);
         let ziel = PathBuf::from(&r.fertig[0].ordner);
-        assert!(ziel.ends_with("0939 - Stay [Em 120]"), "{}", ziel.display());
+        assert!(ziel.ends_with("B0939 - Stay [Em 120]"), "{}", ziel.display());
         assert_eq!(fs::read(ziel.join("Stay [Em 120].mp3")).unwrap(), b"stay2"); // neuester in den Root
         assert_eq!(fs::read(ziel.join("02_OLD/[532] Stay - 120 Em.mp3")).unwrap(), b"stay1");
         assert!(ziel.join("01_SAVEFILES/Stay [Em 120].flp").is_file());

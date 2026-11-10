@@ -13,6 +13,8 @@ mod einsammeln;
 mod create;
 mod audio;
 mod flp;
+pub(crate) mod pfadreparatur;
+mod nummerieren;
 mod kanal;
 mod artists;
 mod relocate;

@@ -414,6 +414,8 @@ pub fn init_db() -> Result<(), String> {
                 // Song begonnen wurde. Bleiben über jede Neu-Nummerierung erhalten.
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN alte_id TEXT", []);
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN begonnen TEXT", []);
+                // Scheibe 4: Katalognummer vor der Neu-Nummerierung (B-Nummern), suchbar
+                let _ = conn.execute("ALTER TABLE beats ADD COLUMN frueher_nr TEXT", []);
 
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(

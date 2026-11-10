@@ -269,7 +269,7 @@ const GridCard = memo(function GridCard({
           // dem Seitengrund sind 2,8:1 Kontrast — lesbar ist das nicht.
           fontSize: 11, color: C.onSurfaceVariant,
         }}>
-          <span style={{ fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>#{beat.id}</span>
+          <span style={{ fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>B{beat.id}</span>
           {beat.key && <><Trenner />{beat.key}</>}
           {beat.bpm != null && <><Trenner />{beat.bpm}</>}
           <span style={{ flex: 1, minWidth: 8 }} />

@@ -19,6 +19,8 @@ describe("Ideen-Liste", () => {
 
   it("trennt Nummer und Titel", () => {
     expect(ideeName(idee("Project_0861"))).toEqual({ nummer: "0861", titel: null });
+    expect(ideeName(idee("P0861 - Hell & Heaven"))).toEqual({ nummer: "0861", titel: "Hell & Heaven" });
+    expect(ideeName(idee("Pattern"))).toEqual({ nummer: null, titel: "Pattern" });
     expect(ideeName(idee("Project_0001 - Hell & Heaven"))).toEqual({ nummer: "0001", titel: "Hell & Heaven" });
     expect(ideeName(idee("Project_0885", { song_name: "UNRESOLVED" }))).toEqual({ nummer: "0885", titel: "UNRESOLVED" });
     expect(ideeName(idee("NO MORE RUNNING"))).toEqual({ nummer: null, titel: "NO MORE RUNNING" });

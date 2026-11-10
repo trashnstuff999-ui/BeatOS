@@ -180,7 +180,7 @@ export default function Video() {
                 <span style={{ fontSize: 22, fontWeight: 800, color: C.onSurface }}>{currentBeat.name}</span>
                 <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>
                   {[
-                    isStudioBeatId(currentBeat.id) ? null : `#${currentBeat.id}`,
+                    isStudioBeatId(currentBeat.id) ? null : `B${currentBeat.id}`,
                     currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
                     zeigeVideo && video.duration ? `Video ${laenge(video.duration)}` : null,
                     audioLaenge ? `Audio ${laenge(audioLaenge)}` : null,

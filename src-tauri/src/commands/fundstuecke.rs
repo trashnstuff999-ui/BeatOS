@@ -132,6 +132,8 @@ fn generisch(titel: &str) -> bool {
         || n.chars().all(|c| c.is_ascii_digit())
         || ["untitled", "project", "test", "unbenannt", "newproject", "neuesprojekt"].iter().any(|p| n.starts_with(p))
         || ["beattag", "tag", "template", "starttemplate", "deleteme"].contains(&n.as_str())
+        // Projekt-Platzhalter „P0039“ (seit Scheibe 4), wie „Project_0039“
+        || (n.len() >= 5 && n.starts_with('p') && n[1..].chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Song aus einem Datei- oder Ordnernamen. None = nichts Brauchbares.
@@ -215,10 +217,15 @@ struct Fundort {
     modified: i64,
 }
 
-/// `…\01_ACTIVE_PRODUCTION\Project_0646` für jede Datei darunter
+/// Produktionsordner: „Project_0646“ (alt) oder „P0646“ (seit Scheibe 4)
+fn ist_projektname(n: &str) -> bool {
+    n.starts_with("Project_") || (n.len() >= 5 && n.starts_with('P') && n[1..5].chars().all(|c| c.is_ascii_digit()))
+}
+
+/// `…\01_ACTIVE_PRODUCTION\P0646` für jede Datei darunter
 fn projekt_ordner(p: &Path) -> Option<&Path> {
     p.ancestors().find(|a| {
-        a.file_name().is_some_and(|n| n.to_string_lossy().starts_with("Project_"))
+        a.file_name().is_some_and(|n| ist_projektname(&n.to_string_lossy()))
             && a.parent().and_then(|e| e.file_name()).is_some_and(|n| n.eq_ignore_ascii_case("01_ACTIVE_PRODUCTION"))
     })
 }
@@ -232,7 +239,7 @@ fn endung(p: &Path) -> String {
 fn sammeln(dir: &Path, ordner_werk: Option<&Werk>, out: &mut Vec<Fundort>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     let eimer = dir.components().rev().find_map(|k| eimer_bereich(&k.as_os_str().to_string_lossy()));
-    let nackte_nr = !dir.components().any(|k| k.as_os_str().to_string_lossy().starts_with("Project_"));
+    let nackte_nr = !dir.components().any(|k| ist_projektname(&k.as_os_str().to_string_lossy()));
     let mut hier = Vec::new();
     for e in rd.filter_map(|e| e.ok()) {
         let p = e.path();
@@ -648,7 +655,7 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
         // Namenlose Bounces offener Projekte sind Zwischenstände, keine
         // verlorenen Songs: sie kommen beim Archivieren des Projekts mit
         .filter(|f| !(f.grund == "ohne Titel" && f.dateien.iter().all(|d| Path::new(&d.path).components()
-            .any(|k| k.as_os_str().to_string_lossy().starts_with("Project_")))))
+            .any(|k| ist_projektname(&k.as_os_str().to_string_lossy())))))
         .collect();
     let rang = |a: &str| ["gruen", "gelb", "rot", "grau"].iter().position(|x| *x == a).unwrap_or(9);
     out.sort_by(|a, b| {
@@ -937,6 +944,9 @@ mod tests {
         assert!(r.iter().any(|f| f.titel == "test" && f.grund == "ohne Titel"));
         assert_eq!(werk_aus_name("[638] Cuthroat -150 - Gm.mp3", true, true).unwrap().titel, "Cuthroat");
         assert_eq!(werk_aus_name("397 . Master.mp3", true, true).unwrap().titel, "");
+        // Projekt-Platzhalter sind kein Titel, im alten wie im neuen Schema
+        assert!(werk_aus_name("P0039.flp", true, false).is_none() && werk_aus_name("Project_0039.flp", true, false).is_none());
+        assert_eq!(werk_aus_name("Pain.mp3", true, false).unwrap().titel, "Pain");
         let anger = werk_aus_name("ANGER - 160 Am_2.mp3", true, true).unwrap();
         assert_eq!((anger.titel.as_str(), anger.key.as_deref(), anger.bpm), ("ANGER", Some("Am"), Some(160)));
         assert_eq!(werk_aus_name("473_Prototype.mp3", true, true).unwrap().titel, "");

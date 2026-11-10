@@ -424,6 +424,17 @@ pub(crate) fn build_archive_folder_name(
     key: Option<&str>,
     bpm: Option<i32>,
 ) -> String {
+    ordnername_mit('B', catalog_id, title, key, bpm)
+}
+
+/// „B0145 - Titel [Key BPM]“, „S0012 - …“, „R0003 - …“: Präfix je Bibliotheksteil
+pub(crate) fn ordnername_mit(
+    praefix: char,
+    catalog_id: i32,
+    title: &str,
+    key: Option<&str>,
+    bpm: Option<i32>,
+) -> String {
     let key_bpm = match (key, bpm) {
         (Some(k), Some(b)) => format!("[{} {}]", k, b),
         (Some(k), None) => format!("[{}]", k),
@@ -434,7 +445,7 @@ pub(crate) fn build_archive_folder_name(
     // refuses in a folder name before building the path.
     let safe_title = crate::utils::sanitize_filename_part(title);
     crate::utils::sanitize_filename_part(
-        format!("{:04} - {} {}", catalog_id, safe_title, key_bpm).trim(),
+        format!("{}{:04} - {} {}", praefix, catalog_id, safe_title, key_bpm).trim(),
     )
 }
 

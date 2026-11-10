@@ -23,12 +23,16 @@ fn base_beat_filters(
         let search_lower = s.to_lowercase();
         if !search_lower.is_empty() {
             let search_pattern = format!("%{}%", search_lower);
+            // „B0145“ und „#0145“ meinen die ID 0145; die frühere Nummer findet den Beat auch
+            let nr = search_lower.trim().trim_start_matches(['b', '#']);
+            let nr_pattern = if !nr.is_empty() && nr.chars().all(|c| c.is_ascii_digit()) { format!("%{nr}%") } else { search_pattern.clone() };
             where_clauses.push(format!(
-                "(LOWER(name) LIKE ?{idx} OR LOWER(id) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx})",
-                idx = param_idx
+                "(LOWER(name) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx} OR id LIKE ?{n} OR frueher_nr LIKE ?{n})",
+                idx = param_idx, n = param_idx + 1
             ));
             params.push(Box::new(search_pattern));
-            param_idx += 1;
+            params.push(Box::new(nr_pattern));
+            param_idx += 2;
         }
     }
 

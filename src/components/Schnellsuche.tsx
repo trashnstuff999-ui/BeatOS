@@ -155,7 +155,7 @@ function Fenster({ onClose }: { onClose: () => void }) {
             const Icon = istBeat ? Music : Disc3;
             const titel = istBeat ? t.beat.name : projectDisplayName(t.projekt);
             const neben = istBeat
-              ? `#${t.beat.id} · ${t.beat.key || "–"} · ${t.beat.bpm ?? "–"} BPM`
+              ? `B${t.beat.id} · ${t.beat.key || "–"} · ${t.beat.bpm ?? "–"} BPM`
               : `Projekt · ${t.projekt.name}`;
             return (
               <div
