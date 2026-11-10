@@ -722,6 +722,20 @@ mod tests {
         println!("{} zurückgenommen, Hinweise: {hinweise:?}", ids.len());
     }
 
+    /// „Gleich wie“ auf echten Daten: BEATOS_DATEIEN (;-getrennt) nach
+    /// BEATOS_ARCHIV_ORDNER/02_OLD, mit Protokoll in _BEATOS
+    #[test]
+    #[ignore]
+    fn reste_echt() {
+        let db = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap()).join("BeatOS").join("beats.db");
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let arch = PathBuf::from(std::env::var("BEATOS_ARCHIVE").unwrap());
+        let e = EinsammelEintrag { id: None, titel: String::new(), key: None, bpm: None, archiv: Some(std::env::var("BEATOS_ARCHIV_ORDNER").unwrap()),
+            dateien: std::env::var("BEATOS_DATEIEN").unwrap().split(';').map(|s| s.trim().to_string()).collect() };
+        let r = einsammeln_mit(&conn, vec![e], &arch, &arch.parent().unwrap().join("_BEATOS"), Art::Reste).unwrap();
+        println!("{:?} {:?} {:?}", r.fertig.iter().map(|g| &g.dateien).collect::<Vec<_>>(), r.ausgelassen, r.fehler);
+    }
+
     /// Echter Song-Ordner (BEATOS_SONG_DIR), als Kopie in einem Testordner
     /// eingesammelt: zeigen die FLP-Verweise danach auf die Kopien?
     #[test]
