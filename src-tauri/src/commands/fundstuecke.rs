@@ -447,6 +447,10 @@ pub(crate) fn fundstuecke(roots: &[String], archive_root: &Path) -> Result<Vec<F
         .into_values()
         .filter(|fs| fs.iter().any(|f| !f.flp)) // nur mit Export
         .map(|fs| bewerten(fs, &index, &by_title, &by_id, &by_size, &vermerkt))
+        // Namenlose Bounces offener Projekte sind Zwischenstände, keine
+        // verlorenen Songs: sie kommen beim Archivieren des Projekts mit
+        .filter(|f| !(f.grund == "ohne Titel" && f.dateien.iter().all(|d| Path::new(&d.path).components()
+            .any(|k| k.as_os_str().to_string_lossy().starts_with("Project_")))))
         .collect();
     let rang = |a: &str| ["gruen", "gelb", "rot", "grau"].iter().position(|x| *x == a).unwrap_or(9);
     out.sort_by(|a, b| {
@@ -659,6 +663,8 @@ mod tests {
         assert!(r.iter().any(|f| f.ampel == "rot"));
         assert_eq!(finde(539).dateien.len(), 1);
         assert!(r.iter().all(|f| f.id != Some(1) && f.id != Some(2)), "Project_0753/2.mp3 als Nummer gelesen");
+        // Namenloser Bounce im offenen Projekt: gar nicht in den Fundstücken
+        assert!(r.iter().all(|f| !f.dateien.iter().any(|d| d.path.contains("Project_0753"))));
         let tausend = r.iter().find(|f| f.dateien[0].path.contains("100 Tausend")).unwrap();
         assert_eq!((tausend.id, tausend.titel.as_str()), (None, "100 Tausend_mix"));
         assert!(r.iter().all(|f| f.id != Some(1)), "01_SAVEFILES als Nummer gelesen");
