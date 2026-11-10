@@ -320,7 +320,7 @@ Bisher eingesammelt (Archiv 0939–1029, Lücke 1026), Rot R0001–R0016.
 - Einsammeln von Hand: `reste_echt` mit `BEATOS_DATEIEN` (`;`), `BEATOS_ARCHIVE`
   und entweder `BEATOS_ARCHIV_ORDNER` (Gleich wie) oder
   `BEATOS_TITEL/_ID/_KEY/_BPM` (neuer Song).
-- DB lesen: `node:sqlite` auf `%LOCALAPPDATA%BeatOSeats.db` (kein sqlite3).
+- DB lesen: `node:sqlite` auf `%LOCALAPPDATA%\BeatOS\beats.db` (kein sqlite3).
 
 **Abnahme:** Grün leer. Gelb: jeder **Song** ist im Archiv, bevor Scheibe 4
 nummeriert (sonst bekommt ein Beat von 2020 eine hohe Nummer, und B-Nummern
