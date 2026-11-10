@@ -291,7 +291,7 @@ Gelb = BeatOS findet den Song nicht im Archiv, will aber nicht raten.
 | 128 namenlose Bounces offener Projekte | ausgeblendet (Stephan: ja), kommen beim Archivieren mit | 8d2b55c |
 | 239 LoFi: Skizzen-FLP `Bpm140` machte „mehrere Songs“ | Key/BPM-Abweichung zählt nur über Exporte; geerbte Angaben vom Export | 148e62c |
 | Try, Louis V nach Einsammeln weiter gelb | Alle Dateien im Archiv → Grau | 148e62c |
-| 1029 LoFi bekam den ganzen Ordner `MusicSongsLo-Fi` (Paris, Piano LoFi …) | Eigener Songordner nur, wenn jede FLP/jeder Export darin zum Song gehört | 82810b4 |
+| 1029 LoFi bekam den ganzen Ordner `Music\Songs\Lo-Fi` (Paris, Piano LoFi …) | Eigener Songordner nur, wenn jede FLP/jeder Export darin zum Song gehört | 82810b4 |
 
 **Reparaturen 10.11.:** Victory doppelt (1026 = 0770, Tippfehler F# statt F#m):
 1026 zurückgenommen, Dateien nach `0770/02_OLD`. 1026 ist jetzt eine Lücke.
