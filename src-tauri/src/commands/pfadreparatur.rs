@@ -172,6 +172,14 @@ pub(crate) fn unsichere_holen(beat: &Path, schreiben: bool) -> Result<Bericht, S
     dateien(beat, true, &mut alle);
     let flps: Vec<&PathBuf> = alle.iter().filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("flp"))).collect();
     let beat_klein = beat.to_string_lossy().replace('/', "\\").to_lowercase() + "\\";
+    // Liegt die Datei schon byte-gleich im eigenen Ordner (ganzer Artist-Ordner kopiert),
+    // wird nur umgebogen, nicht noch einmal kopiert
+    let eigene: Vec<PathBuf> = alle.iter().filter(|p| ist_audio(p)).cloned().collect();
+    let schon_hier = |q: &Path| -> Option<PathBuf> {
+        let n = q.file_name()?.to_string_lossy().to_lowercase();
+        eigene.iter().find(|e| e.file_name().is_some_and(|x| x.to_string_lossy().to_lowercase() == n)
+            && crate::commands::archive_match::same_content(q, e)).cloned()
+    };
     let mut b = Bericht { flps: flps.len(), ..Default::default() };
     let mut kopie_von: HashMap<PathBuf, PathBuf> = HashMap::new();
     for flp in flps {
@@ -179,11 +187,16 @@ pub(crate) fn unsichere_holen(beat: &Path, schreiben: bool) -> Result<Bericht, S
         let mut ersatz: Vec<(String, String)> = Vec::new();
         for p in audio_pfade(&bytes) {
             let q = PathBuf::from(p.replace('/', "\\"));
-            // Produktion (wird aufgeräumt) und Downloads; die Sample-Bibliothek auf D: bleibt, wo sie ist
+            // Produktion (wird aufgeräumt), Downloads und Altbestand (geht in Scheibe 10 nach _ALT);
+            // die Sample-Bibliothek auf D: bleibt, wo sie ist
             let s = q.to_string_lossy().to_lowercase();
-            let holen = s.contains("\\01_active_production\\") || s.contains("\\downloads");
+            let holen = s.contains("\\01_active_production\\") || s.contains("\\downloads")
+                || s.contains("\\music\\songs\\") || s.contains("\\image-line\\fl studio\\projects\\");
             if p.starts_with('%') || !q.is_file() || !holen || s.starts_with(&beat_klein) { continue; }
-            let ziel = if let Some(z) = kopie_von.get(&q) { z.clone() } else {
+            let ziel = if let Some(z) = kopie_von.get(&q) { z.clone() } else if let Some(h) = schon_hier(&q) {
+                kopie_von.insert(q.clone(), h.clone());
+                h
+            } else {
                 let audio = q.parent().and_then(|e| e.file_name()).is_some_and(|n| n.eq_ignore_ascii_case("audio"));
                 let ordner = beat.join("01_SAVEFILES").join(if audio { "Audio" } else { "Samples" });
                 let z = freier_name(&q, &ordner.join(q.file_name().unwrap()));
@@ -330,6 +343,15 @@ mod tests {
         assert_eq!(fs::read(beat.join("01_SAVEFILES/Samples/kick.wav")).unwrap(), b"anders");
         // zweimal: nichts mehr zu tun
         assert_eq!(unsichere_holen(&beat, true).unwrap().umgebogen, 0);
+        // Liegt die Datei schon byte-gleich im Song: nur umbiegen, nicht kopieren
+        let alt_ordner = t.join("Music/Songs/Artists/JarnoGm/Song");
+        fs::create_dir_all(&alt_ordner).unwrap(); fs::write(alt_ordner.join("hook.wav"), "h").unwrap();
+        let song = t.join("05_ARTISTS/JarnoGm/Song");
+        fs::create_dir_all(song.join("Audio")).unwrap(); fs::write(song.join("Audio/hook.wav"), "h").unwrap();
+        fs::write(song.join("Song.flp"), flp_mit(&[alt_ordner.join("hook.wav").to_string_lossy().to_string()])).unwrap();
+        let r = unsichere_holen(&song, true).unwrap();
+        assert_eq!((r.umgebogen, r.kopiert.len()), (1, 0));
+        assert_eq!(PathBuf::from(&audio_pfade(&fs::read(song.join("Song.flp")).unwrap())[0]), song.join("Audio").join("hook.wav"));
         let _ = fs::remove_dir_all(&t);
     }
 

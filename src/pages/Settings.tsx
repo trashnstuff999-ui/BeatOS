@@ -38,19 +38,6 @@ async function pickFolder(title: string): Promise<string | null> {
   }
 }
 
-async function pickFlp(): Promise<string | null> {
-  try {
-    const result = await open({
-      multiple: false,
-      title: "Template-FLP wählen",
-      filters: [{ name: "FL Studio Projekt", extensions: ["flp"] }],
-    });
-    return result as string | null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── Section Component ───────────────────────────────────────────────────────
 
 function Section({ title, description, children }: {
@@ -1073,28 +1060,6 @@ export function Settings() {
                 onBrowse={async () => {
                   const p = await pickFolder("Übergabe-Ordner wählen");
                   if (p) update("importPath", p);
-                }}
-              />
-              <PathInput
-                label="Template-FLP"
-                icon={Music2}
-                value={draft.flpTemplatePath}
-                placeholder="z.B. D:\Beat Library\_TEMPLATE\Start.flp"
-                onChange={v => update("flpTemplatePath", v)}
-                onBrowse={async () => {
-                  const p = await pickFlp();
-                  if (p) update("flpTemplatePath", p);
-                }}
-              />
-              <PathInput
-                label="Sample-Template"
-                icon={Music2}
-                value={draft.sampleTemplatePath}
-                placeholder="z.B. D:\Beat Library\_TEMPLATE\Sample.flp"
-                onChange={v => update("sampleTemplatePath", v)}
-                onBrowse={async () => {
-                  const p = await pickFlp();
-                  if (p) update("sampleTemplatePath", p);
                 }}
               />
             </div>

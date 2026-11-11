@@ -24,6 +24,9 @@ import { api } from "../../lib/api";
 import { formatRelativeTime, tageRelativ } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { useSettings } from "../../contexts/SettingsContext";
+import { useFlVorlagen } from "../../hooks/useFlVorlagen";
+import { useLocation, useNavigate } from "react-router-dom";
+import type { FlVorlage } from "../../lib/api";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
 import { passtZumSong, pfadSchluessel, songStand, songVerlauf } from "../../lib/kuenstler";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
@@ -63,6 +66,18 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   // Offener Anlege-Dialog.
   const [neu, setNeu] = useState<"kuenstler" | "song" | null>(null);
   const { settings } = useSettings();
+  const { von: vorlagenVon } = useFlVorlagen();
+  // Aus „Neu" im Studio: Dialog gleich offen, Vorlage schon gewählt.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [startVorlage, setStartVorlage] = useState<string | undefined>();
+  useEffect(() => {
+    const v = (location.state as { neuerSong?: string } | null)?.neuerSong;
+    if (!v) return;
+    setStartVorlage(v);
+    setNeu("song");
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const laden = useCallback(() => {
     if (!root) return;
@@ -195,8 +210,9 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   ) || neu === "song" && scan && (
     <SongDialog
       kuenstler={scan.kuenstler}
-      vorlage={settings.flpTemplatePath.trim()}
-      onClose={angelegt => { setNeu(null); if (angelegt) laden(); }}
+      vorlagen={vorlagenVon("kuenstler")}
+      start={startVorlage}
+      onClose={angelegt => { setNeu(null); setStartVorlage(undefined); if (angelegt) laden(); }}
     />
   );
 
@@ -507,12 +523,16 @@ function NameDialog({ titel, hinweis, anlegen, onClose }: {
 /** Neuer Song: Künstler wählen, Namen eingeben, dazu Dateien aus den
  *  Downloads. Was zum Namen passt („heartbreak highlights_vocals"), ist
  *  vorausgewählt; von Hand An- oder Abgewähltes gilt vor dem Vorschlag. */
-function SongDialog({ kuenstler, vorlage, onClose }: {
+function SongDialog({ kuenstler, vorlagen, start, onClose }: {
   kuenstler: Artist[];
-  vorlage: string;
+  /** FLPs aus FL/Recording und FL/Mix-Master */
+  vorlagen: FlVorlage[];
+  start?: string;
   onClose: (angelegt: boolean) => void;
 }) {
   const [wer, setWer] = useState(kuenstler[0]?.path ?? "");
+  const [gewaehlteVorlage, setVorlage] = useState(start);
+  const vorlage = gewaehlteVorlage ?? vorlagen[0]?.pfad ?? "";
   const [name, setName] = useState("");
   const [nurMaster, setNurMaster] = useState(false);
   const [downloads, setDownloads] = useState<{ name: string; path: string; geaendert: number }[]>([]);
@@ -532,7 +552,7 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
 
   const los = async () => {
     if (!name.trim() || !wer || laeuft) return;
-    if (!vorlage) { setFehler("Keine Template-FLP (Einstellungen → Pfade)"); return; }
+    if (!vorlage) { setFehler("Keine Vorlage in FL/Recording oder FL/Mix-Master"); return; }
     setLaeuft(true);
     setFehler(null);
     try {
@@ -601,6 +621,15 @@ function SongDialog({ kuenstler, vorlage, onClose }: {
         <Segmented label="Art" value={nurMaster ? "master" : "mixmaster"} onChange={v => setNurMaster(v === "master")}
           options={[{ value: "mixmaster", label: "Mix & Master" }, { value: "master", label: "Nur Master" }]} />
       </div>
+
+      {vorlagen.length > 1 && (
+        <label style={{ display: "block", marginTop: 16 }}>
+          <span style={beschriftung}>Vorlage</span>
+          <Select value={vorlage} onChange={setVorlage}
+            options={vorlagen.map(v => ({ value: v.pfad, label: `${v.ordner} · ${v.name}` }))}
+            panelWidth={300} triggerStyle={{ width: "100%", height: 36 }} />
+        </label>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <span style={beschriftung}>Aus den Downloads in 02_ASSETS</span>

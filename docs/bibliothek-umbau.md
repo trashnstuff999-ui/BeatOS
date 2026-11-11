@@ -17,12 +17,12 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 2 | Fundstücke | erledigt 09.11. (80 grün, 339 gelb, 16 rot, 113 grau) |
 | 3 | Einsammeln | erledigt 10.11. (Gelb leer, Grau ohne Reste, Reparaturen siehe unten) |
 | 4 | Neu nummerieren | erledigt 10.11.: Katalog B0001–B0403, Produktion P0001–P0770 (117 fertige nach `_ARCHIVIERT`) |
-| 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | offen, nach 4 (≈590 Ideen, Ziel `01_ACTIVE_PRODUCTION/_IDEEN/`) |
-| 5 | FL-Templates über „Neu“ | offen |
-| 6 | Ohne Nummer | offen |
-| 7 | Künstler | teils: 64 Artist-Ordner am 10.11. nach 05_ARTISTS kopiert. Offen: Release-Schema, A-Nummern |
-| 8 | Samples | offen |
-| 9 | Upload-Ablage | offen |
+| 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | Kopie + Pfade + Liste „Alte Ideen“ gebaut (10.11.), offen: Abnahme der Liste, Filter „Aus den Anfängen“ |
+| 5 | FL-Templates über „Neu“ | gebaut 11.11., offen: Abnahme, Vorlagen für Sample/Recording/Mix-Master ablegen |
+| 6 | Neues erkennen (Ordner ohne Nummer → fragen, Name nach Regel) | gebaut 11.11., offen: Abnahme |
+| 7 | Künstler als Planer (Status von Hand, Releases, Features, kein Umräumen, keine A-Nummern) | offen; 64 Artist-Ordner am 10.11. kopiert |
+| 8 | Samples: nach Namen gruppieren, Filter, „Zu den Ideen“ (kein Umbenennen per Dialog) | offen |
+| 9 | Upload-Ablage (Namensvorschlag nur Angebot, sonst fragen) | offen |
 | 10 | Abschluss: Altbestand nach `_ALT` | offen |
 
 Reihenfolge ist Absicht: 0–1 schaffen Ordnung und feste Ziele, 2–4 holen alle
@@ -30,6 +30,40 @@ Songs heim und nummerieren erst danach, 5–9 bauen BeatOS auf die neue Ordnung
 um, 10 räumt erst ab, wenn alles sicher drüben ist.
 
 ---
+
+## Weiter am 12.11.
+
+- **Abnahme in der App offen:** 4b (Alte Ideen: eine Idee holen), 5 („Neu ▾“ mit Vorlagen),
+  6 (in FL `test 140 am` in die Produktion speichern, anderes Projekt öffnen, Studio prüfen).
+- Stephan legt Vorlagen in `FL/Sample`, `FL/Recording`, `FL/Mix-Master` ab.
+- Offen aus 4b: Filter „Aus den Anfängen“ im Archiv. Offen aus 6: `untitled.mp3`, `real me.mp3`
+  im Stamm der Produktion; Archiv-Abgleich für Neues nur bei Bedarf.
+- **Nächste Scheibe: 7, Künstler als Planer.** Entwurf zuerst. Eckpunkte siehe Leitbild:
+  Status pro Track nur von Hand, Releases (Album/EP/Single), Features/mehrere Künstler,
+  Tracks ohne Dateien planen, „Anfangen“ legt Ordner + FLP aus Vorlage an, Dateien per
+  Ziehen zuordnen, kein Umräumen, keine A-Nummern. Offene Fragen dazu klären.
+- Danach 8 (Samples gruppieren), 9 (Ablage), Bestand-Umbenennung nach der Namensregel, 10.
+- Whitescreen nach Updates: Strg+F5 im BeatOS-Fenster (WebView-Zwischenspeicher).
+
+## Leitbild und Namensregel (11.11.)
+
+BeatOS richtet sich nach Stephans Ablage, nicht umgekehrt: **der Ordner sagt, was etwas ist**
+(`01_ACTIVE_PRODUCTION` = Beat, `06_SAMPLES` = Sample), BeatOS erkennt Neues und fragt.
+Nie raten, ob etwas Beat, Sample oder Loop ist. Künstler-Status nur von Hand.
+
+**Namensregel** (`utils::schoener_name`, gilt für Neues; Bestand später als eigene Scheibe):
+
+| Eingabe | Ergebnis |
+|---|---|
+| `dont cry 150 bm`, `dont cry - 150 bm`, `150 bm dont cry` | `DONT CRY [150 Bmin]` |
+| `dont cry 150 b` | `DONT CRY [150 Bmaj]` |
+| `dont cry f#m 150_master` | `DONT CRY [150 F#min]_master` |
+| Sample `pads - dont cry 150 bm` | `PADS - DONT CRY [150 Bmin]` |
+| Sample `acoustic-guitar - dont cry 150 f#m_LEFT` | `ACOUSTIC-GUITAR - DONT CRY [150 F#min]_LEFT` |
+
+Tempo 40–300, Tonart = Wort direkt daneben, Reihenfolge egal. Zusätze ab `_` bleiben am Ende.
+Instrument nur bei Samples und nur vor ` - `. Sample ohne Instrument = volle Version. Titel und
+Instrument in Großbuchstaben.
 
 ## Regeln für jede Scheibe
 
@@ -405,6 +439,22 @@ kann in die Produktion geholt werden.
 - Liste „Alte Ideen“ nach Alter, Knopf „In Produktion holen“ gibt eine P-Nummer.
 - Dazu: Produktionsordner nur mit FLPs (wie Project_0654 = LONELY WORLD) gegen
   das Archiv prüfen.
+- **Stand 10.11. nachts:** Nine.flp → B0002, 2 ältere Stände nach `02_OLD` (B0172, B0312),
+  590 Ideen nach `_IDEEN/<Jahr>/` kopiert, Abhängigkeiten geholt, Pfade repariert.
+  Altbestand-Verweise der Archiv-/Artist-Songs geholt (44 FLPs, 122 Kopien; Sicherung
+  `_BEATOS/Sicherung/holen-songs-2026-11-10`). Studio überspringt `_`-Ordner.
+  Liste gebaut: Studio-Bereich „Alte Ideen“ (`AlteIdeenPane.tsx`, `scan_alte_ideen`,
+  `idee_in_produktion`), nach Jahr, Tempo aus FLP, Holen = nächste P-Nummer, „[248] X“ wird
+  „P0771 - 248 X“ (Klammern gälten sonst als BPM), gesperrt solange FL läuft. Offen: Abnahme.
+
+**Weiter am 11.11.:**
+1. Abnahme der Liste „Alte Ideen“ in der App (eine Idee holen, der Verschiebeweg lief bisher nur im Test).
+2. Filter „Aus den Anfängen“ im Archiv, Entwurf zuerst. Dann ist 4b fertig.
+3. Commit (alles seit 9ae158c ist uncommittet).
+
+**Nebenbei offen:** Studio-Look. Entwurf mit Kacheln, Zeitstrahl und Stapel liegt als
+Artefakt vor (https://claude.ai/artifact/7V13Cs1gsBDARZNQqY2NpA), Rückmeldung steht aus.
+Umsetzung später in eigenen kleinen Scheiben.
 
 ## Scheibe 5: FL-Templates über „Neu“
 
@@ -423,6 +473,14 @@ richtigen Ort.
 - Löst die heutigen Einzel-Einstellungen für START.flp und die Sample-Vorlage
   ab.
 
+**Stand 11.11.:** gebaut. `fl_vorlagen` liest jede FLP in `01_TEMPLATES/FL/<Typ>/`
+(Ordner = Typ, Name = Dateiname, neu eingelesen beim Zurückwechseln). „Neu ▾“ im Studio:
+Gruppen Beat (mit nächster P-Nummer), Sample, Künstler; leer = gesperrter Punkt „In FL/… ablegen“.
+„Neues Sample“ in Samples ist jetzt ein Menü derselben Art. Künstler-Vorlage öffnet die
+Künstler-Seite mit „Neuer Song“ und gewählter Vorlage; dort Auswahl „Vorlage“, wenn es mehrere gibt.
+Einstellungen „Template-FLP“ und „Sample-Template“ entfernt (alte DB-Zeilen bleiben, liest keiner).
+Offen: Abnahme in der App; Stephan legt Vorlagen in `Sample/`, `Recording/`, `Mix-Master/` ab.
+
 ## Scheibe 6: Ohne Nummer
 
 **Ziel:** Was in FL ohne BeatOS gespeichert wurde, bekommt trotzdem Nummer
@@ -433,6 +491,22 @@ und Ordner.
 - Die Übersicht zeigt „Ohne Nummer (2)“ mit dem Knopf „Nummern vergeben“.
 - Der Knopf ist gesperrt, solange FL läuft. Sonst speichert FL wieder unter
   dem alten Pfad.
+
+**Stand 11.11.:** Knopf vertagt, Stephan: „der muss etwas komplexer werden“. Die 4 losen FLPs
+im Stamm von `01_ACTIVE_PRODUCTION` von Hand eingeräumt, vorher per Tempo + Samples geprüft:
+`0857.flp` (17.02.) und `untitled.flp` (17.02.) sind frühe Stände von ARE YOU HERE → `B0320/02_OLD`
+(`0857.flp` gab es dort schon, deshalb `0857 (2026-02-17).flp`). `untitle6d.flp` (170 BPM) → `P0771`,
+`Project_201.flp` (160 BPM, nicht LONG NIGHTS, nicht P0201) → `P0772`. Offen: `untitled.mp3` (27.03.)
+und `real me.mp3` (15.06.) ohne FLP. **Lehre für den Knopf:** lose FLPs können ältere Stände von
+Archiv-Songs sein, also erst gegen das Archiv prüfen (Tempo + gemeinsame Samples), dann Nummer.
+
+**Gebaut 11.11. (neu gedacht, Zukunftsfälle):** `scan_neues` findet Ordner mit FLP ohne P-/S-Nummer
+und lose FLPs im Stamm von Produktion und `06_SAMPLES` (`_`-Ordner nicht). Studio zeigt darüber die
+Zeile „NEU alt → P0773 - [DONT CRY [150 Bmin]] Übernehmen“, Name per Klick änderbar, Regel greift beim
+Übernehmen erneut. Nummer wird beim Übernehmen frisch gezogen. Ordner: `apply_steps` (Protokoll,
+FLP-Pfade, gleichnamige FLP zieht mit). Lose FLP: neuer Ordner, FLP heißt wie er, gleichnamige Exporte
+ziehen mit. **Gesperrt**, solange der Ordner- oder FLP-Name im FL-Fenstertitel steht (Titel nicht
+lesbar = gesperrt). Archiv-Abgleich (ältere Stände) noch nicht drin.
 
 ## Scheibe 7: Künstler
 
@@ -511,5 +585,5 @@ dem Beat zu.
 
 ## Offene Fragen
 
-- Kommt „Neu mixen“ als Markierung im Archiv (nach Scheibe 4)?
-- Vor Scheibe 10: Produktionsordner nur mit FLPs gegen das Archiv prüfen (Tempo + Datum), siehe Stand 3c.
+- Kommt „Neu mixen“ als Markierung im Archiv? Entscheidung nach dem Umbau (11.11.).
+- Entschieden 11.11.: Produktionsordner nur mit FLPs werden in Scheibe 10 gegen das Archiv geprüft (Tempo + Datum), siehe Stand 3c.

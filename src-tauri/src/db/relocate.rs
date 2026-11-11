@@ -31,8 +31,6 @@ const PATH_SETTINGS: &[&str] = &[
     "archive_path",
     "production_path",
     "asset_path",
-    "flp_template_path",
-    "sample_template_path",
 ];
 
 /// Trenner des laufenden Systems: `\` auf Windows, `/` sonst.

@@ -168,9 +168,114 @@ fn parse_name_key_bpm(id: &str, remainder: &str) -> Option<(String, String, Opti
     Some((id.to_string(), name, key, bpm))
 }
 
+/// Die eine Namensregel der App (11.11.2026, Stephan):
+/// `dont cry 150 bm` → `DONT CRY [150 Bmin]`, Sample `pads - dont cry 150 bm_2`
+/// → `PADS - DONT CRY [150 Bmin]_2`.
+/// - Tempo = Zahl 40–300, Tonart = das Wort direkt daneben (danach zuerst),
+///   Reihenfolge egal. Ohne Tonart daneben gilt die letzte passende Zahl.
+/// - Alles ab dem ersten `_` ist Zusatz und bleibt, wie getippt, am Ende.
+/// - Instrument nur bei Samples: was vor ` - ` steht, wenn danach noch Titel kommt.
+/// - Titel und Instrument in Großbuchstaben. Klammern im Eingang werden neu gelesen,
+///   ein schon sauberer Name bleibt also gleich.
+pub fn schoener_name(eingabe: &str, sample: bool) -> String {
+    let (basis, zusatz) = match eingabe.find('_') {
+        Some(i) => (&eingabe[..i], &eingabe[i..]),
+        None => (eingabe, ""),
+    };
+    let basis = basis.replace(['[', ']'], " ");
+    let tokens: Vec<&str> = basis.split_whitespace().collect();
+    let tempo_von = |t: &str| t.trim_end_matches(|c: char| c.is_ascii_alphabetic())
+        .parse::<u32>().ok().filter(|n| (40..=300).contains(n) && t.chars().next().is_some_and(|c| c.is_ascii_digit()));
+    let ist_key = |i: usize| tokens.get(i).is_some_and(|t| is_valid_key(t));
+
+    // Tempo: die Zahl mit Tonart daneben, sonst die letzte
+    let zahlen: Vec<usize> = (0..tokens.len()).filter(|&i| tempo_von(tokens[i]).is_some()).collect();
+    let tempo_i = zahlen.iter().copied()
+        .find(|&i| ist_key(i + 1) || (i > 0 && ist_key(i - 1)))
+        .or(zahlen.last().copied());
+    let key_i = tempo_i.and_then(|i| if ist_key(i + 1) { Some(i + 1) } else if i > 0 && ist_key(i - 1) { Some(i - 1) } else { None });
+
+    // Rest: Titelwörter, ` - ` merkt sich die Stelle fürs Instrument
+    let mut vor: Vec<&str> = Vec::new();
+    let mut nach: Vec<&str> = Vec::new();
+    let mut trenner = false;
+    for (i, t) in tokens.iter().enumerate() {
+        if Some(i) == tempo_i || Some(i) == key_i { continue; }
+        if *t == "-" { if !vor.is_empty() { trenner = true; } continue; }
+        if trenner { nach.push(t) } else { vor.push(t) }
+    }
+    let (instrument, titel) = if sample && trenner && !nach.is_empty() {
+        (vor.join("-"), nach.join(" "))
+    } else {
+        (String::new(), vor.into_iter().chain(nach).collect::<Vec<_>>().join(" "))
+    };
+
+    let mut klammer: Vec<String> = Vec::new();
+    if let Some(i) = tempo_i { klammer.push(tempo_von(tokens[i]).unwrap().to_string()); }
+    if let Some(i) = key_i { klammer.push(key_lang(tokens[i])); }
+
+    let mut s = String::new();
+    if !instrument.is_empty() { s.push_str(&instrument.to_uppercase()); s.push_str(" - "); }
+    s.push_str(&titel.to_uppercase());
+    if !klammer.is_empty() {
+        if !s.is_empty() { s.push(' '); }
+        s.push_str(&format!("[{}]", klammer.join(" ")));
+    }
+    s.push_str(zusatz);
+    s
+}
+
+/// `bm` → `Bmin`, `b` → `Bmaj`, `f#m` → `F#min`, `bbm` → `Bbmin`, `Cmaj` → `Cmaj`.
+fn key_lang(k: &str) -> String {
+    let mut c = k.chars();
+    let wurzel = c.next().unwrap().to_ascii_uppercase();
+    let rest = c.as_str().to_lowercase();
+    let (vorzeichen, art) = match rest.strip_prefix('#') {
+        Some(r) => ("#", r.to_string()),
+        None => match rest.strip_prefix('b') {
+            Some(r) if ["", "m", "min", "maj"].contains(&r) => ("b", r.to_string()),
+            _ => ("", rest),
+        },
+    };
+    let art = if art == "m" || art == "min" { "min" } else { "maj" };
+    format!("{}{}{}", wurzel, vorzeichen, art)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schoener_name_nach_stephans_tabelle() {
+        for (ein, aus) in [
+            ("dont cry - 150 bm", "DONT CRY [150 Bmin]"),
+            ("dont cry 150 bm", "DONT CRY [150 Bmin]"),
+            ("150 bm dont cry", "DONT CRY [150 Bmin]"),
+            ("  dont cry - 150 b", "DONT CRY [150 Bmaj]"),
+            ("dont cry 150 b", "DONT CRY [150 Bmaj]"),
+            ("150 b dont cry", "DONT CRY [150 Bmaj]"),
+            ("dont cry bm 150_2", "DONT CRY [150 Bmin]_2"),
+            ("a day 150 am", "A DAY [150 Amin]"),
+            ("dont cry f#m 150_master", "DONT CRY [150 F#min]_master"),
+            ("dont cry 150 bbm", "DONT CRY [150 Bbmin]"),
+            ("dont cry 150", "DONT CRY [150]"),
+            ("dont cry", "DONT CRY"),
+            ("50 cent 150 bm", "50 CENT [150 Bmin]"),
+            ("DONT CRY [150 Bmin]_2", "DONT CRY [150 Bmin]_2"),
+        ] {
+            assert_eq!(schoener_name(ein, false), aus, "Beat: {ein}");
+        }
+        for (ein, aus) in [
+            ("pads - dont cry 150 bm", "PADS - DONT CRY [150 Bmin]"),
+            ("acoustic-guitar - dont cry 150 f#m_LEFT", "ACOUSTIC-GUITAR - DONT CRY [150 F#min]_LEFT"),
+            ("wide lead - dont cry bm 150", "WIDE-LEAD - DONT CRY [150 Bmin]"),
+            ("dont cry - 150 bm", "DONT CRY [150 Bmin]"), // nach „-“ kein Titel: kein Instrument
+            ("dont cry 150 bm", "DONT CRY [150 Bmin]"),   // ohne Trenner: volle Version
+            ("PADS - DONT CRY [150 Bmin]_2", "PADS - DONT CRY [150 Bmin]_2"),
+        ] {
+            assert_eq!(schoener_name(ein, true), aus, "Sample: {ein}");
+        }
+    }
 
     // ─── parse_audio_filename ────────────────────────────────────────────────
 

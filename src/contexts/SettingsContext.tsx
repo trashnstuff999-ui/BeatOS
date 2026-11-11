@@ -16,10 +16,6 @@ export interface AppSettings {
   assetPath: string;
   /** Wohin fertige Beats von aussen abgelegt werden (Zwischenspeicher). */
   importPath: string;
-  /** Vorlage, aus der „Neues Projekt" im Studio die FLP kopiert */
-  flpTemplatePath: string;
-  /** Vorlage für „Neues Sample" (06_SAMPLES neben dem Archiv) */
-  sampleTemplatePath: string;
   // Producer info (used by Upload-tab templates)
   producerName: string;
   contactEmail: string;
@@ -43,8 +39,6 @@ export const DEFAULTS: AppSettings = {
   productionPath: "",
   assetPath: "",
   importPath: "",
-  flpTemplatePath: "",
-  sampleTemplatePath: "",
   producerName: "",
   contactEmail: "",
   instagramUrl: "",
@@ -66,8 +60,6 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   productionPath: "production_path",
   assetPath: "asset_path",
   importPath: "import_path",
-  flpTemplatePath: "flp_template_path",
-  sampleTemplatePath: "sample_template_path",
   producerName: "producer_name",
   contactEmail: "contact_email",
   instagramUrl: "instagram_url",
@@ -119,6 +111,14 @@ export function kuenstlerOrdner(s: Pick<AppSettings, "artistsPath" | "archivePat
 
 /** Samples liegen immer in 06_SAMPLES neben dem Archiv-Ordner. */
 export const samplesOrdner = (archivePath: string) => nebenArchiv(archivePath, "06_SAMPLES");
+
+/** FL-Vorlagen: 02_LIBRARY_ASSETS/01_TEMPLATES/FL neben dem Archiv-Ordner. */
+export function vorlagenOrdner(archivePath: string): string {
+  const assets = nebenArchiv(archivePath, "02_LIBRARY_ASSETS");
+  if (!assets) return "";
+  const sep = assets.includes("\\") ? "\\" : "/";
+  return [assets, "01_TEMPLATES", "FL"].join(sep);
+}
 
 function nebenArchiv(archivePath: string, ordner: string): string {
   const archiv = archivePath.trim().replace(/[\\/]+$/, "");

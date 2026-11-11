@@ -15,7 +15,9 @@ import { useSettings, samplesOrdner } from "../../contexts/SettingsContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { Button, EmptyState } from "../ui";
+import { Button, EmptyState, Dropdown } from "../ui";
+import { useFlVorlagen } from "../../hooks/useFlVorlagen";
+import { VorlagenPunkte } from "./VorlagenPunkte";
 import { studioBeatId } from "../../types/studio";
 import type { StudioProject } from "../../types/studio";
 import type { Beat } from "../../types/browse";
@@ -44,10 +46,8 @@ function toBeat(p: StudioProject): Beat {
 export function useNeuesSample() {
   const { settings } = useSettings();
   const { frage, melde } = useDialog();
-  return async (): Promise<boolean> => {
-    const template = settings.sampleTemplatePath.trim();
+  return async (template: string): Promise<boolean> => {
     const root = samplesOrdner(settings.archivePath);
-    if (!template) { melde("Keine Sample-Template (Einstellungen → Pfade)"); return false; }
     if (!root) { melde("Kein Archiv-Ordner (Einstellungen → Pfade)"); return false; }
     let name = "";
     const ok = await frage({
@@ -104,7 +104,9 @@ export function SamplesPane() {
   useFocusRefresh(() => { if (!isLoading) scan(); });
 
   const neuesSample = useNeuesSample();
-  const handleNew = async () => { if (await neuesSample()) scan(); };
+  const { von } = useFlVorlagen();
+  const vorlagen = von("sample");
+  const handleNew = async (vorlage: string) => { if (await neuesSample(vorlage)) scan(); };
 
   const handleOpen = async (p: StudioProject) => {
     if (!p.newest_flp) return;
@@ -130,9 +132,12 @@ export function SamplesPane() {
         <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Ordner neu einlesen">
           Scan
         </Button>
-        <Button variant="primary" icon={AudioLines} onClick={handleNew} disabled={!root}>
-          Neues Sample
-        </Button>
+        <Dropdown
+          variant="primary" align="right" panelWidth={260} disabled={!root}
+          label={<><AudioLines size={14} strokeWidth={2} />Neues Sample</>}
+        >
+          {close => <VorlagenPunkte vorlagen={vorlagen} ordner="Sample" onPick={v => { close(); handleNew(v); }} />}
+        </Dropdown>
       </div>
 
       {!root && <EmptyState variant="inline" title="Kein Archiv-Ordner" description="Einstellungen → Pfade" />}

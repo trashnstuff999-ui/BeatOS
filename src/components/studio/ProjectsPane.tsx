@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, Star, FolderKanban, FilePlus2, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered, AudioLines, Plus, Wrench } from "lucide-react";
+import { RefreshCw, Star, FolderKanban, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered, AudioLines, Plus, Wrench } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
 import { C, STUDIO_STATUS_CONFIG, alpha } from "../../lib/theme";
@@ -26,6 +26,9 @@ import { useKlickDaneben } from "../../hooks/useKlickDaneben";
 import { ProjectsToolbar, type SortMode } from "./ProjectsToolbar";
 import { EmptyState, Button, IconButton, Dropdown, MenuePunkt } from "../ui";
 import { useNeuesSample } from "./SamplesPane";
+import { VorlagenPunkte, MenueGruppe } from "./VorlagenPunkte";
+import { NeuesZeile } from "./NeuesZeile";
+import { useFlVorlagen } from "../../hooks/useFlVorlagen";
 import { MergeProjectsDialog } from "./MergeProjectsDialog";
 import { BenennenDialog } from "./BenennenDialog";
 import { ProjectInspector } from "./ProjectInspector";
@@ -107,6 +110,7 @@ interface ProjectsPaneProps {
 
 export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspectorOpen, view = "work", extraActions }: ProjectsPaneProps) {
   const neuesSample = useNeuesSample();
+  const { von: vorlagenVon } = useFlVorlagen();
   const [projects, setProjects] = useState<StudioProject[]>([]);
   /** Der aktuelle Stand — auch in einer Closure aus einem älteren Render. */
   const projectsRef = useRef(projects);
@@ -248,16 +252,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionPaths.join("\n"), projects.length]);
 
-  // `vorlage` ersetzt die Template-FLP aus den Einstellungen — sonst identisch:
-  // dieselbe Nummer, derselbe Ordner, dasselbe Oeffnen in FL. create_project_folder
-  // kopiert ohnehin jede FLP und benennt sie nach dem Projekt, der alte Name ist
-  // damit weg.
-  const handleNewProject = async (vorlage?: string) => {
-    const template = vorlage ?? settings.flpTemplatePath.trim();
-    if (!template) {
-      melde("Keine Template-FLP (Einstellungen → Pfade)");
-      return;
-    }
+  // Vorlage aus FL/Beat oder eine beliebige FLP („Aus Vorlage"). create_project_folder
+  // kopiert sie und benennt sie nach dem Projekt, der alte Name ist damit weg.
+  const handleNewProject = async (template: string) => {
     setIsCreating(true);
     try {
       const name = await api.studio.nextProjectName(productionPaths);
@@ -738,15 +735,19 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
             disabled={isCreating}
           >
             {close => (<>
-              <MenuePunkt icon={FilePlus2} label="Neues Projekt"
-                hint={`${nextName || "Nächste Nummer"} aus der Template-FLP`}
-                disabled={productionPaths.length === 0}
-                onClick={() => { close(); handleNewProject(); }} />
+              <MenueGruppe>{nextName ? `Beat · ${nextName}` : "Beat"}</MenueGruppe>
+              <VorlagenPunkte vorlagen={productionPaths.length === 0 ? [] : vorlagenVon("beat")} ordner="Beat"
+                onPick={v => { close(); handleNewProject(v); }} />
+              <MenueGruppe>Sample</MenueGruppe>
+              <VorlagenPunkte vorlagen={vorlagenVon("sample")} ordner="Sample"
+                onPick={v => { close(); neuesSample(v); }} />
+              <MenueGruppe>Künstler</MenueGruppe>
+              <VorlagenPunkte vorlagen={vorlagenVon("kuenstler")} ordner="Recording oder FL/Mix-Master"
+                onPick={v => { close(); navigate("/kuenstler", { state: { neuerSong: v } }); }} />
+              <div style={{ height: 1, background: C.border20, margin: "6px 4px" }} />
               <MenuePunkt icon={CopyPlus} label="Aus Vorlage" hint="Kopie einer vorhandenen FLP"
                 disabled={productionPaths.length === 0}
                 onClick={() => { close(); handleNewFromFlp(); }} />
-              <MenuePunkt icon={AudioLines} label="Neues Sample" hint="In 06_SAMPLES"
-                onClick={() => { close(); neuesSample(); }} />
               <MenuePunkt icon={FolderPlus} label="Ordner archivieren" hint="Externen Ordner ins Archiv"
                 onClick={() => { close(); navigate("/create"); }} />
             </>)}
@@ -755,6 +756,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       </ProjectsToolbar>
       </div>
 
+      {view === "work" && <NeuesZeile onUebernommen={scan} />}
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",

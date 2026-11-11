@@ -44,6 +44,34 @@ struct Flp {
     marker: Vec<(u32, String)>,
 }
 
+/// Tempo (Event 156) aus dem Dateianfang. `b` darf abgeschnitten sein:
+/// das Tempo steht bei den Kopf-Events, weit vor den Kanälen.
+pub(crate) fn tempo(b: &[u8]) -> Option<f64> {
+    if b.get(0..4)? != b"FLhd" { return None; }
+    let mut p = 8 + u32::from_le_bytes(b.get(4..8)?.try_into().ok()?) as usize + 8;
+    loop {
+        let id = *b.get(p)?;
+        p += 1;
+        match id {
+            0..=63 => p += 1,
+            64..=127 => p += 2,
+            156 => return Some(u32::from_le_bytes(b.get(p..p + 4)?.try_into().ok()?) as f64 / 1000.0),
+            128..=191 => p += 4,
+            _ => {
+                let (mut len, mut shift) = (0usize, 0);
+                loop {
+                    let c = *b.get(p)?;
+                    p += 1;
+                    len |= ((c & 0x7f) as usize) << shift;
+                    shift += 7;
+                    if c & 0x80 == 0 { break; }
+                }
+                p += len;
+            }
+        }
+    }
+}
+
 fn lesen(b: &[u8]) -> Option<Flp> {
     if b.get(0..4)? != b"FLhd" { return None; }
     let kopf = u32::from_le_bytes(b.get(4..8)?.try_into().ok()?) as usize;

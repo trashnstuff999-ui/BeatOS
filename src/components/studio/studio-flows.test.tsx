@@ -68,7 +68,9 @@ function stubInvoke(assets: AssetFile[] = [], projects: StudioProject[] = PROJEC
     (calls[cmd] ??= []).push(args);
     switch (cmd) {
       case "get_settings":
-        return Promise.resolve({ production_path: "C:\\PROD", asset_path: "C:\\ASSETS" }) as never;
+        return Promise.resolve({ production_path: "C:\\PROD", asset_path: "C:\\ASSETS", archive_path: "C:\\LIB\\03_ARCHIVE" }) as never;
+      case "fl_vorlagen":
+        return Promise.resolve([{ ordner: "Beat", name: "START", pfad: "C:\\LIB\\START.flp" }]) as never;
       case "scan_studio_projects": return Promise.resolve([...projects]) as never;
       case "scan_asset_inbox":     return Promise.resolve(assets) as never;
       case "next_project_name":    return Promise.resolve("Project_0858") as never;
@@ -727,6 +729,21 @@ describe("Notiz-Debounce gegen gleichzeitige Änderungen", () => {
   });
 });
 
+describe("N0 — neues Projekt aus FL/Beat", () => {
+  it("listet die Vorlagen aus 01_TEMPLATES/FL und kopiert die gewählte", async () => {
+    const calls = stubInvoke();
+    renderProjects();
+    await screen.findByText("ARE YOU HERE");
+
+    await userEvent.click(screen.getByRole("button", { name: /^Neu$/ }));
+    await userEvent.click(await screen.findByText("START"));
+
+    await waitFor(() => expect(calls["create_project_folder"]).toBeTruthy());
+    expect(calls["fl_vorlagen"][0]).toEqual({ dir: "C:\\LIB\\02_LIBRARY_ASSETS\\01_TEMPLATES\\FL" });
+    expect(calls["create_project_folder"][0]).toMatchObject({ name: "Project_0858", templateFlp: "C:\\LIB\\START.flp" });
+  });
+});
+
 describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
   it("kopiert die gewaehlte FLP unter die naechste freie Nummer", async () => {
     const calls = stubInvoke();
@@ -757,5 +774,36 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Neu$/ }));
     await userEvent.click(screen.getByText("Aus Vorlage"));
     expect(calls["create_project_folder"]).toBeUndefined();
+  });
+});
+
+describe("Scheibe 6 — Neues erkennen", () => {
+  const NEU = { pfad: "C:\PROD\dont cry 150 bm", alt: "dont cry 150 bm", titel: "DONT CRY [150 Bmin]", nummer: "P0858", sample: false, lose: false, in_fl: false };
+  function mitNeuem(neu: object[]) {
+    const calls = stubInvoke();
+    vi.mocked(invoke).mockImplementation(((orig) => (cmd: string, args?: unknown) => {
+      if (cmd === "scan_neues") return Promise.resolve(neu) as never;
+      if (cmd === "neu_uebernehmen") { (calls[cmd] ??= []).push(args); return Promise.resolve("C:\PROD\P0858 - X") as never; }
+      return orig(cmd, args as never);
+    })(vi.mocked(invoke).getMockImplementation()!) as never);
+    return calls;
+  }
+
+  it("schlägt Nummer + Namen vor, der Name ist änderbar", async () => {
+    const calls = mitNeuem([NEU]);
+    renderProjects();
+    const feld = await screen.findByLabelText("Neuer Name");
+    expect(feld).toHaveValue("DONT CRY [150 Bmin]");
+    await userEvent.clear(feld);
+    await userEvent.type(feld, "no way 140 am");
+    await userEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    await waitFor(() => expect(calls["neu_uebernehmen"]).toEqual([{ pfad: NEU.pfad, titel: "no way 140 am" }]));
+  });
+
+  it("sperrt, solange das Projekt in FL offen ist", async () => {
+    mitNeuem([{ ...NEU, in_fl: true }]);
+    renderProjects();
+    expect(await screen.findByText("In FL offen")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Übernehmen" })).toBeDisabled();
   });
 });

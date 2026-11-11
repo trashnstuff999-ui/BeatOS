@@ -133,7 +133,8 @@ fn scan_studio_projects_blocking(paths: &[String]) -> Result<Vec<StudioProject>,
         };
         for entry in entries.filter_map(|e| e.ok()) {
             let dir = entry.path();
-            if !dir.is_dir() {
+            // `_IDEEN`, `_ARCHIVIERT` und Co. sind Ablagen, keine Projekte
+            if !dir.is_dir() || entry.file_name().to_string_lossy().starts_with('_') {
                 continue;
             }
             if let Some(p) = scan_project_dir(&dir, root) {
@@ -918,6 +919,37 @@ pub fn create_sample(root: String, name: String, template_flp: String) -> Result
     create_project_folder(root, ordner, template_flp)
 }
 
+#[derive(Debug, Serialize)]
+pub struct FlVorlage {
+    /// Unterordner = Typ: `Beat`, `Sample`, `Recording`, `Mix-Master`
+    pub ordner: String,
+    pub name: String,
+    pub pfad: String,
+}
+
+/// Jede FLP in `<dir>/<Typ>/` für das Menü „Neu". Fehlender Ordner = keine
+/// Vorlagen, kein Fehler. Sortiert nach Ordner, dann Name.
+#[tauri::command]
+pub fn fl_vorlagen(dir: String) -> Vec<FlVorlage> {
+    let mut alle = Vec::new();
+    for typ in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        if !typ.path().is_dir() { continue; }
+        let ordner = typ.file_name().to_string_lossy().to_string();
+        for f in std::fs::read_dir(typ.path()).into_iter().flatten().flatten() {
+            let p = f.path();
+            if p.is_file() && is_flp(&p) {
+                alle.push(FlVorlage {
+                    ordner: ordner.clone(),
+                    name: p.file_stem().unwrap_or_default().to_string_lossy().to_string(),
+                    pfad: p.to_string_lossy().to_string(),
+                });
+            }
+        }
+    }
+    alle.sort_by(|a, b| (&a.ordner, a.name.to_lowercase()).cmp(&(&b.ordner, b.name.to_lowercase())));
+    alle
+}
+
 /// Projekt (aus Projekte oder Aufräumen) als Sample nach `06_SAMPLES`: Ordner
 /// verschieben und als `S0012 Name` benennen, gleichnamige FLPs mitziehen. FL
 /// speichert Audio mit vollem Pfad, also danach die Pfade in den FLPs
@@ -982,6 +1014,292 @@ pub async fn scan_samples(root: String) -> Result<Vec<StudioProject>, String> {
     })
     .await
     .map_err(|e| format!("Sample-Scan abgestürzt: {}", e))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Alte Ideen: `<Produktion>/_IDEEN/<Jahr>/<Idee>`, FLPs ohne Export aus dem Altbestand
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const IDEEN_ORDNER: &str = "_IDEEN";
+
+fn alte_ideen_in(roots: &[String]) -> Vec<StudioProject> {
+    use std::io::Read;
+    let unterordner = |d: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(d).map(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default()
+    };
+    let mut ideen = Vec::new();
+    for root in roots {
+        for jahr in unterordner(&Path::new(root).join(IDEEN_ORDNER)) {
+            for dir in unterordner(&jahr) {
+                let Some(mut p) = scan_project_dir(&dir, root) else { continue };
+                // Tempo aus der neuesten FLP: alte Namen tragen kein [Key BPM],
+                // und „[248] FEAR“ läse der Namens-Parser als 248 BPM
+                let mut buf = Vec::with_capacity(16 * 1024);
+                let gelesen = p.newest_flp.as_ref().and_then(|f| std::fs::File::open(f).ok())
+                    .and_then(|f| f.take(16 * 1024).read_to_end(&mut buf).ok());
+                let tempo = gelesen.and_then(|_| crate::commands::flp::tempo(&buf)).map(|t| t.round() as i32).filter(|t| *t > 0);
+                p.bpm = tempo.or(p.bpm.filter(|_| !p.name.starts_with('[')));
+                ideen.push(p);
+            }
+        }
+    }
+    ideen
+}
+
+/// Liste „Alte Ideen“ im Studio. Ohne Datenbank, wie die Samples.
+#[tauri::command]
+pub async fn scan_alte_ideen() -> Result<Vec<StudioProject>, String> {
+    tauri::async_runtime::spawn_blocking(|| alte_ideen_in(&production_roots()))
+        .await
+        .map_err(|e| format!("Ideen-Scan abgestürzt: {}", e))
+}
+
+/// Idee aus `_IDEEN` als nächstes P-Projekt in ihren Produktions-Ordner
+/// verschieben. Derselbe Weg wie das Nachrücken: Protokoll, FLP-Pfade ziehen mit.
+fn idee_holen(roots: &[String], idee: &Path) -> Result<String, String> {
+    let schritt = idee_schritt(roots, idee)?;
+    let ziel = schritt.to.clone();
+    let r = apply_steps(vec![schritt], None)?;
+    if r.moved == 0 || !r.failed.is_empty() {
+        return Err(if r.failed.is_empty() { "Nicht verschoben".to_string() } else { r.failed.join("; ") });
+    }
+    Ok(ziel)
+}
+
+/// Wohin die Idee zieht: `<Produktion>/P<nächste Nummer> - <alter Name>`.
+fn idee_schritt(roots: &[String], idee: &Path) -> Result<MergeStep, String> {
+    let jahr = idee.parent().ok_or("Kein Ideen-Ordner")?;
+    let ablage = jahr.parent().filter(|a| a.file_name().is_some_and(|n| n == IDEEN_ORDNER)).ok_or("Liegt nicht in _IDEEN")?;
+    let root = ablage.parent().ok_or("Kein Produktions-Ordner")?;
+    let alt = idee.file_name().ok_or("Kein Ordnername")?.to_string_lossy().to_string();
+    // „[248] FEAR“ → „248 FEAR“: die alte Nummer bleibt, aber ohne Klammern,
+    // sonst gilt sie im Projekt als [BPM]
+    let titel = match alt.strip_prefix('[').and_then(|r| r.split_once(']')) {
+        Some((nr, rest)) if !nr.is_empty() && nr.chars().all(|c| c.is_ascii_digit()) => format!("{} {}", nr, rest.trim()),
+        _ => alt.clone(),
+    };
+    let neu = sanitize_filename_part(&format!("{}{:04} - {}", PROJECT_PREFIX, highest_project_number(roots) + 1, titel.trim()));
+    Ok(MergeStep {
+        from: idee.to_string_lossy().to_string(),
+        to: root.join(&neu).to_string_lossy().to_string(),
+        old_name: alt,
+        new_name: neu,
+        date: None,
+    })
+}
+
+/// Läuft FL, speichert es ein offenes Projekt wieder unter dem alten Pfad.
+fn fl_laeuft() -> bool {
+    let mut c = std::process::Command::new("tasklist");
+    c.args(["/NH", "/FO", "CSV"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    c.output().is_ok_and(|o| {
+        let liste = String::from_utf8_lossy(&o.stdout).to_lowercase();
+        liste.contains("\"fl64.exe\"") || liste.contains("\"fl.exe\"")
+    })
+}
+
+/// Knopf „In Produktion holen“. Gibt den neuen Projektordner zurück.
+#[tauri::command]
+pub async fn idee_in_produktion(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if fl_laeuft() {
+            return Err("FL läuft. Erst FL schließen.".to_string());
+        }
+        idee_holen(&production_roots(), Path::new(&path))
+    })
+    .await
+    .map_err(|e| format!("Holen abgestürzt: {}", e))?
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Scheibe 6: Neues erkennen. In FL ohne BeatOS gespeichert („dont cry 150 bm“)
+// liegt als Ordner oder lose FLP ohne Nummer in der Produktion bzw. 06_SAMPLES.
+// BeatOS schlägt Nummer + Namen nach der Regel vor, Stephan übernimmt.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize)]
+pub struct NeuGefunden {
+    pub pfad: String,
+    /// Name wie gespeichert (Ordner oder FLP ohne Endung)
+    pub alt: String,
+    /// Vorschlag ohne Nummer: „DONT CRY [150 Bmin]“
+    pub titel: String,
+    /// „P0773“ / „S0039“, fortlaufend innerhalb der Liste
+    pub nummer: String,
+    pub sample: bool,
+    /// Lose FLP statt Ordner
+    pub lose: bool,
+    pub in_fl: bool,
+}
+
+fn samples_root() -> Option<PathBuf> {
+    let s = crate::commands::get_settings().ok()?;
+    Some(Path::new(s.get("archive_path")?.trim()).parent()?.join("06_SAMPLES"))
+}
+
+/// Titel des FL-Fensters, kleingeschrieben. `Some("")`, wenn FL läuft, der Titel
+/// aber nicht lesbar ist; `None`, wenn FL nicht läuft.
+fn fl_fenstertitel() -> Option<String> {
+    let mut c = std::process::Command::new("tasklist");
+    c.args(["/V", "/NH", "/FO", "CSV"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
+    }
+    let out = String::from_utf8_lossy(&c.output().ok()?.stdout).to_lowercase();
+    let zeilen: Vec<&str> = out.lines().filter(|l| l.starts_with("\"fl64.exe\"") || l.starts_with("\"fl.exe\"")).collect();
+    if zeilen.is_empty() { return None; }
+    // Letzte CSV-Spalte = Fenstertitel
+    Some(zeilen.iter().map(|l| l.rsplit("\",\"").next().unwrap_or("").trim_matches('"').to_string())
+        .filter(|t| t != "n/a").collect::<Vec<_>>().join("\n"))
+}
+
+/// Offen in FL = Name steht im Fenstertitel. Titel nicht lesbar: lieber „offen“.
+fn in_fl(titel: &Option<String>, name: &str) -> bool {
+    match titel {
+        None => false,
+        Some(t) if t.is_empty() => true,
+        Some(t) => t.contains(&name.to_lowercase()),
+    }
+}
+
+fn neues_in(root: &Path, sample: bool, start: u32, fl: &Option<String>) -> Vec<NeuGefunden> {
+    let Ok(rd) = std::fs::read_dir(root) else { return Vec::new() };
+    let mut alle: Vec<(PathBuf, String, bool)> = Vec::new();
+    for e in rd.filter_map(|e| e.ok()) {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.starts_with('_') || name.starts_with('.') { continue; }
+        let hat_nummer = if sample { sample_number(&name).is_some() } else { project_number(&name).is_some() };
+        if p.is_dir() && !hat_nummer {
+            let hat_flp = std::fs::read_dir(&p).into_iter().flatten().flatten().any(|f| is_flp(&f.path()));
+            if hat_flp { alle.push((p, name, false)); }
+        } else if p.is_file() && is_flp(&p) {
+            let stem = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
+            alle.push((p, stem, true));
+        }
+    }
+    alle.sort_by_key(|(p, _, _)| file_modified_secs(p));
+    let prefix = if sample { "S" } else { PROJECT_PREFIX };
+    alle.into_iter().enumerate().map(|(i, (p, alt, lose))| NeuGefunden {
+        pfad: p.to_string_lossy().to_string(),
+        titel: crate::utils::schoener_name(&alt, sample),
+        nummer: format!("{}{:04}", prefix, start + i as u32 + 1),
+        in_fl: fl_namen(&p).iter().any(|n| in_fl(fl, n)),
+        alt, sample, lose,
+    }).collect()
+}
+
+fn hoechste_sample_nummer(root: &Path) -> u32 {
+    std::fs::read_dir(root).into_iter().flatten().flatten()
+        .filter_map(|e| sample_number(&e.file_name().to_string_lossy())).max().unwrap_or(0)
+}
+
+/// Studio-Zeile „Neu“: alles ohne Nummer in Produktion und 06_SAMPLES.
+#[tauri::command]
+pub async fn scan_neues() -> Result<Vec<NeuGefunden>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let roots = production_roots();
+        let fl = fl_fenstertitel();
+        let mut liste = Vec::new();
+        let mut naechste = highest_project_number(&roots);
+        for r in &roots {
+            let neu = neues_in(Path::new(r), false, naechste, &fl);
+            naechste += neu.len() as u32;
+            liste.extend(neu);
+        }
+        if let Some(s) = samples_root() {
+            liste.extend(neues_in(&s, true, hoechste_sample_nummer(&s), &fl));
+        }
+        liste
+    })
+    .await
+    .map_err(|e| format!("Scan abgestürzt: {}", e))
+}
+
+/// Übernehmen: Nummer frisch ziehen (nicht die aus der Liste, die kann alt sein),
+/// Titel nach der Regel, dann Ordner umbenennen bzw. lose FLP in einen neuen Ordner.
+/// Gibt den neuen Ordner zurück.
+#[tauri::command]
+pub async fn neu_uebernehmen(pfad: String, titel: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let roots = production_roots();
+        let sample_root = samples_root();
+        neu_uebernehmen_in(&roots, sample_root.as_deref(), Path::new(&pfad), &titel, &fl_fenstertitel())
+    })
+    .await
+    .map_err(|e| format!("Übernehmen abgestürzt: {}", e))?
+}
+
+/// Namen, unter denen FL das Projekt im Fenstertitel zeigt: Ordnername und jede FLP darin.
+fn fl_namen(pfad: &Path) -> Vec<String> {
+    if pfad.is_file() {
+        return pfad.file_stem().map(|s| s.to_string_lossy().to_string()).into_iter().collect();
+    }
+    let mut n: Vec<String> = pfad.file_name().map(|s| s.to_string_lossy().to_string()).into_iter().collect();
+    n.extend(std::fs::read_dir(pfad).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| is_flp(p)).filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().to_string())));
+    n
+}
+
+/// Wohin es geht: (Ziel, neuer Name, alter Name). Prüft Ort, FL und Belegung, ändert nichts.
+fn neu_ziel(roots: &[String], sample_root: Option<&Path>, pfad: &Path, titel: &str, fl: &Option<String>) -> Result<(PathBuf, String, String), String> {
+    let root = pfad.parent().ok_or("Kein Elternordner")?;
+    let sample = sample_root.is_some_and(|s| s == root);
+    if !sample && !roots.iter().any(|r| Path::new(r) == root) {
+        return Err("Liegt weder in der Produktion noch in 06_SAMPLES".into());
+    }
+    if fl_namen(pfad).iter().any(|n| in_fl(fl, n)) {
+        return Err("In FL offen. Erst ein anderes Projekt öffnen oder FL schließen.".into());
+    }
+    let alt = if pfad.is_file() { pfad.file_stem() } else { pfad.file_name() }
+        .ok_or("Kein Name")?.to_string_lossy().to_string();
+    let titel = crate::utils::schoener_name(titel, sample);
+    let nummer = if sample { format!("S{:04}", hoechste_sample_nummer(root) + 1) }
+        else { format!("{}{:04}", PROJECT_PREFIX, highest_project_number(roots) + 1) };
+    let neu = sanitize_filename_part(&if titel.is_empty() { nummer } else { format!("{} - {}", nummer, titel) });
+    let ziel = root.join(&neu);
+    if ziel.exists() { return Err(format!("„{}“ gibt es schon", neu)); }
+    Ok((ziel, neu, alt))
+}
+
+/// Lose FLP in einen neuen Ordner, die FLP heißt wie er; gleichnamige Exporte ziehen mit.
+fn lose_flp_einordnen(pfad: &Path, ziel: &Path, neu: &str, alt: &str) -> Result<(), String> {
+    let root = pfad.parent().ok_or("Kein Elternordner")?;
+    std::fs::create_dir(ziel).map_err(|e| format!("Ordner nicht anlegbar: {}", e))?;
+    std::fs::rename(pfad, ziel.join(format!("{}.flp", neu)))
+        .map_err(|e| { let _ = std::fs::remove_dir(ziel); format!("FLP nicht verschiebbar: {}", e) })?;
+    for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_file() && p.file_stem().is_some_and(|s| s.to_string_lossy() == alt) {
+            let _ = std::fs::rename(&p, ziel.join(e.file_name()));
+        }
+    }
+    Ok(())
+}
+
+fn neu_uebernehmen_in(roots: &[String], sample_root: Option<&Path>, pfad: &Path, titel: &str, fl: &Option<String>) -> Result<String, String> {
+    let (ziel, neu, alt) = neu_ziel(roots, sample_root, pfad, titel, fl)?;
+    if pfad.is_file() {
+        lose_flp_einordnen(pfad, &ziel, &neu, &alt)?;
+        return Ok(ziel.to_string_lossy().to_string());
+    }
+    // Ordner: derselbe Weg wie das Nachrücken (Protokoll, FLP-Pfade, DB-Zeilen)
+    let r = apply_steps(vec![MergeStep {
+        from: pfad.to_string_lossy().to_string(),
+        to: ziel.to_string_lossy().to_string(),
+        old_name: alt, new_name: neu, date: None,
+    }], None)?;
+    if r.moved == 0 || !r.failed.is_empty() {
+        return Err(if r.failed.is_empty() { "Nicht umbenannt".into() } else { r.failed.join("; ") });
+    }
+    Ok(ziel.to_string_lossy().to_string())
 }
 
 /// „S0012 Nachtzug" → 12. Nur ein großes S mit Ziffern direkt dahinter.
@@ -3073,6 +3391,66 @@ mod tests {
     }
 
     #[test]
+    fn neues_erkennen_und_lose_flp_einordnen() {
+        let tmp = std::env::temp_dir().join(format!("beatos_neues_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let prod = tmp.join("prod");
+        let samples = tmp.join("06_SAMPLES");
+        for d in [prod.join("P0005"), prod.join("_IDEEN"), prod.join("dont cry 150 bm"), prod.join("leer"), samples.join("S0002 Alt"), samples.join("pads - x 140 am")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(prod.join("dont cry 150 bm").join("dont cry 150 bm.flp"), b"x").unwrap();
+        std::fs::write(prod.join("P0005").join("P0005.flp"), b"x").unwrap();
+        std::fs::write(samples.join("pads - x 140 am").join("a.flp"), b"x").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(prod.join("no way 140 am.flp"), b"x").unwrap();
+        std::fs::write(prod.join("no way 140 am.mp3"), b"x").unwrap();
+        let roots = vec![prod.to_string_lossy().to_string()];
+
+        let neu = super::neues_in(&prod, false, 5, &None);
+        let kurz: Vec<_> = neu.iter().map(|n| format!("{} {} {}", n.nummer, n.titel, n.lose)).collect();
+        assert_eq!(kurz, ["P0006 DONT CRY [150 Bmin] false", "P0007 NO WAY [140 Amin] true"]);
+        let s = super::neues_in(&samples, true, 2, &None);
+        assert_eq!(s.len(), 1);
+        assert_eq!(format!("{} {}", s[0].nummer, s[0].titel), "S0003 PADS - X [140 Amin]");
+
+        // FL zeigt das Projekt im Titel → gesperrt, sonst frei
+        let fl = Some("dont cry 150 bm - fl studio 2024".to_string());
+        assert!(super::neues_in(&prod, false, 5, &fl)[0].in_fl);
+        assert!(super::neu_ziel(&roots, Some(&samples), &prod.join("dont cry 150 bm"), "x", &fl).is_err());
+        let (ziel, name, _) = super::neu_ziel(&roots, Some(&samples), &prod.join("dont cry 150 bm"), "dont cry 151 bm", &None).unwrap();
+        assert_eq!(name, "P0006 - DONT CRY [151 Bmin]");
+        assert_eq!(ziel, prod.join("P0006 - DONT CRY [151 Bmin]"));
+        assert!(super::neu_ziel(&roots, Some(&samples), &tmp.join("woanders"), "x", &None).is_err());
+
+        // Lose FLP: neuer Ordner, FLP heißt wie er, MP3 zieht mit
+        let flp = prod.join("no way 140 am.flp");
+        let (ziel, name, alt) = super::neu_ziel(&roots, Some(&samples), &flp, "no way 140 am", &None).unwrap();
+        super::lose_flp_einordnen(&flp, &ziel, &name, &alt).unwrap();
+        assert!(ziel.join("P0006 - NO WAY [140 Amin].flp").is_file());
+        assert!(ziel.join("no way 140 am.mp3").is_file());
+        assert!(!flp.exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn fl_vorlagen_liest_jede_flp_je_typ() {
+        let tmp = std::env::temp_dir().join(format!("beatos_vorlagen_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("Beat")).unwrap();
+        std::fs::create_dir_all(tmp.join("Sample")).unwrap();
+        std::fs::write(tmp.join("Beat").join("START_2.flp"), b"x").unwrap();
+        std::fs::write(tmp.join("Beat").join("START.flp"), b"x").unwrap();
+        std::fs::write(tmp.join("Beat").join("notiz.txt"), b"x").unwrap();
+        std::fs::write(tmp.join("lose.flp"), b"x").unwrap(); // ohne Typ-Ordner: nicht im Menü
+        let v = super::fl_vorlagen(tmp.to_string_lossy().to_string());
+        let namen: Vec<_> = v.iter().map(|x| format!("{}/{}", x.ordner, x.name)).collect();
+        assert_eq!(namen, ["Beat/START", "Beat/START_2"]);
+        assert!(super::fl_vorlagen(tmp.join("fehlt").to_string_lossy().to_string()).is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn create_sample_numbers_on_and_creates_root() {
         let tmp = std::env::temp_dir().join(format!("beatos_samples_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
@@ -3206,6 +3584,38 @@ mod tests {
         assert!(["Project_0001", "Project_0003 - MEMORIES", "Project_0004", "Project_0007"].iter().all(|d| !root.join(d).exists()));
         assert!(root.join("NO MORE RUNNING").is_dir());
         assert!(super::plan_close_gaps(&roots).is_empty());
+
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn alte_idee_wird_naechstes_projekt() {
+        let tmp = std::env::temp_dir().join(format!("beatos_ideen_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let root = tmp.join("prod");
+        std::fs::create_dir_all(root.join("P0003")).unwrap();
+        let idee = root.join("_IDEEN").join("2021").join("[248] FEAR - Bpm 130 - Dm");
+        std::fs::create_dir_all(&idee).unwrap();
+        // FLP mit Tempo 130 (Event 156 = BPM · 1000)
+        let mut flp = b"FLhd".to_vec();
+        flp.extend(6u32.to_le_bytes()); flp.extend([0u8; 6]);
+        flp.extend(b"FLdt"); flp.extend(5u32.to_le_bytes()); flp.push(156); flp.extend(130_000u32.to_le_bytes());
+        std::fs::write(idee.join("FEAR.flp"), &flp).unwrap();
+        let roots = vec![root.to_string_lossy().to_string()];
+
+        // Die Liste zeigt sie mit Tempo, der Projekt-Scan kennt `_IDEEN` nicht als Nummer
+        let ideen = super::alte_ideen_in(&roots);
+        assert_eq!((ideen.len(), ideen[0].bpm), (1, Some(130)));
+        assert_eq!(super::highest_project_number(&roots), 3);
+
+        let schritt = super::idee_schritt(&roots, &idee).unwrap();
+        assert_eq!(schritt.new_name, "P0004 - 248 FEAR - Bpm 130 - Dm");
+        let (done, failed) = super::merge_steps_on_disk(&[schritt]);
+        assert!(failed.is_empty() && done.len() == 1, "{failed:?}");
+        assert!(root.join("P0004 - 248 FEAR - Bpm 130 - Dm").join("FEAR.flp").is_file());
+        assert!(super::alte_ideen_in(&roots).is_empty());
+        // Nur was in _IDEEN/<Jahr>/ liegt
+        assert!(super::idee_schritt(&roots, &root.join("P0003")).is_err());
 
         std::fs::remove_dir_all(&tmp).unwrap();
     }

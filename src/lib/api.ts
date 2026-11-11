@@ -5,6 +5,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { invoke } from "@tauri-apps/api/core";
+
+/** Eine FLP aus 01_TEMPLATES/FL/<ordner>/ */
+export interface FlVorlage { ordner: string; name: string; pfad: string }
+
+/** Ohne Nummer gespeichert (Scheibe 6): Ordner oder lose FLP */
+export interface NeuGefunden {
+  pfad: string; alt: string; titel: string; nummer: string;
+  sample: boolean; lose: boolean; in_fl: boolean;
+}
 import type { Beat, BeatStatus, SortColumn, SortDirection, UpdateBeatParams } from "../types/browse";
 import type {
   ArchiveBeatParams,
@@ -387,6 +396,14 @@ export const api = {
     scanSamples: (root: string) =>
       invoke<StudioProject[]>("scan_samples", { root }),
 
+    /** Alte Ideen aus `_IDEEN/<Jahr>/` aller Produktions-Ordner, ohne DB. */
+    scanAlteIdeen: () =>
+      invoke<StudioProject[]>("scan_alte_ideen"),
+
+    /** Idee wird das nächste P-Projekt. Gibt den neuen Ordner zurück. Fehler, wenn FL läuft. */
+    ideeInProduktion: (path: string) =>
+      invoke<string>("idee_in_produktion", { path }),
+
     /** Projektordner als „S0012 Name" nach `root` verschieben, FLP-Pfade nachziehen. */
     moveToSamples: (path: string, root: string, name: string) =>
       invoke<string>("move_to_samples", { path, root, name }),
@@ -394,6 +411,18 @@ export const api = {
     /** Neues Sample „S0001 Name" in `root` (wird angelegt), gibt die FLP zurück. */
     createSample: (root: string, name: string, templateFlp: string) =>
       invoke<string>("create_sample", { root, name, templateFlp }),
+
+    /** Ordner/FLPs ohne Nummer in Produktion und 06_SAMPLES. */
+    scanNeues: () =>
+      invoke<NeuGefunden[]>("scan_neues"),
+
+    /** Nummer + Name nach der Regel vergeben, gibt den neuen Ordner zurück. */
+    neuUebernehmen: (pfad: string, titel: string) =>
+      invoke<string>("neu_uebernehmen", { pfad, titel }),
+
+    /** Jede FLP in `<dir>/<Typ>/` für „Neu". */
+    flVorlagen: (dir: string) =>
+      invoke<FlVorlage[]>("fl_vorlagen", { dir }),
 
     /** Nächste freie Projektnummer über alle Roots ("Project_206"). */
     nextProjectName: (paths: string[]) =>

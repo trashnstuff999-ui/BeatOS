@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, AudioLines } from "lucide-react";
+import { Disc3, FolderKanban, BrushCleaning, Image as ImageIcon, AudioLines, History } from "lucide-react";
 import { C } from "../lib/theme";
 import { api } from "../lib/api";
 import { PageHeader, PageBody, Segmented, Button } from "../components/ui";
@@ -19,10 +19,11 @@ import { useFocusRefresh } from "../hooks/useFocusRefresh";
 import { ProjectsPane } from "../components/studio/ProjectsPane";
 import { AssetsPane } from "../components/studio/AssetsPane";
 import { SamplesPane } from "../components/studio/SamplesPane";
+import { AlteIdeenPane } from "../components/studio/AlteIdeenPane";
 import { INSPECTOR_WIDTH } from "../components/studio/ProjectInspector";
 import type { StudioProject } from "../types/studio";
 
-type StudioTab = "projects" | "samples" | "cleanup" | "assets";
+type StudioTab = "projects" | "samples" | "ideen" | "cleanup" | "assets";
 
 export default function Studio() {
   const { settings } = useSettings();
@@ -67,6 +68,7 @@ export default function Studio() {
           options={[
             { value: "projects", label: "Projekte", icon: FolderKanban },
             { value: "samples", label: "Samples", icon: AudioLines },
+            { value: "ideen", label: "Alte Ideen", icon: History },
             { value: "cleanup", label: "Aufräumen", icon: BrushCleaning },
           ]}
         />
@@ -112,6 +114,7 @@ export default function Studio() {
           />
         </div>
         {tab === "samples" && <SamplesPane />}
+        {tab === "ideen" && <AlteIdeenPane onGeholt={() => setRefreshKey(k => k + 1)} />}
         <div style={{ height: 40 }} />
       </PageBody>
       </div>
