@@ -20,7 +20,7 @@ Bindeglied zwischen FL, Photoshop, Premiere und der Bibliothek.
 | 4b | Alte Ideen + „Aus den Anfängen“ (für alles Alte) | Kopie + Pfade + Liste „Alte Ideen“ gebaut (10.11.), offen: Abnahme der Liste, Filter „Aus den Anfängen“ |
 | 5 | FL-Templates über „Neu“ | gebaut 11.11., offen: Abnahme, Vorlagen für Sample/Recording/Mix-Master ablegen |
 | 6 | Neues erkennen (Ordner ohne Nummer → fragen, Name nach Regel) | gebaut 11.11., offen: Abnahme |
-| 7 | Künstler als Planer (Status von Hand, Releases, Features, kein Umräumen, keine A-Nummern) | offen; 64 Artist-Ordner am 10.11. kopiert |
+| 7 | Künstler als Planer (Status von Hand, Releases, Features, kein Umräumen, keine A-Nummern) | 7a–7e gebaut 11.11., Abnahme in der App offen, uncommittet |
 | 8 | Samples: nach Namen gruppieren, Filter, „Zu den Ideen“ (kein Umbenennen per Dialog) | offen |
 | 9 | Upload-Ablage (Namensvorschlag nur Angebot, sonst fragen) | offen |
 | 10 | Abschluss: Altbestand nach `_ALT` | offen |
@@ -508,16 +508,34 @@ FLP-Pfade, gleichnamige FLP zieht mit). Lose FLP: neuer Ordner, FLP heißt wie e
 ziehen mit. **Gesperrt**, solange der Ordner- oder FLP-Name im FL-Fenstertitel steht (Titel nicht
 lesbar = gesperrt). Archiv-Abgleich (ältere Stände) noch nicht drin.
 
-## Scheibe 7: Künstler
+## Scheibe 7: Künstler als Planer
 
-**Ziel:** Alle Auftragsarbeiten liegen in `05_ARTISTS` im Release-Schema.
+**Ziel:** Jarnos Liste offener Tracks eintragen und Spur für Spur abarbeiten.
+Entwurf (abgesegnet 11.11.): https://claude.ai/artifact/FHr6pUZZ53LqdsDnMLhjF5
 
-- `Image-Line\...\Projects\Songs\Artists` (404ANGEL, Blowfish, Jarno & Mats,
-  JarnoGm, Mats Elders, xP4RA und lose Dateien) wird eingesammelt, mit
-  derselben Ampel und Kopie wie in Scheibe 3.
-- In `05_ARTISTS/JarnoGm` liegen `Project_0873`, `Project_1` und `Backup` lose.
-  Sie werden Releases zugeordnet.
-- A-Nummer pro Release vergeben.
+Entschieden 11.11.:
+1. Stufen pro Track von Hand: Vocals · Mix · Master · Abgegeben (Nur Master: ohne Vocals/Mix).
+   Datei-Abzeichen (FLP, Demo, Beat) fallen weg.
+2. Abgegeben ist ein Haken, nichts wandert. Was in `_Fertig` liegt, bleibt und zählt als abgegeben.
+3. Features: Ordner beim Hauptkünstler, Track erscheint zusätzlich beim Gast.
+   Ordner wie „Jarno & Mats“ will Stephan vermeiden.
+4. Ein Track darf in mehreren Releases sein, Zuordnung jederzeit änderbar (Single → Album).
+5. Versionen: nur die neueste zeigen, der Rest im Klappmenü.
+6. Keine A-Nummern.
+
+| Stück | Inhalt | Status |
+|---|---|---|
+| 7a | Haken von Hand (`artist_songs.erledigt`, `set_artist_erledigt`), Abgeben ohne `_Fertig` | gebaut 11.11., Abnahme offen |
+| 7b | Releases (Album/EP/Single) in `_kuenstler.json`, Track in mehreren, änderbar | gebaut 11.11., Abnahme offen |
+| 7c | Geplante Tracks ohne Ordner (`_kuenstler.json` geplant), Liste einfügen, „Anfangen“ | gebaut 11.11., Abnahme offen |
+| 7d | Features (`_kuenstler.json` features, Gast sieht Track unter „Als Gast“) | gebaut 11.11., Abnahme offen; „Jarno & Mats“ auflösen wartet auf Stephans Wahl des Hauptkünstlers |
+| 7e | Versionen: Reinhören spielt die neueste, „+n“ klappt ältere auf (FLP-Auswahl hatte das schon) | gebaut 11.11., Abnahme offen |
+
+7a: Ohne Haken gilt einmalig die alte Vermutung aus den Dateien als Startwert; ab dem
+ersten Klick zählen nur noch die Haken. Abgeben-Dialog benennt den Export in 03_VERSIONS
+und hakt ab, der Ordner bleibt. „Wieder öffnen“ nur noch für Songs in `_Fertig`.
+
+Alt (09.11., verworfen): Einsammeln aus `Projects\Songs\Artists` per Ampel, A-Nummer pro Release.
 
 ## Scheibe 8: Samples
 
@@ -578,6 +596,7 @@ dem Beat zu.
 | 10.11. | „Nur Nummer“ sind oft ganze Beats: vor Scheibe 4 durchhören, nicht vertagen |
 | 10.11. | „Alte Ideen“ (4b) gilt für alles Alte, nicht nur für Nummern ohne Namen |
 | 10.11. | Titel sind beim Einsammeln zweitrangig: Umbenennen ändert die Nummer nicht |
+| 11.11. | Künstler: Status nur von Hand, Abgeben verschiebt nichts, keine A-Nummern (Details Scheibe 7) |
 | 10.11. | Kein Durchhör-Modus mit Tasten (Stephan: nein) |
 | 10.11. | Alte Ideen (FLPs ohne Export) in eigenen Ordner `01_ACTIVE_PRODUCTION/_IDEEN/<Jahr>/`, nicht als P-Projekte; nach Scheibe 4 |
 | 10.11. | Vor Scheibe 4: FLP-Pfade reparieren. Umbenennen selbst trifft nur 4 Beats, die schreibt Scheibe 4 mit um |

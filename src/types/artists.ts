@@ -3,8 +3,15 @@
 export interface ArtistSong {
   name: string;
   path: string;
-  /** Liegt in <Künstler>/_Fertig/ — abgegeben. */
+  /** Abgegeben: Haken gesetzt oder liegt in <Künstler>/_Fertig/. */
   fertig: boolean;
+  /** Liegt in <Künstler>/_Fertig/ (alte Abgaben). */
+  im_fertig: boolean;
+  /** Nur geplant, noch kein Ordner. `path` ist der künftige Ordner. */
+  geplant: boolean;
+  /** Gäste („ft."), Künstlernamen. */
+  features: string[];
+  /** vocals/mix/master: von Hand abgehakt; ohne Haken die Vermutung aus den Dateien. */
   flp: boolean;
   vocals: boolean;
   demo: boolean;
@@ -42,10 +49,24 @@ export interface ArtistSong {
   nur_master: boolean;
 }
 
+/** Album oder EP = Ordner `ALBUM - <Titel>` / `EP - <Titel>` beim Artist. `tracks` = Song-Ordner darin, nach Nummer. */
+export interface Release {
+  art: "ALBUM" | "EP";
+  titel: string;
+  path: string;
+  cover: string | null;
+  tracks: string[];
+}
+
 export interface Artist {
   name: string;
   path: string;
   songs: ArtistSong[];
+  releases: Release[];
+  /** „In Session“: Song-Pfade, höchstens drei. */
+  session: string[];
+  /** Eigene Akzentfarbe (#rrggbb); null = aus dem Profilbild. */
+  farbe: string | null;
   /** Profilbild im Künstler-Ordner. */
   bild: string | null;
   /** Plattform → Link (spotify, soundcloud, youtube, instagram, discord). */

@@ -408,6 +408,9 @@ pub fn init_db() -> Result<(), String> {
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN beat_id TEXT", []);
                 // „Nur Master": ein fertiger Track kommt rein, Vocals und Mix entfallen.
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN nur_master INTEGER NOT NULL DEFAULT 0", []);
+                // Bibliothek-Umbau Scheibe 7: Haken von Hand, z. B. "vocals,mix".
+                // NULL = nie angefasst, dann gilt die Vermutung aus den Dateien.
+                let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN erledigt TEXT", []);
                 // „Nicht hochladen": der Beat fällt aus der Warteschlange.
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN upload_skip INTEGER NOT NULL DEFAULT 0", []);
                 // Bibliothek-Umbau: alte Nummer ("630", "Project_0121") und wann der

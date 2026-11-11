@@ -329,6 +329,30 @@ export const api = {
     /** Notiz und „Warte auf Künstler" für einen Song. */
     setSong: (path: string, notiz: string | null, warten: boolean) =>
       invoke<void>("set_artist_song", { path, notiz, warten }),
+    /** Neues Album/EP: legt <Artist>/<ART> - <Titel>/ an; gibt den Pfad zurück. */
+    createRelease: (artistPath: string, art: "ALBUM" | "EP", titel: string) =>
+      invoke<string>("create_artist_release", { artistPath, art, titel }),
+    /** Song in ein Release oder zu den Singles (ziel = Artist-Ordner). Pfade werden nachgezogen; gibt den neuen Pfad zurück. */
+    songVerschieben: (songPath: string, ziel: string) =>
+      invoke<string>("artist_song_verschieben", { songPath, ziel }),
+    /** Vorschau Zusammenführen: was aus quelle wohin in ziel wandert (neu, umbenannt, gleich = identische Kopie fällt weg). */
+    zusammenfuehrenPlan: (ziel: string, quelle: string) =>
+      invoke<{ von: string; nach: string; art: "neu" | "umbenannt" | "gleich" }[]>("artist_zusammenfuehren_plan", { ziel, quelle }),
+    /** quelle in ziel zusammenführen, FLP-Pfade nachziehen; gibt eine Zusammenfassung zurück. */
+    zusammenfuehren: (ziel: string, quelle: string) => invoke<string>("artist_zusammenfuehren", { ziel, quelle }),
+    /** Ordner ist kein Song: _ davor, FLP-Pfade des Artists ziehen mit; gibt den neuen Pfad zurück. */
+    keinSong: (pfad: string) => invoke<string>("artist_kein_song", { pfad }),
+    /** Reihenfolge der Artists in der Leiste (05_ARTISTS/_reihenfolge.json). */
+    setReihenfolge: (root: string, namen: string[]) => invoke<void>("set_artist_reihenfolge", { root, namen }),
+    /** „In Session“ eines Artists speichern (Song-Pfade, höchstens drei). */
+    setSession: (artistPath: string, songs: string[]) => invoke<void>("set_artist_session", { artistPath, songs }),
+    /** Artist, Song oder Release umbenennen (Release: nur der Titel); alles zieht mit. Gibt den neuen Pfad zurück. */
+    umbenennen: (pfad: string, art: "artist" | "song" | "release", name: string) => invoke<string>("artist_umbenennen", { pfad, art, name }),
+    /** Akzentfarbe von Hand (#rrggbb); null = aus dem Profilbild. */
+    setFarbe: (artistPath: string, farbe: string | null) => invoke<void>("set_artist_farbe", { artistPath, farbe }),
+    /** Haken von Hand: "vocals", "mix", "master", "abgegeben". Verschiebt nichts. */
+    setErledigt: (path: string, erledigt: string[]) =>
+      invoke<void>("set_artist_erledigt", { path, erledigt }),
     /** Song-Art: nur Master (true) oder Mix & Master. */
     setNurMaster: (path: string, nurMaster: boolean) =>
       invoke<void>("set_artist_nur_master", { path, nurMaster }),
@@ -337,6 +361,12 @@ export const api = {
     /** Neuer Song: 01_SAVEFILES mit Template-FLP, 02_ASSETS, 03_VERSIONS; gibt den FLP-Pfad zurück. */
     createSong: (artistPath: string, name: string, templateFlp: string) =>
       invoke<string>("create_artist_song", { artistPath, name, templateFlp }),
+    /** Gäste eines Songs („ft."); leere Liste löscht. */
+    setFeatures: (artistPath: string, song: string, features: string[]) =>
+      invoke<void>("set_artist_features", { artistPath, song, features }),
+    /** Geplante Tracks (ohne Ordner) speichern, ganze Liste. */
+    setGeplant: (artistPath: string, geplant: string[]) =>
+      invoke<void>("set_artist_geplant", { artistPath, geplant }),
     /** Audiodateien im Downloads-Ordner (leer = der von Windows), neueste zuerst. */
     downloads: (dir: string) => invoke<{ name: string; path: string; geaendert: number }[]>("artist_downloads", { dir }),
     /** Fehlende Audio-Pfade in den FLPs des Songs nachziehen; gibt die Zahl zurück. */

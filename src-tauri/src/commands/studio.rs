@@ -1144,7 +1144,7 @@ fn samples_root() -> Option<PathBuf> {
 
 /// Titel des FL-Fensters, kleingeschrieben. `Some("")`, wenn FL läuft, der Titel
 /// aber nicht lesbar ist; `None`, wenn FL nicht läuft.
-fn fl_fenstertitel() -> Option<String> {
+pub(crate) fn fl_fenstertitel() -> Option<String> {
     let mut c = std::process::Command::new("tasklist");
     c.args(["/V", "/NH", "/FO", "CSV"]);
     #[cfg(windows)]
@@ -1161,7 +1161,7 @@ fn fl_fenstertitel() -> Option<String> {
 }
 
 /// Offen in FL = Name steht im Fenstertitel. Titel nicht lesbar: lieber „offen“.
-fn in_fl(titel: &Option<String>, name: &str) -> bool {
+pub(crate) fn in_fl(titel: &Option<String>, name: &str) -> bool {
     match titel {
         None => false,
         Some(t) if t.is_empty() => true,

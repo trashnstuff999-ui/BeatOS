@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { passtZumSong, pfadSchluessel, songStand, songVerlauf } from "./kuenstler";
+import { passtZumSong, pfadSchluessel, songStand, songVerlauf, phase, erledigtFuer, aehnlich } from "./kuenstler";
 
 describe("songVerlauf", () => {
   it("nimmt je Etappe die erste Datei, sortiert nach Datum", () => {
@@ -25,6 +25,37 @@ describe("songStand", () => {
     expect(songStand({ ...s, vocals: true, warten: true })).toEqual({ text: "Warte auf Künstler", schritt: 1, ton: "warten" });
     expect(songStand({ ...s, fertig: true, warten: true })).toEqual({ text: "Abgegeben", schritt: 4, ton: "fertig" });
     expect(songStand({ ...s, nur_master: true })).toEqual({ text: "Master offen", schritt: 2, ton: "offen" });
+    expect(songStand({ ...s, vocals: true, geplant: true }).text).toBe("Geplant");
+  });
+});
+
+describe("phase und Stufen", () => {
+  const s = { fertig: false, warten: false, vocals: false, mix: false, master: false };
+  it("sagt, woran der Track hängt", () => {
+    expect(phase(s)).toBe("Recording");
+    expect(phase({ ...s, vocals: true })).toBe("Mixing");
+    expect(phase({ ...s, vocals: true, mix: true })).toBe("Mastering");
+    expect(phase({ ...s, vocals: true, mix: true, master: true })).toBe("Ready");
+    expect(phase({ ...s, nur_master: true })).toBe("Mastering");
+    expect(phase({ ...s, warten: true })).toBe("Feedback offen");
+    expect(phase({ ...s, fertig: true, warten: true })).toBe("abgegeben");
+    expect(phase({ ...s, geplant: true })).toBe("geplant");
+  });
+  it("Stufe → Haken", () => {
+    expect(erledigtFuer(0)).toEqual([]);
+    expect(erledigtFuer(3)).toEqual(["vocals", "mix", "master"]);
+    expect(erledigtFuer(4)).toEqual(["vocals", "mix", "master", "abgegeben"]);
+  });
+});
+
+describe("aehnlich", () => {
+  it("findet Doppel trotz Klammern und Tippfehlern", () => {
+    expect(aehnlich("spirirt of live", "Spirit of Live")).toBe(true);
+    expect(aehnlich("NO BLEED (Prod. goodbxy)", "No Bleed")).toBe(true);
+    expect(aehnlich("Massaker Mental [Beat- Stay]", "Massaker Mental")).toBe(true);
+    expect(aehnlich("Natsmaus", "Natsmaus")).toBe(true);
+    expect(aehnlich("Traum", "Finden")).toBe(false);
+    expect(aehnlich("Soul", "Struggle")).toBe(false);
   });
 });
 

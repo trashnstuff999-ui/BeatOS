@@ -15,8 +15,11 @@ export default function Kuenstler() {
   return (
     <div data-app-flaeche style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
       <PageHeader icon={Users} title="Künstler" />
-      <PageBody width="wide">
-        <ArtistsPane root={kuenstlerOrdner(settings)} archivePath={settings.archivePath} active />
+      <PageBody width="full">
+        {/* Breite wie im Entwurf: mittig, nicht randlos */}
+        <div style={{ width: "100%", maxWidth: 1320, margin: "0 auto" }}>
+          <ArtistsPane root={kuenstlerOrdner(settings)} archivePath={settings.archivePath} active />
+        </div>
         <div style={{ height: 40 }} />
       </PageBody>
     </div>

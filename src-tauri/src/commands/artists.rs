@@ -25,8 +25,14 @@ use std::path::Path;
 pub struct ArtistSong {
     pub name: String,
     pub path: String,
-    /// Liegt in <Künstler>/_Fertig/ — abgegeben.
+    /// Abgegeben: Haken gesetzt oder liegt in <Künstler>/_Fertig/.
     pub fertig: bool,
+    /// Liegt in <Künstler>/_Fertig/ (alte Abgaben), „Wieder öffnen" holt ihn raus.
+    pub im_fertig: bool,
+    /// Nur geplant, noch kein Ordner (Scheibe 7c). „Anfangen" legt ihn an.
+    pub geplant: bool,
+    /// Gäste („ft."), aus `_kuenstler.json` (Scheibe 7d).
+    pub features: Vec<String>,
     pub flp: bool,
     pub vocals: bool,
     pub demo: bool,
@@ -85,6 +91,12 @@ pub struct Artist {
     /// Plattform → Link (spotify, soundcloud, youtube, instagram, discord),
     /// aus `_kuenstler.json` im Künstler-Ordner.
     pub links: std::collections::BTreeMap<String, String>,
+    /// Alben/EPs als Ordner `ALBUM - …`/`EP - …`.
+    pub releases: Vec<Release>,
+    /// „In Session": Song-Pfade, höchstens drei.
+    pub session: Vec<String>,
+    /// Eigene Akzentfarbe; None = aus dem Profilbild.
+    pub farbe: Option<String>,
     pub songs: Vec<ArtistSong>,
 }
 
@@ -112,19 +124,21 @@ pub fn scan_artists(root: String) -> Result<ArtistsScan, String> {
     let mut kuenstler = kuenstler_lesen(pfad);
     // Notiz, Warten, Abgabedatum, Beat dazulesen. Ohne Tabelle bleibt es leer.
     if let Ok(conn) = open_db() {
-        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben, beat_id, nur_master FROM artist_songs") {
-            type Zeile = (Option<String>, bool, Option<String>, Option<String>, bool);
+        if let Ok(mut stmt) = conn.prepare("SELECT path, notiz, warten, abgegeben, beat_id, nur_master, erledigt FROM artist_songs") {
+            type Zeile = (Option<String>, bool, Option<String>, Option<String>, bool, Option<String>);
             let zeilen: HashMap<String, Zeile> = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?, r.get(4)?, r.get::<_, i64>(5)? != 0))))
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get::<_, i64>(2)? != 0, r.get(3)?, r.get(4)?, r.get::<_, i64>(5)? != 0, r.get(6)?))))
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
             for s in kuenstler.iter_mut().flat_map(|k| k.songs.iter_mut()) {
-                if let Some((notiz, warten, abgegeben, beat_id, nur_master)) = zeilen.get(&s.path) {
+                if let Some((notiz, warten, abgegeben, beat_id, nur_master, erledigt)) = zeilen.get(&s.path) {
                     s.notiz = notiz.clone();
                     s.warten = *warten;
                     s.abgegeben = abgegeben.clone();
                     s.beat_id = beat_id.clone();
                     s.nur_master = *nur_master;
+                    if let Some(e) = erledigt { haken_setzen(s, e); }
+                    s.fertig |= s.abgegeben.is_some();
                 }
             }
         }
@@ -153,6 +167,32 @@ fn beat_in_verweisen(verweise: &[String], beats: &[(String, String)]) -> Option<
         .filter(|(_, ordner)| verweise.iter().any(|v| v.starts_with(ordner.as_str())))
         .max_by_key(|(_, ordner)| ordner.len())
         .map(|(id, _)| id.clone())
+}
+
+/// Vocals/Mix/Master kommen von Hand (Scheibe 7). Die Vermutung aus den
+/// Dateien gilt nur, bis Stephan zum ersten Mal einen Haken setzt.
+fn haken_setzen(s: &mut ArtistSong, erledigt: &str) {
+    let hat = |k: &str| erledigt.split(',').any(|x| x == k);
+    s.vocals = hat("vocals");
+    s.mix = hat("mix");
+    s.master = hat("master");
+}
+
+/// Haken von Hand: `erledigt` aus "vocals", "mix", "master", "abgegeben".
+/// Abgegeben setzt das Datum (bleibt, wenn schon gesetzt) oder löscht es.
+/// Verschoben wird nichts.
+#[tauri::command]
+pub fn set_artist_erledigt(path: String, erledigt: Vec<String>) -> Result<(), String> {
+    let haken: Vec<&str> = ["vocals", "mix", "master"].into_iter().filter(|k| erledigt.iter().any(|e| e == k)).collect();
+    let abgegeben = erledigt.iter().any(|e| e == "abgegeben");
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO artist_songs (path, erledigt, abgegeben) VALUES (?1, ?2, CASE WHEN ?3 THEN date('now', 'localtime') END)
+         ON CONFLICT(path) DO UPDATE SET erledigt = excluded.erledigt,
+            abgegeben = CASE WHEN ?3 THEN COALESCE(artist_songs.abgegeben, excluded.abgegeben) END",
+        rusqlite::params![path, haken.join(","), abgegeben],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// „Mein Beat" setzen oder lösen (None).
@@ -222,7 +262,7 @@ pub fn create_artist(root: String, name: String) -> Result<String, String> {
 /// Gibt den Pfad der FLP zurück.
 #[tauri::command]
 pub fn create_artist_song(artist_path: String, name: String, template_flp: String) -> Result<String, String> {
-    let flp = std::path::PathBuf::from(crate::commands::create_project_folder(artist_path, name, template_flp)?);
+    let flp = std::path::PathBuf::from(crate::commands::create_project_folder(artist_path.clone(), name, template_flp)?);
     let dir = flp.parent().ok_or("FLP ohne Ordner")?.to_path_buf();
     let ziel = dir.join(SAVES).join(flp.file_name().ok_or("FLP ohne Namen")?);
     let angelegt = [SAVES, ASSETS, VERSIONS].iter().try_for_each(|o| fs::create_dir_all(dir.join(o)))
@@ -231,18 +271,48 @@ pub fn create_artist_song(artist_path: String, name: String, template_flp: Strin
         let _ = fs::remove_dir_all(&dir);
         return Err(format!("Song-Ordner ließ sich nicht anlegen: {e}"));
     }
+    // War der Song geplant, ist er jetzt echt (Scheibe 7c).
+    let kuenstler = Path::new(&artist_path);
+    let mut p = profil_lesen(kuenstler);
+    let ordner = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if p.geplant.iter().any(|g| g.eq_ignore_ascii_case(&ordner)) {
+        p.geplant.retain(|g| !g.eq_ignore_ascii_case(&ordner));
+        let _ = profil_schreiben(kuenstler, &p);
+    }
     Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Geplante Tracks des Künstlers speichern: Namen ohne Ordner (Scheibe 7c).
+/// Namen werden wie Ordnernamen bereinigt, damit „Anfangen" denselben trifft.
+#[tauri::command]
+pub fn set_artist_geplant(artist_path: String, geplant: Vec<String>) -> Result<(), String> {
+    let dir = Path::new(&artist_path);
+    let mut p = profil_lesen(dir);
+    p.geplant = geplant_bereinigen(geplant);
+    profil_schreiben(dir, &p)
+}
+
+fn geplant_bereinigen(namen: Vec<String>) -> Vec<String> {
+    let mut gesehen = std::collections::HashSet::new();
+    namen.iter().map(|n| crate::utils::sanitize_filename_part(n.trim()))
+        .filter(|n| !n.is_empty() && gesehen.insert(n.to_lowercase()))
+        .collect()
 }
 
 // ─── Abgabe ──────────────────────────────────────────────────────────────────
 
-/// Abgeben: Export umbenennen nach `<Künstler> - <Song> (Master|Mix).<ext>`,
-/// Song nach `<Künstler>/_Fertig/` schieben, Datum merken. Gibt den neuen Pfad
-/// der Datei zurück — das Frontend zeigt sie im Explorer, zum Verschicken.
+/// Abgeben: Export als `<Künstler> - <Song> (Master|Mix)` in 03_VERSIONS, Haken
+/// „Abgegeben" setzen. Der Song-Ordner bleibt, wo er ist (Scheibe 7).
+/// Gibt den Pfad der Datei zurück, das Frontend zeigt sie im Explorer.
 #[tauri::command]
 pub fn artist_abgeben(song_path: String, datei: String, art: String) -> Result<String, String> {
-    let (neuer_song, abgabe) = abgeben_dateien(Path::new(&song_path), &datei, &art)?;
-    pfad_umhaengen(&song_path, &neuer_song.to_string_lossy(), true);
+    let abgabe = abgeben_dateien(Path::new(&song_path), &datei, &art)?;
+    let conn = open_db().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO artist_songs (path, abgegeben) VALUES (?1, date('now', 'localtime'))
+         ON CONFLICT(path) DO UPDATE SET abgegeben = excluded.abgegeben, warten = 0",
+        [&song_path],
+    ).map_err(|e| e.to_string())?;
     Ok(abgabe.to_string_lossy().to_string())
 }
 
@@ -250,29 +320,30 @@ pub fn artist_abgeben(song_path: String, datei: String, art: String) -> Result<S
 #[tauri::command]
 pub fn artist_wieder_oeffnen(song_path: String) -> Result<String, String> {
     let neu = wieder_oeffnen_dateien(Path::new(&song_path))?;
-    pfad_umhaengen(&song_path, &neu.to_string_lossy(), false);
+    pfad_umhaengen(&song_path, &neu.to_string_lossy());
     Ok(neu.to_string_lossy().to_string())
 }
 
-/// Notiz und Status ziehen mit um. Die Dateien sind dann schon verschoben —
-/// ein DB-Fehler kostet höchstens die Notiz, darum kein Abbruch.
-fn pfad_umhaengen(alt: &str, neu: &str, abgegeben: bool) {
+/// Notiz und Haken ziehen mit um, die Abgabe gilt nicht mehr. Die Dateien
+/// sind dann schon verschoben, ein DB-Fehler kostet höchstens die Notiz.
+fn pfad_umhaengen(alt: &str, neu: &str) {
     let Ok(conn) = open_db() else { return };
     let _ = conn.execute("DELETE FROM artist_songs WHERE path = ?1", [neu]);
     let _ = conn.execute("INSERT OR IGNORE INTO artist_songs (path) VALUES (?1)", [alt]);
     let _ = conn.execute(
-        "UPDATE artist_songs SET path = ?2, warten = 0,
-            abgegeben = CASE WHEN ?3 THEN date('now', 'localtime') ELSE NULL END
-         WHERE path = ?1",
-        rusqlite::params![alt, neu, abgegeben],
+        "UPDATE artist_songs SET path = ?2, warten = 0, abgegeben = NULL WHERE path = ?1",
+        rusqlite::params![alt, neu],
     );
 }
 
-fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<std::path::PathBuf, String> {
     if art != "Master" && art != "Mix" { return Err(format!("Unbekannte Art: {art}")); }
     let kuenstler_dir = song.parent().ok_or("Song-Ordner ohne Künstler")?;
     let kuenstler = kuenstler_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    if kuenstler == FERTIG { return Err("Der Song ist schon abgegeben".into()); }
+    // Alte Abgaben in _Fertig heißen nach dem Künstler darüber.
+    let kuenstler = if kuenstler == FERTIG {
+        kuenstler_dir.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    } else { kuenstler };
     let song_name = song.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
 
     // Nur ein Dateiname, kein Pfad — gesucht, wo Exporte liegen.
@@ -283,10 +354,6 @@ fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::Pa
     let ext = quelle.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "wav".into());
     let neuer_name = format!("{}.{ext}", crate::utils::sanitize_filename_part(&format!("{kuenstler} - {song_name} ({art})")));
 
-    let fertig_dir = kuenstler_dir.join(FERTIG);
-    let ziel_song = fertig_dir.join(&song_name);
-    // Erst alles prüfen, dann anfassen.
-    if ziel_song.exists() { return Err(format!("In _Fertig gibt es „{song_name}\" schon")); }
     // Die Abgabe landet in 03_VERSIONS, egal wo FL sie hingelegt hat.
     let umbenannt = song.join(VERSIONS).join(&neuer_name);
     if umbenannt != quelle && umbenannt.exists() {
@@ -295,13 +362,7 @@ fn abgeben_dateien(song: &Path, datei: &str, art: &str) -> Result<(std::path::Pa
 
     fs::create_dir_all(song.join(VERSIONS)).map_err(|e| format!("{VERSIONS} ließ sich nicht anlegen: {e}"))?;
     fs::rename(&quelle, &umbenannt).map_err(|e| format!("Umbenennen fehlgeschlagen: {e}"))?;
-    fs::create_dir_all(&fertig_dir).map_err(|e| format!("_Fertig ließ sich nicht anlegen: {e}"))?;
-    if let Err(e) = fs::rename(song, &ziel_song) {
-        // Ordner offen in FL oder im Explorer: Umbenennung zurück, nichts halb lassen.
-        let _ = fs::rename(&umbenannt, &quelle);
-        return Err(format!("Song-Ordner ließ sich nicht verschieben (in FL oder im Explorer offen?): {e}"));
-    }
-    Ok((ziel_song.clone(), ziel_song.join(VERSIONS).join(&neuer_name)))
+    Ok(umbenannt)
 }
 
 fn wieder_oeffnen_dateien(song: &Path) -> Result<std::path::PathBuf, String> {
@@ -318,19 +379,68 @@ fn kuenstler_lesen(root: &Path) -> Vec<Artist> {
     let mut kuenstler: Vec<Artist> = unterordner(root).into_iter()
         .filter(|(n, _)| !kein_song(n))
         .map(|(name, pfad)| {
-            let mut songs: Vec<ArtistSong> = unterordner(&pfad).into_iter()
-                .filter(|(n, _)| !kein_song(n))
-                .map(|(n, p)| song(&n, &p, false))
-                .collect();
+            // Direkt beim Artist: Singles, oder Release-Ordner `ALBUM - …`/`EP - …` mit Songs darin.
+            let mut songs: Vec<ArtistSong> = Vec::new();
+            let mut releases: Vec<Release> = Vec::new();
+            for (n, p) in unterordner(&pfad).into_iter().filter(|(n, _)| !kein_song(n)) {
+                match release_art(&n) {
+                    Some((art, titel)) => {
+                        let mut drin: Vec<(String, std::path::PathBuf)> = unterordner(&p).into_iter().filter(|(n, _)| !kein_song(n)).collect();
+                        drin.sort_by_key(|(n, _)| tracknummer(n));
+                        releases.push(Release {
+                            art, titel, cover: cover_in(&p), path: p.to_string_lossy().to_string(),
+                            tracks: drin.iter().map(|(n, _)| n.clone()).collect(),
+                        });
+                        songs.extend(drin.iter().map(|(n, p)| song(n, p, false)));
+                    }
+                    None => songs.push(song(&n, &p, false)),
+                }
+            }
+            releases.sort_by_key(|r| r.titel.to_lowercase());
             songs.extend(unterordner(&pfad.join(FERTIG)).into_iter()
                 .filter(|(n, _)| !kein_song(n))
                 .map(|(n, p)| song(&n, &p, true)));
             songs.sort_by(|a, b| a.fertig.cmp(&b.fertig).then(b.geaendert.cmp(&a.geaendert)));
-            Artist { bild: profilbild(&pfad), links: links_lesen(&pfad), name, path: pfad.to_string_lossy().to_string(), songs }
+            let profil = profil_lesen(&pfad);
+            // Geplant und noch kein Ordner: Eintrag ohne Dateien, Pfad = künftiger Ordner.
+            for g in &profil.geplant {
+                if !songs.iter().any(|s| s.name.eq_ignore_ascii_case(g)) {
+                    songs.push(ArtistSong { name: g.clone(), path: pfad.join(g).to_string_lossy().to_string(), geplant: true, ..Default::default() });
+                }
+            }
+            for s in songs.iter_mut() {
+                s.features = profil.features.get(&s.name).cloned().unwrap_or_default();
+            }
+            // Session: nur, was es noch gibt.
+            let session = profil.session.iter()
+                .map(|r| r.split('/').fold(pfad.clone(), |p, t| p.join(t)).to_string_lossy().to_string())
+                .filter(|p| songs.iter().any(|s| &s.path == p))
+                .collect();
+            Artist { bild: profilbild(&pfad), farbe: profil.farbe, links: profil.links, releases, session, name, path: pfad.to_string_lossy().to_string(), songs }
         })
         .collect();
-    kuenstler.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    // Reihenfolge von Hand (Leiste, per Ziehen); wer nicht drinsteht, folgt nach Name.
+    let reihe = reihenfolge_lesen(root);
+    let platz = |n: &str| reihe.iter().position(|r| r == n).unwrap_or(usize::MAX);
+    kuenstler.sort_by(|a, b| platz(&a.name).cmp(&platz(&b.name)).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     kuenstler
+}
+
+const REIHENFOLGE_JSON: &str = "_reihenfolge.json";
+
+fn reihenfolge_lesen(root: &Path) -> Vec<String> {
+    fs::read_to_string(root.join(REIHENFOLGE_JSON)).ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Reihenfolge der Artists in der Leiste speichern (`05_ARTISTS/_reihenfolge.json`).
+#[tauri::command]
+pub fn set_artist_reihenfolge(root: String, namen: Vec<String>) -> Result<(), String> {
+    let dir = Path::new(&root);
+    if !dir.is_dir() { return Err("Künstler-Ordner nicht gefunden".into()); }
+    let json = serde_json::to_string_pretty(&namen).map_err(|e| e.to_string())?;
+    fs::write(dir.join(REIHENFOLGE_JSON), json).map_err(|e| format!("{REIHENFOLGE_JSON} ließ sich nicht schreiben: {e}"))
 }
 
 // ─── Profil: Bild und Links, beides im Künstler-Ordner ──────────────────────
@@ -358,25 +468,414 @@ fn ist_bild(name: &str) -> bool {
 struct ProfilDatei {
     #[serde(default)]
     links: std::collections::BTreeMap<String, String>,
+    /// Tracks ohne Ordner, z. B. aus Jarnos WhatsApp-Liste (Scheibe 7c).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    geplant: Vec<String>,
+    /// Song-Ordnername → Gäste (Künstlernamen). Der Ordner bleibt beim
+    /// Hauptkünstler, der Gast sieht den Track bei sich (Scheibe 7d).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    features: std::collections::BTreeMap<String, Vec<String>>,
+    /// „In Session": bis zu drei Songs, an denen Stephan gerade sitzt.
+    /// Pfade relativ zum Artist („ALBUM - X/Natsmaus"), Namen sind nicht eindeutig.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    session: Vec<String>,
+    /// Eigene Akzentfarbe (#rrggbb). Leer = aus dem Profilbild.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    farbe: Option<String>,
 }
 
-fn links_lesen(dir: &Path) -> std::collections::BTreeMap<String, String> {
+/// Akzentfarbe von Hand setzen (#rrggbb) oder mit None zurück auf „aus dem Bild".
+#[tauri::command]
+pub fn set_artist_farbe(artist_path: String, farbe: Option<String>) -> Result<(), String> {
+    let farbe = farbe.map(|f| f.trim().to_lowercase()).filter(|f| !f.is_empty());
+    if let Some(f) = &farbe {
+        let ok = f.len() == 7 && f.starts_with('#') && f[1..].chars().all(|c| c.is_ascii_hexdigit());
+        if !ok { return Err(format!("Keine Farbe: {f}")); }
+    }
+    let dir = Path::new(&artist_path);
+    let mut p = profil_lesen(dir);
+    p.farbe = farbe;
+    profil_schreiben(dir, &p)
+}
+
+/// „In Session" speichern (Song-Pfade, absolut; höchstens drei).
+#[tauri::command]
+pub fn set_artist_session(artist_path: String, songs: Vec<String>) -> Result<(), String> {
+    let dir = Path::new(&artist_path);
+    let mut p = profil_lesen(dir);
+    p.session = songs.iter()
+        .filter_map(|s| Path::new(s).strip_prefix(dir).ok().map(|r| r.to_string_lossy().replace('\\', "/")))
+        .take(3).collect();
+    profil_schreiben(dir, &p)
+}
+
+/// Gäste eines Songs speichern; leere Liste löscht den Eintrag.
+#[tauri::command]
+pub fn set_artist_features(artist_path: String, song: String, features: Vec<String>) -> Result<(), String> {
+    let dir = Path::new(&artist_path);
+    let mut p = profil_lesen(dir);
+    let mut gesehen = std::collections::HashSet::new();
+    let gaeste: Vec<String> = features.iter().map(|f| f.trim().to_string())
+        .filter(|f| !f.is_empty() && gesehen.insert(f.to_lowercase())).collect();
+    if gaeste.is_empty() { p.features.remove(&song); } else { p.features.insert(song, gaeste); }
+    profil_schreiben(dir, &p)
+}
+
+/// Album oder EP = Ordner `ALBUM - <Titel>` / `EP - <Titel>` beim Artist
+/// (docs/kuenstler-redesign.md). `tracks` = Song-Ordner darin, nach Nummer.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct Release {
+    /// "ALBUM" oder "EP"
+    pub art: String,
+    pub titel: String,
+    pub path: String,
+    /// Bild im Release-Ordner, bevorzugt mit „cover" im Namen.
+    pub cover: Option<String>,
+    pub tracks: Vec<String>,
+}
+
+const RELEASE_ARTEN: [&str; 2] = ["ALBUM", "EP"];
+
+/// `ALBUM - FCK OFF BBY GIRL` → ("ALBUM", "FCK OFF BBY GIRL"). Groß/klein egal.
+fn release_art(ordner: &str) -> Option<(String, String)> {
+    RELEASE_ARTEN.iter().find_map(|art| {
+        let praefix = format!("{art} - ");
+        let kopf = ordner.get(..praefix.len())?;
+        kopf.eq_ignore_ascii_case(&praefix)
+            .then(|| (art.to_string(), ordner[praefix.len()..].trim().to_string()))
+            .filter(|(_, t)| !t.is_empty())
+    })
+}
+
+/// Sortierschlüssel: Nummer vorne im Namen („3_…", „03 …"), sonst nach Name.
+fn tracknummer(name: &str) -> (u32, String) {
+    let ziffern: String = name.chars().take_while(|c| c.is_ascii_digit()).collect();
+    (ziffern.parse().unwrap_or(u32::MAX), name.to_lowercase())
+}
+
+fn cover_in(dir: &Path) -> Option<String> {
+    let mut bilder: Vec<String> = dateien(dir).into_iter().map(|(n, _)| n).filter(|n| ist_bild(n)).collect();
+    bilder.sort_by_key(|n| !n.to_lowercase().contains("cover"));
+    bilder.first().map(|n| dir.join(n).to_string_lossy().to_string())
+}
+
+/// Neues Album oder neue EP: legt `<Artist>/<ART> - <Titel>/` an.
+#[tauri::command]
+pub fn create_artist_release(artist_path: String, art: String, titel: String) -> Result<String, String> {
+    let art = art.to_uppercase();
+    if !RELEASE_ARTEN.contains(&art.as_str()) { return Err(format!("Unbekannte Art: {art}")); }
+    let titel = crate::utils::sanitize_filename_part(titel.trim());
+    if titel.is_empty() { return Err("Bitte einen Namen eingeben".into()); }
+    let dir = Path::new(&artist_path);
+    if !dir.is_dir() { return Err("Künstler-Ordner nicht gefunden".into()); }
+    let ziel = dir.join(format!("{art} - {titel}"));
+    if ziel.exists() { return Err(format!("„{art} - {titel}\" gibt es schon")); }
+    fs::create_dir(&ziel).map_err(|e| format!("Ordner ließ sich nicht anlegen: {e}"))?;
+    Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Song in ein Release oder zurück zu den Singles (`ziel` = Artist-Ordner).
+/// Gesperrt, solange der Song in FL offen ist. Haken und Notiz ziehen mit,
+/// danach werden die FLP-Pfade nachgezogen. Gibt den neuen Pfad zurück.
+#[tauri::command(async)]
+pub fn artist_song_verschieben(song_path: String, ziel: String) -> Result<String, String> {
+    let name = Path::new(&song_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if crate::commands::studio::in_fl(&crate::commands::studio::fl_fenstertitel(), &name) {
+        return Err(format!("„{name}\" ist in FL offen. Erst schließen"));
+    }
+    let neu = verschieben(Path::new(&song_path), Path::new(&ziel))?;
+    let neu_s = neu.to_string_lossy().to_string();
+    if let Ok(conn) = open_db() {
+        let _ = conn.execute("UPDATE artist_songs SET path = ?2 WHERE path = ?1", rusqlite::params![song_path, neu_s]);
+    }
+    pfade_reparieren(&neu).map_err(|e| format!("Verschoben, aber FLP-Pfade: {e}"))?;
+    Ok(neu_s)
+}
+
+/// Artist-Ordner eines Songs: eine Ebene höher, aus einem Release zwei.
+fn artist_von(song: &Path) -> Result<&Path, String> {
+    let oben = song.parent().ok_or("Song ohne Ordner darüber")?;
+    Ok(if oben.file_name().and_then(|n| release_art(&n.to_string_lossy())).is_some() { oben.parent().ok_or("Release ohne Artist")? } else { oben })
+}
+
+fn verschieben(song: &Path, ziel: &Path) -> Result<std::path::PathBuf, String> {
+    if !song.is_dir() { return Err("Song-Ordner nicht gefunden".into()); }
+    let oben = song.parent().ok_or("Song ohne Ordner darüber")?;
+    let artist = artist_von(song)?;
+    // Nur innerhalb des Artists: in eins seiner Releases oder zu den Singles.
+    let erlaubt = ziel == artist
+        || (ziel.parent() == Some(artist) && ziel.file_name().and_then(|n| release_art(&n.to_string_lossy())).is_some() && ziel.is_dir());
+    if !erlaubt { return Err("Ziel ist kein Release dieses Artists".into()); }
+    if ziel == oben { return Ok(song.to_path_buf()); }
+    let neu = ziel.join(song.file_name().ok_or("Kein Song-Name")?);
+    if neu.exists() { return Err(format!("{} gibt es dort schon", neu.file_name().unwrap_or_default().to_string_lossy())); }
+    fs::rename(song, &neu).map_err(|e| format!("Verschieben fehlgeschlagen (im Explorer offen?): {e}"))?;
+    Ok(neu)
+}
+
+// ─── Zusammenführen: zwei Ordner desselben Songs werden einer ───────────────
+//
+// Alles aus `quelle` wandert nach `ziel`, Unterordner bleiben (01_SAVEFILES …).
+// Gleicher Name, gleiche Bytes: echte Doppel, die Kopie aus `quelle` fällt weg.
+// Gleicher Name, anderer Inhalt: bekommt `_2`, `_3` … Nichts wird überschrieben.
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct MergeSchritt {
+    pub von: String,
+    pub nach: String,
+    /// "neu", "umbenannt" oder "gleich" (identische Kopie, fällt weg)
+    pub art: String,
+}
+
+fn alle_dateien(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut aus = Vec::new();
+    for (_, p) in unterordner(dir) { aus.extend(alle_dateien(&p)); }
+    aus.extend(dateien(dir).into_iter().map(|(n, _)| dir.join(n)));
+    aus
+}
+
+fn gleiche_bytes(a: &Path, b: &Path) -> bool {
+    let (Ok(ma), Ok(mb)) = (fs::metadata(a), fs::metadata(b)) else { return false };
+    ma.len() == mb.len() && fs::read(a).ok() == fs::read(b).ok()
+}
+
+fn merge_plan(quelle: &Path, ziel: &Path) -> Result<Vec<MergeSchritt>, String> {
+    if !quelle.is_dir() || !ziel.is_dir() { return Err("Song-Ordner nicht gefunden".into()); }
+    if quelle == ziel || ziel.starts_with(quelle) || quelle.starts_with(ziel) { return Err("Zweimal derselbe Ordner".into()); }
+    if artist_von(quelle)? != artist_von(ziel)? { return Err("Nur Songs desselben Artists".into()); }
+    let mut belegt = std::collections::HashSet::new();
+    let mut plan = Vec::new();
+    for von in alle_dateien(quelle) {
+        let rel = von.strip_prefix(quelle).map_err(|e| e.to_string())?;
+        let mut nach = ziel.join(rel);
+        let art = if !nach.exists() && !belegt.contains(&nach) { "neu" }
+            else if nach.exists() && gleiche_bytes(&von, &nach) { "gleich" }
+            else {
+                let stamm = nach.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                let ext = nach.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+                let dir = nach.parent().ok_or("Datei ohne Ordner")?.to_path_buf();
+                nach = (2..).map(|i| dir.join(format!("{stamm}_{i}{ext}"))).find(|p| !p.exists() && !belegt.contains(p)).unwrap();
+                "umbenannt"
+            };
+        belegt.insert(nach.clone());
+        plan.push(MergeSchritt { von: von.to_string_lossy().to_string(), nach: nach.to_string_lossy().to_string(), art: art.into() });
+    }
+    Ok(plan)
+}
+
+/// Vorschau: was wohin wandert. Ändert nichts.
+#[tauri::command(async)]
+pub fn artist_zusammenfuehren_plan(ziel: String, quelle: String) -> Result<Vec<MergeSchritt>, String> {
+    merge_plan(Path::new(&quelle), Path::new(&ziel))
+}
+
+/// `quelle` in `ziel` zusammenführen. Gesperrt, solange einer davon in FL offen
+/// ist. FLP-Pfade werden umgeschrieben, Haken/Notiz/Features bleiben erhalten.
+#[tauri::command(async)]
+pub fn artist_zusammenfuehren(ziel: String, quelle: String) -> Result<String, String> {
+    let (q, z) = (Path::new(&quelle), Path::new(&ziel));
+    let titel = crate::commands::studio::fl_fenstertitel();
+    for p in [q, z] {
+        let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        if crate::commands::studio::in_fl(&titel, &name) { return Err(format!("„{name}\" ist in FL offen. Erst schließen")); }
+    }
+    let plan = merge_plan(q, z)?;
+    let ersatz = zusammenfuehren(q, &plan)?;
+
+    // FLPs im Ziel: erst gezielt alt → neu, dann was sonst fehlt.
+    let mut pfade = 0;
+    for flp in alle_dateien(z).into_iter().filter(|p| is_flp(p) && !p.components().any(|c| c.as_os_str().eq_ignore_ascii_case("backup"))) {
+        pfade += crate::commands::flp::flp_umschreiben(&flp, &ersatz, "vor Zusammenführen").unwrap_or(0);
+    }
+    pfade += pfade_reparieren(z).unwrap_or(0);
+
+    // DB: Zeile der Quelle nur übernehmen, wenn das Ziel keine hat.
+    if let Ok(conn) = open_db() {
+        let _ = conn.execute("UPDATE OR IGNORE artist_songs SET path = ?2 WHERE path = ?1", rusqlite::params![quelle, ziel]);
+        let _ = conn.execute("DELETE FROM artist_songs WHERE path = ?1", [&quelle]);
+    }
+    // Features beider Namen zusammenlegen.
+    let artist = artist_von(z)?;
+    let (qn, zn) = (q.file_name().unwrap_or_default().to_string_lossy().to_string(), z.file_name().unwrap_or_default().to_string_lossy().to_string());
+    let mut p = profil_lesen(artist);
+    if let Some(f) = p.features.remove(&qn) {
+        let liste = p.features.entry(zn).or_default();
+        for g in f { if !liste.contains(&g) { liste.push(g); } }
+        let _ = profil_schreiben(artist, &p);
+    }
+
+    let zahl = |a: &str| plan.iter().filter(|s| s.art == a).count();
+    Ok(format!("{} Dateien übernommen, {} umbenannt, {} doppelte weggelassen, {pfade} FLP-Pfade nachgezogen",
+        zahl("neu"), zahl("umbenannt"), zahl("gleich")))
+}
+
+/// Führt den Plan aus. Gibt die Pfad-Ersetzungen alt → neu für die FLPs zurück.
+fn zusammenfuehren(quelle: &Path, plan: &[MergeSchritt]) -> Result<Vec<(String, String)>, String> {
+    let mut ersatz = Vec::new();
+    for s in plan {
+        let (von, nach) = (Path::new(&s.von), Path::new(&s.nach));
+        if s.art == "gleich" {
+            fs::remove_file(von).map_err(|e| format!("{} ließ sich nicht entfernen: {e}", s.von))?;
+        } else {
+            if let Some(d) = nach.parent() { fs::create_dir_all(d).map_err(|e| e.to_string())?; }
+            fs::rename(von, nach).map_err(|e| format!("{} ließ sich nicht verschieben (offen?): {e}", s.von))?;
+        }
+        // FLPs verweisen nicht auf FLPs, das spart Suchläufe.
+        if !is_flp(von) { ersatz.push((s.von.clone(), s.nach.clone())); }
+    }
+    leere_ordner_weg(quelle);
+    Ok(ersatz)
+}
+
+/// „Kein Song": `_` vor den Ordnernamen, dann zählt er nie mehr als Song.
+/// FLPs des Artists, die in den Ordner zeigen, werden mit umgeschrieben
+/// (z. B. „Album Loudness.flp" → „Final WAV/…"). Gibt den neuen Pfad zurück.
+#[tauri::command(async)]
+pub fn artist_kein_song(pfad: String) -> Result<String, String> {
+    let alt = Path::new(&pfad);
+    let name = alt.file_name().map(|n| n.to_string_lossy().to_string()).ok_or("Kein Ordnername")?;
+    if !alt.is_dir() { return Err("Ordner nicht gefunden".into()); }
+    if name.starts_with('_') { return Ok(pfad); }
+    let artist = artist_von(alt)?.to_path_buf();
+    let neu = alt.with_file_name(format!("_{name}"));
+    if neu.exists() { return Err(format!("„_{name}\" gibt es schon")); }
+    fs::rename(alt, &neu).map_err(|e| format!("Umbenennen fehlgeschlagen (im Explorer offen?): {e}"))?;
+    flps_umhaengen(&artist, alt, &neu).map_err(|e| format!("Umbenannt, aber FLP-Pfade: {e}"))?;
+    if let Ok(conn) = open_db() {
+        let _ = conn.execute("DELETE FROM artist_songs WHERE path = ?1", [&pfad]);
+    }
+    Ok(neu.to_string_lossy().to_string())
+}
+
+// ─── Umbenennen: Artist, Song oder Release ───────────────────────────────────
+
+/// Ordner umbenennen, alles zieht mit: FLP-Pfade des Artists, Haken/Notiz in
+/// der DB, Features, Session, Reihenfolge. `art`: "artist", "song" oder
+/// "release" (dann ist `name` der Titel, die Art bleibt). Gibt den neuen Pfad zurück.
+#[tauri::command(async)]
+pub fn artist_umbenennen(pfad: String, art: String, name: String) -> Result<String, String> {
+    // FL: ein Song darf nicht offen sein; bei Artist/Release muss FL zu sein, weil viele FLPs mitziehen.
+    let titel = crate::commands::studio::fl_fenstertitel();
+    let alter_name = Path::new(&pfad).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if art == "song" {
+        if crate::commands::studio::in_fl(&titel, &alter_name) { return Err(format!("„{alter_name}\" ist in FL offen. Erst schließen")); }
+    } else if titel.is_some() {
+        return Err("FL Studio bitte erst schließen, die FLPs des Artists ziehen mit".into());
+    }
+    umbenennen(pfad, art, name)
+}
+
+fn umbenennen(pfad: String, art: String, name: String) -> Result<String, String> {
+    let alt = Path::new(&pfad).to_path_buf();
+    if !alt.is_dir() { return Err("Ordner nicht gefunden".into()); }
+    let sauber = crate::utils::sanitize_filename_part(name.trim());
+    if sauber.is_empty() { return Err("Bitte einen Namen eingeben".into()); }
+    let alter_name = alt.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let neuer_name = match art.as_str() {
+        "artist" | "song" => sauber.clone(),
+        "release" => {
+            let (a, _) = release_art(&alter_name).ok_or("Kein Release-Ordner")?;
+            format!("{a} - {sauber}")
+        }
+        _ => return Err(format!("Unbekannte Art: {art}")),
+    };
+    if neuer_name == alter_name { return Ok(pfad); }
+    let neu = alt.with_file_name(&neuer_name);
+    // Nur Groß/klein geändert: Windows sieht denselben Ordner.
+    if neu.exists() && !neuer_name.eq_ignore_ascii_case(&alter_name) { return Err(format!("„{neuer_name}\" gibt es schon")); }
+
+    let artist_alt = if art == "artist" { alt.clone() } else { artist_von(&alt)?.to_path_buf() };
+    fs::rename(&alt, &neu).map_err(|e| format!("Umbenennen fehlgeschlagen (im Explorer offen?): {e}"))?;
+    let artist = if art == "artist" { neu.clone() } else { artist_alt.clone() };
+
+    // DB: Pfade gleich oder darunter.
+    if let Ok(conn) = open_db() {
+        let (a, n) = (alt.to_string_lossy().to_string(), neu.to_string_lossy().to_string());
+        let _ = conn.execute(
+            "UPDATE artist_songs SET path = ?2 || substr(path, length(?1) + 1) WHERE path = ?1 OR path LIKE ?1 || '\\%'",
+            rusqlite::params![a, n],
+        );
+    }
+    // Profil: Features-Schlüssel (Song) und Session-Pfade (Song/Release).
+    let mut p = profil_lesen(&artist);
+    let rel_alt = alt.strip_prefix(&artist_alt).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+    let rel_neu = neu.strip_prefix(&artist).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+    if art == "song" {
+        if let Some(f) = p.features.remove(&alter_name) { p.features.insert(neuer_name.clone(), f); }
+    }
+    if art != "artist" {
+        for s in p.session.iter_mut() {
+            if *s == rel_alt { *s = rel_neu.clone(); }
+            else if let Some(rest) = s.strip_prefix(&format!("{rel_alt}/")) { *s = format!("{rel_neu}/{rest}"); }
+        }
+    }
+    let _ = profil_schreiben(&artist, &p);
+    // Artist: Features bei allen anderen und die Reihenfolge.
+    if art == "artist" {
+        if let Some(root) = artist.parent() {
+            for (_, dir) in unterordner(root) {
+                let mut q = profil_lesen(&dir);
+                let mut geaendert = false;
+                for gaeste in q.features.values_mut() {
+                    for g in gaeste.iter_mut() { if *g == alter_name { *g = neuer_name.clone(); geaendert = true; } }
+                }
+                if geaendert { let _ = profil_schreiben(&dir, &q); }
+            }
+            let mut reihe = reihenfolge_lesen(root);
+            if let Some(r) = reihe.iter_mut().find(|r| **r == alter_name) {
+                *r = neuer_name.clone();
+                let _ = set_artist_reihenfolge(root.to_string_lossy().into(), reihe);
+            }
+        }
+    }
+    flps_umhaengen(&artist, &alt, &neu).map_err(|e| format!("Umbenannt, aber FLP-Pfade: {e}"))?;
+    Ok(neu.to_string_lossy().to_string())
+}
+
+/// Alle FLPs unter `bereich`: Verweise in den Ordner `alt` zeigen danach in `neu`.
+fn flps_umhaengen(bereich: &Path, alt: &Path, neu: &Path) -> Result<usize, String> {
+    let alt_s = alt.to_string_lossy().to_string();
+    let praefix = format!("{}\\", alt_s.to_lowercase().replace('/', "\\"));
+    let mut zahl = 0;
+    for flp in alle_dateien(bereich).into_iter().filter(|p| is_flp(p) && !p.components().any(|c| c.as_os_str().eq_ignore_ascii_case("backup"))) {
+        let Ok(b) = fs::read(&flp) else { continue };
+        let ersatz: Vec<(String, String)> = crate::commands::flp::audio_pfade(&b).into_iter()
+            .filter(|v| v.to_lowercase().replace('/', "\\").starts_with(&praefix))
+            .filter_map(|v| { let rest = v.get(praefix.len()..)?.to_string(); Some((v, neu.join(rest).to_string_lossy().to_string())) })
+            .collect();
+        if !ersatz.is_empty() { zahl += crate::commands::flp::flp_umschreiben(&flp, &ersatz, "vor Kein Song")?; }
+    }
+    Ok(zahl)
+}
+
+/// Leere Ordner von unten nach oben entfernen; was nicht leer ist, bleibt.
+fn leere_ordner_weg(dir: &Path) {
+    for (_, p) in unterordner(dir) { leere_ordner_weg(&p); }
+    let _ = fs::remove_dir(dir);
+}
+
+fn profil_lesen(dir: &Path) -> ProfilDatei {
     fs::read_to_string(dir.join(PROFIL_JSON)).ok()
         .and_then(|s| serde_json::from_str::<ProfilDatei>(&s).ok())
-        .map(|p| p.links).unwrap_or_default()
+        .unwrap_or_default()
+}
+
+fn profil_schreiben(dir: &Path, p: &ProfilDatei) -> Result<(), String> {
+    if !dir.is_dir() { return Err("Künstler-Ordner nicht gefunden".into()); }
+    let json = serde_json::to_string_pretty(p).map_err(|e| e.to_string())?;
+    fs::write(dir.join(PROFIL_JSON), json).map_err(|e| format!("{PROFIL_JSON} ließ sich nicht schreiben: {e}"))
 }
 
 /// Links speichern; leere Felder fallen weg, nur bekannte Plattformen.
 #[tauri::command]
 pub fn set_artist_links(artist_path: String, links: std::collections::BTreeMap<String, String>) -> Result<(), String> {
     let dir = Path::new(&artist_path);
-    if !dir.is_dir() { return Err("Künstler-Ordner nicht gefunden".into()); }
-    let links = links.into_iter()
+    let mut p = profil_lesen(dir);
+    p.links = links.into_iter()
         .map(|(k, v)| (k.to_lowercase(), v.trim().to_string()))
         .filter(|(k, v)| PLATTFORMEN.contains(&k.as_str()) && !v.is_empty())
         .collect();
-    let json = serde_json::to_string_pretty(&ProfilDatei { links }).map_err(|e| e.to_string())?;
-    fs::write(dir.join(PROFIL_JSON), json).map_err(|e| format!("{PROFIL_JSON} ließ sich nicht schreiben: {e}"))
+    profil_schreiben(dir, &p)
 }
 
 /// Ein Bild als Profilbild übernehmen (kopiert, die Quelle bleibt). Ältere
@@ -489,9 +988,15 @@ pub fn artist_downloads(app: tauri::AppHandle, dir: Option<String>) -> Result<Ve
 /// Datei, wird übersprungen statt überschrieben.
 #[tauri::command(async)]
 pub fn artist_assets_fuellen(song_path: String, dateien: Vec<String>) -> Result<Vec<UmzugErgebnis>, String> {
-    let assets = Path::new(&song_path).join(ASSETS);
-    fs::create_dir_all(&assets).map_err(|e| format!("Assets/ ließ sich nicht anlegen: {e}"))?;
-    let mut erg = assets_verschieben(&assets, dateien);
+    // FLPs gehören nach 01_SAVEFILES, alles andere nach 02_ASSETS.
+    let (flps, rest): (Vec<String>, Vec<String>) = dateien.into_iter().partition(|d| is_flp(Path::new(d)));
+    let mut erg = Vec::new();
+    for (ordner, liste) in [(SAVES, flps), (ASSETS, rest)] {
+        if liste.is_empty() { continue; }
+        let dir = Path::new(&song_path).join(ordner);
+        fs::create_dir_all(&dir).map_err(|e| format!("{ordner} ließ sich nicht anlegen: {e}"))?;
+        erg.extend(assets_verschieben(&dir, liste));
+    }
     // Verwendet die FLP eine der Dateien, zeigt sie jetzt ins Leere — nachziehen.
     if erg.iter().any(|e| e.ok) {
         if let Err(e) = pfade_reparieren(Path::new(&song_path)) {
@@ -507,7 +1012,7 @@ fn assets_verschieben(assets: &Path, dateien: Vec<String>) -> Vec<UmzugErgebnis>
         let quelle = Path::new(&d);
         let Some(name) = quelle.file_name() else { return ergebnis(false, "Kein Dateiname".into()) };
         let ziel = assets.join(name);
-        if ziel.exists() { return ergebnis(false, "liegt schon in Assets/, übersprungen".into()); }
+        if ziel.exists() { return ergebnis(false, "liegt dort schon, übersprungen".into()); }
         // rename klappt nur auf demselben Laufwerk; sonst kopieren, prüfen, löschen.
         let verschoben = fs::rename(quelle, &ziel).map_err(|e| e.to_string()).or_else(|_| {
             crate::utils::copy_and_verify(quelle, &ziel)?;
@@ -906,6 +1411,7 @@ pub(crate) fn song(name: &str, pfad: &Path, fertig: bool) -> ArtistSong {
         name: name.to_string(),
         path: pfad.to_string_lossy().to_string(),
         fertig,
+        im_fertig: fertig,
         ..Default::default()
     };
     s.flps = saves.iter().chain(&wurzel).filter(|d| is_flp(Path::new(&d.0)))
@@ -1011,8 +1517,17 @@ mod tests {
         assert!(create_artist(r.clone(), "Yoghi".into()).is_err(), "doppelt");
         assert!(create_artist(r, "  ".into()).is_err(), "leer");
 
+        // Geplant: bereinigt, ohne Doppel, steht als Song ohne Ordner da
+        set_artist_geplant(k.clone(), vec!["No Bleed".into(), " no bleed ".into(), "Traum?".into(), "".into()]).unwrap();
+        assert_eq!(profil_lesen(Path::new(&k)).geplant.len(), 2);
+        let geplant: Vec<_> = kuenstler_lesen(&root)[0].songs.iter().filter(|s| s.geplant).map(|s| s.name.clone()).collect();
+        assert_eq!(geplant.len(), 2);
+
         let flp = create_artist_song(k.clone(), "No Bleed".into(), vorlage.to_string_lossy().to_string()).unwrap();
         assert!(Path::new(&flp).ends_with("Yoghi/No Bleed/01_SAVEFILES/No Bleed.flp"));
+        assert_eq!(profil_lesen(Path::new(&k)).geplant.len(), 1, "Anfangen nimmt ihn aus dem Plan");
+        let songs = &kuenstler_lesen(&root)[0].songs;
+        assert!(songs.iter().any(|s| s.name == "No Bleed" && !s.geplant));
         assert!(Path::new(&k).join("No Bleed/02_ASSETS").is_dir() && Path::new(&k).join("No Bleed/03_VERSIONS").is_dir());
         assert!(!Path::new(&k).join("No Bleed/No Bleed.flp").exists());
 
@@ -1045,21 +1560,218 @@ mod tests {
         assert!(abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Bounce").is_err(), "nur Master/Mix");
         assert!(abgeben_dateien(&song, "../Finden/Finden.mp3", "Mix").is_err(), "nur Dateien im Song-Ordner");
 
-        let (neu, abgabe) = abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Master").unwrap();
-        assert_eq!(neu, root.join("JarnoGm/_Fertig/Mindestens 2K"));
-        assert_eq!(abgabe, neu.join("03_VERSIONS/JarnoGm - Mindestens 2K (Master).wav"));
-        assert!(abgabe.is_file() && neu.join("01_SAVEFILES/Mindestens 2K.flp").is_file() && !song.exists());
-        assert!(abgeben_dateien(&neu, "JarnoGm - Mindestens 2K (Master).wav", "Master").is_err(), "schon abgegeben");
+        let abgabe = abgeben_dateien(&song, "Mindestens 2K_master v3.wav", "Master").unwrap();
+        assert_eq!(abgabe, song.join("03_VERSIONS/JarnoGm - Mindestens 2K (Master).wav"));
+        assert!(abgabe.is_file() && song.join("01_SAVEFILES/Mindestens 2K.flp").is_file(), "Ordner bleibt");
 
-        // Scan sieht ihn als fertig
+        // Alte Abgabe in _Fertig: Name vom Künstler darüber, wieder öffnen geht
+        let neu = root.join("JarnoGm/_Fertig/Mindestens 2K");
+        fs::create_dir_all(neu.parent().unwrap()).unwrap();
+        fs::rename(&song, &neu).unwrap();
         let k = &kuenstler_lesen(&root)[0];
-        assert!(k.songs.iter().any(|s| s.name == "Mindestens 2K" && s.fertig));
+        assert!(k.songs.iter().any(|s| s.name == "Mindestens 2K" && s.fertig && s.im_fertig));
+        datei(&neu.join("03_VERSIONS/Mix 2.wav"));
+        assert_eq!(abgeben_dateien(&neu, "Mix 2.wav", "Mix").unwrap(), neu.join("03_VERSIONS/JarnoGm - Mindestens 2K (Mix).wav"));
 
         let zurueck = wieder_oeffnen_dateien(&neu).unwrap();
         assert_eq!(zurueck, song);
         assert!(song.join("03_VERSIONS/JarnoGm - Mindestens 2K (Master).wav").is_file());
         assert!(wieder_oeffnen_dateien(&song).is_err(), "nicht in _Fertig");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn features_und_links_teilen_sich_die_datei() {
+        let dir = std::env::temp_dir().join(format!("beatos_features_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let d = dir.to_string_lossy().to_string();
+        set_artist_features(d.clone(), "Traum".into(), vec![" Mats Elders ".into(), "mats elders".into(), "".into()]).unwrap();
+        set_artist_links(d.clone(), [("youtube".to_string(), "y".to_string())].into()).unwrap();
+        let p = profil_lesen(&dir);
+        assert_eq!(p.features["Traum"], vec!["Mats Elders"], "getrimmt, doppelte raus, Links lassen Features stehen");
+        assert_eq!(p.links.keys().collect::<Vec<_>>(), vec!["youtube"]);
+        set_artist_features(d.clone(), "Traum".into(), vec![]).unwrap();
+        assert!(profil_lesen(&dir).features.is_empty(), "leer löscht");
+        set_artist_farbe(d.clone(), Some(" #FDA124 ".into())).unwrap();
+        assert_eq!(profil_lesen(&dir).farbe.as_deref(), Some("#fda124"));
+        assert!(set_artist_farbe(d.clone(), Some("rot".into())).is_err());
+        set_artist_farbe(d.clone(), None).unwrap();
+        assert_eq!(profil_lesen(&dir).farbe, None);
+        assert_eq!(profil_lesen(&dir).links.len(), 1, "Farbe lässt Links stehen");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zusammenfuehren_verliert_nichts() {
+        let root = std::env::temp_dir().join(format!("beatos_merge_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let k = root.join("JarnoGm");
+        let ziel = k.join("ALBUM - X/Natsmaus");
+        let quelle = k.join("Natsmaus");
+        fs::create_dir_all(ziel.join("03_VERSIONS")).unwrap();
+        fs::write(ziel.join("03_VERSIONS/mix.wav"), b"A").unwrap();
+        fs::write(ziel.join("03_VERSIONS/gleich.wav"), b"G").unwrap();
+        fs::create_dir_all(quelle.join("03_VERSIONS")).unwrap();
+        fs::create_dir_all(quelle.join("01_SAVEFILES")).unwrap();
+        fs::write(quelle.join("03_VERSIONS/mix.wav"), b"B").unwrap();
+        fs::write(quelle.join("03_VERSIONS/gleich.wav"), b"G").unwrap();
+        fs::write(quelle.join("01_SAVEFILES/Natsmaus.flp"), b"FLhd").unwrap();
+        datei(&k.join("Anderer/a.wav"));
+
+        assert!(merge_plan(&quelle, &quelle).is_err());
+        assert!(merge_plan(&quelle, &root).is_err(), "nicht über den Artist hinaus");
+        let plan = merge_plan(&quelle, &ziel).unwrap();
+        let art = |n: &str| plan.iter().find(|s| s.von.ends_with(n)).map(|s| (s.art.clone(), s.nach.clone())).unwrap();
+        assert_eq!(art("mix.wav").0, "umbenannt");
+        assert!(art("mix.wav").1.ends_with("mix_2.wav"));
+        assert_eq!(art("gleich.wav").0, "gleich");
+        assert_eq!(art("Natsmaus.flp").0, "neu");
+
+        let ersatz = zusammenfuehren(&quelle, &plan).unwrap();
+        assert_eq!(fs::read(ziel.join("03_VERSIONS/mix.wav")).unwrap(), b"A", "nichts überschrieben");
+        assert_eq!(fs::read(ziel.join("03_VERSIONS/mix_2.wav")).unwrap(), b"B");
+        assert!(ziel.join("01_SAVEFILES/Natsmaus.flp").is_file());
+        assert!(!quelle.exists(), "leere Quelle ist weg");
+        assert_eq!(ersatz.len(), 2, "FLP selbst nicht in den Ersetzungen");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn umbenennen_zieht_alles_mit() {
+        let root = std::env::temp_dir().join(format!("beatos_umbenennen_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let k = root.join("JarnoGm");
+        let song = k.join("ALBUM - X").join("Natsmaus");
+        let wav = song.join("02_ASSETS/vocals.wav");
+        datei(&wav);
+        fs::create_dir_all(song.join("01_SAVEFILES")).unwrap();
+        fs::write(song.join("01_SAVEFILES/Natsmaus.flp"), flp_mit(&[wav.to_string_lossy().to_string()])).unwrap();
+        fs::create_dir_all(root.join("Mats Elders")).unwrap();
+        set_artist_features(root.join("Mats Elders").to_string_lossy().into(), "Atzig".into(), vec!["JarnoGm".into()]).unwrap();
+        set_artist_features(k.to_string_lossy().into(), "Natsmaus".into(), vec!["Mats Elders".into()]).unwrap();
+        set_artist_session(k.to_string_lossy().into(), vec![song.to_string_lossy().into()]).unwrap();
+        set_artist_reihenfolge(root.to_string_lossy().into(), vec!["JarnoGm".into(), "Mats Elders".into()]).unwrap();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+
+        // Song
+        let neu = umbenennen(s(&song), "song".into(), "Natsmaus (Remix)".into()).unwrap();
+        let neu_p = k.join("ALBUM - X").join("Natsmaus (Remix)");
+        assert_eq!(neu, s(&neu_p));
+        let flp = neu_p.join("01_SAVEFILES/Natsmaus.flp");
+        assert_eq!(crate::commands::flp::audio_pfade(&fs::read(&flp).unwrap()), vec![s(&neu_p.join("02_ASSETS/vocals.wav"))]);
+        assert!(profil_lesen(&k).features.contains_key("Natsmaus (Remix)"));
+        assert_eq!(profil_lesen(&k).session, vec!["ALBUM - X/Natsmaus (Remix)"]);
+
+        // Release: Art bleibt, Session und FLP ziehen mit
+        let rel = umbenennen(s(&k.join("ALBUM - X")), "release".into(), "FCK OFF BBY GRL".into()).unwrap();
+        assert!(rel.ends_with("ALBUM - FCK OFF BBY GRL"));
+        assert_eq!(profil_lesen(&k).session, vec!["ALBUM - FCK OFF BBY GRL/Natsmaus (Remix)"]);
+        let flp = Path::new(&rel).join("Natsmaus (Remix)/01_SAVEFILES/Natsmaus.flp");
+        assert!(crate::commands::flp::audio_pfade(&fs::read(&flp).unwrap())[0].contains("ALBUM - FCK OFF BBY GRL"));
+
+        // Artist: Features bei anderen und Reihenfolge
+        let a = umbenennen(s(&k), "artist".into(), "Jarno".into()).unwrap();
+        assert!(a.ends_with("Jarno"));
+        assert_eq!(profil_lesen(&root.join("Mats Elders")).features["Atzig"], vec!["Jarno"]);
+        assert_eq!(reihenfolge_lesen(&root), vec!["Jarno", "Mats Elders"]);
+        assert!(umbenennen(s(&root.join("Jarno")), "artist".into(), "Mats Elders".into()).is_err(), "gibt es schon");
+        assert!(umbenennen(s(&root.join("Jarno")), "release".into(), "x".into()).is_err(), "kein Release-Ordner");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn session_merkt_pfade() {
+        let root = std::env::temp_dir().join(format!("beatos_session_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let k = root.join("JarnoGm");
+        datei(&k.join("ALBUM - X/Natsmaus/03_VERSIONS/a.wav"));
+        datei(&k.join("Natsmaus/03_VERSIONS/a.wav"));
+        datei(&k.join("Kreislauf/03_VERSIONS/a.wav"));
+        let p = |r: &str| r.split('/').fold(k.clone(), |p, t| p.join(t)).to_string_lossy().to_string();
+        set_artist_session(k.to_string_lossy().into(), vec![p("ALBUM - X/Natsmaus"), p("Kreislauf"), p("Weg")]).unwrap();
+        assert_eq!(kuenstler_lesen(&root)[0].session, vec![p("ALBUM - X/Natsmaus"), p("Kreislauf")], "Album-Natsmaus, nicht der lose; Fehlendes fällt weg");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn reihenfolge_von_hand() {
+        let root = std::env::temp_dir().join(format!("beatos_reihe_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for k in ["Yoghi", "JarnoGm", "Blowfish", "CHIA B"] { fs::create_dir_all(root.join(k)).unwrap(); }
+        let namen = |r: &Path| kuenstler_lesen(r).into_iter().map(|k| k.name).collect::<Vec<_>>();
+        assert_eq!(namen(&root), vec!["Blowfish", "CHIA B", "JarnoGm", "Yoghi"], "ohne Datei nach Name");
+        set_artist_reihenfolge(root.to_string_lossy().into(), vec!["JarnoGm".into(), "Yoghi".into()]).unwrap();
+        assert_eq!(namen(&root), vec!["JarnoGm", "Yoghi", "Blowfish", "CHIA B"], "Rest hinten nach Name");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn kein_song_haengt_flps_um() {
+        let root = std::env::temp_dir().join(format!("beatos_keinsong_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let album = root.join("JarnoGm/ALBUM - X");
+        let wav = album.join("Final WAV/1_Creampies.wav");
+        datei(&wav);
+        datei(&album.join("Creampies/03_VERSIONS/a.wav"));
+        fs::write(album.join("Album Loudness.flp"), flp_mit(&[wav.to_string_lossy().to_string()])).unwrap();
+
+        let neu = artist_kein_song(album.join("Final WAV").to_string_lossy().into()).unwrap();
+        assert!(neu.ends_with("_Final WAV") && Path::new(&neu).join("1_Creampies.wav").is_file());
+        let b = fs::read(album.join("Album Loudness.flp")).unwrap();
+        assert_eq!(crate::commands::flp::audio_pfade(&b), vec![album.join("_Final WAV").join("1_Creampies.wav").to_string_lossy().to_string()]);
+        assert_eq!(kuenstler_lesen(&root)[0].releases[0].tracks, vec!["Creampies"], "nur noch der Song");
+        assert_eq!(artist_kein_song(neu.clone()).unwrap(), neu, "schon mit _ bleibt");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn release_ordner() {
+        assert_eq!(release_art("Album - FCK OFF BBY GIRL"), Some(("ALBUM".into(), "FCK OFF BBY GIRL".into())));
+        assert_eq!(release_art("EP - Teufelskraut"), Some(("EP".into(), "Teufelskraut".into())));
+        assert_eq!(release_art("EPIC"), None);
+        assert_eq!(release_art("ALBUM - "), None);
+
+        let root = std::env::temp_dir().join(format!("beatos_release_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let k = root.join("JarnoGm");
+        let album = k.join("ALBUM - X");
+        datei(&album.join("10_Natsmaus/03_VERSIONS/a.wav"));
+        datei(&album.join("2_Schlag Ein/03_VERSIONS/a.wav"));
+        datei(&album.join("_FINAL WAV/x.wav"));
+        datei(&album.join("Backup/x.flp"));
+        datei(&album.join("X - Album cover.png"));
+        datei(&album.join("anderes.jpg"));
+        datei(&k.join("Kreislauf/03_VERSIONS/a.wav"));
+
+        let a = &kuenstler_lesen(&root)[0];
+        assert_eq!(a.releases.len(), 1);
+        assert_eq!(a.releases[0].tracks, vec!["2_Schlag Ein", "10_Natsmaus"], "nach Nummer, ohne _ und Backup");
+        assert!(a.releases[0].cover.as_deref().unwrap().ends_with("X - Album cover.png"));
+        assert_eq!(a.songs.len(), 3);
+
+        let ep = create_artist_release(k.to_string_lossy().into(), "ep".into(), " Teufelskraut ".into()).unwrap();
+        assert!(Path::new(&ep).ends_with("EP - Teufelskraut"));
+        assert!(create_artist_release(k.to_string_lossy().into(), "EP".into(), "Teufelskraut".into()).is_err(), "doppelt");
+        assert!(create_artist_release(k.to_string_lossy().into(), "Mixtape".into(), "x".into()).is_err());
+
+        // Single → EP → zurück zu den Singles
+        let neu = verschieben(&k.join("Kreislauf"), Path::new(&ep)).unwrap();
+        assert!(neu.ends_with("EP - Teufelskraut/Kreislauf") && neu.join("03_VERSIONS/a.wav").is_file());
+        assert!(verschieben(&neu, &root).is_err(), "nicht aus dem Artist heraus");
+        assert!(verschieben(&neu, &album.join("_FINAL WAV")).is_err(), "kein Release");
+        let zurueck = verschieben(&neu, &k).unwrap();
+        assert_eq!(zurueck, k.join("Kreislauf"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn haken_ersetzen_die_vermutung() {
+        let mut s = ArtistSong { vocals: true, mix: true, ..Default::default() };
+        haken_setzen(&mut s, "master");
+        assert!(!s.vocals && !s.mix && s.master);
+        haken_setzen(&mut s, "");
+        assert!(!s.vocals && !s.mix && !s.master);
     }
 
     /// Kleinste FLP mit Audio-Pfaden (Ereignis 196).
