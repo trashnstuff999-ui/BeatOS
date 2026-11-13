@@ -207,6 +207,45 @@ pub fn set_artist_beat(path: String, beat_id: Option<String>) -> Result<(), Stri
     Ok(())
 }
 
+/// Ein Artist-Song, in dem ein Katalog-Beat steckt.
+#[derive(Debug, Serialize)]
+pub struct Placement {
+    pub artist: String,
+    pub song: String,
+    pub path: String,
+}
+
+/// Placements eines Beats: die Gegenrichtung zu „Mein Beat". Nur Songs, deren
+/// Ordner es noch gibt.
+#[tauri::command(async)]
+pub fn get_beat_placements(beat_id: String) -> Result<Vec<Placement>, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT path FROM artist_songs WHERE beat_id = ?1 ORDER BY path")
+        .map_err(|e| e.to_string())?;
+    let pfade: Vec<String> = stmt.query_map([&beat_id], |r| r.get(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(pfade.into_iter()
+        .filter(|p| Path::new(p).is_dir())
+        .filter_map(|p| {
+            let (artist, song) = artist_und_song(Path::new(&p))?;
+            Some(Placement { artist, song, path: p })
+        })
+        .collect())
+}
+
+/// Artist und Song aus dem Song-Pfad. `_Fertig` und Release-Ordner
+/// (`ALBUM - …`, `EP - …`) liegen dazwischen und zählen nicht als Artist.
+fn artist_und_song(song: &Path) -> Option<(String, String)> {
+    let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_string());
+    let mut dir = song.parent()?;
+    while name(dir).map_or(false, |n| n == FERTIG || release_art(&n).is_some()) {
+        dir = dir.parent()?;
+    }
+    Some((name(dir)?, name(song)?))
+}
+
 /// Song-Art setzen: „Nur Master" oder Mix & Master.
 #[tauri::command]
 pub fn set_artist_nur_master(path: String, nur_master: bool) -> Result<(), String> {
@@ -1451,6 +1490,15 @@ mod tests {
     fn datei(p: &Path) {
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, b"x").unwrap();
+    }
+
+    #[test]
+    fn placement_artist_ueberspringt_fertig_und_release() {
+        let a = Path::new("X").join("05_ARTISTS").join("Mara");
+        let erwartet = Some(("Mara".to_string(), "No Bleed".to_string()));
+        assert_eq!(artist_und_song(&a.join("No Bleed")), erwartet);
+        assert_eq!(artist_und_song(&a.join(FERTIG).join("No Bleed")), erwartet);
+        assert_eq!(artist_und_song(&a.join("EP - Nacht").join("No Bleed")), erwartet);
     }
 
     #[test]

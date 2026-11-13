@@ -178,8 +178,8 @@ Gesammelt beim Durchgang durch den Code. Reihenfolge ist keine Priorität.
 ### Neue Features
 - [ ] **Verkäufe richtig erfassen**: je Verkauf Lizenzart, Preis, Datum, Käufer statt
       nur „Exklusiv an“. Grundlage für eine Einnahmen-Statistik
-- [ ] **Placements im Archiv-Beat**: in welchen Artist-Songs der Beat steckt
-      (Gegenrichtung zu „Mein Beat“ im Artist-Song). Entwurf zuerst
+- [x] **Placements im Archiv-Beat** (13.11.2026): Abschnitt im Detail-Panel,
+      liest „Mein Beat“ von der anderen Seite, Klick öffnet die Artists
 - [ ] **Aufrufe pro Beat** über yt-dlp, siehe „Analyse-Tab“ oben
 - [ ] **Lautheit/Clipping** je Export anzeigen; die Wellenform im Player rechnet
       schon RMS, darauf aufbauen (siehe „Lautheit/Clipping prüfen“ oben)
@@ -187,10 +187,9 @@ Gesammelt beim Durchgang durch den Code. Reihenfolge ist keine Priorität.
 - [ ] **Mehrfachauswahl im Archiv** für Tags und Status (im Studio gibt es sie)
 
 ### Offene Entscheidungen
-- [ ] **Geplante Uploads werden von selbst „Live“**, sobald das Datum vorbei ist
-      (`promote_past_scheduled`). Richtig, wenn der Termin auf der Plattform
-      geplant ist; falsch, wenn er nur in BeatOS steht und der Upload ausfiel.
-      Alternative: überfällige Termine bestätigen lassen
+- [x] **Geplante Uploads bestätigen** (entschieden 13.11.2026): nichts wird mehr
+      von selbst „Live“. Ist der geplante Tag vorbei, steht der Beat in
+      Übersicht → Heute unter „Live gegangen?“ mit „Live“ und „Termin entfernen“
 - [ ] **Warteschlange schaut nur 180 Tage zurück** (`WARTESCHLANGE_TAGE`). Ohne
       Grenze stünden am 13.11.2026 321 alte Beats in der Liste, mit Grenze 3.
       Erst nach „Uploads nacherfassen“ oder „Nicht hochladen“ für den Altbestand
@@ -286,6 +285,20 @@ Sample-Browser, der nur Passendes zeigt und direkt nach FL liefert.
 - [ ] **Samples aus BeatOS nach FL ziehen**: im Samples-Tab vorhören und die WAV
       direkt in die FL-Playlist ziehen. Gleiches Tauri-Drag-Plugin wie
       „Dateien aus BeatOS herausziehen“ im Upload
+- [ ] **Saubere Namen in Samples**: alles in `06_SAMPLES` einheitlich benannt
+      (Art, Name, Tempo, Tonart wie `PADS - DONT CRY [150 Bmin]`), auch MIDIs
+      und Patterns (Hi-Hat, Drums). Grundlage für spätere Sample- und
+      MIDI-Packs. BeatOS zeigt, was nicht passt, und schlägt den Namen vor.
+      Patterns ohne Tonart: gleiches Muster ohne Tonart, `HIHAT - BOUNCE [150]`
+      (entschieden 13.11.)
+- [ ] **Packs zusammenstellen** (später): Samples und MIDIs auswählen, als
+      Ordner oder ZIP mit sauberen Namen ausgeben
+- [ ] **MIDIs im Samples-Tab**: `.mid`-Dateien neben den WAVs zeigen, mit
+      kleiner Noten-Vorschau wie in FL (Balken je Note, Tonhöhe nach oben, Zeit
+      nach rechts) und per Drag & Drop nach FL ziehen. Auslesen in Rust mit der
+      Crate `midly`, zeichnen als SVG/Canvas, Ziehen über dasselbe Drag-Plugin
+      wie bei den WAVs. Vorhören mit Ton erst einmal nicht (bräuchte einen
+      Synth)
 - [ ] **„Passt zu“-Filter**: Tempo und Tonart des laufenden Beats angeben, nur
       passende Samples sehen (gleiche Tonart, Paralleltonart; gleiches, halbes,
       doppeltes Tempo). Werte stehen im Namen (`PADS - DONT CRY [150 Bmin]`)

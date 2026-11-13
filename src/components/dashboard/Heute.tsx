@@ -25,7 +25,7 @@ import { Button, Segmented } from "../ui";
 import { useAudioPlayerContext, useAudioProgress } from "../../contexts/AudioPlayerContext";
 import type { DashboardActions } from "../../types/stats";
 import type { Beat } from "../../types/browse";
-import type { ScheduleEntry, QueueBeat } from "../../types/upload";
+import type { ScheduleEntry, QueueBeat, OverdueBeat } from "../../types/upload";
 import type { StudioProject } from "../../types/studio";
 import type { ArtistSong } from "../../types/artists";
 
@@ -81,6 +81,7 @@ export function Heute({ actions, recent, refreshKey }: {
 
   const [eintraege, setEintraege] = useState<ScheduleEntry[]>([]);
   const [queue, setQueue] = useState<QueueBeat[]>([]);
+  const [offeneTermine, setOffeneTermine] = useState<OverdueBeat[]>([]);
   const [projekte, setProjekte] = useState<StudioProject[] | null>(null);
   const [songs, setSongs] = useState<{ kuenstler: string; song: ArtistSong }[] | null>(null);
   const [ansicht, setAnsicht] = useState<"diese" | "naechste">("diese");
@@ -108,6 +109,13 @@ export function Heute({ actions, recent, refreshKey }: {
       .catch(e => { if (!weg) setFehler(String(e)); });
     return () => { weg = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey, neuLaden]);
+
+  // Geplanter Tag vorbei: wird nicht von selbst „Live", sondern hier bestätigt.
+  useEffect(() => {
+    let weg = false;
+    api.upload.getOverdue().then(o => { if (!weg) setOffeneTermine(o ?? []); }).catch(() => {});
+    return () => { weg = true; };
   }, [refreshKey, neuLaden]);
 
   // Studio und Künstler lesen Ordner — das dauert, also danach und still.
@@ -195,6 +203,7 @@ export function Heute({ actions, recent, refreshKey }: {
     setAusgeblendet(null);
   });
   const terminLoesen = (beatId: string) => aendern(() => api.upload.unscheduleRelease(beatId));
+  const liveBestaetigen = (beatId: string) => aendern(() => api.upload.confirmOverdue(beatId));
 
   // ── Diese Woche geschafft ──
   const geschafft = [
@@ -249,6 +258,25 @@ export function Heute({ actions, recent, refreshKey }: {
           )}
         </div>
       </section>
+
+      {/* ── Geplanter Tag vorbei: bestätigen statt von selbst „Live" ── */}
+      {offeneTermine.length > 0 && (
+        <section aria-label="Live gegangen?" className="ds-fl" style={flaeche(WARN, 1)}>
+          <Kopf farbe={WARN} unter={<span style={{ fontSize: 14, color: C.onSecondaryFixedVar }}>geplanter Tag vorbei</span>}>
+            Live gegangen?
+          </Kopf>
+          {offeneTermine.map(b => (
+            <div key={b.beat_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.beat_name}</span>
+              <span style={{ fontSize: 13, color: C.onSurfaceVariant, whiteSpace: "nowrap" }}>geplant für {datum(b.date)}</span>
+              <span style={{ flex: 1 }} />
+              <Button size="sm" variant="primary" onClick={() => liveBestaetigen(b.beat_id)} title={`Live seit ${datum(b.date)}`}>Live</Button>
+              <Button size="sm" variant="secondary" onClick={() => zumUpload(b.beat_id)}>Zum Upload</Button>
+              <Button size="sm" variant="ghost" onClick={() => terminLoesen(b.beat_id)} title="Zurück zu Up next">Termin entfernen</Button>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* ── Woche ── */}
       {rhythmus.length > 0 && (

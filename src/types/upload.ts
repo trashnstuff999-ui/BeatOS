@@ -67,6 +67,14 @@ export interface ScheduleEntry {
   cover: string | null;
 }
 
+/** Geplanter Tag vorbei, noch nicht als live bestätigt. */
+export interface OverdueBeat {
+  beat_id: string;
+  beat_name: string;
+  date: string;              // YYYY-MM-DD
+  cover: string | null;
+}
+
 export interface TypeBeatPreset {
   id: number;
   label: string;

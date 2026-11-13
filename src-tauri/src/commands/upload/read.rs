@@ -23,20 +23,42 @@ pub struct ScheduleEntry {
     pub cover: Option<String>,
 }
 
-/// A "scheduled" entry whose date has passed: promote it to
-/// "uploaded" and stamp uploaded_at with the planned day. Idempotent —
-/// runs before every read so the data stays honest even across midnight.
-/// Entries scheduled for TODAY stay "scheduled" until the day is over.
-pub fn promote_past_scheduled(conn: &rusqlite::Connection) -> rusqlite::Result<usize> {
-    conn.execute(
-        "UPDATE beat_uploads
-         SET status = 'uploaded',
-             uploaded_at = COALESCE(uploaded_at, scheduled_at)
-         WHERE status = 'scheduled'
-           AND scheduled_at IS NOT NULL AND scheduled_at != ''
-           AND scheduled_at < date('now','localtime')",
-        [],
-    )
+/// Ein Beat, dessen geplanter Tag vorbei ist und der noch nicht als live
+/// bestätigt wurde.
+#[derive(Debug, Serialize)]
+pub struct OverdueBeat {
+    pub beat_id: String,
+    pub beat_name: String,
+    /// Frühester überfälliger Termin, YYYY-MM-DD.
+    pub date: String,
+    pub cover: Option<String>,
+}
+
+/// Geplante Uploads, deren Tag vorbei ist. Sie werden nicht mehr von selbst
+/// „Live" (Entscheidung 13.11.2026): der Termin steht nur in BeatOS, ob der
+/// Upload wirklich stattfand, weiß nur Stephan. Heute Geplantes zählt nicht.
+#[tauri::command(async)]
+pub fn get_overdue_uploads() -> Result<Vec<OverdueBeat>, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT b.id, b.name, MIN(u.scheduled_at), b.path
+         FROM (SELECT beat_id, scheduled_at FROM beat_uploads WHERE {}) u
+         JOIN beats b ON b.id = u.beat_id
+         GROUP BY b.id ORDER BY 3",
+        super::UEBERFAELLIG,
+    )).map_err(|e| e.to_string())?;
+    let beats = stmt
+        .query_map([], |row| Ok(OverdueBeat {
+            beat_id:   row.get(0)?,
+            beat_name: row.get(1)?,
+            date:      row.get(2)?,
+            cover:     row.get::<_, Option<String>>(3)?
+                .and_then(|p| crate::commands::get_beat_cover_path(p).ok().flatten()),
+        }))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(beats)
 }
 
 /// All scheduled/uploaded platform entries between two dates (inclusive).
@@ -47,7 +69,6 @@ pub fn promote_past_scheduled(conn: &rusqlite::Connection) -> rusqlite::Result<u
 #[tauri::command(async)]
 pub fn get_upload_schedule(from_date: String, to_date: String) -> Result<Vec<ScheduleEntry>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
         "SELECT tag, platform, status, id, name, path FROM (
            SELECT COALESCE(NULLIF(u.scheduled_at, ''), substr(u.uploaded_at, 1, 10)) AS tag,
@@ -108,7 +129,6 @@ const WARTESCHLANGE_TAGE: i64 = 180;
 #[tauri::command(async)]
 pub fn get_upload_queue() -> Result<Vec<QueueBeat>, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
         "SELECT b.id, b.name, b.path, b.key, b.bpm, b.created_date,
                 TRIM(COALESCE(b.type_beat_main, '')) != '' AND TRIM(COALESCE(b.genre_tags, '')) != ''
@@ -209,7 +229,6 @@ pub struct UploadData {
 #[tauri::command]
 pub fn get_upload_data(beat_id: String) -> Result<UploadData, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    promote_past_scheduled(&conn).map_err(|e| e.to_string())?;
 
     // ─── Beat metadata ───────────────────────────────────────────────────
     let beat = conn.query_row(
@@ -439,7 +458,7 @@ fn scan_dir_into(dir: &Path, out: &mut AssetCheck) {
 
 #[cfg(test)]
 mod tests {
-    use super::promote_past_scheduled;
+    use super::super::write::ueberfaellig_bestaetigen;
 
     #[test]
     fn pick_flp_master_vor_neuester() {
@@ -492,36 +511,24 @@ mod tests {
         ).unwrap()
     }
 
+    /// Bestätigen macht nur die überfälligen Termine DIESES Beats live, mit
+    /// dem geplanten Tag als Upload-Datum. Alles andere bleibt stehen.
     #[test]
-    fn past_scheduled_becomes_uploaded_with_stamped_date() {
-        let conn = test_conn();
-        insert(&conn, "0001", "youtube", "scheduled", Some("2020-01-15"), None);
-        promote_past_scheduled(&conn).unwrap();
-        let (status, uploaded_at) = row(&conn, "0001", "youtube");
-        assert_eq!(status, "uploaded");
-        assert_eq!(uploaded_at.as_deref(), Some("2020-01-15"));
-    }
-
-    #[test]
-    fn future_and_today_stay_scheduled() {
+    fn bestaetigen_nur_ueberfaellige_des_beats() {
         let conn = test_conn();
         let today: String = conn.query_row("SELECT date('now','localtime')", [], |r| r.get(0)).unwrap();
-        insert(&conn, "0002", "soundcloud", "scheduled", Some("2099-12-31"), None);
-        insert(&conn, "0003", "soundcloud", "scheduled", Some(&today), None);
-        promote_past_scheduled(&conn).unwrap();
-        assert_eq!(row(&conn, "0002", "soundcloud").0, "scheduled");
-        assert_eq!(row(&conn, "0003", "soundcloud").0, "scheduled");
-    }
+        insert(&conn, "0001", "youtube", "scheduled", Some("2020-01-15"), None);
+        insert(&conn, "0001", "soundcloud", "scheduled", Some("2099-12-31"), None);
+        insert(&conn, "0001", "beatstars", "scheduled", Some(&today), None);
+        insert(&conn, "0002", "youtube", "scheduled", Some("2020-01-15"), None);
+        insert(&conn, "0003", "beatstars", "draft", None, None);
 
-    #[test]
-    fn drafts_and_existing_uploads_untouched() {
-        let conn = test_conn();
-        insert(&conn, "0004", "beatstars", "draft", None, None);
-        insert(&conn, "0005", "beatstars", "uploaded", Some("2020-01-01"), Some("2020-01-02"));
-        promote_past_scheduled(&conn).unwrap();
-        assert_eq!(row(&conn, "0004", "beatstars").0, "draft");
-        // an existing uploaded_at is never overwritten
-        assert_eq!(row(&conn, "0005", "beatstars").1.as_deref(), Some("2020-01-02"));
+        assert_eq!(ueberfaellig_bestaetigen(&conn, "0001").unwrap(), 1);
+        assert_eq!(row(&conn, "0001", "youtube"), ("uploaded".into(), Some("2020-01-15".into())));
+        assert_eq!(row(&conn, "0001", "soundcloud").0, "scheduled", "Zukunft bleibt geplant");
+        assert_eq!(row(&conn, "0001", "beatstars").0, "scheduled", "heute bleibt geplant");
+        assert_eq!(row(&conn, "0002", "youtube").0, "scheduled", "anderer Beat bleibt, nichts wird von selbst live");
+        assert_eq!(row(&conn, "0003", "beatstars").0, "draft");
     }
 
     /// Auf einen Tag ziehen plant alle Plattformen ein — schon Hochgeladenes

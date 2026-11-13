@@ -39,6 +39,7 @@ import type {
 import type {
   UploadData,
   ScheduleEntry,
+  OverdueBeat,
   QueueBeat,
   TypeBeatPreset,
   SaveTypeBeatPresetParams,
@@ -380,6 +381,9 @@ export const api = {
     bildHolen: (artistPath: string, url: string) => invoke<string>("artist_bild_holen", { artistPath, url }),
     /** „Mein Beat" verknüpfen (null = lösen). Nur im Song vermerkt. */
     setBeat: (path: string, beatId: string | null) => invoke<void>("set_artist_beat", { path, beatId }),
+    /** Placements: Artist-Songs, in denen der Beat als „Mein Beat" steckt. */
+    placements: (beatId: string) =>
+      invoke<{ artist: string; song: string; path: string }[]>("get_beat_placements", { beatId }),
     /** Eine Datei des Beats nach 02_ASSETS kopieren (das Archiv bleibt); gibt den neuen Pfad zurück. */
     beatKopieren: (songPath: string, quelle: string) => invoke<string>("artist_beat_kopieren", { songPath, quelle }),
     /** Songs ins Schema 01_SAVEFILES / 02_ASSETS / 03_VERSIONS bringen, danach FLP-Pfade nachziehen. */
@@ -536,6 +540,13 @@ export const api = {
 
     /** Beats der letzten 180 Tage ohne Termin. */
     getQueue: () => invoke<QueueBeat[]>("get_upload_queue"),
+
+    /** Geplante Uploads, deren Tag vorbei ist: warten auf Bestätigung. */
+    getOverdue: () => invoke<OverdueBeat[]>("get_overdue_uploads"),
+
+    /** Überfällige Termine des Beats als live bestätigen (Datum = geplanter Tag). */
+    confirmOverdue: (beatId: string) =>
+      invoke<void>("confirm_overdue_upload", { beatId }),
 
     /** Einen Beat an einem Tag für alle noch offenen Plattformen einplanen. */
     scheduleRelease: (beatId: string, date: string) =>

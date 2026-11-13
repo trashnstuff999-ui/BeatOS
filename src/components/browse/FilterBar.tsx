@@ -29,9 +29,9 @@ interface FilterBarProps {
 const STATUS_OPTIONS = [
   { value: "all" as const, label: "Alle Status" },
   { value: "idea" as const, label: "Idee" },
-  { value: "wip" as const, label: "In Arbeit" },
+  { value: "wip" as const, label: "Überarbeiten" },
   { value: "finished" as const, label: "Fertig" },
-  { value: "sold" as const, label: "Verkauft" },
+  { value: "sold" as const, label: "Exklusiv verkauft" },
 ];
 
 /** Aktive Filter als einzeln abwerfbare Chips — sichtbar auch wenn eingeklappt. */

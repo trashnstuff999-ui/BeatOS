@@ -8,7 +8,7 @@
 //
 // Zwei Sorten Änderung, bewusst verschieden behandelt:
 //   sofort         — Status, Uploads, Tags, Favorit. Ein Klick, ein Schreibvorgang.
-//   mit Speichern  — Name, Tempo, Tonart, Notiz, Verkauft an. Getippter Text
+//   mit Speichern  — Name, Tempo, Tonart, Notiz, Exklusiv an. Getippter Text
 //                    braucht einen Punkt, an dem er fertig ist.
 //
 // Warum Name, Tempo und Tonart zusammengehören: der Ordnername auf der Platte
@@ -25,6 +25,7 @@ import {
   FolderTree, Upload as UploadIcon, FileMusic, CopyPlus,
 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { C, alpha, radius } from "../../lib/theme";
@@ -51,7 +52,7 @@ interface DetailPanelProps {
   onClose: () => void;
   onToggleFavorite: (beatId: string) => void;
   onUpdateStatus: (beatId: string, status: BeatStatus) => void;
-  /** Name, Tempo, Tonart, Notiz, Verkauft an — gesammelt, auf Knopfdruck. */
+  /** Name, Tempo, Tonart, Notiz, Exklusiv an — gesammelt, auf Knopfdruck. */
   onSaveBeat: (params: UpdateBeatParams) => Promise<void>;
   preloadedCoverUrl?: string | null;
   onUpdateTags?: (beatId: string, tags: string[]) => void;
@@ -339,6 +340,19 @@ export function DetailPanel({
     return () => { cancelled = true; };
   }, [beat.id, isOpen, uploadsNonce]);
 
+  // Placements: in welchen Artist-Songs der Beat steckt („Mein Beat" von der
+  // anderen Seite). Nur gelesen; gesetzt wird am Artist-Song.
+  const [placements, setPlacements] = useState<{ artist: string; song: string; path: string }[]>([]);
+  useEffect(() => {
+    if (!isOpen) return;
+    let weg = false;
+    setPlacements([]);
+    Promise.resolve(api.artists.placements(beat.id))
+      .then(p => { if (!weg) setPlacements(p ?? []); })
+      .catch(() => {});
+    return () => { weg = true; };
+  }, [beat.id, isOpen]);
+
   const handleUploadsChanged = () => {
     onUploadsChanged?.();            // Punkte im Raster nachziehen
     setUploadsNonce(n => n + 1);     // und die eigene Anzeige neu holen
@@ -393,7 +407,7 @@ export function DetailPanel({
     }
   };
 
-  // „Verkauft an" nur, wenn es zur Sache gehört — oder schon etwas drinsteht,
+  // „Exklusiv an" nur, wenn es zur Sache gehört — oder schon etwas drinsteht,
   // sonst verschwände ein gefülltes Feld beim Zurückstellen des Status.
   const zeigeKaeufer = beat.status === "sold" || !!form.sold_to;
 
@@ -596,7 +610,7 @@ export function DetailPanel({
 
           {zeigeKaeufer && (
             <div>
-              <div style={labelStyle}>Verkauft an</div>
+              <div style={labelStyle}>Exklusiv an</div>
               <input
                 className="beatos-feld"
                 value={form.sold_to}
@@ -624,6 +638,8 @@ export function DetailPanel({
                   wird geladen …
                 </div>}
           </div>
+
+          {placements.length > 0 && <Placements liste={placements} />}
 
           {/* Assets: ersetzte Bilder gehen zurück in den Asset-Ordner, alte Videos in den Papierkorb. */}
           {beat.path && (
@@ -862,6 +878,28 @@ const coverKnopf: React.CSSProperties = {
   border: "none", cursor: "pointer",
   display: "flex", alignItems: "center", justifyContent: "center",
 };
+
+/** Placements: eine Zeile je Artist-Song, Klick öffnet die Artists.
+ *  Eigene Komponente, damit `useNavigate` nur läuft, wenn es etwas zu zeigen gibt. */
+function Placements({ liste }: { liste: { artist: string; song: string; path: string }[] }) {
+  const navigate = useNavigate();
+  return (
+    <div>
+      <div style={labelStyle}>Placements</div>
+      {liste.map(p => (
+        <button key={p.path} className="ue-zeile" onClick={() => navigate("/kuenstler")} title="Artists öffnen"
+          style={{
+            display: "block", width: "calc(100% + 16px)", margin: "0 -8px", padding: "8px",
+            border: "none", borderRadius: 8, cursor: "pointer", font: "inherit", fontSize: 13, textAlign: "left",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+          <span style={{ color: C.onSurfaceVariant }}>{p.artist} · </span>
+          <span style={{ fontWeight: 600, color: C.onSurface }}>{p.song}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11,

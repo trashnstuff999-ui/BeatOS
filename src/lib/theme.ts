@@ -121,19 +121,21 @@ export interface StatusConfig {
 }
 
 export const STATUS_CONFIG: Record<string, StatusConfig> = {
+  // Idee und Überarbeiten gibt es auch im Studio: Wort und Farbe kommen von
+  // dort, damit beide Seiten dasselbe zeigen (angeglichen 13.11.2026).
   idea: {
     key: "idea",
-    label: "Idee",
-    color: colors.tertiary,
-    bg: alpha(colors.tertiary, 0.10),
-    border: alpha(colors.tertiary, 0.20),
+    label: STUDIO_STATUS_CONFIG.idea.label,
+    color: STUDIO_STATUS_CONFIG.idea.color,
+    bg: alpha(STUDIO_STATUS_CONFIG.idea.color, 0.10),
+    border: alpha(STUDIO_STATUS_CONFIG.idea.color, 0.20),
   },
   wip: {
     key: "wip",
-    label: "In Arbeit",
-    color: colors.primary,
-    bg: alpha(colors.primary, 0.10),
-    border: alpha(colors.primary, 0.20),
+    label: STUDIO_STATUS_CONFIG.wip.label,
+    color: STUDIO_STATUS_CONFIG.wip.color,
+    bg: alpha(STUDIO_STATUS_CONFIG.wip.color, 0.10),
+    border: alpha(STUDIO_STATUS_CONFIG.wip.color, 0.20),
   },
   finished: {
     key: "finished",
@@ -144,7 +146,7 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
   sold: {
     key: "sold",
-    label: "Verkauft",
+    label: "Exklusiv verkauft",
     color: colors.error,
     bg: alpha(colors.error, 0.10),
     border: alpha(colors.error, 0.20),

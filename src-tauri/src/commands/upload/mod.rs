@@ -26,3 +26,8 @@ pub use render::*;
 pub(crate) const PLATFORMS: [&str; 3] = ["beatstars", "soundcloud", "youtube"];
 pub(crate) const VALID_STATUSES: [&str; 3] = ["draft", "scheduled", "uploaded"];
 pub(crate) const SOUNDCLOUD_TAG_LIMIT: usize = 9;
+/// SQL-Bedingung auf `beat_uploads`: geplant, und der Tag ist vorbei.
+/// Heute Geplantes ist noch nicht überfällig.
+pub(crate) const UEBERFAELLIG: &str = "status = 'scheduled'
+    AND scheduled_at IS NOT NULL AND scheduled_at != ''
+    AND scheduled_at < date('now','localtime')";

@@ -169,6 +169,27 @@ pub fn unschedule_release(beat_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Überfällige Termine eines Beats als live bestätigen. Upload-Datum ist der
+/// geplante Tag. War der Upload ausgefallen: `unschedule_release`.
+#[tauri::command]
+pub fn confirm_overdue_upload(beat_id: String) -> Result<(), String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    ueberfaellig_bestaetigen(&conn, &beat_id).map_err(|e| format!("Bestätigen fehlgeschlagen: {e}"))?;
+    Ok(())
+}
+
+pub(crate) fn ueberfaellig_bestaetigen(conn: &rusqlite::Connection, beat_id: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        &format!(
+            "UPDATE beat_uploads
+             SET status = 'uploaded', uploaded_at = COALESCE(uploaded_at, scheduled_at)
+             WHERE beat_id = ?1 AND {}",
+            super::UEBERFAELLIG,
+        ),
+        [beat_id],
+    )
+}
+
 /// „Nicht hochladen" setzen oder zurücknehmen — die Warteschlange lässt den Beat dann aus.
 #[tauri::command]
 pub fn set_upload_skip(beat_id: String, skip: bool) -> Result<(), String> {
