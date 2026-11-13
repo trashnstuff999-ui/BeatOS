@@ -35,13 +35,15 @@ import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
 import type { Beat, BeatStatus, EditFormState, UpdateBeatParams } from "../../types/browse";
 import { parseTags, isFavorite, beatToEditForm } from "../../types/browse";
 import { STATUS_CONFIG, STATUS_ITEMS } from "../../lib/theme";
-import { Segmented, Button, IconButton } from "../ui";
+import { Button, IconButton } from "../ui";
 import { getTagCategoryFromDb, sortTagsByCategory } from "../../lib/tags";
 import { useTagManager } from "../../contexts/TagManagerContext";
 import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { UploadPlatformGrid } from "../upload/UploadStatusCard";
 import type { UploadPlatformRow } from "../../types/upload";
+import { AssetPickerDialog, AssetImage, AssetVideo, type AssetSlotKind } from "../AssetPickerDialog";
+import { useFolderAssets } from "../../hooks/useFolderAssets";
 
 interface DetailPanelProps {
   beat: Beat;
@@ -57,6 +59,8 @@ interface DetailPanelProps {
   /** Läuft nach jeder Upload-Änderung — damit die Plattform-Punkte in Raster
    *  und Tabelle nicht stehen bleiben, während das Panel schon weiter ist. */
   onUploadsChanged?: () => void;
+  /** Nach dem Zuweisen von Cover, Thumbnail oder Video: Cover im Raster neu laden. */
+  onAssetsChanged?: () => void;
   /** Läuft nach dem Angleichen. Hier ist der volle Refresh richtig: Ordner-
    *  und Dateinamen ändern sich, also auch der Pfad zum Cover. */
   onRenamed?: () => void;
@@ -100,10 +104,12 @@ export function DetailPanel({
   onUpdateTags,
   onDelete,
   onUploadsChanged,
+  onAssetsChanged,
   onRenamed,
   onOpenInUpload,
 }: DetailPanelProps) {
   const fav = isFavorite(beat);
+  const statusFarbe = (STATUS_CONFIG[beat.status ?? "idea"] ?? STATUS_CONFIG.idea).color;
   const { openTagManager } = useTagManager();
 
   const [localTags, setLocalTags] = useState<string[]>(parseTags(beat.tags));
@@ -156,6 +162,26 @@ export function DetailPanel({
   const dirty =
     namensfelderGeaendert || form.notes !== original.notes || form.sold_to !== original.sold_to;
 
+  // Notiz und Käufer gehen beim Weiterklicken nicht verloren: Beat-Wechsel
+  // oder Schließen speichert sie. Name, Tempo und Tonart nicht, die benennen
+  // den Ordner um und brauchen weiter ein bewusstes Enter.
+  const entwurf = useRef({ id: beat.id, form, original });
+  useEffect(() => {
+    const e = entwurf.current;
+    if (e.id === beat.id && isOpen) return;
+    if (e.form.notes !== e.original.notes || e.form.sold_to !== e.original.sold_to) {
+      onSaveBeat({ id: e.id, notes: e.form.notes, sold_to: e.form.sold_to.trim() }).catch(() => {});
+    }
+  }, [beat.id, isOpen]);
+  // Nach dem Effekt darüber: der liest noch den Stand des vorigen Beats.
+  useEffect(() => { entwurf.current = { id: beat.id, form, original }; });
+
+  /** Tags werden sofort geschrieben; scheitert das, steht es im Panel. */
+  const tagsSchreiben = (tags: string[]) => {
+    setLocalTags(tags);
+    Promise.resolve(onUpdateTags?.(beat.id, tags)).catch(e => setSaveError(String(e)));
+  };
+
   const setFeld = <K extends keyof EditFormState>(key: K, value: EditFormState[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
@@ -175,12 +201,11 @@ export function DetailPanel({
         // `update_beat` laesst null aus dem Update heraus ("nicht geaendert"),
         // deshalb loescht die Tonart ein leerer String statt null — den lesen
         // Anzeige und Ordnername gleich als "keine Tonart".
-        // ponytail: das Tempo laesst sich damit nicht leeren; dafuer muesste
-        // update_beat null von "weggelassen" unterscheiden koennen.
-        bpm:     form.bpm.trim() ? parseFloat(form.bpm) : null,
+        // Beim Tempo heisst 0 "geleert" (update_beat macht daraus NULL).
+        bpm:     form.bpm.trim() ? parseFloat(form.bpm) : (original.bpm ? 0 : null),
         key:     form.key.trim(),
         notes:   form.notes,
-        sold_to: form.sold_to.trim() || null,
+        sold_to: form.sold_to.trim(),
       });
       if (nameRelevant) await ordnerPruefen();
     } catch (e) {
@@ -322,18 +347,13 @@ export function DetailPanel({
   const handleOpenTagManager = () => {
     openTagManager({
       initialSelected: localTags,
-      onConfirm: (newTags) => {
-        setLocalTags(newTags);
-        onUpdateTags?.(beat.id, newTags);
-      },
+      onConfirm: tagsSchreiben,
       editMode: true,
     });
   };
 
   const handleRemoveTag = (tag: string) => {
-    const newTags = localTags.filter(t => t !== tag);
-    setLocalTags(newTags);
-    onUpdateTags?.(beat.id, newTags);
+    tagsSchreiben(localTags.filter(t => t !== tag));
   };
 
   // 1. Use cover from global player if this beat is the active one
@@ -364,6 +384,7 @@ export function DetailPanel({
   }, [beat.id, preloadedCoverUrl]);
 
   const coverUrl = playerCover ?? localCoverUrl ?? null;
+  const ordnerAssets = useFolderAssets(beat.path ?? null);
   const playerActive = !!playerBeat;
 
   const handleOpenFolder = async () => {
@@ -389,7 +410,9 @@ export function DetailPanel({
       display: "flex",
       flexDirection: "column",
       zIndex: 50,
-      borderLeft: `1px solid ${C.border15}`,
+      borderLeft: `1px solid ${C.border30}`,
+      // Look „Wucht“: leuchtet zur Seite in der Farbe des Status
+      boxShadow: isOpen ? `-14px 0 38px -10px color-mix(in srgb, ${statusFarbe} 32%, transparent)` : "none",
       transform: isOpen ? "translateX(0)" : "translateX(100%)",
       transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
@@ -403,10 +426,11 @@ export function DetailPanel({
           onClick={() => onToggleFavorite(beat.id)}
           title={fav ? "Favorit entfernen" : "Als Favorit merken"}
           style={coverKnopf}
+          className="ar-rk ar-rk-herz"
         >
           <Heart size={16} fill={fav ? C.primary : "none"} color={fav ? C.primary : "rgba(255,255,255,0.85)"} strokeWidth={1.75} />
         </button>
-        <button onClick={onClose} title="Schließen" style={coverKnopf}>
+        <button onClick={onClose} title="Schließen" style={coverKnopf} className="ar-rk ar-rk-x">
           <X size={16} color="rgba(255,255,255,0.85)" />
         </button>
       </div>
@@ -456,7 +480,7 @@ export function DetailPanel({
               onChange={e => setFeld("name", e.target.value)}
               onKeyDown={tastatur}
               title="Umbenennen"
-              style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}
+              style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", textShadow: `0 0 24px color-mix(in srgb, ${statusFarbe} 40%, transparent)` }}
             />
             <div style={{
               marginTop: 6, marginLeft: 1,
@@ -467,7 +491,7 @@ export function DetailPanel({
               {[
                 `B${beat.id}`,
                 beat.begonnen ? `begonnen ${datumKurz(beat.begonnen)}` : beat.created_date ? datumKurz(beat.created_date) : null,
-                beat.alte_id ? `alt ${/^d+$/.test(beat.alte_id) ? "#" : ""}${beat.alte_id}` : null,
+                beat.alte_id ? `alt ${/^\d+$/.test(beat.alte_id) ? "#" : ""}${beat.alte_id}` : null,
               ].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -477,11 +501,11 @@ export function DetailPanel({
             Eine Zeile statt zweier beschrifteter Kästen. Die Einheit steht am
             Wert, das reicht als Beschriftung. */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 18,
-          padding: "14px 20px",
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+          padding: "18px 20px",
           borderBottom: `1px solid ${C.border10}`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="ar-wert" style={wertKachel}>
             <span style={miniLabel}>BPM</span>
             <input
               className="beatos-feld"
@@ -490,10 +514,10 @@ export function DetailPanel({
               onKeyDown={tastatur}
               placeholder="–"
               inputMode="numeric"
-              style={{ width: 58, fontSize: 14, fontWeight: 600 }}
+              style={{ width: "100%", fontSize: 28, fontWeight: 700 }}
             />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="ar-wert" style={wertKachel}>
             <span style={miniLabel}>Tonart</span>
             <input
               className="beatos-feld"
@@ -501,7 +525,7 @@ export function DetailPanel({
               onChange={e => setFeld("key", e.target.value)}
               onKeyDown={tastatur}
               placeholder="–"
-              style={{ width: 72, fontSize: 14, fontWeight: 600 }}
+              style={{ width: "100%", fontSize: 28, fontWeight: 700 }}
             />
           </div>
         </div>
@@ -518,7 +542,7 @@ export function DetailPanel({
           }}>
             <FolderTree size={14} color={C.primary} strokeWidth={1.75} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: C.onSurfaceVariant }}>Ordner heißt noch anders</div>
+              <div style={{ fontSize: 12, color: C.onSurfaceVariant }}>Ordnername weicht ab</div>
               <div
                 title={ordnerZiel}
                 style={{
@@ -541,16 +565,34 @@ export function DetailPanel({
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Status — ein Band aus vier Segmenten statt vier Kacheln. */}
-          <Segmented
-            full
-            label="Status"
-            // Ohne Status ist nichts gewählt — "" passt auf keine Option.
-            value={(beat.status ?? "") as BeatStatus}
-            onChange={key => onUpdateStatus(beat.id, key)}
-            // STATUS_CONFIG ist Record<string, …>, damit FilterBar auch mit
-            // "all" indizieren kann; die vier Schlüssel hier sind genau BeatStatus.
-            options={STATUS_ITEMS.map(({ key, label }) => ({ value: key as BeatStatus, label, color: STATUS_CONFIG[key].color }))}
-          />
+          {/* Look „Wucht“: vier Kacheln mit Leuchtpunkt statt eines Bandes */}
+          <div role="group" aria-label="Status" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {STATUS_ITEMS.map(({ key, label }) => {
+              const f = STATUS_CONFIG[key].color;
+              const an = beat.status === key;
+              return (
+                <button key={key} className="ar-st" aria-pressed={an}
+                  onClick={() => onUpdateStatus(beat.id, key as BeatStatus)}
+                  style={{
+                    "--s": f,
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
+                    padding: "10px 4px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+                    fontSize: 12, fontWeight: 800,
+                    color: an ? f : C.onSurfaceVariant,
+                    background: an ? `color-mix(in srgb, ${f} 10%, ${C.surfaceContainerLowest})` : C.surfaceContainerLowest,
+                    border: `1px solid ${an ? f : C.border30}`,
+                    boxShadow: an ? `0 8px 21px -11px color-mix(in srgb, ${f} 64%, transparent)` : "none",
+                  } as React.CSSProperties}>
+                  <i style={{
+                    width: 14, height: 14, borderRadius: "50%",
+                    background: an ? f : "rgba(255,255,255,0.1)",
+                    boxShadow: an ? `0 0 11px color-mix(in srgb, ${f} 64%, transparent)` : "none",
+                  }} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
           {zeigeKaeufer && (
             <div>
@@ -582,6 +624,20 @@ export function DetailPanel({
                   wird geladen …
                 </div>}
           </div>
+
+          {/* Assets: ersetzte Bilder gehen zurück in den Asset-Ordner, alte Videos in den Papierkorb. */}
+          {beat.path && (
+            <div>
+              <div style={labelStyle}>Assets</div>
+              <AssetStreifen
+                beatId={beat.id}
+                ordner={beat.path}
+                assetPath={settings.assetPath}
+                pfade={{ cover: ordnerAssets.assets.coverPath, thumbnail: ordnerAssets.assets.thumbnailPath, video: ordnerAssets.assets.videoPath }}
+                onZugewiesen={() => { ordnerAssets.refresh(); onAssetsChanged?.(); }}
+              />
+            </div>
+          )}
 
           {/* Tags — das „+" steht als Pille am Ende der Reihe. Ohne Tags sagt
               es dazu, was es tut; ein einzelnes „+" unter „Tags" las sich wie
@@ -814,6 +870,78 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: "0.08em",
   color: C.onSecondaryFixedVar,
   marginBottom: 6,
+};
+
+/** Look „Wucht“: BPM und Tonart als Wert-Kacheln */
+// ─── Assets: drei Kacheln in einer Reihe, gleich hoch ───────────────────────
+const ASSET_KACHELN: { slot: AssetSlotKind; label: string; breite: number }[] = [
+  { slot: "cover", label: "Cover", breite: 76 },
+  { slot: "thumbnail", label: "Thumbnail", breite: 135 },
+  { slot: "video", label: "Video", breite: 135 },
+];
+
+function AssetStreifen({ beatId, ordner, assetPath, pfade, onZugewiesen }: {
+  beatId: string; ordner: string; assetPath: string;
+  pfade: Record<AssetSlotKind, string | null>;
+  onZugewiesen: () => void;
+}) {
+  const [picker, setPicker] = useState<AssetSlotKind | null>(null);
+  const [hover, setHover] = useState<AssetSlotKind | null>(null);
+  const ohnePfad = !assetPath.trim();
+  return (
+    <div style={{ display: "flex", gap: 10 }}>
+      {ASSET_KACHELN.map(({ slot, label, breite }) => {
+        const pfad = pfade[slot];
+        const name = pfad?.split(/[/\\]/).pop();
+        return (
+          <div key={slot} style={{ width: breite, minWidth: 0, flex: slot === "cover" ? "none" : 1 }}>
+            <button
+              className="ar-wert ar-asset"
+              disabled={ohnePfad}
+              onClick={() => setPicker(slot)}
+              onMouseEnter={() => setHover(slot)}
+              onMouseLeave={() => setHover(null)}
+              title={ohnePfad ? "Kein Asset-Ordner (Einstellungen → Pfade)" : name ? `${name} · ersetzen` : `${label} zuweisen`}
+              style={{
+                width: "100%", height: 76, padding: 0, overflow: "hidden", position: "relative",
+                borderRadius: 14, cursor: ohnePfad ? "not-allowed" : "pointer",
+                background: C.surfaceContainerLowest,
+                border: `1px ${pfad ? "solid" : "dashed"} ${C.border30}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: C.onSurfaceVariant,
+                ["--c" as string]: "#fda124",
+              } as React.CSSProperties}
+            >
+              {pfad
+                ? (slot === "video"
+                    ? <AssetVideo path={pfad} fit="cover" spielen={hover === slot} />
+                    : <AssetImage path={pfad} fit="cover" />)
+                : <Plus size={18} strokeWidth={2} />}
+              {pfad && <span className="ar-asset-neu">Ersetzen</span>}
+            </button>
+            <div style={{ ...miniLabel, marginTop: 6, color: pfad ? C.onSurfaceVariant : C.onSecondaryFixedVar }}>{label}</div>
+          </div>
+        );
+      })}
+      {picker && (
+        <AssetPickerDialog
+          targetDir={ordner}
+          assetRoot={assetPath}
+          slot={picker}
+          beatId={beatId}
+          title={`${ASSET_KACHELN.find(k => k.slot === picker)!.label} zuweisen`}
+          onAssigned={onZugewiesen}
+          onClose={() => setPicker(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const wertKachel: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: 4,
+  padding: "12px 14px", borderRadius: 16,
+  background: C.surfaceContainerLowest, border: `1px solid ${C.border30}`,
 };
 
 const miniLabel: React.CSSProperties = {

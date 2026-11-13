@@ -73,3 +73,22 @@ describe("refreshUploadBadges", () => {
     expect(mockInvoke).not.toHaveBeenCalledWith("get_beats_paginated", expect.anything());
   });
 });
+
+describe("updateBeat", () => {
+  it("reicht den Fehler weiter und lädt die Liste trotzdem neu", async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_beats_paginated") return { beats: [], total_count: 0 };
+      if (cmd === "update_beat") throw "Gespeichert, aber Umbenennen auf der Platte schlug fehl";
+      return [];
+    });
+    const { result } = renderHook(() => useBeats());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await expect(result.current.updateBeat({ id: "0842", name: "NEU" })).rejects.toMatch(/Umbenennen/);
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("get_beats_paginated", expect.anything());
+  });
+});

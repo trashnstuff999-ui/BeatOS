@@ -45,13 +45,15 @@ interface AssetPickerDialogProps {
   /** Konfigurierter Asset-Ordner (Guard im Backend) */
   assetRoot: string;
   slot: AssetSlotKind;
+  /** Archiv-Beat: nach dem Zuweisen bekommt die Datei den BeatOS-Namen. */
+  beatId?: string;
   title?: string;
   onAssigned: (count: number) => void;
   onClose: () => void;
 }
 
 export function AssetPickerDialog({
-  targetDir, assetRoot, slot, title = "Asset zuweisen", onAssigned, onClose,
+  targetDir, assetRoot, slot, beatId, title = "Asset zuweisen", onAssigned, onClose,
 }: AssetPickerDialogProps) {
   const [assets, setAssets] = useState<AssetFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +94,11 @@ export function AssetPickerDialog({
     setBusy(true);
     try {
       await api.studio.assignAsset(file.path, assetRoot, targetDir, slot);
+      if (beatId) {
+        // Name nach Schema; scheitert das, ist die Datei trotzdem zugewiesen.
+        await api.upload.applyFilenameConventionFor(beatId, [slot === "video" ? "mp4" : slot])
+          .catch(e => console.error("[AssetPicker] Umbenennen fehlgeschlagen:", e));
+      }
       onAssigned(1);
       onClose();
     } catch (e) {
@@ -219,7 +226,14 @@ function FileCard({ asset, aspect, busy, onAssign }: {
 /** Image via asset protocol, base64 fallback. Standard: ganz sichtbar
  *  (contain) — zum Aussuchen. Die Slots füllen randlos (cover).
  *  Auch von der Studio-Inbox genutzt. */
-export function AssetImage({ path, fit = "contain", stand }: {
+export function AssetImage(props: Parameters<typeof AssetImageInnen>[0]) {
+  // Neuer Pfad oder Stand = neues Bild. Ohne den Schlüssel blieb das alte
+  // stehen: im Archiv-Panel zeigte die Cover-Kachel nach dem Beat-Wechsel
+  // noch das Cover des vorigen Beats.
+  return <AssetImageInnen key={`${props.path}|${props.stand ?? ""}`} {...props} />;
+}
+
+function AssetImageInnen({ path, fit = "contain", stand }: {
   path: string;
   fit?: "contain" | "cover";
   /** Stand der Datei (z. B. Änderungszeit + Größe). Liegt unter demselben
@@ -259,19 +273,33 @@ export function AssetImage({ path, fit = "contain", stand }: {
 /** Erstes Bild eines Videos statt eines Film-Symbols. Lädt nur die Metadaten;
  *  `#t=1` springt hinter das Schwarzbild, mit dem viele Videos anfangen. Kann der
  *  WebView das Format nicht (manche .mov), bleibt das Symbol. */
-export function AssetVideo({ path, fit = "contain", onDauer }: { path: string; fit?: "contain" | "cover"; onDauer?: (sek: number) => void }) {
+/** `spielen`: stumm anspielen (Hover in der Inbox), sonst Standbild bei 1 s.
+ *  `onFortschritt`: 0..1 während des Abspielens. */
+export function AssetVideo({ path, fit = "contain", onDauer, spielen = false, onFortschritt }: {
+  path: string; fit?: "contain" | "cover"; onDauer?: (sek: number) => void;
+  spielen?: boolean; onFortschritt?: (anteil: number) => void;
+}) {
   const [failed, setFailed] = useState(false);
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (spielen) { v.loop = true; v.play().catch(() => {}); }
+    else { v.pause(); if (v.readyState > 0) v.currentTime = 1; }
+  }, [spielen]);
   if (failed) {
     return <Film size={26} color={C.onSecondaryFixedVar} strokeWidth={1.25} />;
   }
   return (
     <video
       src={`${convertFileSrc(path.replace(/\\/g, "/"))}#t=1`}
+      ref={ref}
       preload="metadata"
       muted
       playsInline
       onError={() => setFailed(true)}
       onLoadedMetadata={e => onDauer?.(e.currentTarget.duration)}
+      onTimeUpdate={e => { const v = e.currentTarget; if (spielen && v.duration) onFortschritt?.(v.currentTime / v.duration); }}
       style={{ width: "100%", height: "100%", objectFit: fit, display: "block", pointerEvents: "none" }}
     />
   );

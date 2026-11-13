@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, CalendarPlus, ArrowDown, ImagePlus, FolderOpen, Rocket } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { C } from "../../lib/theme";
+import { C, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { useSettings } from "../../contexts/SettingsContext";
 import { Button } from "../ui/Button";
@@ -119,7 +119,7 @@ export function NaechsterSchrittBlock({ schritt, beatId, beatPath, onChanged, on
       break;
     }
     case "fertig":
-      titel = "Überall hochgeladen";
+      titel = "Überall live";
       unter = schritt.datum ? tageRelativ(schritt.datum) : null;
       farbe = C.mint;
       break;
@@ -128,22 +128,23 @@ export function NaechsterSchrittBlock({ schritt, beatId, beatPath, onChanged, on
   const ausstehend = schritt.art === "infos" || schritt.art === "audio" || schritt.art === "cover";
 
   return (
-    <div style={{
-      flexShrink: 0, minWidth: 220, maxWidth: 300,
-      display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center",
-      gap: 6, textAlign: "right",
+    // Look „Wucht“: eigene Karte; pulsiert, solange ein Knopf etwas zu tun hat
+    <div className={knopf ? "ul-schritt-puls" : undefined} style={{
+      flex: "0 1 300px", minWidth: 240, alignSelf: "center",
+      display: "flex", flexDirection: "column", gap: 6,
+      padding: "16px 18px", borderRadius: 18,
+      background: "rgba(14,14,14,0.55)",
+      border: `1px solid ${knopf ? alpha(C.primary, 0.45) : C.border30}`,
     }}>
-      {ausstehend && (
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar }}>
-          Als Nächstes
-        </span>
-      )}
-      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 15, fontWeight: 700, color: farbe }}>
-        {schritt.art === "fertig" && <CheckCircle2 size={16} strokeWidth={2} />}
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: knopf ? C.primary : C.onSecondaryFixedVar }}>
+        {ausstehend ? "Als Nächstes" : "Stand"}
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 22, fontWeight: 700, lineHeight: 1.2, color: farbe }}>
+        {schritt.art === "fertig" && <CheckCircle2 size={20} strokeWidth={2} />}
         {titel}
       </span>
-      {unter && <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{unter}</span>}
-      {knopf && <div style={{ marginTop: 4 }}>{knopf}</div>}
+      {unter && <span style={{ fontSize: 13, color: C.onSurfaceVariant }}>{unter}</span>}
+      {knopf && <div style={{ marginTop: 8 }}>{knopf}</div>}
     </div>
   );
 }

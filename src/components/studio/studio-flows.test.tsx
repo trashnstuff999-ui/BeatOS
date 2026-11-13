@@ -27,6 +27,9 @@ import type { AssetFile, StudioProject } from "../../types/studio";
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn(), revealItemInDir: vi.fn(),
 }));
+// Die Bühne zeigt den Titel ein zweites Mal — die Abläufe hier fragen nach
+// Kachel und Zeile. Eigener Test: StudioBuehne.test.tsx.
+vi.mock("./StudioBuehne", () => ({ StudioBuehne: () => null }));
 vi.mock("@tauri-apps/api/core", async () => ({
   invoke: vi.fn(),
   convertFileSrc: (p: string) => `file://${p}`,
@@ -136,7 +139,7 @@ function renderAssets(props: { assetPath: string; onAssigned?: () => void; proje
 function sectionHeadings(): string[] {
   return [...document.querySelectorAll("h2, button")]
     .map(el => el.textContent ?? "")
-    .filter(t => /^(Priorität|Bereit|Exportiert|Überarbeiten|Idee|Lange inaktiv|Kann weg)\d*$/.test(t));
+    .filter(t => /^(Priorität|Bereit|Exportiert|Überarbeiten|Idee|Lange inaktiv|Verwerfen)\d*$/.test(t));
 }
 
 /**
@@ -265,7 +268,7 @@ describe("Scheibe 7 — namenlose Projekte zeigen ihre Notiz", () => {
   });
 });
 
-describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
+describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Verwerfen", () => {
   // Titel aus dem Ordnernamen: „Project_300 - Alt" → Nummer 300, Titel „Alt"
   const RAUS = project({ name: "Project_300 - Alt", status: "discard", modified_secs: NOW - 400 * DAY });
   const ALT = project({ name: "Project_12 - Staub", modified_secs: NOW - 300 * DAY });
@@ -285,12 +288,12 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     expect(await screen.findByText("Staub")).toBeInTheDocument();
     expect(screen.getByText("Lange inaktiv · 2")).toBeInTheDocument();
 
-    await user.click(screen.getByText("Kann weg · 1"));
+    await user.click(screen.getByText("Verwerfen · 1"));
     await waitFor(() => expect(screen.queryByText("Staub")).not.toBeInTheDocument());
     expect(screen.getByText("Alt")).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText("Titel, Notiz, Tonart, BPM …"), "Project_12");
-    await waitFor(() => expect(screen.getByText("Kann weg · 0")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Verwerfen · 0")).toBeInTheDocument());
   });
 
   it("ohne Export öffnet der runde Knopf die neueste FLP in FL", async () => {
@@ -369,12 +372,12 @@ describe("Werkbank Scheibe 5 — Aufräumen mit Behalten / Kann weg", () => {
     ]);
   });
 
-  it("„Kann weg“ merkt vor und nimmt es beim zweiten Klick zurück", async () => {
+  it("„Verwerfen“ merkt vor und nimmt es beim zweiten Klick zurück", async () => {
     stubInvoke([], [ALT]);
     const user = userEvent.setup();
     renderProjects("cleanup");
     await screen.findByText("Staub");
-    const knopf = screen.getByRole("button", { name: "Kann weg" });
+    const knopf = screen.getByRole("button", { name: "Verwerfen" });
     await user.click(knopf);
     expect(await screen.findByText("1 Projekt kann weg")).toBeInTheDocument();
     expect(knopf).toHaveAttribute("aria-pressed", "true");
@@ -487,7 +490,7 @@ describe("F2 — der Assets-Tab zeigt die Inbox", () => {
     // Die Inbox ist sichtbar, ohne dass vorher irgendwo ein Projekt zu
     // wählen war — das war vorher unmöglich.
     expect(await screen.findByText("MEMORIES_final.png")).toBeInTheDocument();
-    expect(screen.getByText(/1 Datei in der Inbox/)).toBeInTheDocument();
+    expect(screen.getByText("Datei wartet auf ein Projekt")).toBeInTheDocument();
 
     await user.click(screen.getByText("MEMORIES_final.png"));
 
@@ -544,7 +547,7 @@ describe("Inbox-Filter", () => {
     renderAssets({ assetPath: "C:\\ASSETS" });
     await screen.findByText("MEMORIES_final.png");
 
-    await user.click(screen.getByRole("radio", { name: /Videos 1/ }));
+    await user.click(screen.getByRole("button", { name: /^1\s*Videos$/ }));
     expect(screen.getByText("clip.mp4")).toBeInTheDocument();
     expect(screen.queryByText("MEMORIES_final.png")).not.toBeInTheDocument();
   });
@@ -588,7 +591,7 @@ describe("Q1 — Mehrfachauswahl für die Triage", () => {
     expect(screen.getByText("3 ausgewählt")).toBeInTheDocument();
 
     const leiste = screen.getByText("3 ausgewählt").parentElement!;
-    await user.click(within(leiste).getByRole("button", { name: "Kann weg" }));
+    await user.click(within(leiste).getByRole("button", { name: "Verwerfen" }));
 
     await waitFor(() => {
       const geschrieben = vi.mocked(invoke).mock.calls

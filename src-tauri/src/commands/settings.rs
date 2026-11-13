@@ -30,7 +30,7 @@ pub fn get_settings() -> Result<HashMap<String, String>, String> {
 /// Frontend sends a flat map; only keys present in the map are written
 /// (keys not in the map are left untouched in the DB).
 #[tauri::command]
-pub fn save_settings(settings: HashMap<String, String>) -> Result<(), String> {
+pub fn save_settings(app: tauri::AppHandle, settings: HashMap<String, String>) -> Result<(), String> {
     let mut conn = open_db().map_err(|e| e.to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     for (key, value) in &settings {
@@ -41,6 +41,7 @@ pub fn save_settings(settings: HashMap<String, String>) -> Result<(), String> {
         ).map_err(|e| e.to_string())?;
     }
     tx.commit().map_err(|e| e.to_string())?;
+    crate::asset_scope_freigeben(&app);
     Ok(())
 }
 

@@ -1,0 +1,125 @@
+/* Studio-Tab, Look „Wucht" (Entwurf studio-redesign v5): Hover, Leuchten, Bewegung.
+   Größen und Farben stehen inline, hier nur, was inline nicht geht.
+   --c setzt das Regal bzw. die Bühne (Leuchtfarbe des Status). */
+
+/* Platzhalter: Note wächst beim Hover */
+.sw-platz svg { transition: transform 0.4s cubic-bezier(.2, .9, .3, 1.5); }
+.sw-kachel:hover .sw-platz svg, .sw-bcov:hover .sw-platz svg { transform: scale(1.12) rotate(-6deg); }
+
+/* Regal-Kopf */
+.sw-pfeil { transition: transform 0.25s; }
+.sw-punkt { box-shadow: 0 0 11px color-mix(in srgb, var(--c) 64%, transparent); }
+
+/* Kachel */
+.sw-kachel { animation: sw-hoch 0.5s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
+.sw-kc { transition: transform 0.3s cubic-bezier(.2, .9, .3, 1.2), box-shadow 0.3s; }
+.sw-kc::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 62%);
+  transform: translateX(-120%); transition: transform 0.7s;
+}
+.sw-kachel:hover .sw-kc {
+  transform: translateY(-9px) scale(1.03);
+  box-shadow: 0 13px 21px -7px color-mix(in srgb, var(--c) 45%, transparent), 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.sw-kachel:hover .sw-kc::after { transform: translateX(120%); }
+.sw-kachel[data-an="true"] .sw-kc { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 64%, transparent), 0 10px 21px -7px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-striche { opacity: 0; transform: translateY(8px); transition: opacity 0.25s, transform 0.25s; }
+.sw-kachel:hover .sw-striche, .sw-kachel[data-an="true"] .sw-striche { opacity: 1; transform: none; }
+.sw-strich-an { box-shadow: 0 0 8px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-play { opacity: 0; transform: scale(0.5) translateY(10px); transition: opacity 0.2s, transform 0.3s cubic-bezier(.2, .9, .3, 1.6); }
+.sw-kachel:hover .sw-play, .sw-kachel[data-spielt="true"] .sw-play, .sw-play:focus-visible { opacity: 1; transform: none; }
+.sw-play:hover { transform: scale(1.12) !important; }
+.sw-sand { opacity: 0; transform: rotate(-90deg); transition: opacity 0.2s, transform 0.35s, background 0.15s, color 0.15s; }
+.sw-kachel:hover .sw-sand, .sw-sand:focus-visible { opacity: 1; transform: none; }
+.sw-sand:hover { background: #fda124 !important; color: #2a1700 !important; }
+.sw-stern { box-shadow: 0 0 13px -2px color-mix(in srgb, #fda124 64%, transparent); }
+.sw-eq { display: none; }
+.sw-kachel[data-spielt="true"] .sw-eq { display: flex; }
+.sw-eq > i { width: 5px; border-radius: 2px; background: #fff; box-shadow: 0 0 6px color-mix(in srgb, var(--c) 64%, transparent); animation: sw-eq 0.8s ease-in-out infinite alternate; }
+.sw-eq > i:nth-child(2) { animation-delay: -0.3s; }
+.sw-eq > i:nth-child(3) { animation-delay: -0.6s; }
+.sw-eq > i:nth-child(4) { animation-delay: -0.15s; }
+@keyframes sw-eq { from { height: 4px; } to { height: 26px; } }
+.sw-kachel[data-spielt="true"] .sw-kc { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 64%, transparent), 0 0 19px -2px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-mehr { transition: border-color 0.2s, color 0.2s; }
+.sw-mehr:hover { border-color: var(--c) !important; color: #fff !important; }
+
+/* Bühne */
+.sw-bcov { transition: transform 0.45s cubic-bezier(.2, .9, .3, 1.3); }
+.sw-bcov:hover { transform: scale(1.04) rotate(-2deg); }
+.sw-fl { animation: sw-blink 1.6s ease-in-out infinite; }
+@keyframes sw-blink { 50% { opacity: 0.3; } }
+.sw-pipe > div > i { transform-origin: bottom; transition: transform 0.2s; }
+.sw-pipe > div:hover > i { transform: scaleY(1.7); }
+.sw-zk { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.sw-zk:hover { transform: translateY(-3px); border-color: var(--c) !important; box-shadow: 0 11px 27px -11px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-bk { transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.2s; }
+.sw-bk:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--c) !important; }
+.sw-bk-haupt:hover:not(:disabled) { box-shadow: 0 7px 17px -4px color-mix(in srgb, var(--c) 64%, transparent); }
+
+/* Ideen-Zeilen */
+.sw-zl { position: relative; transition: background 0.2s, transform 0.2s; animation: sw-hoch 0.45s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 30ms + 0.1s); }
+.sw-zl::before {
+  content: ""; position: absolute; left: 40px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px;
+  background: #fda124; box-shadow: 0 0 10px color-mix(in srgb, #fda124 64%, transparent); transform: scaleY(0); transition: transform 0.2s; z-index: 1;
+}
+.sw-zl:hover { transform: translateX(5px); }
+.sw-zl:hover::before { transform: scaleY(1); }
+.sw-zl:hover .sw-zb { background: color-mix(in srgb, #fda124 8%, #131313) !important; }
+.sw-zl .sw-nr { transition: color 0.2s; }
+.sw-zl:hover .sw-nr { color: #fda124 !important; }
+.sw-zp { transition: transform 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s; }
+.sw-zp:hover:not(:disabled) { background: #34d399 !important; color: #06281d !important; transform: scale(1.12); box-shadow: 0 0 14px -2px color-mix(in srgb, #34d399 64%, transparent); }
+
+/* Zeile ohne eigenen Hauptknopf (Alte Ideen): die Zeile selbst leuchtet */
+.sw-zl.sw-zb:hover { background: color-mix(in srgb, #fda124 8%, #131313); }
+/* FL-Knopf statt Play: Amber statt Mint */
+.sw-zp-fl:hover:not(:disabled) { background: #fda124 !important; color: #2a1700 !important; box-shadow: 0 0 14px -2px color-mix(in srgb, #fda124 64%, transparent); }
+/* Pillen im Aufräumen */
+.sw-pille { transition: transform 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.2s; }
+.sw-pille:hover { transform: translateY(-2px); border-color: var(--c) !important; color: var(--c) !important; box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--c) 64%, transparent); }
+
+/* NEU */
+.sw-neu { animation: sw-puls 2.6s ease-in-out infinite; }
+@keyframes sw-puls { 50% { box-shadow: 0 0 0 4px rgba(253, 161, 36, 0.08), 0 5px 19px -6px color-mix(in srgb, #fda124 64%, transparent); } }
+
+/* Suche */
+.sw-such { transition: border-color 0.2s, box-shadow 0.2s; }
+.sw-such:focus-within { border-color: #fda124 !important; box-shadow: 0 0 0 4px rgba(253, 161, 36, 0.11); }
+
+/* Panel */
+.sw-pcov { transition: transform 0.4s cubic-bezier(.2, .9, .3, 1.3); }
+.sw-pcov:hover:not(:disabled) { transform: scale(1.05) rotate(-2deg); }
+
+@keyframes sw-hoch { from { opacity: 0; transform: translateY(18px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="sw-"], [class*="sw-"]::before, [class*="sw-"]::after, [class*="sw-"] * { animation: none !important; transition: none !important; }
+}
+
+/* Assets-Inbox */
+.sw-art { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.sw-art:hover { transform: translateY(-3px); border-color: var(--c) !important; box-shadow: 0 11px 27px -11px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-art[aria-pressed="true"] { border-color: var(--c) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 64%, transparent), 0 11px 27px -11px color-mix(in srgb, var(--c) 64%, transparent); }
+.sw-ak { animation: sw-hoch 0.5s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
+.sw-ab { transition: transform 0.3s cubic-bezier(.2, .9, .3, 1.2), box-shadow 0.3s; }
+.sw-ab::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 62%);
+  transform: translateX(-120%); transition: transform 0.7s;
+}
+.sw-ak:hover .sw-ab, .sw-ak:focus-visible .sw-ab {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 11px 21px -7px color-mix(in srgb, var(--c) 45%, transparent), 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent) !important;
+}
+.sw-ak:hover .sw-ab::after { transform: translateX(120%); }
+.sw-ab-inhalt { transition: transform 0.5s; }
+.sw-ak:hover .sw-ab-inhalt { transform: scale(1.04); }
+.sw-ak[data-an="true"] .sw-ab { box-shadow: 0 0 0 3px color-mix(in srgb, #fda124 64%, transparent), 0 8px 19px -7px color-mix(in srgb, #fda124 64%, transparent) !important; }
+.sw-zuw { opacity: 0; transform: translate(-50%, 14px); transition: opacity 0.2s, transform 0.3s cubic-bezier(.2, .9, .3, 1.5); }
+.sw-ak:hover .sw-zuw, .sw-ak:focus-visible .sw-zuw { opacity: 1; transform: translate(-50%, 0); }
+.sw-weg { opacity: 0; transform: rotate(-90deg) scale(0.7); transition: opacity 0.2s, transform 0.35s, background 0.15s, color 0.15s; }
+.sw-ak:hover .sw-weg, .sw-weg:focus-visible { opacity: 1; transform: none; }
+.sw-weg:hover { background: #ff7351 !important; color: #2a0a00 !important; }
+.sw-haken { transition: transform 0.2s cubic-bezier(.2, .9, .3, 1.6), background 0.15s; }

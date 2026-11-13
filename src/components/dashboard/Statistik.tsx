@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
-import { C, alpha, radius, STATUS_ITEMS, STUDIO_STATUS_CONFIG } from "../../lib/theme";
+import { C, alpha, radius, STATUS_ITEMS, STUDIO_STATUS_CONFIG, STUDIO_VERLAUF } from "../../lib/theme";
 import { heatmap, zirkel, durchlauf, wachstum, DUR_ZIRKEL, MOLL_ZIRKEL } from "../../lib/statistik";
 import type { Stats, DashboardActions, StatsDetails } from "../../types/stats";
 
@@ -19,12 +19,16 @@ const MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", 
 const WOCHENTAGE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const MO_ZUERST = [1, 2, 3, 4, 5, 6, 0];
 
+// Look „Wucht“: große Überschriften, jeder Abschnitt eine Fläche (ds-fl)
 const ueberschrift: React.CSSProperties = {
-  margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase",
-  letterSpacing: "0.08em", color: C.onSurfaceVariant,
+  margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface,
 };
+/** Leuchten der Amber-Balken, gedämpfte Stufe */
+const GLUT = `0 0 10px ${alpha(C.primary, 0.41)}`;
 const unterzeile: React.CSSProperties = { margin: "6px 0 0", fontSize: 13, color: C.onSecondaryFixedVar };
-const abschnitt: React.CSSProperties = { padding: "44px 0", borderBottom: `1px solid ${C.border10}` };
+const abschnitt: React.CSSProperties = {
+  padding: 24, marginTop: 24, borderRadius: 22, border: `1px solid ${C.border30}`, background: C.surfaceContainerLow,
+};
 const zahl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, fontFamily: "monospace", lineHeight: 1 };
 
 /** Knopf ohne Knopf-Optik: erbt Schrift und Farbe, bringt Tab und Enter mit.
@@ -55,45 +59,50 @@ export function Statistik({ stats, actions, refreshKey, onFilter }: {
   const studio = actions.studio_by_status;
   const studioSumme = ["idea", "wip", "exported", "ready"].reduce((s, k) => s + (studio[k] ?? 0), 0);
 
+  // Farbe je Kennzahl: Archiv, veröffentlicht, fertig, Serie, Studio
+  const KENN_FARBE = [C.primary, C.mint, "#22c55e", STUDIO_VERLAUF.wip.glow, STUDIO_VERLAUF.exported.glow];
   const kennzahlen = [
     { wert: stats.total, label: "Beats im Archiv", unter: `${stats.this_month} neu diesen Monat`, ziel: () => navigate("/browse") },
-    { wert: actions.published_beats, label: "veröffentlicht", unter: "mit mind. 1 Upload", ziel: () => navigate("/upload") },
-    { wert: stats.by_status.finished, label: "fertig", unter: `${actions.finished_unscheduled} noch ohne Termin`, ziel: () => onFilter({ status: "finished" }) },
-    { wert: actions.current_streak_weeks, label: "Wochen Serie", unter: "jede Woche ein Upload", ziel: null },
+    { wert: actions.published_beats, label: "Veröffentlicht", unter: "mit mind. 1 Upload", ziel: () => navigate("/upload") },
+    { wert: stats.by_status.finished, label: "Fertig", unter: `${actions.finished_unscheduled} noch ohne Termin`, ziel: () => onFilter({ status: "finished" }) },
+    { wert: actions.current_streak_weeks, label: "Wochen Streak", unter: "jede Woche ein Upload", ziel: null },
     { wert: studioSumme, label: "Studio-Projekte", unter: `davon ${studio.idea ?? 0} Ideen`, ziel: () => navigate("/studio") },
   ];
 
   return (
     <div>
       {/* ── Kennzahlen als Zeile ── */}
-      <section style={{ display: "flex", flexWrap: "wrap", rowGap: 24, padding: "24px 0 44px", borderBottom: `1px solid ${C.border10}` }}>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, paddingTop: 8 }}>
         {kennzahlen.map((k, i) => (
-          <div key={k.label} style={{ flex: "1 1 160px", padding: i ? "0 20px" : "0 20px 0 0", borderLeft: i ? `1px solid ${C.border10}` : undefined, boxSizing: "border-box" }}>
-            <Klick className={k.ziel ? "ue-zeile" : undefined} onClick={k.ziel ?? undefined} disabled={!k.ziel}
-              style={{ display: "block", width: "100%", padding: 8, cursor: k.ziel ? "pointer" : "default" }}>
-            <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: C.onSurface, fontVariantNumeric: "tabular-nums" }}>{k.wert}</div>
-            <div style={{ fontSize: 13, color: C.onSurfaceVariant, marginTop: 8 }}>{k.label}</div>
+          <Klick key={k.label} className="ds-kk" onClick={k.ziel ?? undefined} disabled={!k.ziel}
+            style={{
+              "--c": KENN_FARBE[i], "--i": i,
+              display: "block", width: "100%", padding: 20, borderRadius: 20, textAlign: "left",
+              border: `1px solid ${C.border30}`, background: C.surfaceContainerLow,
+              cursor: k.ziel ? "pointer" : "default",
+            } as React.CSSProperties}>
+            <div style={{ fontSize: 52, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: KENN_FARBE[i], fontVariantNumeric: "tabular-nums", textShadow: `0 0 24px ${alpha(KENN_FARBE[i], 0.32)}` }}>{k.wert}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.onSurface, marginTop: 8 }}>{k.label}</div>
             <div style={{ fontSize: 12, color: C.onSecondaryFixedVar, marginTop: 3 }}>{k.unter}</div>
-            </Klick>
-          </div>
+          </Klick>
         ))}
       </section>
 
       {fehler && <p style={{ fontSize: 12, color: C.error }}>Details nicht geladen: {fehler}</p>}
       {details && <UploadJahr details={details} />}
-      <section style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
+      <section className="ds-fl" style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
         <Tonarten stats={stats} onFilter={onFilter} />
         {details && <Tempo bpm={details.bpm} />}
       </section>
       <WegDerBeats stats={stats} actions={actions} studioSumme={studioSumme} onFilter={onFilter} />
       {details && (
-        <section style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
+        <section className="ds-fl" style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
           <Wochentage werte={details.wochentage} />
           <Durchlauf tage={details.durchlauf_tage} />
         </section>
       )}
       {details && (
-        <section style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
+        <section className="ds-fl" style={{ ...abschnitt, display: "flex", flexWrap: "wrap", gap: 56 }}>
           <Wachstum monate={details.monate} />
           <NeueBeats monate={details.monate} />
         </section>
@@ -121,7 +130,7 @@ function UploadJahr({ details }: { details: StatsDetails }) {
   const Z = 15, L = 4;
 
   return (
-    <section style={abschnitt}>
+    <section className="ds-fl" style={abschnitt}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
         <h2 style={ueberschrift}>Upload-Jahr</h2>
         <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>
@@ -144,6 +153,7 @@ function UploadJahr({ details }: { details: StatsDetails }) {
                 style={{
                   width: Z, height: Z, borderRadius: 3,
                   background: z.zukunft ? "transparent" : z.anzahl === 0 ? C.surfaceContainerHigh : z.anzahl === 1 ? alpha(C.primary, 0.6) : C.primary,
+                  boxShadow: z.anzahl > 1 ? `0 0 6px ${alpha(C.primary, 0.48)}` : "none",
                   border: z.zukunft ? `1px dashed ${C.border10}` : undefined, boxSizing: "border-box",
                 }} />
             ))}
@@ -255,7 +265,7 @@ function Tempo({ bpm }: { bpm: [number, number][] }) {
         {stufen.map((s, i) => (
           <div key={s.b} className="ue-hell" title={`${s.b}–${s.b + 9} BPM: ${s.n} Beats`} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 5, height: "100%" }}>
             <span style={zahl}>{s.n || ""}</span>
-            <div style={{ width: "100%", borderRadius: "4px 4px 0 0", height: Math.max((s.n / max) * 160, s.n ? 4 : 2), background: kern(i) ? C.primary : s.n ? C.outlineVariant : C.surfaceContainerHigh }} />
+            <div style={{ width: "100%", borderRadius: "4px 4px 0 0", height: Math.max((s.n / max) * 160, s.n ? 4 : 2), background: kern(i) ? C.primary : s.n ? C.outlineVariant : C.surfaceContainerHigh, boxShadow: kern(i) ? GLUT : "none" }} />
           </div>
         ))}
       </div>
@@ -271,16 +281,16 @@ function Strecke({ teile }: { teile: { key: string; label: string; anzahl: numbe
   const summe = teile.reduce((s, t) => s + t.anzahl, 0) || 1;
   return (
     <>
-      <div style={{ display: "flex", height: 10, borderRadius: radius.full, overflow: "hidden", gap: 3 }}>
+      <div style={{ display: "flex", height: 16, borderRadius: radius.full, overflow: "hidden", gap: 3 }}>
         {teile.filter(t => t.anzahl > 0).map(t => (
-          <div key={t.key} className="ue-hell" title={`${t.label}: ${t.anzahl}`} style={{ width: `${(t.anzahl / summe) * 100}%`, minWidth: 6, background: t.farbe }} />
+          <div key={t.key} className="ue-hell" title={`${t.label}: ${t.anzahl}`} style={{ width: `${(t.anzahl / summe) * 100}%`, minWidth: 6, background: t.farbe, boxShadow: `0 0 10px ${alpha(t.farbe, 0.41)}` }} />
         ))}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "12px 40px", marginTop: 16, alignItems: "baseline" }}>
         {teile.map((t, i) => {
           const inhalt = (
             <>
-              <span style={{ fontSize: 26, fontWeight: 800, color: C.onSurface }}>{t.anzahl}</span>{" "}
+              <span style={{ fontSize: 30, fontWeight: 700, color: t.farbe, textShadow: `0 0 19px ${alpha(t.farbe, 0.26)}` }}>{t.anzahl}</span>{" "}
               <span style={{ fontSize: 13, color: t.farbe }}>{t.label}</span>
             </>
           );
@@ -299,8 +309,8 @@ function Strecke({ teile }: { teile: { key: string; label: string; anzahl: numbe
 function WegDerBeats({ stats, actions, studioSumme, onFilter }: { stats: Stats; actions: DashboardActions; studioSumme: number; onFilter: (f: object) => void }) {
   const studio = actions.studio_by_status;
   return (
-    <section style={abschnitt}>
-      <h2 style={ueberschrift}>Weg der Beats</h2>
+    <section className="ds-fl" style={abschnitt}>
+      <h2 style={ueberschrift}>Release-Pipeline</h2>
       <p style={{ ...unterzeile, marginBottom: 24 }}>Erst im Studio, dann im Archiv · {studioSumme} Projekte, {stats.total} archivierte Beats</p>
       <div style={{ fontSize: 12, fontWeight: 700, color: C.onSecondaryFixedVar, marginBottom: 10 }}>Studio</div>
       <Strecke teile={(["idea", "wip", "exported", "ready"] as const).map(k => ({
@@ -331,7 +341,7 @@ function Wochentage({ werte }: { werte: number[] }) {
         <div key={t} className="ue-zeile" title={`${WOCHENTAGE[t]}: ${werte[t]} Beats`} style={{ display: "grid", gridTemplateColumns: "28px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 8px", margin: "0 -8px", fontSize: 13 }}>
           <span style={{ fontWeight: 600, color: C.onSurfaceVariant }}>{WOCHENTAGE[t]}</span>
           <span style={{ height: 8, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
-            <span style={{ display: "block", height: "100%", width: `${(werte[t] / max) * 100}%`, borderRadius: radius.full, background: werte[t] / max > 0.5 ? C.primary : C.outlineVariant }} />
+            <span style={{ display: "block", height: "100%", width: `${(werte[t] / max) * 100}%`, borderRadius: radius.full, background: werte[t] / max > 0.5 ? C.primary : C.outlineVariant, boxShadow: werte[t] / max > 0.5 ? GLUT : "none" }} />
           </span>
           <span style={{ ...zahl, fontSize: 12, textAlign: "right" }}>{werte[t]}</span>
         </div>
@@ -346,7 +356,7 @@ function Durchlauf({ tage }: { tage: number[] }) {
   const max = Math.max(1, ...stufen.map(s => s.anzahl));
   return (
     <div style={{ flex: "1 1 340px", minWidth: 0 }}>
-      <h2 style={ueberschrift}>Vom Archiv zum Upload</h2>
+      <h2 style={ueberschrift}>Time to Release</h2>
       <p style={{ ...unterzeile, marginBottom: 20 }}>
         {median === null ? "Noch keine Uploads gemessen"
           : `Meist ${median <= 1 ? "nach einem Tag" : `nach ${Math.round(median)} Tagen`} draußen (Median) · ${tage.length} Beats`}
@@ -355,7 +365,7 @@ function Durchlauf({ tage }: { tage: number[] }) {
         <div key={s.label} className="ue-zeile" title={`${s.label}: ${s.anzahl} Beats`} style={{ display: "grid", gridTemplateColumns: "170px 1fr 32px", alignItems: "center", gap: 12, padding: "5px 8px", margin: "0 -8px", fontSize: 13 }}>
           <span style={{ color: C.onSurfaceVariant }}>{s.label}</span>
           <span style={{ height: 8, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
-            <span style={{ display: "block", height: "100%", width: `${(s.anzahl / max) * 100}%`, borderRadius: radius.full, background: C.primary }} />
+            <span style={{ display: "block", height: "100%", width: `${(s.anzahl / max) * 100}%`, borderRadius: radius.full, background: C.primary, boxShadow: GLUT }} />
           </span>
           <span style={{ ...zahl, fontSize: 12, textAlign: "right" }}>{s.anzahl}</span>
         </div>
@@ -437,7 +447,7 @@ function Tags({ stats, onFilter }: { stats: Stats; onFilter: (f: object) => void
   if (tags.length === 0) return null;
   const max = Math.max(1, ...tags.map(t => t.count));
   return (
-    <section style={{ padding: "44px 0" }}>
+    <section className="ds-fl" style={abschnitt}>
       <h2 style={ueberschrift}>Häufigste Tags</h2>
       <p style={{ ...unterzeile, marginBottom: 18 }}>Klick sucht im Archiv</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", columnGap: 56 }}>
@@ -446,7 +456,7 @@ function Tags({ stats, onFilter }: { stats: Stats; onFilter: (f: object) => void
             style={{ display: "grid", gridTemplateColumns: "150px 1fr 28px", alignItems: "center", gap: 12, padding: "7px 8px", margin: "0 -8px", fontSize: 13 }}>
             <span style={{ fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>#{t.tag}</span>
             <span style={{ height: 6, borderRadius: radius.full, background: C.surfaceContainerHigh, overflow: "hidden" }}>
-              <span style={{ display: "block", height: "100%", width: `${(t.count / max) * 100}%`, borderRadius: radius.full, background: C.primary }} />
+              <span style={{ display: "block", height: "100%", width: `${(t.count / max) * 100}%`, borderRadius: radius.full, background: C.primary, boxShadow: GLUT }} />
             </span>
             <span style={{ ...zahl, fontSize: 12, textAlign: "right" }}>{t.count}</span>
           </Klick>

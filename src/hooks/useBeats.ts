@@ -421,8 +421,11 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     try {
       await api.beats.update(params);
     } catch (e) {
-      console.error("[useBeats] Failed to update beat:", e);
-      return;
+      // Kann halb geklappt haben (gespeichert, aber Ordner gesperrt): Liste
+      // trotzdem neu holen und den Fehler dem Panel zeigen lassen.
+      queueCacheRef.current = null;
+      await reload();
+      throw e;
     }
     queueCacheRef.current = null;
     await reload();

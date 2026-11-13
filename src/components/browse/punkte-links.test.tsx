@@ -24,6 +24,6 @@ describe("PlatformDots", () => {
     expect(openUrl).toHaveBeenCalledWith("https://youtu.be/x");
     expect(zeile).not.toHaveBeenCalled();
     // Ohne Link: kein Knopf, nur der Hinweis
-    expect(screen.getByTitle("Beatstars: hochgeladen").tagName).toBe("SPAN");
+    expect(screen.getByTitle("BeatStars: hochgeladen").tagName).toBe("SPAN");
   });
 });

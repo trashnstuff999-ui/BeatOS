@@ -15,7 +15,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw, Star, FolderKanban, FolderInput, FolderPlus, CopyPlus, Trash2, X, Settings, ListOrdered, AudioLines, Plus, Wrench } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
-import { C, STUDIO_STATUS_CONFIG, alpha } from "../../lib/theme";
+import { C, STUDIO_STATUS_CONFIG, STUDIO_VERLAUF, verlaufKey, alpha, type StudioVerlaufKey } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { daysSince } from "../../lib/time";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
@@ -33,6 +33,7 @@ import { MergeProjectsDialog } from "./MergeProjectsDialog";
 import { BenennenDialog } from "./BenennenDialog";
 import { ProjectInspector } from "./ProjectInspector";
 import { Werkbank } from "./Werkbank";
+import { StudioBuehne } from "./StudioBuehne";
 import { IdeenListe } from "./IdeenListe";
 import { AufraeumListe, type AufraeumFilter, type AufraeumSort } from "./AufraeumListe";
 import { ideenGruppen, jahresGruppen, zeitGruppen, ideeName, skizzen } from "../../lib/werkbank";
@@ -118,7 +119,9 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { playBeat, setQueue } = useAudioPlayerContext();
+  const { playBeat, setQueue, currentBeat, isPlaying, togglePlay } = useAudioPlayerContext();
+  /** Pfad des Projekts, das gerade läuft: Equalizer auf der Kachel, Pause statt Play. */
+  const playingPath = isPlaying ? currentBeat?.path ?? null : null;
   const { settings } = useSettings();
   const { frage, melde } = useDialog();
 
@@ -274,7 +277,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   const handleNewFromFlp = async () => {
     const quelle = await open({
       multiple: false,
-      title: "FLP als Vorlage fuer das neue Projekt waehlen",
+      title: "FLP als Vorlage für das neue Projekt wählen",
       defaultPath: settings.archivePath || newProjectRoot,
       filters: [{ name: "FL Studio Projekt", extensions: ["flp"] }],
     }).catch(() => null);
@@ -534,6 +537,12 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
       }))
     : [];
 
+  // Bühne: zuletzt aus BeatOS in FL geöffnet, sonst zuletzt geändert. Nur in
+  // der Arbeitsansicht ohne Suche — beim Suchen zählen die Treffer.
+  const buehne = view !== "work" || q ? null
+    : projects.find(p => p.path === inFlPath && inView(p))
+      ?? projects.filter(inView).reduce<StudioProject | null>((a, p) => !a || p.modified_secs > a.modified_secs ? p : a, null);
+
   // Genau die Zeilen, die dastehen — in der Reihenfolge der Liste. Daraus wird
   // die Hör-Queue, damit „Weiter" das nächste Projekt meint und nicht die
   // Browse-Liste von vorhin.
@@ -608,6 +617,8 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
   // scans the folder root and finds the exported MP3/WAV. Die ganze sichtbare
   // Liste kommt als Queue mit: hören → Stern oder „Kann weg" → Weiter.
   const handlePreview = (p: StudioProject) => {
+    // Dasselbe Projekt nochmal: Pause bzw. weiter, nicht von vorn
+    if (currentBeat?.path === p.path) { togglePlay(); return; }
     setQueue(rows.filter(x => x.has_mp3 || x.has_wav).map(toPseudoBeat));
     playBeat(toPseudoBeat(p));
   };
@@ -741,7 +752,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
               <MenueGruppe>Sample</MenueGruppe>
               <VorlagenPunkte vorlagen={vorlagenVon("sample")} ordner="Sample"
                 onPick={v => { close(); neuesSample(v); }} />
-              <MenueGruppe>Künstler</MenueGruppe>
+              <MenueGruppe>Artists</MenueGruppe>
               <VorlagenPunkte vorlagen={vorlagenVon("kuenstler")} ordner="Recording oder FL/Mix-Master"
                 onPick={v => { close(); navigate("/kuenstler", { state: { neuerSong: v } }); }} />
               <div style={{ height: 1, background: C.border20, margin: "6px 4px" }} />
@@ -786,14 +797,33 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
         <EmptyState variant="inline" title="Keine Treffer" />
       )}
 
+      {buehne && (
+        <StudioBuehne
+          project={buehne}
+          verlauf={STUDIO_VERLAUF[verlaufKey(buehne)]}
+          inFl={buehne.path === inFlPath}
+          spielt={playingPath === buehne.path}
+          zahlen={sections.filter(s => isShelf(s.key) || s.key === "idea").map(s => ({
+            key: s.key, label: s.key === "idea" ? "Ideen" : s.meta.label, anzahl: s.items.length,
+            farbe: STUDIO_VERLAUF[s.key as StudioVerlaufKey].glow,
+          }))}
+          onPreview={() => handlePreview(buehne)}
+          onOpenDaw={() => handleOpenDaw(buehne)}
+          onDetails={() => setInspectorPath(buehne.path)}
+          onSpring={key => document.getElementById(`regal-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        />
+      )}
+
       {sections.some(s => isShelf(s.key)) && (
         <Werkbank
           regale={sections.filter(s => isShelf(s.key)).map(s => ({
-            key: s.key, label: s.meta.label, color: s.meta.color,
+            key: s.key, label: s.meta.label,
+            verlauf: STUDIO_VERLAUF[s.key as StudioVerlaufKey],
             hint: SHELF_HINT[s.key] ?? "", items: s.items,
           }))}
           inspectorPath={inspectorPath}
           selected={selected}
+          playingPath={playingPath}
           onOpen={handleRowClick}
           onPreview={handlePreview}
           onAufraeumen={handleAufraeumen}
@@ -857,7 +887,7 @@ export function ProjectsPane({ productionPaths, refreshKey, onProjects, onInspec
             Priorität
           </Button>
           <Button size="sm" icon={Trash2} onClick={() => patchSelected(() => ({ status: "discard" }))}>
-            Kann weg
+            Verwerfen
           </Button>
           <Button size="sm" icon={AudioLines} onClick={() => handleToSamples(projectsRef.current.filter(p => selected.has(p.path)))}>
             Zu Samples

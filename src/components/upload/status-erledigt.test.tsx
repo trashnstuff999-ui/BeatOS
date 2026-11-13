@@ -20,13 +20,13 @@ describe("Status-Karte: alles hochgeladen", () => {
       zeile("youtube", "uploaded", null),
     ]} />);
 
-    expect(screen.getByText("Überall hochgeladen")).toBeInTheDocument();
+    expect(screen.getByText("Überall live")).toBeInTheDocument();
     expect(screen.getByText(/am 12\.10\.2026/)).toBeInTheDocument();
     expect(screen.getByText("YouTube").closest("button")).toBeDisabled();   // kein Link
-    expect(screen.queryByText("Entwurf")).not.toBeInTheDocument();          // keine Kacheln
+    expect(screen.queryByText("Draft")).not.toBeInTheDocument();          // keine Kacheln
 
     await userEvent.click(screen.getByText("Details"));
-    expect(screen.getAllByText("Entwurf")).toHaveLength(3);
+    expect(screen.getAllByText("Draft")).toHaveLength(3);
   });
 
   it("ist noch etwas offen, bleiben die Kacheln", () => {
@@ -35,7 +35,7 @@ describe("Status-Karte: alles hochgeladen", () => {
       zeile("soundcloud", "draft", null),
       zeile("youtube", "draft", null),
     ]} />);
-    expect(screen.queryByText("Überall hochgeladen")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Entwurf")).toHaveLength(3);
+    expect(screen.queryByText("Überall live")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Draft")).toHaveLength(3);
   });
 });

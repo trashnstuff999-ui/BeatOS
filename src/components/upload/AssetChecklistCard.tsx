@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  FileAudio, FileVideo, FolderOpen, FolderTree, RefreshCw, Wand2, X, Plus, Archive, Copy, Check,
+  FolderOpen, RefreshCw, Wand2, X, Plus, Archive, Copy, Check,
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -201,7 +201,6 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
             mass={mass[id] ?? null}
             soll={id === "cover" || id === "thumbnail" ? MASSE[id].soll : undefined}
             zuweisbar={id in ZUWEISBAR}
-            icon={id === "flp" ? FolderTree : id === "video" ? FileVideo : FileAudio}
             eingehend={eingehend(id)?.pfad ?? null}
             onClick={() => klick(id)}
           />
@@ -260,6 +259,7 @@ export function AssetChecklistCard({ beatId, assets, beatPath, onRefresh, onConv
           targetDir={beatPath}
           assetRoot={settings.assetPath}
           slot={picker}
+          beatId={beatId}
           onAssigned={() => onRefresh()}
           onClose={() => setPicker(null)}
         />
@@ -358,7 +358,7 @@ function ExportNamen({ beatId }: { beatId: string }) {
 
 /** Eine Datei als Kachel. Da: ruhige Fläche (bei Bildern das Bild selbst).
  *  Fehlt: gestrichelt mit „+". Beim Ziehen: leuchtet, wenn hier etwas landet. */
-function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: Icon, eingehend, onClick }: {
+function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, eingehend, onClick }: {
   label: string;
   datei: string | null;
   bild: string | null;
@@ -366,7 +366,6 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
   mass: Mass | null;
   soll?: string;
   zuweisbar: boolean;
-  icon: React.ElementType;
   eingehend: string | null;
   onClick: () => void;
 }) {
@@ -389,21 +388,22 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       title={titel}
+      className="ul-datei"
       style={{
         position: "relative", overflow: "hidden",
-        width: breit ? 104 : 64, height: 58, flexShrink: 0,
-        padding: 0, borderRadius: radius.control,
+        width: breit ? 136 : 84, height: 76, flexShrink: 0,
+        padding: 0, borderRadius: 14,
         cursor: klickbar ? "pointer" : "default",
         fontFamily: "inherit",
         background: eingehend ? alpha(C.primary, 0.14)
-          : da ? "rgba(255,255,255,0.04)" : "transparent",
+          : da ? "rgba(14,14,14,0.55)" : "transparent",
         border: eingehend ? `1px solid ${C.primary}`
           : falsch ? `1px solid ${alpha(C.primary, 0.6)}`
-          : da ? `1px solid ${hover && klickbar ? C.border30 : C.border10}`
+          : da ? `1px solid ${C.border30}`
           : `1px dashed ${hover && klickbar ? C.border30 : C.border20}`,
         transition: "border-color 0.15s, background 0.15s",
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 4,
+        alignItems: "center", justifyContent: "center", gap: 9,
       }}
     >
       {da && bild && !eingehend && <KachelBild pfad={bild} />}
@@ -413,7 +413,7 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
       {!(da && bild) || eingehend ? (
         eingehend
           ? <Plus size={14} color={C.primary} strokeWidth={2.25} />
-          : da ? <Icon size={15} color={C.onSurfaceVariant} strokeWidth={1.5} />
+          : da ? <span className="ul-led" style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--c)", boxShadow: "0 0 18px color-mix(in srgb, var(--c) 64%, transparent)" }} />
           : <Plus size={14} color={C.onSecondaryFixedVar} strokeWidth={2} />
       ) : null}
       <span style={{
@@ -421,7 +421,7 @@ function AssetKachel({ label, datei, bild, breit, mass, soll, zuweisbar, icon: I
         left: 0, right: 0, bottom: 0,
         padding: da && bild && !eingehend ? "10px 4px 3px" : 0,
         background: da && bild && !eingehend ? "linear-gradient(transparent, rgba(0,0,0,0.75))" : "none",
-        fontSize: 11, fontWeight: 600, textAlign: "center",
+        fontSize: 12, fontWeight: 800, textAlign: "center",
         color: eingehend ? C.primary : da ? C.onSurface : C.onSecondaryFixedVar,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         maxWidth: "100%",

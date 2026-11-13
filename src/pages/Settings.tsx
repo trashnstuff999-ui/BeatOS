@@ -11,7 +11,19 @@ import {
   Instagram, Music2, Youtube, ShoppingBag, X, Wrench, Info, DatabaseBackup, FileText,
   Settings as SettingsIcon, FolderTree, Users, Trash2, Plus, History, Download,
 } from "lucide-react";
-import { C, commonStyles, alpha, radius } from "../lib/theme";
+import { C, commonStyles, alpha, radius, STUDIO_VERLAUF, PLATFORM_CONFIG } from "../lib/theme";
+import "./settings-wucht.css";
+import { APP_VERSION } from "../lib/version";
+
+/** Look „Wucht“: Farbe je Bereich */
+const FARBE = {
+  paths: C.primary,
+  producer: STUDIO_VERLAUF.exported.glow,
+  maintenance: STUDIO_VERLAUF.ready.glow,
+  about: C.mint,
+} as const;
+const LEER = STUDIO_VERLAUF.wip.glow;
+const PLATTFORM = { ig: "#e1306c", sc: PLATFORM_CONFIG.soundcloud.color, yt: PLATFORM_CONFIG.youtube.color, bs: PLATFORM_CONFIG.beatstars.color };
 import { PageHeader, PageBody, Button, IconButton } from "../components/ui";
 import { useSettings, parseProductionPaths, DEFAULTS, kuenstlerOrdner } from "../contexts/SettingsContext";
 import type { AppSettings } from "../contexts/SettingsContext";
@@ -40,30 +52,74 @@ async function pickFolder(title: string): Promise<string | null> {
 
 // ─── Section Component ───────────────────────────────────────────────────────
 
-function Section({ title, description, children }: {
+function Section({ title, description, farbe = C.primary, index = 0, children }: {
   title: string;
-  description: string;
+  description?: string;
+  farbe?: string;
+  index?: number;
   children: React.ReactNode;
 }) {
   return (
-    <div style={{
-      background: C.surfaceContainerLowest,
-      border: `1px solid ${C.border10}`,
-      borderRadius: radius.card,
-      padding: 28,
-    }}>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.onSurface, letterSpacing: "-0.01em" }}>
+    <section className="st-fl" style={{
+      "--c": farbe, "--i": index,
+      background: C.surfaceContainerLow,
+      border: `1px solid ${C.border30}`,
+      borderRadius: 22,
+      padding: 22,
+      display: "flex", flexDirection: "column", gap: 14,
+    } as React.CSSProperties}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.onSurface, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: farbe, boxShadow: `0 0 8px ${alpha(farbe, 0.64)}` }} />
           {title}
         </h2>
-        <p style={{ margin: "4px 0 0", fontSize: 12, color: C.onSurfaceVariant }}>
-          {description}
-        </p>
+        {description && (
+          <p style={{ margin: "4px 0 0 20px", fontSize: 13, color: C.onSecondaryFixedVar }}>{description}</p>
+        )}
       </div>
       {children}
-    </div>
+    </section>
   );
 }
+
+/** Kopf eines Bereichs: große Überschrift, optional ein Leuchtbalken für den Stand. */
+function Buehne({ titel, text, farbe, stand }: { titel: string; text: string; farbe: string; stand?: boolean[] }) {
+  return (
+    <section className="st-buehne" style={{
+      padding: "28px 30px", borderRadius: 24,
+      background: `color-mix(in srgb, ${farbe} 6%, ${C.surfaceContainerLow})`,
+      border: `1px solid ${alpha(farbe, 0.3)}`,
+      boxShadow: `0 14px 38px -14px ${alpha(farbe, 0.35)}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: farbe }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: farbe, boxShadow: `0 0 8px ${alpha(farbe, 0.64)}` }} />
+        Einstellungen
+      </div>
+      <h1 style={{ margin: "10px 0 8px", fontSize: "clamp(36px, 4.4vw, 56px)", lineHeight: 1, fontWeight: 700, color: C.onSurface, textShadow: `0 0 19px ${alpha(farbe, 0.29)}` }}>
+        {titel}
+      </h1>
+      <p style={{ margin: 0, fontSize: 15, color: C.onSurfaceVariant }}>{text}</p>
+      {stand && (
+        <div style={{ display: "flex", gap: 6, marginTop: 18, maxWidth: 420 }} title={`${stand.filter(Boolean).length} von ${stand.length} gesetzt`}>
+          {stand.map((an, i) => (
+            <i key={i} style={{ flex: 1, height: 8, borderRadius: 4, background: an ? C.mint : "rgba(255,255,255,0.1)", boxShadow: an ? `0 0 8px ${alpha(C.mint, 0.64)}` : "none" }} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Leuchtpunkt einer Pfad-Zeile: grün gesetzt, Koralle leer. */
+function Led({ an }: { an: boolean }) {
+  const f = an ? C.mint : LEER;
+  return <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, background: f, boxShadow: `0 0 10px ${alpha(f, 0.64)}` }} />;
+}
+
+const feldLabel: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8,
+  fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: C.onSecondaryFixedVar,
+};
 
 // ─── Path Input ──────────────────────────────────────────────────────────────
 
@@ -77,45 +133,33 @@ function PathInput({ label, icon: Icon, value, placeholder, onBrowse, onChange }
 }) {
   const hasValue = value.trim().length > 0;
   return (
-    <div>
-      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
-        {label}
+    <div className="st-pfad" style={{
+      "--s": hasValue ? C.mint : LEER,
+      display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 12, alignItems: "center",
+      padding: "12px 14px", borderRadius: 16, border: `1px solid ${C.border30}`, background: C.surfaceContainerLowest,
+    } as React.CSSProperties}>
+      <Led an={hasValue} />
+      <label style={{ minWidth: 0 }}>
+        <span style={feldLabel}><Icon size={12} strokeWidth={2} />{label}</span>
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            ...commonStyles.input,
+            width: "100%", padding: "4px 0 0",
+            fontSize: 13,
+            fontFamily: "'JetBrains Mono', Consolas, monospace",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: hasValue ? C.onSurface : C.onSurfaceVariant,
+          }}
+        />
       </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          background: C.surfaceContainerHighest,
-          border: `1px solid ${hasValue ? C.primary + "40" : C.border20}`,
-          borderRadius: radius.control,
-          padding: "0 14px",
-          transition: "border-color 0.15s",
-        }}>
-          <Icon size={14} color={hasValue ? C.primary : C.onSurfaceVariant} strokeWidth={1.5} />
-          <input
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            placeholder={placeholder}
-            style={{
-              ...commonStyles.input,
-              flex: 1,
-              padding: "12px 0",
-              fontSize: 12,
-              fontFamily: "monospace",
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: hasValue ? C.onSurface : C.onSurfaceVariant,
-            }}
-          />
-          {hasValue && <CheckCircle size={14} color={C.mint} />}
-        </div>
-        <Button variant="secondary" icon={FolderOpen} onClick={onBrowse} style={{ whiteSpace: "nowrap" }}>
-          Durchsuchen
-        </Button>
-      </div>
+      <Button variant="secondary" icon={FolderOpen} onClick={onBrowse} style={{ whiteSpace: "nowrap" }}>
+        Durchsuchen
+      </Button>
     </div>
   );
 }
@@ -141,41 +185,45 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
   };
 
   return (
-    <div>
-      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
-        {label}
-      </label>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {paths.map((p, i) => (
-          <div key={`${p}-${i}`} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            background: C.surfaceContainerHighest,
-            border: `1px solid ${C.border20}`,
-            borderRadius: radius.control,
-            padding: "10px 14px",
-          }}>
-            <Icon size={14} color={C.primary} strokeWidth={1.5} />
-            <span style={{ flex: 1, fontSize: 12, fontFamily: "monospace", color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {p}
+    <div className="st-pfad" style={{
+      "--s": paths.length ? C.mint : LEER,
+      display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: 12, alignItems: "center",
+      padding: "12px 14px", borderRadius: 16, border: `1px solid ${C.border30}`, background: C.surfaceContainerLowest,
+    } as React.CSSProperties}>
+      <Led an={paths.length > 0} />
+      <div style={{ minWidth: 0 }}>
+        <span style={feldLabel}><Icon size={12} strokeWidth={2} />{label}{paths.length > 0 && ` · ${paths.length}`}</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          {paths.map((p, i) => (
+            <span key={`${p}-${i}`} className="st-chip" title={p} style={{
+              display: "inline-flex", alignItems: "center", gap: 6, maxWidth: "100%",
+              padding: "5px 6px 5px 12px", borderRadius: 999,
+              background: C.surfaceContainer, border: `1px solid ${C.border30}`,
+            }}>
+              <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', Consolas, monospace", color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {p}
+              </span>
+              <IconButton icon={X} size={22} title="Pfad entfernen" onClick={() => removeAt(i)} />
             </span>
-            <IconButton icon={X} size={24} title="Pfad entfernen" onClick={() => removeAt(i)} />
-          </div>
-        ))}
-        <button
-          onClick={addPath}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            padding: "10px 14px", borderRadius: radius.control,
-            fontSize: 12, fontWeight: 600,
-            background: "transparent",
-            border: `1px dashed ${C.border30}`,
-            color: C.onSurfaceVariant,
-            cursor: "pointer",
-          }}
-        >
-          <FolderOpen size={13} strokeWidth={1.5} />
-          Ordner hinzufügen
-        </button>
+          ))}
+          <button
+            onClick={addPath}
+            title={browseTitle}
+            className="st-plus"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 999,
+              fontSize: 12, fontWeight: 800, fontFamily: "inherit",
+              background: "transparent",
+              border: `1px dashed ${C.border30}`,
+              color: C.onSurfaceVariant,
+              cursor: "pointer",
+            }}
+          >
+            <Plus size={13} strokeWidth={2} />
+            Ordner
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -183,7 +231,9 @@ function PathListInput({ label, icon: Icon, value, onChange, browseTitle }: {
 
 // ─── Text Input (non-path settings) ─────────────────────────────────────────
 
-function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospace, multiline }: {
+function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospace, multiline, farbe = C.primary }: {
+  /** Leuchtpunkt am Label, z. B. die Farbe der Plattform */
+  farbe?: string;
   label: string;
   icon: React.ElementType;
   value: string;
@@ -194,21 +244,21 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
 }) {
   const hasValue = value.trim().length > 0;
   return (
-    <div>
-      <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+    <label className="st-feld" style={{
+      "--s": farbe,
+      display: "block", padding: "12px 14px", borderRadius: 16,
+      border: `1px solid ${C.border30}`, background: C.surfaceContainerLowest,
+    } as React.CSSProperties}>
+      <span style={feldLabel}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: farbe, boxShadow: `0 0 8px ${alpha(farbe, 0.64)}` }} />
         {label}
-      </label>
+      </span>
       <div style={{
         display: "flex",
         alignItems: multiline ? "flex-start" : "center",
-        gap: 10,
-        background: C.surfaceContainerHighest,
-        border: `1px solid ${hasValue ? C.primary + "40" : C.border20}`,
-        borderRadius: radius.control,
-        padding: multiline ? "10px 14px" : "0 14px",
-        transition: "border-color 0.15s",
+        gap: 10, marginTop: 4,
       }}>
-        <Icon size={14} color={hasValue ? C.primary : C.onSurfaceVariant} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: multiline ? 4 : 0 }} />
+        <Icon size={14} color={hasValue ? farbe : C.onSurfaceVariant} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: multiline ? 4 : 0 }} />
         {multiline ? (
           <textarea
             value={value}
@@ -236,9 +286,10 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
             style={{
               ...commonStyles.input,
               flex: 1,
-              padding: "12px 0",
-              fontSize: 12,
-              fontFamily: monospace ? "monospace" : "inherit",
+              padding: "6px 0",
+              fontSize: monospace ? 13 : 15,
+              fontWeight: monospace ? 500 : 700,
+              fontFamily: monospace ? "'JetBrains Mono', Consolas, monospace" : "inherit",
               background: "transparent",
               border: "none",
               outline: "none",
@@ -247,7 +298,7 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
           />
         )}
       </div>
-    </div>
+    </label>
   );
 }
 
@@ -255,7 +306,7 @@ function TextSetting({ label, icon: Icon, value, placeholder, onChange, monospac
 
 function TemplatePreview({ draft }: { draft: AppSettings }) {
   const lines: Array<[string, string]> = [
-    ["{{PRODUCER_PROD}}", draft.producerName ? `prod. ${draft.producerName}` : "–"],
+    ["{{PRODUCER_PROD}}", draft.producerName ? mitProd(draft.producerName) : "–"],
     ["{{EMAIL}}", draft.contactEmail || "–"],
     ["{{IG_URL}}", draft.instagramUrl || "–"],
     ["{{SC_URL}}", draft.soundcloudUrl || "–"],
@@ -263,25 +314,16 @@ function TemplatePreview({ draft }: { draft: AppSettings }) {
   ];
   return (
     <div style={{
-      padding: "14px 16px",
-      background: C.surfaceContainerHighest,
-      border: `1px solid ${C.border15}`,
-      borderRadius: radius.control,
+      padding: 16,
+      background: C.surfaceContainerLowest,
+      border: `1px solid ${C.border30}`,
+      borderRadius: 16,
     }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 6,
-        fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: C.onSecondaryFixedVar,
-        marginBottom: 10,
-      }}>
-        <FileText size={10} strokeWidth={2} />
-        Vorschau
-      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {lines.map(([placeholder, value]) => (
           <div key={placeholder} style={{ display: "flex", gap: 10, fontSize: 12, fontFamily: "monospace" }}>
             <span style={{ color: C.onSecondaryFixedVar, width: 150, flexShrink: 0 }}>{placeholder}</span>
-            <span style={{ color: value === "–" ? C.onSecondaryFixedVar : C.mint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ color: value === "–" ? C.onSecondaryFixedVar : C.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {value}
             </span>
           </div>
@@ -344,11 +386,11 @@ function SampleProducersCard() {
     setDraft(d => (d ? { ...d, [k]: v } : d));
 
   return (
-    <div style={{
-      padding: "16px 18px",
-      background: C.surfaceContainerHighest,
-      border: `1px solid ${C.border15}`,
-      borderRadius: radius.control,
+    <div className="st-ak" style={{
+      padding: 20,
+      background: C.surfaceContainerLow,
+      border: `1px solid ${C.border30}`,
+      borderRadius: 18,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <Users size={14} color={C.mint} strokeWidth={1.75} />
@@ -397,7 +439,7 @@ function SampleProducersCard() {
             placeholder="z.B. prodzeux" onChange={feld("name")} />
           <TextSetting label="Instagram URL" icon={Instagram} value={draft.instagram_url}
             placeholder="https://www.instagram.com/prodzeux/" onChange={feld("instagram_url")} monospace />
-          <TextSetting label="Beatstars URL" icon={ShoppingBag} value={draft.beatstars_url}
+          <TextSetting label="BeatStars URL" icon={ShoppingBag} value={draft.beatstars_url}
             placeholder="https://www.beatstars.com/prodzeux" onChange={feld("beatstars_url")} monospace />
           <TextSetting label="SoundCloud URL" icon={Music2} value={draft.soundcloud_url}
             placeholder="optional" onChange={feld("soundcloud_url")} monospace />
@@ -631,7 +673,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
 
   const handleRepair = async () => {
     const ok = await frage({
-      titel: "System Repair starten?",
+      titel: "System-Reparatur starten?",
       text: "1. Fehlende Beats aus dem Archiv importieren\n" +
             "2. Alle create_dates aus FLP-Dateien neu lesen\n" +
             "3. has_artwork/has_video auffrischen",
@@ -643,7 +685,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
       const scan = await api.archive.scan(archivePath);
       const fix = await api.archive.fixDates(archivePath);
       await frage({
-        titel: "System Repair abgeschlossen",
+        titel: "System-Reparatur abgeschlossen",
         text: `── Scan ──\nGefunden: ${scan.found}  Importiert: ${scan.imported}  Übersprungen: ${scan.skipped}\n\n` +
               `── Dates ──\nAktualisiert: ${fix.updated}  Nicht gefunden: ${fix.not_found}  Ohne FLP: ${fix.no_flp}\n\n` +
               `Fehler: ${[...scan.errors, ...fix.errors].length}`,
@@ -651,7 +693,7 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
         nurHinweis: true,
       });
     } catch (e) {
-      melde(`System Repair fehlgeschlagen:\n${String(e)}`);
+      melde(`System-Reparatur fehlgeschlagen:\n${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -717,17 +759,14 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
   const rowLabel: React.CSSProperties = { color: C.onSecondaryFixedVar, width: 110, flexShrink: 0, fontFamily: "Inter, sans-serif", fontSize: 12 };
 
   return (
-    <Section
-      title="Wartung"
-      description="Backup, Reparatur, Vorlagen"
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, alignItems: "start" }}>
         {/* Backup */}
-        <div style={{
-          padding: "16px 18px",
-          background: C.surfaceContainerHighest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
+        <div className="st-ak" style={{
+          padding: 20,
+          background: C.surfaceContainerLow,
+          border: `1px solid ${C.border30}`,
+          borderRadius: 18,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <DatabaseBackup size={14} color={C.mint} strokeWidth={1.75} />
@@ -761,11 +800,11 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
         <RelocateCard />
 
         {/* System Repair */}
-        <div style={{
-          padding: "16px 18px",
-          background: C.surfaceContainerHighest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
+        <div className="st-ak" style={{
+          padding: 20,
+          background: C.surfaceContainerLow,
+          border: `1px solid ${C.border30}`,
+          borderRadius: 18,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <Wrench size={14} color={C.error} strokeWidth={1.75} />
@@ -783,11 +822,11 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
         </div>
 
         {/* Ordner-Abgleich */}
-        <div style={{
-          padding: "16px 18px",
-          background: C.surfaceContainerHighest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
+        <div className="st-ak" style={{
+          padding: 20,
+          background: C.surfaceContainerLow,
+          border: `1px solid ${C.border30}`,
+          borderRadius: 18,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <FolderTree size={14} color={C.mint} strokeWidth={1.75} />
@@ -847,16 +886,16 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
         </div>
 
         {/* Templates */}
-        <div style={{
-          padding: "16px 18px",
-          background: C.surfaceContainerHighest,
-          border: `1px solid ${C.border15}`,
-          borderRadius: radius.control,
+        <div className="st-ak" style={{
+          padding: 20,
+          background: C.surfaceContainerLow,
+          border: `1px solid ${C.border30}`,
+          borderRadius: 18,
           display: "flex", alignItems: "center", gap: 12,
         }}>
           <FileText size={14} color={C.tertiary ?? C.tertiary} strokeWidth={1.75} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Templates</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.onSurface }}>Beschreibungs-Vorlagen</div>
             <div style={{ fontSize: 11, color: C.onSecondaryFixedVar, marginTop: 2 }}>
               beatstars / soundcloud / youtube .template
             </div>
@@ -864,13 +903,16 @@ function MaintenancePane({ archivePath }: { archivePath: string }) {
           <Button variant="secondary" icon={FolderOpen} onClick={handleOpenTemplates}>Ordner öffnen</Button>
         </div>
       </div>
-    </Section>
+    </div>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type Draft = AppSettings;
+
+/** „prod. " davor, außer der Name bringt es schon mit (wie mit_prod_praefix in render.rs). */
+const mitProd = (name: string) => /^prod./i.test(name.trim()) ? name.trim() : `prod. ${name.trim()}`;
 
 export function Settings() {
   const { settings, isLoaded, updateSettings } = useSettings();
@@ -907,6 +949,26 @@ export function Settings() {
     setDraft(settings);
   };
 
+  // Stand für die Navigation und den Leuchtbalken der Pfade
+  const pfadStand = [
+    draft.archivePath, draft.assetPath, draft.artistsPath,
+    draft.productionPath, draft.altbestandPaths,
+    draft.downloadsPath, draft.importPath,
+  ].map(v => v.trim().length > 0);
+  const pfadeGesetzt = pfadStand.filter(Boolean).length;
+
+  const BEREICHE = [
+    { key: "paths", Icon: FolderOpen, label: "Pfade", text: "Ordner für Archiv, Produktion und Assets",
+      stand: `${pfadeGesetzt} von ${pfadStand.length} gesetzt`, standFarbe: draft.archivePath ? C.mint : LEER },
+    { key: "producer", Icon: User, label: "Producer", text: "Für die Beschreibungen im Upload",
+      stand: draft.producerName ? mitProd(draft.producerName) : "Name fehlt", standFarbe: draft.producerName ? C.onSecondaryFixedVar : LEER },
+    { key: "maintenance", Icon: Wrench, label: "Wartung", text: "Backup, Reparatur, Vorlagen",
+      stand: "Backup, Reparatur, Vorlagen", standFarbe: C.onSecondaryFixedVar },
+    { key: "about", Icon: Info, label: "Info", text: "Informationen zur Anwendung",
+      stand: `Version ${APP_VERSION}`, standFarbe: C.onSecondaryFixedVar },
+  ] as const;
+  const aktiv = BEREICHE.find(b => b.key === section)!;
+
   return (
     <div style={{
       height: "100%",
@@ -920,73 +982,86 @@ export function Settings() {
         icon={SettingsIcon}
         title="Einstellungen"
         actions={saved && (
-          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.mint }}>
+          <span className="st-gespeichert" style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999,
+            fontSize: 12, fontWeight: 800, color: C.mint, background: alpha(C.mint, 0.14),
+          }}>
             <CheckCircle size={14} />
             Gespeichert
           </span>
         )}
       />
 
-      {/* Content: Sektions-Navigation links, aktive Sektion rechts */}
+      {/* Content: Bereichs-Kacheln links, aktiver Bereich rechts */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
         {/* Nav */}
         <nav style={{
-          width: 190, flexShrink: 0,
-          borderRight: `1px solid ${C.border10}`,
-          padding: "24px 16px",
-          display: "flex", flexDirection: "column", gap: 4,
+          width: 260, flexShrink: 0,
+          padding: "24px 0 24px 24px",
+          display: "flex", flexDirection: "column", gap: 8,
         }}>
-          {([
-            ["paths", FolderOpen, "Pfade"],
-            ["producer", User, "Producer"],
-            ["maintenance", Wrench, "Wartung"],
-            ["about", Info, "Info"],
-          ] as const).map(([key, Icon, label]) => (
-            <button
-              key={key}
-              onClick={() => setSection(key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 12px", borderRadius: radius.control,
-                background: section === key ? C.surfaceContainerHigh : "transparent",
-                border: "none",
-                cursor: "pointer", textAlign: "left",
-                fontSize: 12, fontWeight: section === key ? 700 : 500,
-                color: section === key ? C.onSurface : C.onSurfaceVariant,
-                transition: "all 0.15s",
-              }}
-            >
-              <Icon size={14} strokeWidth={1.75} />
-              {label}
-            </button>
-          ))}
+          {BEREICHE.map(({ key, Icon, label, stand, standFarbe }) => {
+            const an = section === key;
+            const f = FARBE[key];
+            return (
+              <button
+                key={key}
+                onClick={() => setSection(key)}
+                aria-current={an}
+                className="st-nk"
+                style={{
+                  "--c": f,
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: 14, borderRadius: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                  background: an ? `color-mix(in srgb, ${f} 10%, ${C.surfaceContainerLow})` : C.surfaceContainerLow,
+                  border: `1px solid ${an ? f : C.border30}`,
+                  boxShadow: an ? `0 10px 24px -12px ${alpha(f, 0.51)}` : "none",
+                } as React.CSSProperties}
+              >
+                <span className="st-ic" style={{
+                  width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: alpha(f, 0.16), color: f,
+                }}>
+                  <Icon size={18} strokeWidth={1.9} />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: C.onSurface }}>{label}</span>
+                  <span style={{ display: "block", fontSize: 12, color: standFarbe, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stand}</span>
+                </span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Pane */}
-        <PageBody width="reading">
+        <PageBody width="reading" gap={22}>
+          <Buehne
+            key={section}
+            titel={aktiv.label}
+            text={aktiv.text}
+            farbe={FARBE[section]}
+            stand={section === "paths" ? pfadStand : undefined}
+          />
 
           {/* Warning if paths not set */}
           {section === "paths" && !settings.archivePath && (
             <div style={{
               display: "flex", alignItems: "center", gap: 12,
-              padding: "14px 18px", borderRadius: radius.control,
-              background: alpha(C.primary, 0.08),
-              border: `1px solid ${alpha(C.primary, 0.25)}`,
+              padding: "14px 18px", borderRadius: 16,
+              background: alpha(LEER, 0.08),
+              border: `1px solid ${alpha(LEER, 0.35)}`,
             }}>
-              <AlertCircle size={16} color={C.primary} />
-              <span style={{ fontSize: 12, color: C.primary }}>
+              <AlertCircle size={16} color={LEER} />
+              <span style={{ fontSize: 13, color: LEER }}>
                 Es ist kein Archiv-Ordner gesetzt. Ohne ihn kann nichts archiviert werden.
               </span>
             </div>
           )}
 
-          {/* Paths */}
-          {section === "paths" && (
-          <Section
-            title="Pfade"
-            description="Ordner für Archiv, Produktion und Assets"
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Pfade: drei Gruppen */}
+          {section === "paths" && (<>
+            <Section title="Bibliothek" farbe={C.primary} index={1}>
               <PathInput
                 label="Archiv-Ordner"
                 icon={Archive}
@@ -997,20 +1072,6 @@ export function Settings() {
                   const p = await pickFolder("Archiv-Ordner wählen");
                   if (p) update("archivePath", p);
                 }}
-              />
-              <PathListInput
-                label="Produktions-Ordner"
-                icon={HardDrive}
-                value={draft.productionPath}
-                onChange={v => update("productionPath", v)}
-                browseTitle="Produktions-Ordner hinzufügen"
-              />
-              <PathListInput
-                label="Altbestand"
-                icon={History}
-                value={draft.altbestandPaths}
-                onChange={v => update("altbestandPaths", v)}
-                browseTitle="Altbestand-Ordner hinzufügen"
               />
               <PathInput
                 label="Asset-Ordner"
@@ -1026,16 +1087,36 @@ export function Settings() {
               {/* Künstler-Projekte (Mix & Master). Leer = 05_ARTISTS neben dem
                   Archiv-Ordner — der Platzhalter zeigt, was dann gilt. */}
               <PathInput
-                label="Künstler-Ordner"
+                label="Artist-Ordner"
                 icon={Users}
                 value={draft.artistsPath}
                 placeholder={kuenstlerOrdner({ artistsPath: "", archivePath: draft.archivePath }) || "z.B. D:\\Beat Library\\05_ARTISTS"}
                 onChange={v => update("artistsPath", v)}
                 onBrowse={async () => {
-                  const p = await pickFolder("Künstler-Ordner wählen");
+                  const p = await pickFolder("Artist-Ordner wählen");
                   if (p) update("artistsPath", p);
                 }}
               />
+            </Section>
+
+            <Section title="Produktion" farbe={STUDIO_VERLAUF.exported.glow} index={2}>
+              <PathListInput
+                label="Produktions-Ordner"
+                icon={HardDrive}
+                value={draft.productionPath}
+                onChange={v => update("productionPath", v)}
+                browseTitle="Produktions-Ordner hinzufügen"
+              />
+              <PathListInput
+                label="Altbestand"
+                icon={History}
+                value={draft.altbestandPaths}
+                onChange={v => update("altbestandPaths", v)}
+                browseTitle="Altbestand-Ordner hinzufügen"
+              />
+            </Section>
+
+            <Section title="Import" farbe={STUDIO_VERLAUF.ready.glow} index={3}>
               {/* Woher Vocals & Demos kommen: der Künstler-Tab schlägt Dateien
                   von hier für die Songs vor. Leer = Downloads von Windows. */}
               <PathInput
@@ -1052,77 +1133,85 @@ export function Settings() {
               {/* Zwischenspeicher für Beats von aussen: „Neuer Beat" listet
                   die Unterordner, statt dass man sie im Dateidialog sucht. */}
               <PathInput
-                label="Übergabe-Ordner"
+                label="Import-Ordner"
                 icon={FolderOpen}
                 value={draft.importPath}
                 placeholder="z.B. C:\Users\…\Downloads\BeatOS-Import  (optional)"
                 onChange={v => update("importPath", v)}
                 onBrowse={async () => {
-                  const p = await pickFolder("Übergabe-Ordner wählen");
+                  const p = await pickFolder("Import-Ordner wählen");
                   if (p) update("importPath", p);
                 }}
               />
-            </div>
-          </Section>
-          )}
+            </Section>
+          </>)}
 
           {/* Producer Info — used by Upload-tab template generation */}
-          {section === "producer" && (
-          <Section
-            title="Producer-Infos"
-            description="Für die Beschreibungen im Upload"
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <TextSetting
-                label="Producer-Name"
-                icon={User}
-                value={draft.producerName}
-                placeholder="z.B. goodbxy"
-                onChange={v => update("producerName", v)}
-              />
-              <TextSetting
-                label="Kontakt-E-Mail"
-                icon={Mail}
-                value={draft.contactEmail}
-                placeholder="z.B. contact@prod404.com"
-                onChange={v => update("contactEmail", v)}
-              />
-              <TextSetting
-                label="Instagram URL"
-                icon={Instagram}
-                value={draft.instagramUrl}
-                placeholder="https://instagram.com/prod.goodbxy"
-                onChange={v => update("instagramUrl", v)}
-                monospace
-              />
-              <TextSetting
-                label="SoundCloud URL"
-                icon={Music2}
-                value={draft.soundcloudUrl}
-                placeholder="https://soundcloud.com/prodgoodbxy"
-                onChange={v => update("soundcloudUrl", v)}
-                monospace
-              />
-              <TextSetting
-                label="YouTube URL"
-                icon={Youtube}
-                value={draft.youtubeUrl}
-                placeholder="https://youtube.com/@PROD.GOODBXY"
-                onChange={v => update("youtubeUrl", v)}
-                monospace
-              />
-              <TextSetting
-                label="Beatstars URL"
-                icon={ShoppingBag}
-                value={draft.beatstarsUrl}
-                placeholder="https://beatstars.com/prodgoodbxy"
-                onChange={v => update("beatstarsUrl", v)}
-                monospace
-              />
+          {section === "producer" && (<>
+            <Section title="Profil" farbe={STUDIO_VERLAUF.exported.glow} index={1}>
+              <div className="st-raster">
+                <TextSetting
+                  label="Producer-Name"
+                  icon={User}
+                  value={draft.producerName}
+                  placeholder="z.B. goodbxy"
+                  onChange={v => update("producerName", v)}
+                  farbe={STUDIO_VERLAUF.exported.glow}
+                />
+                <TextSetting
+                  label="Kontakt-E-Mail"
+                  icon={Mail}
+                  value={draft.contactEmail}
+                  placeholder="z.B. contact@prod404.com"
+                  onChange={v => update("contactEmail", v)}
+                  farbe={STUDIO_VERLAUF.exported.glow}
+                />
+              </div>
+            </Section>
+
+            <Section title="Kanäle" farbe={PLATTFORM.bs} index={2}>
+              <div className="st-raster">
+                <TextSetting
+                  label="Instagram"
+                  icon={Instagram}
+                  value={draft.instagramUrl}
+                  placeholder="https://instagram.com/prod.goodbxy"
+                  onChange={v => update("instagramUrl", v)}
+                  monospace
+                  farbe={PLATTFORM.ig}
+                />
+                <TextSetting
+                  label="SoundCloud"
+                  icon={Music2}
+                  value={draft.soundcloudUrl}
+                  placeholder="https://soundcloud.com/prodgoodbxy"
+                  onChange={v => update("soundcloudUrl", v)}
+                  monospace
+                  farbe={PLATTFORM.sc}
+                />
+                <TextSetting
+                  label="YouTube"
+                  icon={Youtube}
+                  value={draft.youtubeUrl}
+                  placeholder="https://youtube.com/@PROD.GOODBXY"
+                  onChange={v => update("youtubeUrl", v)}
+                  monospace
+                  farbe={PLATTFORM.yt}
+                />
+                <TextSetting
+                  label="BeatStars"
+                  icon={ShoppingBag}
+                  value={draft.beatstarsUrl}
+                  placeholder="https://beatstars.com/prodgoodbxy"
+                  onChange={v => update("beatstarsUrl", v)}
+                  monospace
+                  farbe={PLATTFORM.bs}
+                />
+              </div>
               {/* Selten gebraucht: ältere Uploads nachtragen, die vor der
                   Upload-Erfassung (02/2026) liegen. Liest die Kanäle oben. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: C.onSecondaryFixedVar }}>
-                <Button variant="ghost" size="sm" icon={History} onClick={() => setNacherfassen(true)}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12, color: C.onSecondaryFixedVar }}>
+                <Button variant="secondary" size="sm" icon={History} onClick={() => setNacherfassen(true)}
                   title="Fehlende Uploads aus den Kanälen ergänzen">
                   Uploads von den Kanälen nacherfassen …
                 </Button>
@@ -1135,24 +1224,30 @@ export function Settings() {
                   onClose={() => setNacherfassen(false)}
                 />
               )}
+            </Section>
+
+            <Section title="Standard-Tags für SoundCloud" farbe={PLATTFORM.sc} index={3}>
               {/* Default-Tags als Chips — gespeichert weiterhin als Komma-Liste */}
               <ChipListEditor
-                label="Standard-Tags für SoundCloud"
+                label="Tags"
                 values={draft.defaultGenreTags.split(",").map(t => t.trim()).filter(Boolean)}
                 onChange={vals => update("defaultGenreTags", vals.join(", "))}
                 separatorLabel=","
                 placeholder="Tag eingeben, Enter drücken … (z.B. Melodic Trap)"
                 hint="werden bei SoundCloud immer vorangestellt"
               />
+            </Section>
 
-              {/* Adressbuch der Sample-Geber */}
+            {/* Adressbuch der Sample-Geber */}
+            <Section title="Sample-Produzenten" farbe={STUDIO_VERLAUF.ready.glow} index={4}>
               <SampleProducersCard />
+            </Section>
 
-              {/* Live-Vorschau: so landen die Werte in den Templates */}
+            {/* Live-Vorschau: so landen die Werte in den Templates */}
+            <Section title="Vorschau" farbe={C.primary} index={5}>
               <TemplatePreview draft={draft} />
-            </div>
-          </Section>
-          )}
+            </Section>
+          </>)}
 
           {/* Wartung */}
           {section === "maintenance" && (
@@ -1161,42 +1256,41 @@ export function Settings() {
 
           {/* App Info */}
           {section === "about" && (
-          <Section
-            title="Über die App"
-            description="Informationen zur Anwendung."
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
               {[
-                ["Version", "0.1.0"],
+                ["Version", APP_VERSION],
                 ["Plattform", "Tauri + React"],
-              ].map(([label, value]) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                  <span style={{ color: C.onSurfaceVariant }}>{label}</span>
-                  <span style={{ color: C.onSurface, fontFamily: "monospace" }}>{value}</span>
+              ].map(([label, value], i) => (
+                <div key={label} className="st-fl" style={{
+                  "--c": C.mint, "--i": i + 1,
+                  padding: 18, borderRadius: 18, border: `1px solid ${C.border30}`, background: C.surfaceContainerLowest,
+                } as React.CSSProperties}>
+                  <div style={feldLabel}>{label}</div>
+                  <div style={{ fontSize: 30, fontWeight: 700, color: C.onSurface, marginTop: 4 }}>{value}</div>
                 </div>
               ))}
             </div>
-          </Section>
           )}
 
+          {/* Platz, damit die Speicherleiste nichts verdeckt */}
+          {isDirty && <div style={{ height: 70, flexShrink: 0 }} />}
         </PageBody>
       </div>
 
-      {/* Unsaved-changes bar — unmissable, pinned above the content */}
+      {/* Ungespeichert: schwebende Leiste unten in der Mitte */}
       {isDirty && (
-        <div style={{
-          flexShrink: 0,
-          display: "flex", alignItems: "center", gap: 16,
-          padding: "14px 32px",
-          background: alpha(C.primary, 0.10),
-          borderTop: `1px solid ${alpha(C.primary, 0.45)}`,
-          backdropFilter: "blur(12px)",
+        <div className="st-leiste" style={{
+          position: "fixed", left: "50%", bottom: 24, zIndex: 60,
+          display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+          padding: "12px 12px 12px 20px", borderRadius: 20, maxWidth: "calc(100vw - 32px)",
+          background: `color-mix(in srgb, ${C.primary} 10%, ${C.surfaceContainerHigh})`,
+          border: `1px solid ${alpha(C.primary, 0.5)}`,
+          boxShadow: `0 14px 38px -12px ${alpha(C.primary, 0.45)}, 0 18px 40px rgba(0,0,0,0.5)`,
         }}>
-          <AlertCircle size={18} color={C.primary} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurface }}>
+          <span className="st-blink" style={{ width: 10, height: 10, borderRadius: "50%", background: C.primary, boxShadow: `0 0 8px ${alpha(C.primary, 0.64)}` }} />
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.onSurface }}>
             Ungespeicherte Änderungen
           </span>
-          <div style={{ flex: 1 }} />
           <Button variant="secondary" onClick={handleReset}>
             Verwerfen
           </Button>
@@ -1205,7 +1299,7 @@ export function Settings() {
             icon={CheckCircle}
             onClick={handleSave}
             disabled={!isLoaded}
-            style={{ padding: "10px 28px" }}
+            style={{ padding: "10px 24px" }}
           >
             Speichern
           </Button>

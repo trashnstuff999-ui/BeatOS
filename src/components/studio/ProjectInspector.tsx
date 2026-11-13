@@ -17,7 +17,7 @@ import {
 import { openPath } from "@tauri-apps/plugin-opener";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useNavigate } from "react-router-dom";
-import { C, STUDIO_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
+import { C, STUDIO_STATUS_CONFIG, STUDIO_VERLAUF, verlaufKey, alpha, radius, type StudioVerlauf } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { Button, IconButton, Dropdown, MenuePunkt, PAGE_HEADER_HEIGHT } from "../ui";
 import { arbeitszeit } from "../../lib/werkbank";
@@ -160,6 +160,8 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
   // Archivieren auf, wenn der Beat längst fertig ist. Die 0 als Katalognummer
   // schaltet die ID-Prüfung des Commands aus — hier geht es nur um den Namen.
   const title = projectDisplayName(p);
+  // Look „Wucht“: Leuchten und Cover-Rahmen in der Farbe des Regals
+  const verlauf = STUDIO_VERLAUF[verlaufKey(p)];
   const [duplicate, setDuplicate] = useState<string | null>(null);
   useEffect(() => {
     setDuplicate(null);
@@ -249,7 +251,7 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
       width: INSPECTOR_WIDTH,
       background: C.surfaceContainerLow,
       borderLeft: `1px solid ${C.border15}`,
-      boxShadow: "-12px 0 40px rgba(0,0,0,0.35)",
+      boxShadow: `-14px 0 38px -10px ${alpha(verlauf.glow, 0.29)}`,
       zIndex: 40,
       display: "flex", flexDirection: "column",
       outline: dropActive ? `2px dashed ${C.primary}` : "none",
@@ -289,20 +291,22 @@ export function ProjectInspector({ project: p, onPatch, onArchive, onOpenDaw, on
           aus dem ersten Blick. */}
       <div style={{
         display: "flex", alignItems: "flex-start", gap: 14,
-        padding: "16px 18px 14px",
-        borderBottom: `1px solid ${C.border10}`,
+        padding: "22px 18px 18px",
+        background: `color-mix(in srgb, ${verlauf.glow} 10%, ${C.surfaceContainerLow})`,
+        borderBottom: `1px solid ${alpha(verlauf.glow, 0.3)}`,
       }}>
         <KleinesCover
           preview={folderAssets.assets.coverPreview}
           title={title}
           disabled={!settings.assetPath.trim()}
           onPick={() => setPicker("cover")}
+          verlauf={verlauf}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
             <div
               title={p.song_name?.trim() ? "Titel aus dem Export" : undefined}
-              style={{ fontSize: 18, fontWeight: 700, color: C.onSurface, lineHeight: 1.25, wordBreak: "break-word", minWidth: 0 }}
+              style={{ fontSize: 24, fontWeight: 800, color: C.onSurface, lineHeight: 1.15, wordBreak: "break-word", minWidth: 0 }}
             >
               {title}
             </div>
@@ -485,7 +489,8 @@ const fileNameOf = (path: string | null) => path?.split(/[/\\]/).filter(Boolean)
 
 /** Das Cover klein neben dem Titel, ohne Cover der Platzhalter.
  *  Klick: Cover aus den Assets holen. */
-function KleinesCover({ preview, title, disabled, onPick }: {
+function KleinesCover({ preview, title, disabled, onPick, verlauf }: {
+  verlauf: StudioVerlauf;
   preview: string | null;
   title: string;
   disabled: boolean;
@@ -495,10 +500,12 @@ function KleinesCover({ preview, title, disabled, onPick }: {
     <button
       onClick={onPick}
       disabled={disabled}
+      className="sw-pcov"
       title={disabled ? "Kein Asset-Pfad (Einstellungen → Pfade)"
         : preview ? "Cover ersetzen" : "Cover zuweisen"}
       style={{
-        width: 96, height: 96, flexShrink: 0,
+        width: 112, height: 112, flexShrink: 0,
+        boxShadow: `0 8px 19px -6px color-mix(in srgb, ${verlauf.glow} 64%, transparent)`,
         padding: 0, overflow: "hidden", borderRadius: radius.card,
         background: "transparent", border: "none",
         cursor: disabled ? "not-allowed" : "pointer",
@@ -508,7 +515,7 @@ function KleinesCover({ preview, title, disabled, onPick }: {
       {preview ? (
         <img src={preview} alt={`Cover ${title}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
-        <CoverPlatzhalter />
+        <CoverPlatzhalter verlauf={verlauf} />
       )}
     </button>
   );

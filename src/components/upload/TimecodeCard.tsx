@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../../lib/api";
-import { C, alpha, radius } from "../../lib/theme";
+import { C, STUDIO_VERLAUF, alpha, radius } from "../../lib/theme";
+import { Zeitleiste, kapitelFarbe } from "./Zeitleiste";
 import { kapitelVorschlagen } from "../../lib/kapitelVorschlag";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
@@ -35,6 +36,9 @@ import type { Beat } from "../../types/browse";
  *  es dasteht — die beiden werden nie getrennt vergeben. */
 const VORSCHLAEGE = ["Intro", "Verse", "Pre-Hook / Hook", "Bridge", "Outro"] as const;
 const NUMMERIERT = new Set(["Verse"]);
+
+/** Look „Wucht“: Farbe der Kapitel-Karte. */
+const KAPITEL_FARBE = STUDIO_VERLAUF.exported.glow;
 
 /** Mindestlänge eines Kapitels bei YouTube. */
 const MIN_ABSTAND = 10;
@@ -155,6 +159,8 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
   });
 
   const laeuftHier = currentBeat?.id === beat.id;
+  /** Nach „Neuesten Export laden“: die Wellenform neu rechnen. */
+  const [wellenStand, setWellenStand] = useState(0);
   /** Ein Takt in Sekunden (4/4). Ohne BPM gibt es kein Raster. */
   const takt = beat.bpm ? 240 / beat.bpm : null;
 
@@ -342,6 +348,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
   /** Datei neu suchen und laden — nach einem neuen Export in FL Studio.
    *  Läuft der Beat schon, geht es an derselben Stelle weiter. */
   const neuLaden = () => {
+    setWellenStand(Date.now());
     setNeuerExport(false);
     // Der Player braucht eine Beat-Form; Pfad und Name reichen ihm.
     playBeat({
@@ -369,6 +376,7 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
     <SectionCard
       icon={ListOrdered}
       title="Kapitel"
+      farbe={KAPITEL_FARBE}
       // Neben „Infos & Credits" gleich hoch gestreckt: der Inhalt füllt die
       // Höhe, damit die Chips unten sitzen können (siehe unten).
       style={{ display: "flex", flexDirection: "column" }}
@@ -463,6 +471,14 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
           </Button>
         </div>
 
+        <Zeitleiste
+          beatPath={beat.path}
+          stand={wellenStand}
+          marken={marken}
+          jetzt={laeuftHier ? jetzt : null}
+          onSeek={laeuftHier ? seekSeconds : null}
+        />
+
         {neuerExport && (
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
@@ -501,15 +517,15 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             // Key ist die Id, nicht der Index: sonst erbt die aufrueckende
             // Zeile beim Loeschen die DOM-Node — und damit die Zeit — ihrer
             // Vorgaengerin.
-            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div key={m.id} className="ul-kzeile" style={{ display: "flex", alignItems: "center", gap: 8, "--k": kapitelFarbe(m.label) } as React.CSSProperties}>
               {ersteZeile ? (
                 <span
                   title="YouTube braucht eine Marke bei 0:00"
                   style={{
-                    width: 64, flexShrink: 0, padding: "7px 8px",
-                    borderRadius: radius.control,
-                    background: C.surfaceContainerLow, border: `1px dashed ${C.border15}`,
-                    fontSize: 12, fontFamily: "monospace", color: C.onSecondaryFixedVar,
+                    width: 70, flexShrink: 0, padding: "10px 8px",
+                    borderRadius: 10,
+                    background: C.surfaceContainerLowest, border: `1px dashed ${C.border20}`,
+                    fontSize: 13, fontFamily: "'JetBrains Mono', Consolas, monospace", color: kapitelFarbe(m.label),
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                   }}
                 >
@@ -528,10 +544,10 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
                     e.target.value = mmss(s);
                   }}
                   style={{
-                    width: 64, flexShrink: 0, padding: "7px 8px",
-                    borderRadius: radius.control,
-                    background: C.surfaceContainer, border: `1px solid ${C.border15}`,
-                    fontSize: 12, fontFamily: "monospace", color: C.onSurface,
+                    width: 70, flexShrink: 0, padding: "10px 8px",
+                    borderRadius: 10,
+                    background: C.surfaceContainerLowest, border: `1px solid ${C.border20}`,
+                    fontSize: 13, fontFamily: "'JetBrains Mono', Consolas, monospace", color: kapitelFarbe(m.label),
                     outline: "none", textAlign: "center",
                   }}
                 />
@@ -542,10 +558,10 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
                 onChange={e => beschriften(m.id, e.target.value)}
                 placeholder="Abschnitt"
                 style={{
-                  flex: 1, minWidth: 0, padding: "7px 10px",
-                  borderRadius: radius.control,
-                  background: C.surfaceContainer, border: `1px solid ${C.border15}`,
-                  fontSize: 12, color: C.onSurface, outline: "none",
+                  flex: 1, minWidth: 0, padding: "10px 12px",
+                  borderRadius: 10,
+                  background: C.surfaceContainer, border: `1px solid ${C.border20}`,
+                  fontSize: 14, fontWeight: 700, color: C.onSurface, outline: "none",
                 }}
               />
 
@@ -569,10 +585,11 @@ export function TimecodeCard({ beat, flpPath, onSaved }: {
             <button
               key={v}
               onClick={() => hinzufuegen(naechsterName(v, vorhandeneNamen))}
+              className="ul-vorschlag"
               style={{
-                padding: "3px 10px", borderRadius: radius.full,
-                background: "transparent", border: `1px solid ${C.border15}`,
-                fontSize: 12, color: C.onSurfaceVariant, cursor: "pointer",
+                padding: "6px 12px", borderRadius: radius.full,
+                background: "transparent", border: `1px dashed ${C.border30}`,
+                fontSize: 12, fontWeight: 700, color: C.onSurfaceVariant, cursor: "pointer",
               }}
             >
               + {v}

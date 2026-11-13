@@ -6,7 +6,6 @@
 // über die Leiste unten.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
 import { Disc3, Play } from "lucide-react";
 import { C, alpha } from "../../lib/theme";
 import { formatRelativeTime } from "../../lib/time";
@@ -52,10 +51,10 @@ export function AufraeumListe({
   skizzen, skizzenGrenze, onSkizzenGrenze, onSkizzenVormerken,
 }: AufraeumListeProps) {
   return (
-    <section aria-label="Aufräumen" style={{ padding: "20px 16px 0", maxWidth: 1100 }}>
+    <section aria-label="Aufräumen" style={{ margin: "0 16px", padding: 24, borderRadius: 22, border: `1px solid ${C.border30}`, background: C.surfaceContainerLow, marginTop: 12, maxWidth: 1100 }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        paddingBottom: 12, borderBottom: `1px solid ${C.border20}`,
+        paddingBottom: 14, borderBottom: `1px solid ${C.border20}`,
       }}>
         <Segmented
           label="Was zeigen"
@@ -63,7 +62,7 @@ export function AufraeumListe({
           onChange={onFilter}
           options={[
             { value: "alle", label: `Lange inaktiv · ${inaktiv + vorgemerkt}` },
-            { value: "discard", label: `Kann weg · ${vorgemerkt}` },
+            { value: "discard", label: `Verwerfen · ${vorgemerkt}` },
           ]}
         />
         <Segmented
@@ -99,14 +98,15 @@ export function AufraeumListe({
       </div>
 
       {gruppen.map(g => (
-        <div key={g.key} style={{ paddingTop: 20 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 6 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.onSurface }}>{g.label}</h3>
+        <div key={g.key} style={{ paddingTop: 22 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.onSurface }}>{g.label}</h3>
             <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>{g.total} {g.total === 1 ? "Projekt" : "Projekte"}</span>
           </div>
-          {g.items.map(p => (
+          {g.items.map((p, i) => (
             <AufraeumZeile
               key={p.path}
+              index={i}
               project={p}
               markiert={inspectorPath === p.path || inFlPath === p.path || selected.has(p.path)}
               onOpen={e => onOpen(p, e)}
@@ -119,10 +119,12 @@ export function AufraeumListe({
           {g.total > g.items.length && (
             <button
               onClick={() => onMore(g.key)}
+              className="sw-mehr"
               style={{
-                marginTop: 2, minHeight: 36, padding: "0 12px 0 52px", border: "none", borderRadius: 8,
-                background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
+                "--c": C.primary,
+                margin: "8px 0 0 52px", padding: "8px 18px", border: `1px solid ${C.border30}`, borderRadius: 999,
+                background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 700, cursor: "pointer",
+              } as React.CSSProperties}
             >
               Alle {g.total} anzeigen
             </button>
@@ -133,7 +135,8 @@ export function AufraeumListe({
   );
 }
 
-function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onKeep, onToss }: {
+function AufraeumZeile({ index, project: p, markiert, onOpen, onPreview, onOpenDaw, onKeep, onToss }: {
+  index: number;
   project: StudioProject;
   markiert: boolean;
   onOpen: (e: React.MouseEvent) => void;
@@ -142,7 +145,6 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
   onKeep: () => void;
   onToss: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const { nummer, titel } = ideeName(p);
   const canPreview = p.has_mp3 || p.has_wav;
   // Ohne Export hört man in FL rein — der Knopf öffnet dann die neueste FLP
@@ -159,11 +161,11 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
   return (
     <div
       data-auswahl
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", alignItems: "center", gap: 4, opacity: weg ? 0.7 : 1 }}
+      className="sw-zl"
+      style={{ display: "flex", alignItems: "center", gap: 4, opacity: weg ? 0.7 : 1, "--i": Math.min(index, 20) } as React.CSSProperties}
     >
       <button
+        className={canDaw ? "sw-zp sw-zp-fl" : "sw-zp"}
         onClick={() => { if (canPreview) onPreview(); else if (canDaw) onOpenDaw(); }}
         disabled={!kannWas}
         aria-label={canPreview ? "Export anhören" : canDaw ? "In FL öffnen" : "Keine FLP im Ordner"}
@@ -171,7 +173,7 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
         style={{
           flex: "0 0 36px", width: 36, height: 36, borderRadius: "50%", border: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: canPreview ? alpha(C.mint, 0.10) : canDaw ? alpha(C.primary, 0.10) : "transparent",
+          background: canPreview ? alpha(C.mint, 0.14) : canDaw ? alpha(C.primary, 0.14) : "transparent",
           color: canPreview ? C.mint : canDaw ? C.primary : C.surfaceContainerHighest,
           cursor: kannWas ? "pointer" : "default",
         }}
@@ -181,22 +183,23 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
           : <Play size={12} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />}
       </button>
       <button
+        className="sw-zb"
         onClick={onOpen}
         title="Details · Strg/Shift: auswählen"
         style={{
-          flex: 1, minWidth: 0, minHeight: 48, display: "flex", alignItems: "center", gap: 12,
-          padding: "0 12px", border: "none", borderRadius: 8, textAlign: "left", color: "inherit",
+          flex: 1, minWidth: 0, minHeight: 54, display: "flex", alignItems: "center", gap: 12,
+          padding: "0 12px 0 16px", border: "none", borderRadius: 12, textAlign: "left", color: "inherit",
           cursor: "pointer", userSelect: "none",
-          background: markiert ? alpha(C.primary, 0.08) : hovered ? "rgba(255,255,255,0.03)" : "transparent",
+          background: markiert ? alpha(C.primary, 0.10) : "transparent",
           boxShadow: markiert ? `inset 3px 0 0 ${C.primary}` : "none",
         }}
       >
-        <span style={{ flex: "0 0 44px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 12, color: C.onSecondaryFixedVar }}>
+        <span className="sw-nr" style={{ flex: "0 0 52px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, color: C.onSecondaryFixedVar }}>
           {nummer ?? ""}
         </span>
         <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "baseline", gap: 10, overflow: "hidden" }}>
           <span title={notiz && !titel ? p.notes ?? undefined : undefined} style={{
-            fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "60%",
+            fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "60%",
             fontWeight: titel ? 700 : 600, color: titel ? C.onSurface : C.onSurfaceVariant,
             textDecoration: weg ? "line-through" : "none", textDecorationColor: alpha(C.error, 0.6),
           }}>
@@ -220,7 +223,7 @@ function AufraeumZeile({ project: p, markiert, onOpen, onPreview, onOpenDaw, onK
           Zurück zu Projekte
         </Pille>
         <Pille onClick={onToss} farbe={C.error} an={weg} title={weg ? "Nicht löschen" : "Zum Löschen vormerken"}>
-          Kann weg
+          Verwerfen
         </Pille>
       </div>
     </div>
@@ -239,13 +242,15 @@ function Pille({ an, farbe, onClick, title, children }: {
       onClick={onClick}
       aria-pressed={an}
       title={title}
+      className="sw-pille"
       style={{
+        "--c": farbe,
         minHeight: 34, padding: "0 12px", borderRadius: 999, cursor: "pointer",
         fontSize: 12, fontWeight: 600,
         border: `1px solid ${an ? farbe : C.border20}`,
         background: an ? alpha(farbe, 0.12) : "transparent",
         color: an ? farbe : C.onSurfaceVariant,
-      }}
+      } as React.CSSProperties}
     >
       {children}
     </button>

@@ -63,15 +63,15 @@ export type PlatformKey = "beatstars" | "soundcloud" | "youtube";
 
 export const PLATFORM_CONFIG: Record<PlatformKey, { label: string; short: string; color: string }> = {
   // Magenta statt #ff3366 — war im Planner nicht von YouTube-Rot unterscheidbar
-  beatstars:  { label: "Beatstars",  short: "BS", color: "#f43f8e" },
+  beatstars:  { label: "BeatStars",  short: "BS", color: "#f43f8e" },
   soundcloud: { label: "SoundCloud", short: "SC", color: "#ff7700" },
   youtube:    { label: "YouTube",    short: "YT", color: "#ff0033" },
 };
 
 export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  draft:     { label: "Entwurf",     color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  scheduled: { label: "Geplant", color: colors.primary, bg: alpha(colors.primary, 0.12) },
-  uploaded:  { label: "Hochgeladen",  color: colors.mint, bg: alpha(colors.mint, 0.12) },
+  draft:     { label: "Draft",       color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
+  scheduled: { label: "Scheduled", color: colors.primary, bg: alpha(colors.primary, 0.12) },
+  uploaded:  { label: "Live",         color: colors.mint, bg: alpha(colors.mint, 0.12) },
 };
 
 /**
@@ -84,11 +84,29 @@ export const UPLOAD_STATUS_CONFIG: Record<string, { label: string; color: string
  */
 export const STUDIO_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   idea:     { label: "Idee",         color: "#8a8a89", bg: "rgba(255,255,255,0.04)" },
-  wip:      { label: "Überarbeiten", color: colors.primary, bg: alpha(colors.primary, 0.12) },
+  // Koralle statt Amber: Amber gehört der Priorität und den Hauptknöpfen
+  wip:      { label: "Überarbeiten", color: "#ff6f6f", bg: alpha("#ff6f6f", 0.12) },
   exported: { label: "Exportiert",   color: colors.tertiary, bg: alpha(colors.tertiary, 0.12) },
   ready:    { label: "Bereit",       color: colors.mint, bg: alpha(colors.mint, 0.12) },
-  discard:  { label: "Kann weg",     color: "#6b6a72", bg: "rgba(255,255,255,0.03)" },
+  discard:  { label: "Verwerfen",    color: "#6b6a72", bg: "rgba(255,255,255,0.03)" },
 };
+
+/** Studio-Look „Wucht": Verlauf je Regal (Cover-Rahmen) und die Leuchtfarbe dazu. */
+export type StudioVerlaufKey = "priority" | "ready" | "exported" | "wip" | "idea";
+export interface StudioVerlauf { von: string; bis: string; glow: string }
+export const STUDIO_VERLAUF: Record<StudioVerlaufKey, StudioVerlauf> = {
+  priority: { von: "#ffe14d", bis: "#ff8a00", glow: "#ffb627" },
+  ready:    { von: "#4dff8f", bis: "#00e0d0", glow: "#22f0b0" },
+  exported: { von: "#1f2a8a", bis: "#a77bff", glow: "#8f7bff" },
+  wip:      { von: "#ff4f6d", bis: "#ffa06b", glow: "#ff6f6f" },
+  idea:     { von: "#6b6a72", bis: "#b9b7c0", glow: "#8a8a89" },
+};
+
+/** Welcher Verlauf zu einem Projekt gehört: wie die Regale (Stern nur bei Ideen). */
+export function verlaufKey(p: { status: string; priority: number }): StudioVerlaufKey {
+  if (p.status === "ready" || p.status === "exported" || p.status === "wip") return p.status;
+  return p.status === "idea" && p.priority ? "priority" : "idea";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────────
 // Status Configuration

@@ -1,30 +1,34 @@
 // src/components/studio/CoverPlatzhalter.tsx
-// Steht da, wo noch kein Cover liegt: monochromer Grauverlauf, darauf eine
-// Milchglas-Scheibe mit Note. Ersetzt die Initialen im gestrichelten Rahmen.
+// Steht da, wo noch kein Cover liegt: dunkle Fläche, der Verlauf des Status
+// nur als dünner Rahmen, in der Mitte eine Note im selben Verlauf.
 
-import { Music2 } from "lucide-react";
+import { useId } from "react";
+import { STUDIO_VERLAUF, type StudioVerlauf } from "../../lib/theme";
 
-/** Füllt den Elternrahmen; `gross` für das Detailpanel. */
-export function CoverPlatzhalter({ gross = false }: { gross?: boolean }) {
-  const scheibe = gross ? 120 : 64;
+/** Füllt den Elternrahmen. Ohne `verlauf`: das Grau der Ideen. */
+export function CoverPlatzhalter({ verlauf = STUDIO_VERLAUF.idea }: { verlauf?: StudioVerlauf }) {
+  // useId enthält „:“, das bricht url(#…)
+  const id = "sw" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   return (
-    <div aria-hidden style={{
-      width: "100%", height: "100%", position: "relative", overflow: "hidden",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      // Monochrom: nur Grautöne, das Licht kommt von oben links
-      background: `radial-gradient(circle at 25% 15%, rgba(255,255,255,0.14), transparent 55%),
-                   radial-gradient(circle at 85% 90%, rgba(255,255,255,0.05), transparent 50%),
-                   linear-gradient(145deg, #2a2a2a, #161616 65%, #101010)`,
+    <div aria-hidden className="sw-platz" style={{
+      width: "100%", height: "100%", position: "relative", boxSizing: "border-box",
+      borderRadius: "inherit", padding: 2,
+      background: `linear-gradient(135deg, ${verlauf.von}, ${verlauf.bis})`,
     }}>
       <div style={{
-        width: scheibe, height: scheibe, borderRadius: "50%",
+        width: "100%", height: "100%", borderRadius: "inherit", background: "#1a1919",
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.18)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 24px rgba(0,0,0,0.35)",
-        backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
       }}>
-        <Music2 size={Math.round(scheibe * 0.42)} strokeWidth={1.5} color="rgba(255,255,255,0.85)" />
+        <svg viewBox="0 0 24 24" fill="none" stroke={`url(#${id})`} strokeWidth={1.6}
+          strokeLinecap="round" strokeLinejoin="round" style={{ width: "34%", height: "34%", opacity: 0.85 }}>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor={verlauf.von} />
+              <stop offset="1" stopColor={verlauf.bis} />
+            </linearGradient>
+          </defs>
+          <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+        </svg>
       </div>
     </div>
   );

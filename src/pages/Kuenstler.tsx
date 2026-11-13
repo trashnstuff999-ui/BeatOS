@@ -14,7 +14,7 @@ export default function Kuenstler() {
   const { settings } = useSettings();
   return (
     <div data-app-flaeche style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: C.background }}>
-      <PageHeader icon={Users} title="Künstler" />
+      <PageHeader icon={Users} title="Artists" />
       <PageBody width="full">
         {/* Breite wie im Entwurf: mittig, nicht randlos */}
         <div style={{ width: "100%", maxWidth: 1320, margin: "0 auto" }}>

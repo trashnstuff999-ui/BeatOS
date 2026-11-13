@@ -12,11 +12,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Images, Play, RefreshCw, Loader2, FolderOpen, Settings, Trash2, ListOrdered, CheckSquare, Check, X } from "lucide-react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { useNavigate } from "react-router-dom";
-import { C, radius } from "../../lib/theme";
+import { C, STUDIO_VERLAUF, alpha } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime, zeitText } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { EmptyState, Button, IconButton, Segmented } from "../ui";
+import { EmptyState, Button, IconButton } from "../ui";
 import { planeNummern, type Rolle } from "../../lib/assetNummern";
 import { AssetImage, AssetVideo } from "../AssetPickerDialog";
 import { AssignToProjectDialog } from "./AssignToProjectDialog";
@@ -28,12 +28,17 @@ const KIND_LABEL: Record<KindFilter, string> = {
   all: "Alle", image: "Bilder", video: "Videos",
 };
 
-const ABSCHNITTE: { rolle: AssetFile["guessed_role"]; titel: string; format: string; breite: number }[] = [
-  { rolle: "cover",     titel: "Cover",          format: "1:1",  breite: 200 },
-  { rolle: "thumbnail", titel: "Thumbnails",     format: "16:9", breite: 300 },
-  { rolle: "video",     titel: "Videos",         format: "16:9", breite: 300 },
-  { rolle: "image",     titel: "Weitere Bilder", format: "ohne cover/thumb im Namen", breite: 300 },
+// Look „Wucht“: jede Art ihre Leuchtfarbe (aus den Studio-Verläufen)
+const ABSCHNITTE: { rolle: AssetFile["guessed_role"]; titel: string; format: string; breite: number; farbe: string }[] = [
+  { rolle: "cover",     titel: "Cover",          format: "1:1",  breite: 200, farbe: STUDIO_VERLAUF.priority.glow },
+  { rolle: "thumbnail", titel: "Thumbnails",     format: "16:9", breite: 300, farbe: STUDIO_VERLAUF.wip.glow },
+  { rolle: "video",     titel: "Videos",         format: "16:9", breite: 300, farbe: STUDIO_VERLAUF.exported.glow },
+  { rolle: "image",     titel: "Weitere Bilder", format: "ohne cover/thumb im Namen", breite: 300, farbe: STUDIO_VERLAUF.idea.glow },
 ];
+
+const ART_FARBE: Record<KindFilter, string> = {
+  all: C.onSurface, image: STUDIO_VERLAUF.priority.glow, video: STUDIO_VERLAUF.exported.glow,
+};
 
 interface AssetsPaneProps {
   assetPath: string;
@@ -124,86 +129,91 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
     video: assets.filter(a => a.kind === "video").length,
   }), [assets]);
 
+  const knopf: React.CSSProperties = {
+    height: 42, display: "inline-flex", alignItems: "center", gap: 8, padding: "0 16px", borderRadius: 12,
+    border: `1px solid ${C.border30}`, background: C.surfaceContainer, color: C.onSurface,
+    fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+  };
+
   return (
-    <div style={{
-      background: C.surfaceContainerLow,
-      border: `1px solid ${C.border10}`,
-      borderRadius: radius.card,
-      overflow: "hidden",
-    }}>
-      {/* Kopf */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "12px 16px",
-        borderBottom: `1px solid ${C.border10}`,
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.onSurface }}>
-          {assets.length} {assets.length === 1 ? "Datei" : "Dateien"} in der Inbox
-        </span>
-        <span
-          title={assetPath}
-          style={{
-            fontSize: 11, color: C.onSecondaryFixedVar,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260,
-          }}
-        >
-          {assetPath.split(/[/\\]/).filter(Boolean).pop()}
-        </span>
-
-        <div style={{ flex: 1 }} />
-
-        {/* Art-Filter */}
-        <Segmented
-          label="Art"
-          value={kind}
-          onChange={setKind}
-          options={(["all", "image", "video"] as const).map(k => ({ value: k, label: `${KIND_LABEL[k]} ${counts[k]}` }))}
-        />
-
-        {auswahl ? (
-          <>
-            <Button size="sm" variant="danger" icon={Trash2} disabled={auswahl.size === 0} onClick={() => loeschen([...auswahl])}>
-              {auswahl.size === 1 ? "1 in den Papierkorb" : `${auswahl.size} in den Papierkorb`}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setAuswahl(null)}>Fertig</Button>
-          </>
-        ) : (
-          <>
-            <Button size="sm" variant="secondary" icon={ListOrdered} loading={nummeriertGerade}
-              disabled={!assets.some(a => a.guessed_role === "cover" || a.guessed_role === "thumbnail")}
-              title="Neuestes = 1, Cover und Thumbnails getrennt"
-              onClick={nummerieren}>
-              Nummerieren
-            </Button>
-            <Button size="sm" variant="secondary" icon={CheckSquare} disabled={assets.length === 0}
-              title="Mehrere auswählen"
-              onClick={() => setAuswahl(new Set())}>
-              Auswählen
-            </Button>
-          </>
-        )}
-
-        <IconButton
-          icon={FolderOpen}
-          size={28}
-          onClick={() => { if (assetPath.trim()) openPath(assetPath).catch(() => {}); }}
-          disabled={!assetPath.trim()}
-          title="Asset-Ordner im Explorer öffnen"
-        />
-        <IconButton
-          icon={isLoading ? Loader2 : RefreshCw}
-          size={28}
-          onClick={scan}
-          disabled={isLoading}
-          title="Inbox neu einlesen"
-        />
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 30, paddingTop: 8 }}>
+      {/* Kopf: die große Zahl, rechts die Arten als Filter, darunter die Knöpfe */}
+      <section aria-label="Inbox" style={{
+        "--c": C.primary,
+        padding: "28px 30px", borderRadius: 24, display: "flex", gap: 30, alignItems: "center", flexWrap: "wrap",
+        background: `color-mix(in srgb, ${C.primary} 7%, ${C.surfaceContainerLow})`,
+        border: `1px solid ${alpha(C.primary, 0.35)}`,
+        boxShadow: `0 14px 38px -14px ${alpha(C.primary, 0.35)}`,
+      } as React.CSSProperties}>
+        <div style={{
+          fontSize: "clamp(56px, 7vw, 96px)", fontWeight: 700, lineHeight: 0.9, color: C.primary,
+          textShadow: `0 0 19px ${alpha(C.primary, 0.32)}`,
+        }}>
+          {assets.length}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.onSurface }}>
+            {assets.length === 1 ? "Datei wartet auf ein Projekt" : "Dateien warten auf ein Projekt"}
+          </div>
+          <div title={assetPath} style={{
+            marginTop: 4, fontSize: 12, fontFamily: "'JetBrains Mono', Consolas, monospace", color: C.onSecondaryFixedVar,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320,
+          }}>
+            {assetPath.split(/[/\\]/).filter(Boolean).pop()}
+          </div>
+        </div>
+        <div role="group" aria-label="Art" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginLeft: "auto" }}>
+          {(["all", "image", "video"] as const).map(k => (
+            <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k} className="sw-art" style={{
+              "--c": ART_FARBE[k],
+              border: `1px solid ${C.border30}`, background: "rgba(14,14,14,0.55)", borderRadius: 16,
+              padding: "12px 16px", minWidth: 110, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+            } as React.CSSProperties}>
+              <b style={{ display: "block", fontSize: 30, lineHeight: 1, color: ART_FARBE[k] }}>{counts[k]}</b>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.onSurfaceVariant }}>{KIND_LABEL[k]}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", width: "100%", alignItems: "center" }}>
+          {auswahl ? (
+            <>
+              <button className="sw-bk" disabled={auswahl.size === 0} onClick={() => loeschen([...auswahl])} style={{
+                ...knopf, "--c": C.error, background: C.error, borderColor: C.error, color: "#2a0a00",
+                boxShadow: `0 8px 24px -8px color-mix(in srgb, ${C.error} 64%, transparent)`, opacity: auswahl.size === 0 ? 0.5 : 1,
+                cursor: auswahl.size === 0 ? "default" : "pointer",
+              } as React.CSSProperties}>
+                <Trash2 size={15} strokeWidth={2} />
+                {auswahl.size === 1 ? "1 in den Papierkorb" : `${auswahl.size} in den Papierkorb`}
+              </button>
+              <button className="sw-bk" onClick={() => setAuswahl(null)} style={knopf}>Fertig</button>
+            </>
+          ) : (
+            <>
+              <button className="sw-bk" onClick={nummerieren}
+                disabled={nummeriertGerade || !assets.some(a => a.guessed_role === "cover" || a.guessed_role === "thumbnail")}
+                title="Neuestes = 1, Cover und Thumbnails getrennt" style={knopf}>
+                {nummeriertGerade ? <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <ListOrdered size={15} />}
+                Nummerieren
+              </button>
+              <button className="sw-bk" onClick={() => setAuswahl(new Set())} disabled={assets.length === 0}
+                title="Mehrere auswählen" style={knopf}>
+                <CheckSquare size={15} />Auswählen
+              </button>
+            </>
+          )}
+          <button className="sw-bk" onClick={() => { if (assetPath.trim()) openPath(assetPath).catch(() => {}); }}
+            disabled={!assetPath.trim()} title="Asset-Ordner im Explorer öffnen" style={knopf}>
+            <FolderOpen size={15} />Ordner öffnen
+          </button>
+          <button className="sw-bk" onClick={scan} disabled={isLoading} title="Inbox neu einlesen" style={knopf}>
+            {isLoading ? <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <RefreshCw size={15} />}
+            Neu einlesen
+          </button>
+        </div>
+      </section>
 
       {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-          padding: "14px 16px", fontSize: 12, color: C.error,
-        }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 12, color: C.error }}>
           <span>{error}</span>
           {!assetPath.trim() && (
             <Button size="sm" icon={Settings} onClick={() => navigate("/settings")}>
@@ -214,7 +224,7 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
       )}
 
       {meldung && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", fontSize: 12, color: C.error }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.error }}>
           <span style={{ flex: 1 }}>{meldung}</span>
           <IconButton icon={X} size={24} title="Ausblenden" onClick={() => setMeldung(null)} />
         </div>
@@ -232,20 +242,26 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
       {/* Nach Art getrennt: jeder Abschnitt hat ein Format, so bleiben die
           Reihen gleich hoch. Bilder ohne „cover“/„thumb“ stehen unter Weitere. */}
       {!error && visible.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 16 }}>
-          {ABSCHNITTE.map(({ rolle, titel, format, breite }) => {
+        <div style={{
+          display: "flex", flexDirection: "column", gap: 40, padding: 24, borderRadius: 22,
+          border: `1px solid ${C.border30}`, background: C.surfaceContainerLow,
+        }}>
+          {ABSCHNITTE.map(({ rolle, titel, format, breite, farbe }) => {
             const liste = visible.filter(a => a.guessed_role === rolle);
             if (liste.length === 0) return null;
             return (
-              <section key={rolle} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
-                  <span style={{ color: C.onSurface }}>{titel}</span>
-                  <span>{liste.length} · {format}</span>
+              <section key={rolle} aria-label={titel} style={{ "--c": farbe } as React.CSSProperties}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+                  <span className="sw-punkt" style={{ width: 12, height: 12, borderRadius: "50%", background: farbe, alignSelf: "center" }} />
+                  <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: C.onSurface }}>{titel}</h2>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: farbe }}>{liste.length}</span>
+                  <span style={{ fontSize: 14, color: C.onSecondaryFixedVar }}>{format}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${breite}px, 1fr))`, gap: 12 }}>
-                  {liste.map(a => (
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${breite}px, 1fr))`, gap: "26px 22px" }}>
+                  {liste.map((a, i) => (
                     <AssetCard
                       key={a.path}
+                      index={i}
                       asset={a}
                       auswahl={auswahl ? auswahl.has(a.path) : null}
                       onClick={() => auswahl
@@ -280,7 +296,8 @@ export function AssetsPane({ assetPath, projects, onAssigned, active = true }: A
 
 // ─── Eine Inbox-Kachel ───────────────────────────────────────────────────────
 
-function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
+function AssetCard({ index, asset, onClick, auswahl, onLoeschen }: {
+  index: number;
   asset: AssetFile;
   onClick: () => void;
   /** Im Auswahl-Modus: ist die Kachel angehakt? (null = kein Auswahl-Modus) */
@@ -289,7 +306,10 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
 }) {
   const [hovered, setHovered] = useState(false);
   const [dauer, setDauer] = useState<number | null>(null);
+  const [fortschritt, setFortschritt] = useState(0);
   const markiert = auswahl === true;
+  const waehlen = auswahl !== null;
+  const spielt = hovered && asset.kind === "video";
 
   return (
     <div
@@ -298,85 +318,95 @@ function AssetCard({ asset, onClick, auswahl, onLoeschen }: {
       onClick={onClick}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={auswahl !== null ? `${asset.name} · auswählen` : `${asset.name} · Projekt zuweisen`}
+      onMouseLeave={() => { setHovered(false); setFortschritt(0); }}
+      title={waehlen ? `${asset.name} · auswählen` : `${asset.name} · Projekt zuweisen`}
+      data-an={markiert}
+      className="sw-ak"
       style={{
-        background: C.surfaceContainerLowest,
-        border: `1px solid ${markiert ? C.primary : hovered ? `${C.primary}60` : C.border15}`,
-        borderRadius: radius.card,
-        overflow: "hidden",
-        cursor: "pointer",
-        padding: 0, textAlign: "left",
-        transform: hovered && auswahl === null ? "translateY(-2px)" : "none",
-        transition: "border-color 0.15s, transform 0.12s",
-      }}
+        "--i": Math.min(index, 20),
+        display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
+        cursor: "pointer", textAlign: "left", outline: "none",
+      } as React.CSSProperties}
     >
       {/* Cover quadratisch, Thumbnails und Videos 16:9. Bilder ohne „cover“/
           „thumb“ im Namen bleiben 16:9 und bekommen notfalls Balken. */}
-      <div style={{
+      <div className="sw-ab" style={{
         aspectRatio: asset.guessed_role === "cover" ? "1 / 1" : "16 / 9",
-        background: C.surfaceContainerHigh,
-        display: "flex", alignItems: "center", justifyContent: "center",
+        background: C.surfaceContainerHigh, borderRadius: 16,
         overflow: "hidden", position: "relative",
+        boxShadow: "0 10px 26px -14px rgba(0,0,0,0.8)",
       }}>
         {/* Absolut, sonst drückt die Bildhöhe die Box aus dem Format */}
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="sw-ab-inhalt" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {asset.kind === "image"
             ? <AssetImage key={`${asset.modified_secs}-${asset.size}`} path={asset.path} stand={`${asset.modified_secs}-${asset.size}`}
                 fit={asset.guessed_role === "cover" ? "cover" : "contain"} />
-            : <AssetVideo path={asset.path} onDauer={setDauer} />}
+            : <AssetVideo path={asset.path} onDauer={setDauer} spielen={spielt} onFortschritt={setFortschritt} />}
         </div>
 
-        {/* Abzeichen unten rechts wie bei YouTube — verdeckt keinen Titel im Bild */}
+        {/* Abzeichen unten rechts wie bei YouTube; beim Anspielen weicht es dem Balken */}
         {asset.kind === "video" && (
           <span style={{
-            position: "absolute", right: 8, bottom: 8,
+            position: "absolute", right: 10, bottom: 10,
             display: "flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 6px",
             borderRadius: 6, background: "rgba(0,0,0,0.75)",
             fontSize: 12, fontWeight: 700, color: "#fff", pointerEvents: "none",
+            opacity: spielt ? 0 : 1, transition: "opacity 0.2s",
           }}>
             <Play size={10} color="#fff" fill="#fff" />
             {dauer != null ? zeitText(dauer) : "Video"}
           </span>
         )}
-
-        {hovered && auswahl === null && (
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: "#fff",
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}>
-            Zuweisen
-          </div>
+        {spielt && (
+          <span aria-hidden style={{
+            position: "absolute", left: 0, bottom: 0, height: 3, width: `${fortschritt * 100}%`,
+            background: "var(--c)", boxShadow: "0 0 8px color-mix(in srgb, var(--c) 64%, transparent)",
+          }} />
         )}
-        {auswahl !== null && (
-          <span style={{
-            position: "absolute", top: 8, left: 8, width: 20, height: 20, borderRadius: 5,
+
+        {waehlen && (
+          <span className="sw-haken" style={{
+            position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: markiert ? C.primary : "rgba(0,0,0,0.55)",
-            border: `1.5px solid ${markiert ? C.primary : "rgba(255,255,255,0.7)"}`,
+            border: `2px solid ${markiert ? C.primary : "rgba(255,255,255,0.7)"}`,
+            transform: markiert ? "scale(1.15)" : "none",
           }}>
-            {markiert && <Check size={13} color={C.onPrimary} strokeWidth={3} />}
+            {markiert && <Check size={14} color={C.onPrimary} strokeWidth={3} />}
           </span>
         )}
-        {hovered && auswahl === null && (
-          <span style={{ position: "absolute", top: 6, right: 6 }} onClick={e => e.stopPropagation()}>
-            <IconButton icon={Trash2} size={28} variant="danger" title="In den Papierkorb" onClick={onLoeschen} />
+        {!waehlen && (<>
+          <span aria-hidden className="sw-zuw" style={{
+            position: "absolute", left: "50%", bottom: 14, padding: "9px 18px", borderRadius: 999,
+            background: "var(--c)", color: "#111", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap",
+            boxShadow: "0 8px 21px -5px color-mix(in srgb, var(--c) 64%, transparent)", pointerEvents: "none",
+          }}>
+            Zuweisen
           </span>
-        )}
+          <button
+            className="sw-weg"
+            onClick={e => { e.stopPropagation(); onLoeschen(); }}
+            aria-label="In den Papierkorb"
+            title="In den Papierkorb"
+            tabIndex={hovered ? 0 : -1}
+            style={{
+              position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: "50%", border: "none",
+              background: "rgba(10,10,10,0.72)", color: C.onSurface, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Trash2 size={15} strokeWidth={1.75} />
+          </button>
+        </>)}
       </div>
-      <div style={{ padding: "9px 12px 10px" }}>
-        <div style={{
-          fontSize: 12, fontFamily: "monospace", color: C.onSurface,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {asset.name}
-        </div>
-        <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
-          {formatRelativeTime(asset.modified_secs)}
-        </div>
+      <div style={{
+        marginTop: 8, fontSize: 13, fontFamily: "'JetBrains Mono', Consolas, monospace", color: C.onSurface,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {asset.name}
+      </div>
+      <div style={{ fontSize: 13, color: C.onSurfaceVariant }}>
+        {formatRelativeTime(asset.modified_secs)}
       </div>
     </div>
   );

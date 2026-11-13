@@ -24,7 +24,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 }));
 // „Neue Version" im Panel braucht Pfade und Meldungen — hier nicht Thema.
 vi.mock("../../contexts/SettingsContext", () => ({
-  useSettings: () => ({ settings: { productionPath: "" } }),
+  useSettings: () => ({ settings: { productionPath: "", assetPath: "" } }),
   parseProductionPaths: () => [],
 }));
 vi.mock("../../contexts/DialogContext", () => ({
@@ -110,7 +110,7 @@ beforeEach(() => {
 describe("Uploads im Side-Panel", () => {
   it("bietet alle drei Plattformen an, auch ohne jeden Eintrag", async () => {
     panelRendern();
-    expect(await screen.findByText("Beatstars")).toBeInTheDocument();
+    expect(await screen.findByText("BeatStars")).toBeInTheDocument();
     expect(screen.getByText("SoundCloud")).toBeInTheDocument();
     expect(screen.getByText("YouTube")).toBeInTheDocument();
   });
@@ -122,7 +122,7 @@ describe("Uploads im Side-Panel", () => {
 
     // Drei Plattformen, jede mit derselben Zustandsleiste — die dritte
     // gehört zu YouTube.
-    const knoepfe = screen.getAllByTitle('Auf „Hochgeladen" setzen');
+    const knoepfe = screen.getAllByTitle('Auf „Live" setzen');
     expect(knoepfe).toHaveLength(3);
     await userEvent.click(knoepfe[2]);
 
@@ -144,7 +144,7 @@ describe("Uploads im Side-Panel", () => {
 
   it("Entwurf zeigt weder Datum noch Linkzeile", async () => {
     panelRendern();
-    await screen.findByText("Beatstars");
+    await screen.findByText("BeatStars");
     await alleAufklappen();
 
     // Drei Entwuerfe — die Zeile ist dann nur Name und Zustandsleiste.
@@ -157,7 +157,7 @@ describe("Uploads im Side-Panel", () => {
     // Die Rakete startet den geführten Upload — hier wird nachgetragen, was
     // schon passiert ist. Im Upload-Tab (ohne `flach`) bleibt sie.
     panelRendern();
-    await screen.findByText("Beatstars");
+    await screen.findByText("BeatStars");
     expect(screen.queryByTitle(/Upload starten/)).not.toBeInTheDocument();
   });
 
@@ -186,7 +186,7 @@ describe("Uploads im Side-Panel", () => {
     await screen.findByText("SoundCloud");
     await alleAufklappen();
 
-    await userEvent.click(screen.getAllByTitle('Auf „Entwurf" setzen')[1]);
+    await userEvent.click(screen.getAllByTitle('Auf „Draft" setzen')[1]);
 
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("update_upload_status", {
@@ -219,7 +219,7 @@ describe("Uploads im Side-Panel", () => {
     await screen.findByText("SoundCloud");
     await alleAufklappen();
 
-    await userEvent.click(screen.getAllByTitle('Auf „Hochgeladen" setzen')[1]);
+    await userEvent.click(screen.getAllByTitle('Auf „Live" setzen')[1]);
     await waitFor(() => expect(aufrufe).toBe(2));   // Nachladen laeuft gerade
 
     expect(screen.queryByText(/wird geladen/)).not.toBeInTheDocument();
@@ -272,7 +272,7 @@ describe("Namen angleichen", () => {
   }
 
   async function nameAendern() {
-    await screen.findByText("Beatstars");
+    await screen.findByText("BeatStars");
     await userEvent.clear(nameFeld());
     await userEvent.type(nameFeld(), "NEU");
     await userEvent.click(screen.getByText("Speichern"));
@@ -284,7 +284,7 @@ describe("Namen angleichen", () => {
     syncAntwort({ beat_id: "0842", from: "alt", to: ZIEL, files_renamed: 2, error: null });
 
     panelRendern(vi.fn(), onRenamed, onSaveBeat);
-    await screen.findByText("Beatstars");
+    await screen.findByText("BeatStars");
 
     // Ohne Aenderung kein Hinweis — vorher stand hier ein Dauerknopf.
     expect(screen.queryByText("Angleichen")).not.toBeInTheDocument();
@@ -340,5 +340,75 @@ describe("Namen angleichen", () => {
     await userEvent.click(await screen.findByText("Angleichen"));
     expect(await screen.findByText(/gibt es in diesem Ordner schon/)).toBeInTheDocument();
     expect(echterLauf).toBe(true);
+  });
+});
+
+// ── Fehlersuche 13.11.2026 ──────────────────────────────────────────────────
+describe("Entwurf und Anzeige im Side-Panel", () => {
+  const panel = (beat: Beat, onSaveBeat: (p: unknown) => Promise<void>, isOpen = true) => (
+    <AudioPlayerProvider>
+      <TagManagerProvider>
+        <DetailPanel beat={beat} isOpen={isOpen} onClose={vi.fn()} onToggleFavorite={vi.fn()}
+          onUpdateStatus={vi.fn()} onSaveBeat={onSaveBeat} />
+      </TagManagerProvider>
+    </AudioPlayerProvider>
+  );
+  const NOTIZ = "Plugins, Inspiration, verwendete Samples …";
+
+  it("zeigt # vor einer alten Nummer, nicht vor einem Projektnamen", () => {
+    const { rerender } = render(panel({ ...BEAT, alte_id: "630" }, vi.fn()));
+    expect(screen.getByText(/alt #630/)).toBeInTheDocument();
+    rerender(panel({ ...BEAT, alte_id: "Project_0121" }, vi.fn()));
+    expect(screen.getByText(/alt Project_0121/)).toBeInTheDocument();
+  });
+
+  it("speichert die getippte Notiz beim Wechsel zum nächsten Beat", async () => {
+    const onSaveBeat = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(panel(BEAT, onSaveBeat));
+    await userEvent.type(screen.getByPlaceholderText(NOTIZ), "Serum Bass");
+
+    rerender(panel({ ...BEAT, id: "0843", name: "MORGEN" }, onSaveBeat));
+
+    expect(onSaveBeat).toHaveBeenCalledTimes(1);
+    expect(onSaveBeat).toHaveBeenCalledWith({ id: "0842", notes: "Serum Bass", sold_to: "" });
+  });
+
+  it("speichert die Notiz auch beim Schließen, aber nichts ohne Änderung", async () => {
+    const onSaveBeat = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(panel(BEAT, onSaveBeat));
+    rerender(panel({ ...BEAT, id: "0843", name: "MORGEN" }, onSaveBeat));
+    expect(onSaveBeat).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByPlaceholderText(NOTIZ), "x");
+    rerender(panel({ ...BEAT, id: "0843", name: "MORGEN" }, onSaveBeat, false));
+    expect(onSaveBeat).toHaveBeenCalledWith({ id: "0843", notes: "x", sold_to: "" });
+  });
+
+  it("zeigt den Fehler, wenn das Speichern scheitert", async () => {
+    const onSaveBeat = vi.fn().mockRejectedValue("Gespeichert, aber Umbenennen auf der Platte schlug fehl: gesperrt");
+    render(panel(BEAT, onSaveBeat));
+    await userEvent.type(screen.getByPlaceholderText(NOTIZ), "x");
+    await userEvent.click(screen.getByText("Speichern"));
+    expect(await screen.findByText(/Umbenennen auf der Platte schlug fehl/)).toBeInTheDocument();
+  });
+
+  it("leert Tempo und Käufer wirklich", async () => {
+    const onSaveBeat = vi.fn().mockResolvedValue(undefined);
+    render(panel({ ...BEAT, status: "sold", sold_to: "Max" }, onSaveBeat));
+    await userEvent.clear(screen.getByDisplayValue("140"));
+    await userEvent.clear(screen.getByDisplayValue("Max"));
+    await userEvent.click(screen.getByText("Speichern"));
+    // 0 und "" heißen „geleert“; null hieße „nicht geändert“
+    expect(onSaveBeat).toHaveBeenCalledWith(expect.objectContaining({ bpm: 0, sold_to: "" }));
+  });
+});
+
+describe("AssetImage", () => {
+  it("zeigt nach einem Pfadwechsel das neue Bild", async () => {
+    const { AssetImage } = await import("../AssetPickerDialog");
+    const { container, rerender } = render(<AssetImage path="C:\A\cover.png" />);
+    expect(container.querySelector("img")?.getAttribute("src")).toContain("A/cover.png");
+    rerender(<AssetImage path="C:\B\cover.png" />);
+    expect(container.querySelector("img")?.getAttribute("src")).toContain("B/cover.png");
   });
 });

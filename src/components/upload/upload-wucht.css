@@ -1,0 +1,60 @@
+/* Upload-Tab, Look „Wucht" (Entwurf upload-redesign v1): Hover, Leuchten, Bewegung.
+   Größen und Farben stehen inline, hier nur, was inline nicht geht.
+   --c: Farbe der Bühne (Stand des Beats), --fc: Farbe einer Fläche, --p: Plattform. */
+
+@keyframes ul-hoch { from { opacity: 0; transform: translateY(18px); } }
+@keyframes ul-blink { 50% { opacity: 0.3; } }
+@keyframes ul-puls { 50% { box-shadow: 0 0 0 4px rgba(253, 161, 36, 0.08), 0 5px 19px -6px color-mix(in srgb, #fda124 64%, transparent); } }
+@keyframes ul-plopp { 0% { transform: scale(0.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes ul-lauf { from { transform: translateX(-1px); } }
+
+/* Flächen (SectionCard farbe=…) */
+.ul-fl { transition: border-color 0.3s, box-shadow 0.3s; animation: ul-hoch 0.55s cubic-bezier(.2, .9, .3, 1) backwards; }
+.ul-fl:hover { border-color: color-mix(in srgb, var(--fc) 40%, transparent) !important; box-shadow: 0 10px 29px -14px color-mix(in srgb, var(--fc) 32%, transparent); }
+.ul-punkt { box-shadow: 0 0 11px color-mix(in srgb, var(--fc, var(--c)) 80%, transparent); }
+
+/* Bühne */
+.ul-buehne { animation: ul-hoch 0.55s cubic-bezier(.2, .9, .3, 1) backwards; }
+.ul-cover { transition: transform 0.45s cubic-bezier(.2, .9, .3, 1.3); }
+.ul-cover:hover { transform: scale(1.04) rotate(-2deg); }
+.ul-dot { animation: ul-blink 1.6s ease-in-out infinite; }
+.ul-wahl .ul-pfeil { transition: transform 0.3s; }
+.ul-wahl:hover .ul-pfeil { transform: translateY(3px); }
+.ul-schritt-puls { animation: ul-puls 2.6s ease-in-out infinite; }
+
+/* Dateikacheln im Kopf */
+.ul-datei { transition: transform 0.2s cubic-bezier(.2, .9, .3, 1.5), border-color 0.2s, box-shadow 0.2s; }
+.ul-datei:hover:not(:disabled) { transform: translateY(-4px); border-color: var(--c) !important; box-shadow: 0 11px 24px -11px color-mix(in srgb, var(--c) 64%, transparent); }
+.ul-led { transition: transform 0.2s; }
+.ul-datei:hover .ul-led { transform: scale(1.25); }
+
+/* Kapitel */
+.ul-abschnitt { transition: background 0.2s; }
+.ul-abschnitt:hover { background: color-mix(in srgb, var(--k) 28%, transparent) !important; }
+.ul-kzeile { position: relative; transition: transform 0.2s; }
+.ul-kzeile::before {
+  content: ""; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px;
+  background: var(--k); box-shadow: 0 0 8px color-mix(in srgb, var(--k) 64%, transparent); transform: scaleY(0); transition: transform 0.2s;
+}
+.ul-kzeile:hover { transform: translateX(4px); }
+.ul-kzeile:hover::before { transform: scaleY(1); }
+
+/* Beschreibungen */
+.ul-pf { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s; }
+.ul-pf:hover { transform: translateY(-3px); border-color: var(--p) !important; }
+.ul-kopiert { animation: ul-plopp 0.4s cubic-bezier(.2, .9, .3, 1.6); }
+
+/* Status */
+.ul-pk { transition: transform 0.25s, box-shadow 0.25s; animation: ul-hoch 0.5s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 80ms + 0.1s); }
+.ul-pk:hover { transform: translateY(-5px); box-shadow: 0 11px 21px -8px color-mix(in srgb, var(--p) 64%, transparent); }
+
+/* Planung */
+.ul-tag { transition: transform 0.2s, border-color 0.2s; }
+.ul-tag:hover { transform: translateY(-3px); border-color: #fda124 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="ul-"], [class*="ul-"]::before, [class*="ul-"]::after { animation: none !important; transition: none !important; }
+}
+
+.ul-vorschlag { transition: transform 0.2s, border-color 0.2s, color 0.2s; }
+.ul-vorschlag:hover { transform: translateY(-2px); border-style: solid !important; border-color: #8f7bff !important; color: #fff !important; }

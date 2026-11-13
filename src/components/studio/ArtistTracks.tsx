@@ -39,7 +39,7 @@ export function Leds({ song: s, akzent, gross = false, onStufe }: {
               width: d, height: d, borderRadius: "50%", padding: 0, cursor: gesperrt ? "default" : "pointer",
               border: an ? "none" : `1px solid ${C.border20}`,
               background: an ? farbe : C.surfaceContainerHighest,
-              boxShadow: an ? `0 0 14px color-mix(in srgb, ${farbe} 80%, transparent)` : "none",
+              boxShadow: an ? `0 0 11px color-mix(in srgb, ${farbe} 51%, transparent)` : "none",
               opacity: s.geplant ? 0.4 : 1,
             }} />
         );
@@ -93,7 +93,7 @@ export function SessionStreifen({ kuenstler: k, songs, akzent, release, onStufe,
       borderRadius: 22, padding: 22,
       background: `linear-gradient(135deg, color-mix(in srgb, ${akzent} 26%, ${C.surfaceContainerLow}), ${C.surfaceContainerLow} 75%)`,
       border: `1px solid color-mix(in srgb, ${akzent} 45%, transparent)`,
-      boxShadow: `0 20px 60px -25px color-mix(in srgb, ${akzent} 55%, transparent)`,
+      boxShadow: `0 10px 29px -12px color-mix(in srgb, ${akzent} 35%, transparent)`,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <span className="kw-rec" aria-hidden />
@@ -198,7 +198,7 @@ export function Trackliste({ kuenstler: k, akzent, filter, auswahl, session, fea
         display: "grid", gridTemplateColumns: "36px minmax(0, 1fr) auto auto 36px", alignItems: "center", gap: 16,
         padding: 14, borderRadius: 12, cursor: "pointer",
         background: ziel ? alpha(C.primary, 0.1) : s.path === auswahl ? C.surfaceContainerHighest : drin ? `color-mix(in srgb, ${akzent} 8%, transparent)` : "transparent",
-        boxShadow: ziel ? `inset 0 0 0 1px ${alpha(C.primary, 0.6)}` : "none",
+        boxShadow: ziel ? `inset 0 0 0 1px ${alpha(C.primary, 0.38)}` : "none",
       }}>
         <span className="kw-nr" style={{ fontSize: 14, color: C.onSecondaryFixedVar, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{nr}</span>
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 15 }}>

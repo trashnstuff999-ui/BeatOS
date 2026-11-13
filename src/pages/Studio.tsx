@@ -21,6 +21,7 @@ import { AssetsPane } from "../components/studio/AssetsPane";
 import { SamplesPane } from "../components/studio/SamplesPane";
 import { AlteIdeenPane } from "../components/studio/AlteIdeenPane";
 import { INSPECTOR_WIDTH } from "../components/studio/ProjectInspector";
+import "../components/studio/studio-wucht.css";
 import type { StudioProject } from "../types/studio";
 
 type StudioTab = "projects" | "samples" | "ideen" | "cleanup" | "assets";

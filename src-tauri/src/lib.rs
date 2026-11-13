@@ -167,12 +167,58 @@ use commands::{
     migrate_beat_structures,
     plan_filename_convention,
     apply_filename_convention,
+    apply_filename_convention_for,
     clean_old_exports,
     sync_beat_folders,
 };
 // ══════════════════════════════════════════════════════════════════════════════
 // ENTRY POINT
 // ══════════════════════════════════════════════════════════════════════════════
+/// Gibt dem Asset-Protokoll die eingestellten Ordner frei (Cover, Audio).
+/// Beim Start und nach jedem Speichern der Einstellungen: ein neuer Pfad
+/// blieb sonst bis zum Neustart ohne Bilder und ohne Ton.
+pub(crate) fn asset_scope_freigeben(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let scope = app.asset_protocol_scope();
+    if let Ok(settings) = commands::get_settings() {
+        let mut dirs: Vec<String> = Vec::new();
+        if let Some(archive) = settings.get("archive_path") {
+            if !archive.trim().is_empty() {
+                dirs.push(archive.trim().to_string());
+            }
+        }
+        if let Some(prod) = settings.get("production_path") {
+            dirs.extend(
+                prod.split(['\n', ';'])
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from),
+            );
+        }
+        if let Some(asset) = settings.get("asset_path") {
+            if !asset.trim().is_empty() {
+                dirs.push(asset.trim().to_string());
+            }
+        }
+        // Künstler-Ordner (Profilbilder): eigener Pfad oder
+        // 05_ARTISTS neben dem Archiv — wie kuenstlerOrdner() im Frontend.
+        let kuenstler = settings.get("artists_path").map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+            .or_else(|| settings.get("archive_path")
+                .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("05_ARTISTS").to_string_lossy().to_string())));
+        dirs.extend(kuenstler);
+        // Samples zum Reinhören: 06_SAMPLES neben dem Archiv (samplesOrdner())
+        dirs.extend(settings.get("archive_path")
+            .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("06_SAMPLES").to_string_lossy().to_string())));
+        // Cover-Vorschauen (get_beat_cover_thumb) liegen neben der Datenbank
+        dirs.extend(db::get_db_path().parent().map(|p| p.join("thumbs").to_string_lossy().to_string()));
+        for dir in dirs {
+            if let Err(e) = scope.allow_directory(&dir, true) {
+                eprintln!("WARNING: cannot extend asset scope for {}: {}", dir, e);
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize database schema ONCE at startup
@@ -211,47 +257,7 @@ pub fn run() {
             //
             // Frontend fällt auf base64 (read_image_file) zurück, wenn ein Pfad
             // doch nicht abgedeckt ist.
-            {
-                use tauri::Manager;
-                let scope = app.asset_protocol_scope();
-                if let Ok(settings) = commands::get_settings() {
-                    let mut dirs: Vec<String> = Vec::new();
-                    if let Some(archive) = settings.get("archive_path") {
-                        if !archive.trim().is_empty() {
-                            dirs.push(archive.trim().to_string());
-                        }
-                    }
-                    if let Some(prod) = settings.get("production_path") {
-                        dirs.extend(
-                            prod.split(['\n', ';'])
-                                .map(str::trim)
-                                .filter(|s| !s.is_empty())
-                                .map(String::from),
-                        );
-                    }
-                    if let Some(asset) = settings.get("asset_path") {
-                        if !asset.trim().is_empty() {
-                            dirs.push(asset.trim().to_string());
-                        }
-                    }
-                    // Künstler-Ordner (Profilbilder): eigener Pfad oder
-                    // 05_ARTISTS neben dem Archiv — wie kuenstlerOrdner() im Frontend.
-                    let kuenstler = settings.get("artists_path").map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-                        .or_else(|| settings.get("archive_path")
-                            .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("05_ARTISTS").to_string_lossy().to_string())));
-                    dirs.extend(kuenstler);
-                    // Samples zum Reinhören: 06_SAMPLES neben dem Archiv (samplesOrdner())
-                    dirs.extend(settings.get("archive_path")
-                        .and_then(|a| std::path::Path::new(a.trim()).parent().map(|p| p.join("06_SAMPLES").to_string_lossy().to_string())));
-                    // Cover-Vorschauen (get_beat_cover_thumb) liegen neben der Datenbank
-                    dirs.extend(db::get_db_path().parent().map(|p| p.join("thumbs").to_string_lossy().to_string()));
-                    for dir in dirs {
-                        if let Err(e) = scope.allow_directory(&dir, true) {
-                            eprintln!("WARNING: cannot extend asset scope for {}: {}", dir, e);
-                        }
-                    }
-                }
-            }
+            asset_scope_freigeben(app.handle());
             // Alte Nummer und Begonnen für Beats nachtragen, die sie noch nicht
             // haben (Bibliothek-Umbau). Nur lesend auf der Platte, im Hintergrund.
             std::thread::spawn(|| match commands::herkunft_nachtragen() {
@@ -413,6 +419,7 @@ pub fn run() {
             migrate_beat_structures,
             plan_filename_convention,
             apply_filename_convention,
+            apply_filename_convention_for,
             clean_old_exports,
             sync_beat_folders,
         ])

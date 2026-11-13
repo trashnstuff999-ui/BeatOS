@@ -7,6 +7,7 @@ import { HelpCircle, Keyboard, BookOpen, Info, ChevronDown, ChevronRight } from 
 import { useState } from "react";
 import { C, radius } from "../lib/theme";
 import { PageHeader, PageBody } from "../components/ui";
+import { APP_VERSION } from "../lib/version";
 
 // ─── Section ─────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ export function Support() {
             <div>
               <FaqItem
                 question="Meine Beats tauchen im Archiv nicht auf."
-                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Danach in den Einstellungen unter „Wartung“ System Repair starten."
+                answer="Prüfe, ob der Archiv-Pfad in den Einstellungen auf den richtigen Ordner zeigt. Danach in den Einstellungen unter „Wartung“ die System-Reparatur starten."
               />
               <FaqItem
                 question="Die Wiedergabe funktioniert nicht."
@@ -200,7 +201,7 @@ export function Support() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 { label: "Anwendung", value: "BeatOS" },
-                { label: "Version", value: "0.1.0" },
+                { label: "Version", value: APP_VERSION },
                 { label: "Framework", value: "Tauri 2 + React 19" },
                 { label: "Datenbank", value: "SQLite (lokal)" },
               ].map(({ label, value }) => (

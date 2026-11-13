@@ -19,9 +19,32 @@ interface SectionCardProps {
   style?: React.CSSProperties;
   /** Sprungziel, z. B. für „Zu den Infos" im Kopf des Upload-Tabs. */
   id?: string;
+  /** Look „Wucht“ (Upload-Tab): große Überschrift mit Leuchtpunkt in dieser
+   *  Farbe, Rand leuchtet beim Hover. Ohne: die ruhige Karte (Create). */
+  farbe?: string;
 }
 
-export function SectionCard({ icon: Icon, title, actions, children, style, id }: SectionCardProps) {
+export function SectionCard({ icon: Icon, title, actions, children, style, id, farbe }: SectionCardProps) {
+  if (farbe) return (
+    <section id={id} className="ul-fl" style={{
+      "--fc": farbe,
+      scrollMarginTop: 16, minWidth: 0,
+      background: C.surfaceContainerLow,
+      border: `1px solid ${C.border30}`,
+      borderRadius: 22,
+      padding: 24,
+      ...style,
+    } as React.CSSProperties}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <span className="ul-punkt" style={{ width: 12, height: 12, borderRadius: "50%", background: farbe, flexShrink: 0 }} />
+        <h3 style={{ margin: 0, flex: 1, fontSize: 28, fontWeight: 700, color: C.onSurface, letterSpacing: "-0.01em" }}>
+          {title}
+        </h3>
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
   return (
     <section id={id} style={{
       scrollMarginTop: 16,

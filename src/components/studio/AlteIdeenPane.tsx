@@ -82,7 +82,7 @@ export function AlteIdeenPane({ onGeholt }: { onGeholt: () => void }) {
         />
       </ProjectsToolbar>
 
-      <section aria-label="Alte Ideen" style={{ padding: "0 16px", maxWidth: 1100 }}>
+      <section aria-label="Alte Ideen" style={{ margin: "0 16px", padding: 24, borderRadius: 22, border: `1px solid ${C.border30}`, background: C.surfaceContainerLow, maxWidth: 1100, paddingTop: 4 }}>
         {!isLoading && ideen.length === 0 && (
           <EmptyState variant="inline" icon={History} title="Keine alten Ideen" />
         )}
@@ -90,14 +90,15 @@ export function AlteIdeenPane({ onGeholt }: { onGeholt: () => void }) {
           const alle = sichtbar.filter(p => jahrVon(p) === jahr);
           const gezeigt = offen.has(jahr) || q ? alle : alle.slice(0, JE_JAHR);
           return (
-            <div key={jahr} style={{ paddingTop: 20 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 6 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.onSurface }}>{jahr}</h3>
+            <div key={jahr} style={{ paddingTop: 22 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.onSurface }}>{jahr}</h3>
                 <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>{alle.length} {alle.length === 1 ? "Idee" : "Ideen"}</span>
               </div>
-              {gezeigt.map(p => (
+              {gezeigt.map((p, i) => (
                 <IdeeZeile
                   key={p.path}
+                  index={i}
                   idee={p}
                   holt={holt === p.path}
                   gesperrt={holt !== null}
@@ -108,10 +109,12 @@ export function AlteIdeenPane({ onGeholt }: { onGeholt: () => void }) {
               {alle.length > gezeigt.length && (
                 <button
                   onClick={() => setOffen(s => new Set(s).add(jahr))}
+                  className="sw-mehr"
                   style={{
-                    marginTop: 2, minHeight: 36, padding: "0 12px 0 52px", border: "none", borderRadius: 8,
-                    background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  }}
+                    "--c": C.primary,
+                    margin: "8px 0 0 52px", padding: "8px 18px", border: `1px solid ${C.border30}`, borderRadius: 999,
+                    background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  } as React.CSSProperties}
                 >
                   Alle {alle.length} anzeigen
                 </button>
@@ -124,29 +127,26 @@ export function AlteIdeenPane({ onGeholt }: { onGeholt: () => void }) {
   );
 }
 
-function IdeeZeile({ idee: p, holt, gesperrt, onOpen, onHolen }: {
+function IdeeZeile({ index, idee: p, holt, gesperrt, onOpen, onHolen }: {
+  index: number;
   idee: StudioProject;
   holt: boolean;
   gesperrt: boolean;
   onOpen: () => void;
   onHolen: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const neben = [
     p.flp_count > 1 ? `${p.flp_count} Versionen` : null,
     p.bpm != null ? `${p.bpm} BPM` : null,
   ].filter(Boolean).join(" · ");
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 12, minHeight: 48, padding: "0 12px 0 0", borderRadius: 8,
-        background: hovered ? "rgba(255,255,255,0.03)" : "transparent",
-      }}
-    >
+    <div className="sw-zl sw-zb" style={{
+      display: "flex", alignItems: "center", gap: 12, minHeight: 54, padding: "0 12px 0 0", borderRadius: 12,
+      "--i": Math.min(index, 20),
+    } as React.CSSProperties}>
       <button
+        className="sw-zp sw-zp-fl"
         onClick={onOpen}
         aria-label="In FL öffnen"
         title="In FL öffnen"
@@ -159,7 +159,7 @@ function IdeeZeile({ idee: p, holt, gesperrt, onOpen, onHolen }: {
         <Disc3 size={14} strokeWidth={1.75} />
       </button>
       <span title={p.name} style={{
-        flex: "1 1 auto", minWidth: 0, fontSize: 14, fontWeight: 600, color: C.onSurface,
+        flex: "1 1 auto", minWidth: 0, fontSize: 16, fontWeight: 700, color: C.onSurface, paddingLeft: 8,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
         {p.name}

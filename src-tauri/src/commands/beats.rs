@@ -22,17 +22,27 @@ fn base_beat_filters(
     if let Some(s) = search {
         let search_lower = s.to_lowercase();
         if !search_lower.is_empty() {
-            let search_pattern = format!("%{}%", search_lower);
+            // % und _ sind getippter Text, keine Platzhalter
+            let muster = |s: &str| format!("%{}%", s.replace('\\', r"\\").replace('%', r"\%").replace('_', r"\_"));
+            let search_pattern = muster(&search_lower);
+            // ponytail: SQLite kennt Groß/Klein nur für ASCII. Klein- und
+            // Großfassung decken „ä“ gegen „Ä“ ab; gemischte Umlaute in einem
+            // Wort (äÖ) nicht, dafür bräuchte es eine eigene SQL-Funktion.
+            let gross_pattern = muster(&s.to_uppercase());
             // „B0145“ und „#0145“ meinen die ID 0145; die frühere Nummer findet den Beat auch
             let nr = search_lower.trim().trim_start_matches(['b', '#']);
             let nr_pattern = if !nr.is_empty() && nr.chars().all(|c| c.is_ascii_digit()) { format!("%{nr}%") } else { search_pattern.clone() };
+            let spalten: Vec<String> = ["name", "key", "tags"].iter()
+                .map(|sp| format!(r"{sp} LIKE ?{a} ESCAPE '\' OR {sp} LIKE ?{b} ESCAPE '\'", a = param_idx, b = param_idx + 1))
+                .collect();
             where_clauses.push(format!(
-                "(LOWER(name) LIKE ?{idx} OR LOWER(key) LIKE ?{idx} OR LOWER(tags) LIKE ?{idx} OR id LIKE ?{n} OR frueher_nr LIKE ?{n})",
-                idx = param_idx, n = param_idx + 1
+                r"({} OR id LIKE ?{n} ESCAPE '\' OR frueher_nr LIKE ?{n} ESCAPE '\')",
+                spalten.join(" OR "), n = param_idx + 2
             ));
             params.push(Box::new(search_pattern));
+            params.push(Box::new(gross_pattern));
             params.push(Box::new(nr_pattern));
-            param_idx += 2;
+            param_idx += 3;
         }
     }
 
@@ -67,7 +77,7 @@ pub struct DeleteBeatResult {
 /// folders if the DB ever holds a bogus path.
 #[tauri::command]
 pub fn delete_beat(beat_id: String, archive_base_path: String) -> Result<DeleteBeatResult, String> {
-    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut conn = open_db().map_err(|e| e.to_string())?;
 
     // 1. Look up the beat's path from the DB (single source of truth)
     let beat_path: String = match conn.query_row(
@@ -120,16 +130,26 @@ pub fn delete_beat(beat_id: String, archive_base_path: String) -> Result<DeleteB
     };
 
     // 4. Remove the DB row only after the filesystem step succeeded (or was a no-op).
-    conn.execute(
-        "DELETE FROM beats WHERE id = ?1",
-        rusqlite::params![beat_id],
-    ).map_err(|e| format!("DB delete failed: {}", e))?;
+    beat_aus_db(&mut conn, &beat_id).map_err(|e| format!("DB delete failed: {}", e))?;
 
     Ok(DeleteBeatResult {
         success: true,
         beat_id,
         folder_trashed,
     })
+}
+
+/// Beat samt allem, was an seiner Nummer hängt. Die nächste Nummer ist
+/// „höchste + 1“: blieben Uploads oder Credits stehen, erbte sie der nächste
+/// Beat mit derselben Nummer.
+fn beat_aus_db(conn: &mut rusqlite::Connection, beat_id: &str) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    for t in ["beat_uploads", "beat_sample_credits", "beat_description_overrides"] {
+        tx.execute(&format!("DELETE FROM {t} WHERE beat_id = ?1"), [beat_id])?;
+    }
+    tx.execute("UPDATE artist_songs SET beat_id = NULL WHERE beat_id = ?1", [beat_id])?;
+    tx.execute("DELETE FROM beats WHERE id = ?1", [beat_id])?;
+    tx.commit()
 }
 
 #[tauri::command]
@@ -325,8 +345,9 @@ pub fn update_beat(params: UpdateBeatParams) -> Result<(), String> {
     }
     
     if let Some(bpm) = params.bpm {
+        // 0 = geleert. null kann es nicht heißen, das bedeutet „nicht geändert“.
         updates.push("bpm = ?".to_string());
-        values.push(Box::new(bpm));
+        values.push(Box::new((bpm > 0.0).then_some(bpm)));
     }
     
     if let Some(ref key) = params.key {
@@ -355,8 +376,9 @@ pub fn update_beat(params: UpdateBeatParams) -> Result<(), String> {
     }
     
     if let Some(ref sold_to) = params.sold_to {
+        // Leer = geleert, als NULL gespeichert
         updates.push("sold_to = ?".to_string());
-        values.push(Box::new(sold_to.clone()));
+        values.push(Box::new(Some(sold_to.trim().to_string()).filter(|s| !s.is_empty())));
     }
     
     updates.push("modified_date = datetime('now')".to_string());
@@ -439,5 +461,79 @@ pub fn get_beat_by_id(beat_id: String) -> Result<Option<Beat>, String> {
         Ok(b) => Ok(Some(b)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("
+            CREATE TABLE beats (id TEXT PRIMARY KEY, name TEXT, key TEXT, tags TEXT, status TEXT, favorite INTEGER, frueher_nr TEXT);
+            CREATE TABLE beat_uploads (beat_id TEXT, platform TEXT, status TEXT);
+            CREATE TABLE beat_sample_credits (beat_id TEXT, producer_id INTEGER);
+            CREATE TABLE beat_description_overrides (beat_id TEXT, platform TEXT, text TEXT);
+            CREATE TABLE artist_songs (path TEXT PRIMARY KEY, beat_id TEXT);
+        ").unwrap();
+        conn
+    }
+
+    fn zahl(conn: &rusqlite::Connection, sql: &str) -> i64 {
+        conn.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn loeschen_nimmt_die_verweise_mit() {
+        let mut conn = db();
+        conn.execute_batch("
+            INSERT INTO beats (id, name) VALUES ('0402', 'BLEIBT'), ('0403', 'WEG');
+            INSERT INTO beat_uploads VALUES ('0402', 'youtube', 'uploaded'), ('0403', 'youtube', 'uploaded');
+            INSERT INTO beat_sample_credits VALUES ('0403', 1);
+            INSERT INTO beat_description_overrides VALUES ('0403', 'youtube', 'x');
+            INSERT INTO artist_songs VALUES ('song', '0403'), ('anderer', '0402');
+        ").unwrap();
+
+        beat_aus_db(&mut conn, "0403").unwrap();
+
+        // Ein neuer Beat 0403 fände nichts Geerbtes vor
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM beats WHERE id = '0403'"), 0);
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM beat_uploads WHERE beat_id = '0403'"), 0);
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM beat_sample_credits"), 0);
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM beat_description_overrides"), 0);
+        // Der Song bleibt, nur die Verknüpfung ist gelöst
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM artist_songs WHERE path = 'song' AND beat_id IS NULL"), 1);
+        // Der Nachbar ist unberührt
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM beat_uploads WHERE beat_id = '0402'"), 1);
+        assert_eq!(zahl(&conn, "SELECT COUNT(*) FROM artist_songs WHERE beat_id = '0402'"), 1);
+    }
+
+    fn treffer(conn: &rusqlite::Connection, suche: &str) -> Vec<String> {
+        let (wo, params, _) = base_beat_filters(&Some(suche.to_string()), &None, false);
+        let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn.prepare(&format!("SELECT name FROM beats WHERE {} ORDER BY name", wo.join(" AND "))).unwrap();
+        let namen: Vec<String> = stmt.query_map(refs.as_slice(), |r| r.get(0)).unwrap().flatten().collect();
+        namen
+    }
+
+    #[test]
+    fn suche_umlaute_und_platzhalter() {
+        let conn = db();
+        conn.execute_batch("
+            INSERT INTO beats (id, name, tags) VALUES
+              ('0001', 'TRÄUME', NULL), ('0002', 'Über Nacht', NULL),
+              ('0003', '100% REAL', NULL), ('0004', 'PIECES', 'dark, Düster');
+        ").unwrap();
+
+        assert_eq!(treffer(&conn, "träume"), ["TRÄUME"]);
+        assert_eq!(treffer(&conn, "über"), ["Über Nacht"]);
+        assert_eq!(treffer(&conn, "düster"), ["PIECES"]);
+        // % und _ suchen sich selbst statt alles zu treffen
+        assert_eq!(treffer(&conn, "%"), ["100% REAL"]);
+        assert!(treffer(&conn, "_").is_empty());
+        // Wie bisher: ASCII ohne Rücksicht auf Groß/Klein, Nummer mit B davor
+        assert_eq!(treffer(&conn, "pieces"), ["PIECES"]);
+        assert_eq!(treffer(&conn, "B0004"), ["PIECES"]);
     }
 }

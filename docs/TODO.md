@@ -4,6 +4,8 @@ Kleinere Sachen, die aufgefallen sind und noch keinen Platz in einem Plan haben.
 Der größere Fahrplan liegt in `qol-roadmap.md` — hier steht nur, was nebenbei
 auftaucht.
 
+**Reihenfolge für alles Offene: `fahrplan-2026-11.md`** (Blöcke A bis I, Stand 13.11.2026).
+
 ---
 
 ## Archivmonat in der Create-Maske änderbar machen — erledigt 17.10.2026 (154ebbb)
@@ -166,3 +168,133 @@ Verwaltung zu einem Werkzeug für Entscheidungen macht. Erst sinnvoll, wenn
 der Rest steht und der Bestand gesichert ist.
 
 Aufgekommen bei der Frage „was könnte man noch bauen" am 04.09.2026.
+
+---
+
+## Feature-Liste aus der App-Analyse (13.11.2026)
+
+Gesammelt beim Durchgang durch den Code. Reihenfolge ist keine Priorität.
+
+### Neue Features
+- [ ] **Verkäufe richtig erfassen**: je Verkauf Lizenzart, Preis, Datum, Käufer statt
+      nur „Exklusiv an“. Grundlage für eine Einnahmen-Statistik
+- [ ] **Placements im Archiv-Beat**: in welchen Artist-Songs der Beat steckt
+      (Gegenrichtung zu „Mein Beat“ im Artist-Song). Entwurf zuerst
+- [ ] **Aufrufe pro Beat** über yt-dlp, siehe „Analyse-Tab“ oben
+- [ ] **Lautheit/Clipping** je Export anzeigen; die Wellenform im Player rechnet
+      schon RMS, darauf aufbauen (siehe „Lautheit/Clipping prüfen“ oben)
+- [ ] **Ähnliche Beats** nach Tonart und Tempo im Detail-Panel (Fahrplan Nr. 18)
+- [ ] **Mehrfachauswahl im Archiv** für Tags und Status (im Studio gibt es sie)
+
+### Offene Entscheidungen
+- [ ] **Geplante Uploads werden von selbst „Live“**, sobald das Datum vorbei ist
+      (`promote_past_scheduled`). Richtig, wenn der Termin auf der Plattform
+      geplant ist; falsch, wenn er nur in BeatOS steht und der Upload ausfiel.
+      Alternative: überfällige Termine bestätigen lassen
+- [ ] **Warteschlange schaut nur 180 Tage zurück** (`WARTESCHLANGE_TAGE`). Ohne
+      Grenze stünden am 13.11.2026 321 alte Beats in der Liste, mit Grenze 3.
+      Erst nach „Uploads nacherfassen“ oder „Nicht hochladen“ für den Altbestand
+      aufheben
+
+### Aus dem Fahrplan, laut qol-roadmap.md noch offen (einzeln gegenprüfen)
+- [ ] Nr. 5 Monatskalender, Nr. 12 Stapel-Planer, Nr. 13 „Nächster freier Tag“
+- [ ] Nr. 14 globaler Hotkey, Nr. 15 Alt+Zahl für die Tabs
+- [ ] Nr. 19 Längen-Zähler an den Tag-Feldern
+
+### Behoben am 13.11.2026 (zur Einordnung)
+Löschen räumt Uploads/Credits/Beschreibungen mit ab · Speicherfehler erscheinen
+im Panel · „#“ vor alter Nummer · Tagessicherungen (7 Stück) · neue Pfade ohne
+Neustart · Notiz/Käufer werden beim Beat-Wechsel gespeichert · Tempo und Käufer
+lassen sich leeren · Suche mit Umlauten und %/_ · Player bei schnellem
+Fassungswechsel
+
+---
+
+## Ideen aus dem Brainstorming (13.11.2026), von Stephan ausgewählt
+
+### Samples und Projekte
+- [ ] **„Welche Beats nutzen diesen Loop?“** Die FLP-Pfade liest BeatOS schon
+      (`commands/flp.rs`). Daraus je Sample die Liste der Projekte, und umgekehrt
+- [ ] **Vollständigkeits-Check vor dem Archivieren**: Warnung, wenn die FLP auf
+      Samples zeigt, die es nicht mehr gibt
+- [ ] **Tempo und Tonart gegenmessen**: aus dem Audio schätzen und nur melden,
+      wenn es vom Dateinamen abweicht
+
+### Upload und Reichweite
+- [ ] **Thumbnail-Generator**: Cover plus Name, Tempo und Tonart nach fester Vorlage.
+      Von Stephan am 13.11. bestätigt: aus dem fertigen Cover per Knopf an der
+      Thumbnail-Kachel, damit nur noch das Cover in Photoshop entsteht
+- [ ] **Shorts-Schnipsel**: 30 Sekunden hochkant ab einer Kapitelmarke, aufbauend
+      auf dem Video-Tab
+- [ ] **Release-Kalender aufs Handy**: Termine als `.ics`-Datei exportieren
+
+### Ordnung
+- [ ] **„Wiederentdecken“ auf der Übersicht**: jeden Tag ein alter, nie
+      veröffentlichter Beat zum Reinhören
+- [ ] **Aktivitätsprotokoll**: was BeatOS zuletzt umbenannt, verschoben oder
+      gelöscht hat, an einer Stelle
+- [ ] **Speicherplatz-Übersicht**: größte Ordner, alte FL-Backups, doppelte Exporte
+
+Nicht ausgewählt (nur zur Erinnerung): Takedown-Liste beim Exklusiv-Verkauf,
+Collab-Splits, Beat-Pack verschicken, OneDrive-Status.
+
+### Upload-Workflow (13.11.2026, von Stephan ausgewählt)
+- [ ] **Dateien aus BeatOS herausziehen**: Zeilen der Asset-Liste (MP3, WAV, Cover,
+      Video) direkt ins Browserfenster von YouTube/BeatStars ziehen statt im
+      Dateidialog suchen. Braucht das Tauri-Drag-Plugin
+- [ ] **Upload-Seite der Plattform mit öffnen**: ein Knopf je Plattform öffnet die
+      Upload-Seite im Browser und legt Titel, Beschreibung, Tags nacheinander in
+      die Zwischenablage. Bausteine sind da (`UploadAssistantDialog`, `openUrl`)
+- [ ] **„Weiter zum nächsten Beat“ im Upload-Tab**: nach dem letzten Schritt zum
+      nächsten Beat der Warteschlange springen
+
+Nicht ausgewählt: Link beim Abhaken aus der Zwischenablage, Meldung bei fertigem Export.
+
+### Cover-Kette: PSD öffnen → Cover holen → Thumbnail (13.11.2026, Machbarkeit geprüft)
+Stephans Ablauf: EINE Master-PSD für alle Cover, eine für Thumbnails
+(`02_LIBRARY_ASSETS\01_TEMPLATES\PHOTOSHOP\COVER - TEMPLATE.psd`,
+`THUMBNAILS - TEMPLATE.psd`). Ziel: zwischen Photoshop und fertigem Beat liegt
+ein Klick.
+
+- [ ] **Klick auf die leere Cover-Kachel öffnet die Cover-PSD in Photoshop.**
+      Nicht über `openPath`: `.psd` ist auf diesem Rechner mit After Effects
+      verknüpft. Über Photoshop selbst öffnen (COM `Photoshop.Application`)
+- [ ] **„Cover holen“**: BeatOS lässt Photoshop das offene Dokument als Kopie
+      direkt in den Beat-Ordner exportieren, schon nach Namensschema. Kein
+      Export-Dialog, kein Asset-Ordner, kein Zuweisen
+- [ ] **Thumbnail gleich mit**: sobald das Cover am Beat liegt, entsteht das
+      Thumbnail automatisch (ersetzt den Punkt „Thumbnail-Generator“ oben)
+- [ ] Pfad der Cover-PSD als Einstellung, Vorbelegung wie oben
+
+**Probe am 13.11.2026** (Photoshop 2025, v26.1, liegt auf `F:\Programme\Adobe`):
+- Fernsteuerung über COM geht ohne Rückfrage-Dialog: PSD öffnen, PNG-Kopie
+  speichern (`saveAs` mit „als Kopie“), ohne Speichern schließen. Die PSD blieb
+  unverändert (Größe und Änderungszeit gleich)
+- Zeiten: Photoshop-Kaltstart 17 s, danach Cover 1,7 s, Thumbnail 0,8 s. Läuft
+  Photoshop schon, entfällt der Start
+- Cover ist 2000×2000, Thumbnail 1920×1080. Das Thumbnail ist immer das
+  Cover auf 1080 Höhe, mittig auf Schwarz (von Stephan am 13.11. bestätigt).
+  Es braucht also kein Photoshop: BeatOS rechnet es selbst, die `image`-Crate
+  ist schon da
+- Aus Rust: COM über einen kurzen PowerShell-Aufruf oder die `windows`-Crate.
+  Nur Windows; auf dem Mac ginge es über AppleScript
+
+### Samples-Workflow (13.11.2026, von Stephan ausgewählt)
+Baut auf Scheibe 8 auf (gruppieren nach Namen, Filter). Ziel: BeatOS als
+Sample-Browser, der nur Passendes zeigt und direkt nach FL liefert.
+
+- [ ] **Samples aus BeatOS nach FL ziehen**: im Samples-Tab vorhören und die WAV
+      direkt in die FL-Playlist ziehen. Gleiches Tauri-Drag-Plugin wie
+      „Dateien aus BeatOS herausziehen“ im Upload
+- [ ] **„Passt zu“-Filter**: Tempo und Tonart des laufenden Beats angeben, nur
+      passende Samples sehen (gleiche Tonart, Paralleltonart; gleiches, halbes,
+      doppeltes Tempo). Werte stehen im Namen (`PADS - DONT CRY [150 Bmin]`)
+- [ ] **Spuren eines Samples zusammen anhören**: alle Instrument-Spuren einer
+      Idee gleichzeitig abspielen, einzelne stummschalten (z. B. „Blue Hour“:
+      Acoustic-Guitar, Bass-GTR, Nylon-Gtr, Rhythm-Gtr)
+- [ ] **„Beat daraus machen“**: am Sample ein Knopf, legt ein Projekt aus der
+      Beat-Vorlage an, kopiert die WAVs hinein, Tempo und Tonart in die Notiz,
+      öffnet FL. Tempo in der FLP setzen erst einmal nicht (hieße FLP schreiben)
+
+Nicht ausgewählt: Marke „frei/verwendet“, Takt-Check für Loops, Hinweis „noch
+nicht exportiert“.

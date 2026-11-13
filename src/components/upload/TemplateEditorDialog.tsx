@@ -17,7 +17,7 @@ import type { UploadPlatform } from "../../types/upload";
 
 // Ein Akzent statt drei Markenfarben — wie in DescriptionFilesCard.
 const TABS: Array<{ key: UploadPlatform; label: string; icon: React.ElementType; color: string; file: string }> = [
-  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: C.primary, file: "beatstars.template"  },
+  { key: "beatstars",  label: "BeatStars",  icon: ShoppingBag, color: C.primary, file: "beatstars.template"  },
   { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: C.primary, file: "soundcloud.template" },
   { key: "youtube",    label: "YouTube",    icon: Youtube,     color: C.primary, file: "youtube.template"    },
 ];
@@ -72,8 +72,8 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
       { label: "Instagram",        name: "IG_URL",         was: "Dein Instagram",                           beispiel: "instagram.com/prod.goodbxy" },
       { label: "SoundCloud",       name: "SC_URL",         was: "Dein SoundCloud",                          beispiel: "soundcloud.com/prodgoodbxy" },
       { label: "YouTube",          name: "YT_URL",         was: "Dein YouTube",                             beispiel: "youtube.com/@PROD.GOODBXY" },
-      { label: "Beatstars",        name: "BS_URL",         was: "Dein Beatstars-Profil",                    beispiel: "beatstars.com/prodgoodbxy" },
-      { label: "Kauflink",         name: "BEATSTARS_LINK", was: "Der Kauflink dieses Beats; ohne einen dein Beatstars-Profil", beispiel: "bsta.rs/sSDFEV" },
+      { label: "BeatStars",        name: "BS_URL",         was: "Dein BeatStars-Profil",                    beispiel: "beatstars.com/prodgoodbxy" },
+      { label: "Kauflink",         name: "BEATSTARS_LINK", was: "Der Kauflink dieses Beats; ohne einen dein BeatStars-Profil", beispiel: "bsta.rs/sSDFEV" },
     ],
   },
   {
@@ -81,7 +81,7 @@ const GRUPPEN: Array<{ titel: string; eintraege: Platzhalter[] }> = [
     eintraege: [
       { label: "Namenszeile",   name: "PRODUCER_LINE",  was: "Du, plus die Sample-Geber dieses Beats",                       beispiel: "prod. goodbxy & prodzeux" },
       { label: "Credits-Block", name: "CREDITS",        was: "Ohne fremdes Sample steht dort „No Samples Used“",             beispiel: "🎸 Guitarsample by prodzeux" },
-      { label: "Ihre Links",    name: "COLLAB_SOCIALS", was: "Name und Links der Sample-Geber. Ohne welche bleibt nichts stehen", beispiel: "prodzeux: instagram.com/…" },
+      { label: "Sample-Links",    name: "COLLAB_SOCIALS", was: "Name und Links der Sample-Geber. Ohne welche bleibt nichts stehen", beispiel: "prodzeux: instagram.com/…" },
     ],
   },
 ];

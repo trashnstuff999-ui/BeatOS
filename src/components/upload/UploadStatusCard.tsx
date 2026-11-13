@@ -24,7 +24,7 @@ import {
   ExternalLink, CheckCircle2, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, radius } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, UPLOAD_STATUS_CONFIG, alpha, radius } from "../../lib/theme";
 import { SectionCard } from "../ui/SectionCard";
 import { Segmented } from "../ui/Segmented";
 import { Button, IconButton } from "../ui/Button";
@@ -176,6 +176,7 @@ export function UploadStatusCard(props: UploadStatusCardProps) {
     <SectionCard
       icon={Send}
       title="Status"
+      farbe={C.mint}
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {eingefuegt ? (
@@ -244,12 +245,12 @@ function Erledigt({ uploads, onDetails }: { uploads: UploadPlatformRow[]; onDeta
   const zuletzt = daten[daten.length - 1];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.mint }}>
-        <CheckCircle2 size={15} strokeWidth={2} />
-        Überall hochgeladen
+      <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 24, fontWeight: 700, color: C.mint, textShadow: `0 0 19px ${alpha(C.mint, 0.32)}` }}>
+        <CheckCircle2 size={24} strokeWidth={2} />
+        Überall live
       </span>
       {zuletzt && (
-        <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>
+        <span style={{ fontSize: 13, color: C.onSurfaceVariant }}>
           {daten.length > 1 ? "zuletzt am " : "am "}{datumDeutsch(zuletzt)} · {tageRelativ(zuletzt)}
         </span>
       )}
@@ -264,7 +265,13 @@ function Erledigt({ uploads, onDetails }: { uploads: UploadPlatformRow[]; onDeta
             onClick={() => u.url && linkOeffnen(u.url)}
             disabled={!hatLink}
             title={hatLink ? `Auf ${PLATFORM_CONFIG[u.platform].label} öffnen\n${u.url}` : "Kein Link eingetragen"}
-            style={hatLink ? { color: PLATFORM_CONFIG[u.platform].color } : undefined}
+            className={hatLink ? "ul-pf" : undefined}
+            style={hatLink ? {
+              "--p": PLATFORM_CONFIG[u.platform].color,
+              color: PLATFORM_CONFIG[u.platform].color,
+              borderColor: alpha(PLATFORM_CONFIG[u.platform].color, 0.45),
+              boxShadow: `0 8px 21px -11px ${PLATFORM_CONFIG[u.platform].color}`,
+            } as React.CSSProperties : undefined}
           >
             {PLATFORM_CONFIG[u.platform].label}
           </Button>
@@ -586,7 +593,7 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
   }
 
   return (
-    <div style={{
+    <div className={flach ? undefined : "ul-pk"} style={{
       ...(flach
         // Flach: keine eigene Flaeche, keine Kontur ausser der Haarlinie.
         // Den Zustand traegt hier allein die Zustandsleiste — sie ist das
@@ -598,9 +605,12 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
         : {
             // Erhebung geht in einem dunklen Design nach OBEN — eine Stufe
             // ueber der Karte, nicht darunter.
-            padding: "14px 15px",
-            borderRadius: radius.card,
-            background: C.surfaceContainer,
+            // Look „Wucht“: im Spiel (geplant/hochgeladen) leuchtet die Kachel
+            // in der Plattformfarbe, der Entwurf bleibt grau — das Aufleuchten
+            // bleibt so eine Nachricht.
+            padding: 18,
+            borderRadius: 18,
+            background: imSpiel ? `color-mix(in srgb, ${meta.color} 7%, ${C.surfaceContainerLowest})` : C.surfaceContainer,
             // Der Rand bleibt neutral. Ihn zusaetzlich einzufaerben war zu
             // viel: drei Kacheln nebeneinander mit farbigem Rahmen UND
             // farbiger Schrift ergeben eine bunte Reihe, in der nichts mehr
@@ -610,9 +620,10 @@ function PlatformRow({ beatId, row, onChanged, flach = false, trennlinie = false
             // sie im Spiel ist. Den Zustand traegt die Linienart:
             // durchgezogen steht, gestrichelt ist vorgemerkt.
             border: geplant
-              ? `1px dashed ${C.border20}`
-              : `1px solid ${hochgeladen ? C.border20 : C.border15}`,
+              ? `1px dashed ${alpha(meta.color, 0.5)}`
+              : `1px solid ${hochgeladen ? alpha(meta.color, 0.4) : C.border15}`,
           }),
+      ...(flach ? {} : { "--p": imSpiel ? meta.color : "transparent" }),
       // Abstand 0: den zwischen Kopfzeile und aufklappendem Teil traegt der
       // Block selbst als paddingTop — als Luecke hier waere er sofort da,
       // waehrend der Rest noch aufklappt.

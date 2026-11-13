@@ -57,7 +57,7 @@ const KNAPP = 0.9;
 // Die Plattformfarbe nur als dünne Linie unter dem Spaltenkopf — drei bunte
 // Flächen nebeneinander würden mit dem Orange der App konkurrieren.
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType; color: string; file: string }> = [
-  { key: "beatstars",  label: "Beatstars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
+  { key: "beatstars",  label: "BeatStars",  icon: ShoppingBag, color: PLATFORM_CONFIG.beatstars.color,  file: "beatstars.txt"  },
   { key: "soundcloud", label: "SoundCloud", icon: Music2,      color: PLATFORM_CONFIG.soundcloud.color, file: "soundcloud.txt" },
   { key: "youtube",    label: "YouTube",    icon: Youtube,     color: PLATFORM_CONFIG.youtube.color,    file: "youtube.txt"    },
 ];
@@ -169,6 +169,7 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
     <SectionCard
       icon={FileText}
       title="Beschreibungen"
+      farbe={C.onSurface}
       style={{ display: "flex", flexDirection: "column", ...style }}
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -207,12 +208,18 @@ export function DescriptionFilesCard({ beatId, rerenderKey, beatstarsUrl, style 
           return (
             <div key={p} style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
               {/* ── Spaltenkopf ── */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                paddingBottom: 8, marginBottom: 6, borderBottom: `2px solid ${alpha(tab.color, 0.55)}`,
-              }}>
-                <Icon size={14} color={tab.color} strokeWidth={2} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>{tab.label}</span>
+              {/* Look „Wucht“: Spaltenkopf als Plattform-Kachel in ihrer Farbe */}
+              <div className="ul-pf" style={{
+                "--p": tab.color,
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 8px 8px 14px", marginBottom: 10, borderRadius: 14,
+                background: `color-mix(in srgb, ${tab.color} 12%, ${C.surfaceContainerLowest})`,
+                border: `1px solid ${alpha(tab.color, 0.45)}`,
+                boxShadow: `0 10px 24px -13px color-mix(in srgb, ${tab.color} 64%, transparent)`,
+              } as React.CSSProperties}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: tab.color, boxShadow: `0 0 8px color-mix(in srgb, ${tab.color} 64%, transparent)`, flexShrink: 0 }} />
+                <Icon size={15} color={tab.color} strokeWidth={2} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: C.onSurface }}>{tab.label}</span>
                 {bereit && hinweise.length === 0 && (
                   <span title="Alles in Ordnung" style={{ display: "flex" }}>
                     <CheckCircle2 size={13} color={C.mint} strokeWidth={2} />
@@ -482,7 +489,10 @@ function Kopierfeld({ label, zaehler, warn, onCopy, kopiert, disabled, children 
         )}
         <span style={{ flex: 1 }} />
         {kopiert
-          ? <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.mint, letterSpacing: "0.02em", textTransform: "none" }}>
+          ? <span className="ul-kopiert" style={{
+              display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999,
+              background: C.mint, color: C.onMint, letterSpacing: "0.02em", textTransform: "none",
+            }}>
               <Check size={12} strokeWidth={2.5} /> Kopiert
             </span>
           : !disabled && <Copy size={12} strokeWidth={2} />}

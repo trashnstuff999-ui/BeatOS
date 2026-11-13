@@ -1,0 +1,36 @@
+/* Einstellungen, Look „Wucht" (Entwurf settings-redesign v1), Leuchten in der kleinen Stufe.
+   --c: Farbe des Bereichs bzw. der Fläche, --s: Farbe eines Feldes (LED, Plattform). */
+@keyframes st-hoch { from { opacity: 0; transform: translateY(16px); } }
+@keyframes st-blink { 50% { opacity: 0.3; } }
+@keyframes st-rein { from { transform: translate(-50%, 140%); } to { transform: translate(-50%, 0); } }
+
+.st-nk { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s; }
+.st-nk:hover { transform: translateX(4px); border-color: var(--c) !important; }
+.st-nk .st-ic { transition: transform 0.3s cubic-bezier(.2, .9, .3, 1.5); }
+.st-nk:hover .st-ic { transform: rotate(-8deg) scale(1.08); }
+
+.st-buehne { animation: st-hoch 0.5s cubic-bezier(.2, .9, .3, 1) backwards; }
+.st-fl { transition: border-color 0.3s; animation: st-hoch 0.5s backwards; animation-delay: calc(var(--i, 0) * 60ms + 0.08s); }
+.st-fl:hover { border-color: color-mix(in srgb, var(--c) 40%, transparent) !important; }
+
+.st-pfad, .st-feld { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.st-pfad:hover { transform: translateX(4px); border-color: var(--s) !important; }
+.st-feld:hover { transform: translateY(-2px); border-color: var(--s) !important; }
+.st-pfad:focus-within, .st-feld:focus-within { border-color: #fda124 !important; box-shadow: 0 0 0 4px rgba(253, 161, 36, 0.12); }
+.st-raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+
+.st-chip { transition: transform 0.2s, border-color 0.2s; }
+.st-chip:hover { transform: translateY(-2px); border-color: #fda124 !important; }
+.st-plus { transition: border-color 0.2s, color 0.2s; }
+.st-plus:hover { border-style: solid !important; border-color: #fda124 !important; color: #fff !important; }
+
+.st-ak { transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s; animation: st-hoch 0.5s backwards; }
+.st-ak:hover { transform: translateY(-4px); border-color: #22f0b0 !important; box-shadow: 0 14px 32px -14px color-mix(in srgb, #22f0b0 51%, transparent); }
+
+.st-leiste { transform: translate(-50%, 0); animation: st-rein 0.35s cubic-bezier(.2, .9, .3, 1.3); }
+.st-blink { animation: st-blink 1.4s ease-in-out infinite; }
+.st-gespeichert { animation: st-hoch 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="st-"], [class*="st-"] * { animation: none !important; transition: none !important; }
+}

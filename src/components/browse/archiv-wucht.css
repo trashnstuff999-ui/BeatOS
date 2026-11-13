@@ -1,0 +1,84 @@
+/* Archiv-Tab, Look „Wucht" (Entwurf archiv-redesign v1), Leuchten in der
+   gedämpften Stufe der anderen Tabs (~64 %). Größen und Farben stehen inline.
+   --c: Status-Farbe des Beats bzw. der Kachel. */
+
+@keyframes ar-hoch { from { opacity: 0; transform: translateY(16px); } }
+@keyframes ar-eq { from { height: 4px; } to { height: 24px; } }
+@keyframes ar-plopp { 0% { transform: scale(0.6); } 60% { transform: scale(1.5); } 100% { transform: scale(1); } }
+@keyframes ar-wuerfel { to { transform: rotate(360deg); } }
+
+/* Zahlenband */
+.ar-sk { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.ar-sk:hover { transform: translateY(-3px); border-color: var(--c) !important; box-shadow: 0 11px 27px -11px color-mix(in srgb, var(--c) 64%, transparent); }
+.ar-sk[aria-pressed="true"] { border-color: var(--c) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 64%, transparent); }
+.ar-zufall { transition: transform 0.2s; }
+.ar-zufall:hover:not(:disabled) { transform: translateY(-2px); }
+.ar-zufall:hover:not(:disabled) svg { animation: ar-wuerfel 0.6s cubic-bezier(.2, .9, .3, 1.4); }
+
+/* Suche */
+.ar-such:focus { border-color: #fda124 !important; box-shadow: 0 0 0 4px rgba(253, 161, 36, 0.12); }
+
+/* Cover-Grid */
+.ar-karte { animation: ar-hoch 0.45s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
+.ar-cv { transition: transform 0.3s cubic-bezier(.2, .9, .3, 1.2), box-shadow 0.3s; box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.8); }
+.ar-cv::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 48%, transparent 62%);
+  transform: translateX(-120%); transition: transform 0.7s;
+}
+.ar-karte:hover .ar-cv {
+  transform: translateY(-6px);
+  box-shadow: 0 11px 19px -7px color-mix(in srgb, var(--c) 48%, transparent), 0 0 0 2px color-mix(in srgb, var(--c) 48%, transparent);
+}
+.ar-karte:hover .ar-cv::after { transform: translateX(120%); }
+.ar-karte .ar-cover { transition: transform 0.5s; }
+.ar-karte:hover .ar-cover { transform: scale(1.06); }
+.ar-karte[data-an="true"] .ar-cv { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 8px 19px -7px color-mix(in srgb, var(--c) 48%, transparent); }
+.ar-karte[data-spielt="true"] .ar-cv { box-shadow: 0 0 0 2px #fda124, 0 0 17px -3px color-mix(in srgb, #fda124 64%, transparent); }
+.ar-play { opacity: 0; transform: scale(0.5) translateY(10px); transition: opacity 0.2s, transform 0.3s cubic-bezier(.2, .9, .3, 1.6); }
+.ar-karte:hover .ar-play, .ar-karte[data-an="true"] .ar-play, .ar-karte[data-laeuft="true"] .ar-play, .ar-play:focus-visible { opacity: 1; transform: none; }
+.ar-play:hover { transform: scale(1.12) !important; }
+.ar-fav { opacity: 0; transform: scale(0.6); transition: opacity 0.2s, transform 0.3s cubic-bezier(.2, .9, .3, 1.6); }
+.ar-karte:hover .ar-fav, .ar-fav[data-an="true"], .ar-fav:focus-visible { opacity: 1; transform: none; }
+.ar-fav:hover { transform: scale(1.15) !important; }
+.ar-eq { display: none; }
+.ar-karte[data-spielt="true"] .ar-eq { display: flex; }
+.ar-eq > i { width: 5px; border-radius: 2px; background: #fff; animation: ar-eq 0.8s ease-in-out infinite alternate; }
+.ar-eq > i:nth-child(2) { animation-delay: -0.3s; }
+.ar-eq > i:nth-child(3) { animation-delay: -0.6s; }
+.ar-eq > i:nth-child(4) { animation-delay: -0.15s; }
+
+/* Tabelle (Zeilen sind divs) */
+.ar-tz::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px;
+  background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 64%, transparent);
+  transform: scaleY(0); transition: transform 0.2s;
+}
+.ar-tz:hover { background: color-mix(in srgb, var(--c) 7%, transparent) !important; transform: translateX(4px); }
+.ar-tz:hover::before { transform: scaleY(1); }
+
+/* Detailpanel */
+.ar-wert { transition: transform 0.2s, border-color 0.2s; }
+.ar-wert:hover, .ar-wert:focus-within { transform: translateY(-2px); border-color: var(--c) !important; }
+.ar-st { transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, color 0.2s; }
+.ar-st:hover:not(:disabled) { transform: translateY(-3px); border-color: var(--s) !important; }
+.ar-st[aria-pressed="true"] > i { animation: ar-plopp 0.45s cubic-bezier(.2, .9, .3, 1.6); }
+.ar-kn { transition: transform 0.15s, border-color 0.15s, box-shadow 0.2s, color 0.15s; }
+.ar-kn:hover:not(:disabled) { transform: translateY(-2px); border-color: #fda124 !important; }
+.ar-kn-weg:hover:not(:disabled) { border-color: #ff7351 !important; color: #ff7351 !important; }
+.ar-rk { transition: transform 0.3s, background 0.2s; }
+.ar-rk:hover { background: rgba(255, 255, 255, 0.14) !important; }
+.ar-rk-x:hover { transform: rotate(90deg); }
+.ar-rk-herz:hover { transform: scale(1.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="ar-"], [class*="ar-"]::before, [class*="ar-"]::after, [class*="ar-"] * { animation: none !important; transition: none !important; }
+}
+
+/* Asset-Kacheln im Panel: „Ersetzen“ erst beim Überfahren */
+.ar-asset-neu {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; opacity: 0; transition: opacity 0.15s;
+}
+.ar-asset:hover .ar-asset-neu, .ar-asset:focus-visible .ar-asset-neu { opacity: 1; }

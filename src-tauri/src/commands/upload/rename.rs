@@ -87,8 +87,17 @@ pub fn clean_old_exports(beat_path: String) -> Result<usize, String> {
 
 #[tauri::command]
 pub fn apply_filename_convention(beat_id: String) -> Result<RenameResult, String> {
+    apply_filename_convention_for(beat_id, None)
+}
+
+/// Wie oben, aber nur für die genannten Arten ("cover", "thumbnail", "mp4" …).
+/// Beim Zuweisen eines Assets: nur die neue Datei bekommt ihren Namen, MP3/WAV
+/// und FLPs bleiben unberührt.
+#[tauri::command]
+pub fn apply_filename_convention_for(beat_id: String, kinds: Option<Vec<String>>) -> Result<RenameResult, String> {
     let (beat_root, naming) = load_naming_context(&beat_id)?;
-    let plan = build_rename_plan(&beat_root, &naming);
+    let mut plan = build_rename_plan(&beat_root, &naming);
+    if let Some(k) = &kinds { plan.operations.retain(|op| k.contains(&op.kind)); }
 
     let mut renamed = 0usize;
     let mut noops   = 0usize;

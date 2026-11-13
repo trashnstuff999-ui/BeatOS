@@ -123,7 +123,7 @@ export const PreviewCard = memo(function PreviewCard({
               gap: 8, zIndex: 3, pointerEvents: "none"
             }}>
               <ImageIcon size={24} color={C.onSurfaceVariant} strokeWidth={1.5} style={{ opacity: 0.5 }} />
-              <span style={{ color: C.onSurfaceVariant, fontSize: 11, opacity: 0.5 }}>No cover in source folder</span>
+              <span style={{ color: C.onSurfaceVariant, fontSize: 11, opacity: 0.5 }}>Kein Cover im Quellordner</span>
             </div>
           )}
 

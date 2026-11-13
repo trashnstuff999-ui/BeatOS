@@ -35,16 +35,16 @@ interface IdeenListeProps {
 }
 
 export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspectorPath, selected, onOpen, onPreview, onAufraeumen }: IdeenListeProps) {
+  let lauf = 0; // fortlaufend über alle Gruppen, für den gestaffelten Einlauf
   return (
-    <section aria-label="Ideen" style={{ padding: "8px 16px 0" }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        paddingBottom: 12, borderBottom: `1px solid ${C.border20}`,
-      }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.onSecondaryFixedVar }} />
-        <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", color: C.onSurface }}>IDEEN</h2>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>{total}</span>
-        <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>ohne Export</span>
+    <section id="regal-idea" aria-label="Ideen" style={{
+      margin: "0 16px", padding: 24, borderRadius: 22, scrollMarginTop: 16,
+      border: `1px solid ${C.border30}`, background: C.surfaceContainerLow,
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", paddingBottom: 6 }}>
+        <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: C.onSurface }}>Ideen</h2>
+        <span style={{ fontSize: 20, fontWeight: 700, color: C.onSurfaceVariant }}>{total}</span>
+        <span style={{ fontSize: 14, color: C.onSecondaryFixedVar }}>ohne Export</span>
         <div style={{ flex: 1 }} />
         <Segmented
           label="Sortierung der Ideen"
@@ -59,14 +59,15 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
       </div>
 
       {gruppen.map(g => (
-        <div key={g.key} style={{ paddingTop: 20 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 6 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.onSurface }}>{g.label}</h3>
+        <div key={g.key} style={{ paddingTop: 22 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingBottom: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.onSurface }}>{g.label}</h3>
             <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>{g.total} {g.total === 1 ? "Idee" : "Ideen"}</span>
           </div>
           {g.items.map(p => (
             <IdeeZeile
               key={p.path}
+              index={lauf++}
               project={p}
               markiert={inspectorPath === p.path || selected.has(p.path)}
               onOpen={e => onOpen(p, e)}
@@ -76,11 +77,13 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
           ))}
           {g.total > g.items.length && (
             <button
+              className="sw-mehr"
               onClick={() => onMore(g.key)}
               style={{
-                marginTop: 2, minHeight: 36, padding: "0 12px 0 52px", border: "none", borderRadius: 8,
-                background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
+                "--c": C.primary,
+                margin: "8px 0 0 52px", padding: "8px 18px", border: `1px solid ${C.border30}`, borderRadius: 999,
+                background: "transparent", color: C.onSurfaceVariant, fontSize: 13, fontWeight: 700, cursor: "pointer",
+              } as React.CSSProperties}
             >
               Alle {g.total} aus {g.label} anzeigen
             </button>
@@ -91,7 +94,8 @@ export function IdeenListe({ gruppen, total, sortMode, onSortMode, onMore, inspe
   );
 }
 
-function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
+function IdeeZeile({ index, project: p, markiert, onOpen, onPreview, onAufraeumen }: {
+  index: number;
   project: StudioProject;
   markiert: boolean;
   onOpen: (e: React.MouseEvent) => void;
@@ -107,11 +111,14 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
   return (
     <div
       data-auswahl
+      className="sw-zl"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", alignItems: "center", gap: 4 }}
+      // Einlauf nur für die ersten Zeilen — bei 800 Ideen wartete man sonst
+      style={{ display: "flex", alignItems: "center", gap: 4, "--i": Math.min(index, 20) } as React.CSSProperties}
     >
       <button
+        className="sw-zp"
         onClick={() => { if (canPreview) onPreview(); }}
         disabled={!canPreview}
         aria-label={canPreview ? "Export anhören" : "Noch kein Export"}
@@ -119,30 +126,31 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
         style={{
           flex: "0 0 36px", width: 36, height: 36, borderRadius: "50%", border: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: canPreview ? alpha(C.mint, 0.10) : "transparent",
+          background: canPreview ? alpha(C.mint, 0.14) : "transparent",
           color: canPreview ? C.mint : C.surfaceContainerHighest,
           cursor: canPreview ? "pointer" : "default",
         }}
       >
-        <Play size={12} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />
+        <Play size={13} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />
       </button>
       <button
+        className="sw-zb"
         onClick={onOpen}
         title="Details · Strg/Shift: auswählen"
         style={{
-          flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", gap: 12,
-          padding: "0 12px", border: "none", borderRadius: 8, textAlign: "left", color: "inherit",
+          flex: 1, minWidth: 0, minHeight: 54, display: "flex", alignItems: "center", gap: 12,
+          padding: "0 12px 0 16px", border: "none", borderRadius: 12, textAlign: "left", color: "inherit",
           cursor: "pointer", userSelect: "none",
-          background: markiert ? alpha(C.primary, 0.08) : hovered ? "rgba(255,255,255,0.03)" : "transparent",
+          background: markiert ? alpha(C.primary, 0.10) : "transparent",
           boxShadow: markiert ? `inset 3px 0 0 ${C.primary}` : "none",
         }}
       >
-        <span style={{ flex: "0 0 44px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 12, color: C.onSecondaryFixedVar }}>
+        <span className="sw-nr" style={{ flex: "0 0 52px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, color: C.onSecondaryFixedVar }}>
           {nummer ?? ""}
         </span>
         <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "baseline", gap: 10, overflow: "hidden" }}>
           <span style={{
-            fontSize: 14, whiteSpace: "nowrap", flexShrink: 0, maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis",
+            fontSize: 16, whiteSpace: "nowrap", flexShrink: 0, maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis",
             fontWeight: titel ? 700 : 500, color: titel ? C.onSurface : C.onSecondaryFixedVar,
           }}>
             {titel ?? "ohne Titel"}
@@ -154,7 +162,7 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
             </span>
           )}
         </span>
-        <span style={{ flex: "0 0 110px", fontSize: 13, color: C.onSurfaceVariant, textAlign: "right", whiteSpace: "nowrap" }}>
+        <span style={{ flex: "0 0 120px", fontSize: 13, color: C.onSurfaceVariant, textAlign: "right", whiteSpace: "nowrap" }}>
           {keyBpm}
         </span>
         <span title={p.modified_date ?? undefined} style={{ flex: "0 0 110px", fontSize: 13, color: C.onSecondaryFixedVar, textAlign: "right", whiteSpace: "nowrap" }}>
@@ -162,7 +170,7 @@ function IdeeZeile({ project: p, markiert, onOpen, onPreview, onAufraeumen }: {
         </span>
       </button>
       {/* Nur beim Drüberfahren — Platz bleibt, damit die Zeile nicht springt */}
-      <span style={{ flex: "0 0 auto", opacity: hovered ? 1 : 0, transition: "opacity 0.15s" }}>
+      <span style={{ flex: "0 0 auto", opacity: hovered ? 1 : 0, transform: hovered ? "none" : "translateX(-6px)", transition: "opacity 0.2s, transform 0.2s" }}>
         <Button variant="ghost" size="sm" icon={Hourglass} onClick={onAufraeumen} tabIndex={hovered ? 0 : -1}
           title="Ins Aufräumen">
           Ins Aufräumen

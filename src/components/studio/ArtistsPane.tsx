@@ -15,6 +15,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { PLAYER_HEIGHT } from "../GlobalAudioPlayer";
 import { Users, FolderPlus, Check, Mic2, FolderInput, ArrowRight, X, Plus, UserPlus, Send, Undo2, FolderTree, Music2, Play, Download, Image as ImageIcon, Pause, MoreHorizontal } from "lucide-react";
 import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
 import { AssetImage } from "../AssetPickerDialog";
@@ -169,8 +171,8 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     return (
       <EmptyState
         icon={Users}
-        title="Kein Künstler-Ordner"
-        description="Archiv- oder Künstler-Ordner in den Einstellungen setzen"
+        title="Kein Artist-Ordner"
+        description="Archiv- oder Artist-Ordner in den Einstellungen setzen"
       />
     );
   }
@@ -185,7 +187,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
       fontSize: 12, color: C.onSurface,
     }}>
       <FolderInput size={14} color={C.primary} />
-      Im Archiv {altbestand.length === 1 ? "liegt 1 Künstler-Ordner" : `liegen ${altbestand.length} Künstler-Ordner`}:
+      Im Archiv {altbestand.length === 1 ? "liegt 1 Artist-Ordner" : `liegen ${altbestand.length} Artist-Ordner`}:
       <span style={{ color: C.onSurfaceVariant }}>{altbestand.map(a => a.name).join(", ")}</span>
       <span style={{ flex: 1 }} />
       <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setUmzugOffen(true)}>Umziehen …</Button>
@@ -218,8 +220,8 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     />
   ) || neu === "kuenstler" && (
     <NameDialog
-      titel="Neuer Künstler"
-      hinweis="Legt einen Ordner für den Künstler an."
+      titel="Neuer Artist"
+      hinweis="Legt einen Ordner für den Artist an."
       anlegen={async name => { await api.artists.create(root, name); }}
       onClose={angelegt => { setNeu(null); if (angelegt) laden(); }}
     />
@@ -233,13 +235,13 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
   );
 
   let inhalt: React.ReactNode;
-  if (fehler) inhalt = <EmptyState icon={Users} title="Künstler-Ordner nicht lesbar" description={fehler} />;
-  else if (!scan) inhalt = <div style={{ padding: 24, fontSize: 12, color: C.onSecondaryFixedVar }}>Lese Künstler-Ordner …</div>;
+  if (fehler) inhalt = <EmptyState icon={Users} title="Artist-Ordner nicht lesbar" description={fehler} />;
+  else if (!scan) inhalt = <div style={{ padding: 24, fontSize: 12, color: C.onSecondaryFixedVar }}>Lese Artist-Ordner …</div>;
   else if (!scan.vorhanden) {
     inhalt = (
       <EmptyState
         icon={FolderPlus}
-        title="Künstler-Ordner fehlt"
+        title="Artist-Ordner fehlt"
         description={<code>{root}</code>}
         action={
           <Button variant="primary" icon={FolderPlus} loading={legtAn} onClick={async () => {
@@ -257,9 +259,9 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
     inhalt = (
       <EmptyState
         icon={Users}
-        title="Noch keine Künstler"
-        description="Je Künstler ein Ordner, darin je Song einer."
-        action={<Button variant="primary" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Künstler</Button>}
+        title="Noch keine Artists"
+        description="Je Artist ein Ordner, darin je Song einer."
+        action={<Button variant="primary" icon={UserPlus} onClick={() => setNeu("kuenstler")}>Neuer Artist</Button>}
       />
     );
   } else {
@@ -477,7 +479,7 @@ function UmzugDialog({ altbestand, archivePath, root, onClose }: {
   return (
     <Modal
       icon={FolderInput}
-      title="Künstler-Ordner aus dem Archiv umziehen"
+      title="Artist-Ordner aus dem Archiv umziehen"
       subtitle="Vorhandene Ziele werden übersprungen"
       width={720}
       onClose={onClose}
@@ -513,7 +515,7 @@ function UmzugDialog({ altbestand, archivePath, root, onClose }: {
               <div style={{ minWidth: 0 }}>
                 <input
                   value={z.kuenstler}
-                  aria-label={`Künstlername für ${z.name}`}
+                  aria-label={`Artist-Name für ${z.name}`}
                   onChange={e => aendern(i, { kuenstler: e.target.value })}
                   style={{
                     width: "100%", padding: "5px 8px", fontSize: 13, fontWeight: 600, fontFamily: "inherit",
@@ -648,7 +650,7 @@ function VerschiebenDialog({ song: s, artist, onFertig, onClose }: {
         <button onClick={() => setNeu(true)} style={{
           display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", marginTop: 4, border: `1px dashed ${C.border20}`, borderRadius: 8,
           background: "transparent", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant, cursor: "pointer",
-        }}><Plus size={14} /> Neues Album / EP …</button>
+        }}><Plus size={14} /> Neues Release …</button>
       </div>
       {fehler && <div style={{ marginTop: 10, fontSize: 12, color: C.error }}>{fehler}</div>}
     </Modal>
@@ -784,7 +786,7 @@ function FeatureZeile({ song: s, artist, alleKuenstler, onGeaendert, onFehler }:
         </span>
       ))}
       {frei.length > 0 && (
-        <Select<string> value="" placeholder="Gast …" panelWidth={220} triggerStyle={{ height: 28 }}
+        <Select<string> value="" placeholder="Feature-Artist …" panelWidth={220} triggerStyle={{ height: 28 }}
           onChange={v => setzen([...s.features, v])}
           options={frei.map(n => ({ value: n, label: n }))} />
       )}
@@ -831,8 +833,8 @@ function GeplantDetail({ song: s, artist, alleKuenstler, vorlagen, onGeaendert }
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Button variant="primary" icon={Play} loading={laeuft} disabled={!gewaehlt}
-          title={gewaehlt ? "Ordner und FLP aus der Vorlage anlegen, in FL öffnen" : "Keine Künstler-Vorlage in FL/Recording oder FL/Mix-Master"}
-          onClick={anfangen}>Anfangen</Button>
+          title={gewaehlt ? "Ordner und FLP aus der Vorlage anlegen, in FL öffnen" : "Keine Artist-Vorlage in FL/Recording oder FL/Mix-Master"}
+          onClick={anfangen}>Session anlegen</Button>
         {vorlagen.length > 1 && (
           <Select value={gewaehlt} onChange={setVorlage} title="Vorlage" panelWidth={280} triggerStyle={{ height: 36 }}
             options={vorlagen.map(v => ({ value: v.pfad, label: `${v.ordner} · ${v.name}` }))} />
@@ -929,7 +931,7 @@ function ReleaseDialog({ kuenstler: k, track, art: start = "ALBUM", onClose }: {
   return (
     <Modal
       icon={Music2}
-      title="Neues Album / EP"
+      title="Neues Release"
       subtitle={titel.trim() ? `${k.name}/${art} - ${titel.trim()}/` : track ? `Mit ${track}` : k.name}
       width={460}
       onClose={() => onClose(null)}
@@ -1045,7 +1047,7 @@ function SongDialog({ kuenstler, vorlagen, start, onClose }: {
     >
       <div style={{ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: 12 }}>
         <label>
-          <span style={beschriftung}>Künstler</span>
+          <span style={beschriftung}>Artist</span>
           <Select value={wer} onChange={setWer} options={kuenstler.map(k => ({ value: k.path, label: k.name }))}
             panelWidth={180} triggerStyle={{ width: "100%", height: 36 }} />
         </label>
@@ -1261,7 +1263,7 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
     <section data-song={s.path} style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       {/* Kopf: Cover, wo der Song steht, Name, ft. und Phase */}
       <div style={{ ...cssVar({ "--akzent": akzent }), position: "relative", display: "flex", gap: 18, padding: "30px 24px 24px", background: `linear-gradient(180deg, color-mix(in srgb, ${akzent} 30%, ${C.surfaceContainerLow}), ${C.background})` }}>
-        <span className="kw-pcover" style={{ width: 128, height: 128, borderRadius: 14, overflow: "hidden", flexShrink: 0, display: "flex", background: C.surfaceContainer, boxShadow: `0 0 40px color-mix(in srgb, ${akzent} 45%, transparent), 0 14px 30px rgba(0,0,0,0.5)` }}>
+        <span className="kw-pcover" style={{ width: 128, height: 128, borderRadius: 14, overflow: "hidden", flexShrink: 0, display: "flex", background: C.surfaceContainer, boxShadow: `0 0 19px color-mix(in srgb, ${akzent} 29%, transparent), 0 14px 30px rgba(0,0,0,0.5)` }}>
           {cover && <AssetImage path={cover} fit="cover" />}
         </span>
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 4, paddingRight: 64 }}>
@@ -1300,7 +1302,7 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
       {/* Eine Aktionszeile */}
       <div style={{ display: "flex", gap: 8, padding: "0 24px 20px", flexWrap: "wrap", alignItems: "center" }}>
         <Button variant="primary" icon={Play} disabled={!flp} className="kw-heben"
-          style={{ fontSize: 14, padding: "11px 18px", boxShadow: flp ? `0 10px 30px -8px color-mix(in srgb, ${akzent} 70%, transparent)` : undefined }}
+          style={{ fontSize: 14, padding: "11px 18px", boxShadow: flp ? `0 8px 24px -6px color-mix(in srgb, ${akzent} 45%, transparent)` : undefined }}
           title={flp ? "Diese FLP in FL Studio öffnen" : "Keine FLP im Song"}
           onClick={() => openPath(flp).catch(e => setFehler(`FLP ließ sich nicht öffnen: ${String(e)}`))}>
           In FL öffnen
@@ -1334,7 +1336,7 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
                   border: `1px solid ${an ? `color-mix(in srgb, ${farbe} 35%, transparent)` : C.border10}`, background: C.surfaceContainerLow,
                   fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: an ? C.onSurface : C.onSurfaceVariant, cursor: gesperrt ? "default" : "pointer",
                 }}>
-                <span style={{ width: 26, height: 26, borderRadius: "50%", background: an ? farbe : C.surfaceContainerHighest, border: an ? "none" : `1px solid ${C.border20}`, boxShadow: an ? `0 0 20px color-mix(in srgb, ${farbe} 75%, transparent)` : "none" }} />
+                <span style={{ width: 26, height: 26, borderRadius: "50%", background: an ? farbe : C.surfaceContainerHighest, border: an ? "none" : `1px solid ${C.border20}`, boxShadow: an ? `0 0 16px color-mix(in srgb, ${farbe} 75%, transparent)` : "none" }} />
                 {label}
               </button>
             );
@@ -1410,7 +1412,7 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
           </div>
         ) : (
           <Button variant="primary" icon={Send} className="kw-heben" disabled={s.exporte.length === 0}
-            style={{ width: "100%", fontSize: 15, padding: "14px 20px", borderRadius: 12, boxShadow: s.exporte.length ? `0 10px 30px -8px ${alpha(C.primary, 0.7)}` : undefined }}
+            style={{ width: "100%", fontSize: 15, padding: "14px 20px", borderRadius: 12, boxShadow: s.exporte.length ? `0 8px 24px -6px ${alpha(C.primary, 0.45)}` : undefined }}
             title={s.exporte.length === 0 ? "Noch kein Export im Song-Ordner" : "Export benennen, Abgegeben abhaken"}
             onClick={() => setAbgabeOffen(true)}>Abgeben …</Button>
         )}
@@ -1686,8 +1688,12 @@ function ArtistFarbe({ kuenstler, children }: { kuenstler: Artist; children: (ak
 
 /** Song-Detail als Panel von rechts. Klick daneben oder × schließt. */
 function DetailPanel({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div onClick={onClose} className="kw-schleier" style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.4)" }}>
+  // An body gehängt: innerhalb der Seite richtete sich „fixed“ nach einem
+  // animierten Vorfahren statt nach dem Fenster, und oben fehlte ein Stück.
+  // Unten endet es über dem Player, wie das Panel im Archiv.
+  const { currentBeat } = useAudioPlayerContext();
+  return createPortal(
+    <div onClick={onClose} className="kw-schleier" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: currentBeat ? PLAYER_HEIGHT : 0, zIndex: 90, background: "rgba(0,0,0,0.4)" }}>
       <aside onClick={e => e.stopPropagation()} aria-label="Song" className="kw-panel" style={{
         position: "absolute", top: 0, right: 0, bottom: 0, overflowY: "auto", display: "flex", flexDirection: "column",
         background: C.background, borderLeft: `1px solid ${C.border20}`, boxShadow: "-20px 0 60px rgba(0,0,0,0.5)",
@@ -1698,6 +1704,7 @@ function DetailPanel({ children, onClose }: { children: React.ReactNode; onClose
         </div>
         {children}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

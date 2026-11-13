@@ -116,9 +116,9 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
   return (
     <section style={{
       background: C.surfaceContainerLow,
-      borderRadius: radius.card,
-      border: `1px solid ${C.border10}`,
-      padding: "10px 12px",
+      borderRadius: 18,
+      border: `1px solid ${C.border30}`,
+      padding: "12px 14px",
     }}>
       {/* ── Kopfzeile: feste Hoehe, damit die Knoepfe rechts nicht mitwachsen ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 32 }}>

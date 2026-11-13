@@ -38,9 +38,9 @@ export function NeuesZeile({ onUebernommen }: { onUebernommen: () => void }) {
   };
 
   return (
-    <div style={{
-      margin: "12px 0 4px", padding: "10px 14px", borderRadius: radius.card,
-      border: `1px solid ${alpha(C.primary, 0.35)}`, background: alpha(C.primary, 0.06),
+    <div className="sw-neu" style={{
+      margin: "12px 0 24px", padding: "14px 18px", borderRadius: 16,
+      border: `1px solid ${alpha(C.primary, 0.5)}`, background: alpha(C.primary, 0.08),
       display: "flex", flexDirection: "column", gap: 8,
     }}>
       {liste.map(n => (

@@ -28,12 +28,12 @@ export function ProjectsToolbar({ search, onSearch, roots, rootFilter, onRootFil
     }}>
       {/* Row 1: Suche groß links, Knöpfe rechts — eine Zeile statt zwei Leisten */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <label style={{
-          flex: "1 1 260px", maxWidth: 440, height: 40, boxSizing: "border-box",
+        <label className="sw-such" style={{
+          flex: "1 1 260px", maxWidth: 460, height: 44, boxSizing: "border-box",
           display: "flex", alignItems: "center", gap: 9,
           background: C.surfaceContainer,
-          border: `1px solid ${C.border20}`,
-          borderRadius: 8,
+          border: `1px solid ${C.border30}`,
+          borderRadius: 12,
           padding: "0 12px",
         }}>
           <Search size={14} color={C.onSecondaryFixedVar} />

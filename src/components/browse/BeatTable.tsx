@@ -11,7 +11,7 @@
 import { memo } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Heart, ArrowUp, ArrowDown, Play, Pause, Loader2 } from "lucide-react";
-import { C, PLATFORM_CONFIG, type PlatformKey, radius } from "../../lib/theme";
+import { C, PLATFORM_CONFIG, STATUS_CONFIG, type PlatformKey, radius } from "../../lib/theme";
 import type { Beat, SortState, SortColumn, UploadBadge, UploadBadgeMap } from "../../types/browse";
 import { StatusPill } from "../Tagpill";
 import { useAudioPlayerContext } from "../../contexts/AudioPlayerContext";
@@ -186,8 +186,10 @@ const BeatRow = memo(function BeatRow({
         if ((e.target as HTMLElement).closest("button")) return;
         onPlayBeat(beat);
       }}
-      className="beatos-zeile"
+      className="beatos-zeile ar-tz"
       style={{
+        "--c": (STATUS_CONFIG[beat.status ?? "idea"] ?? STATUS_CONFIG.idea).color,
+        position: "relative",
         display: "flex",
         alignItems: "center",
         padding: "13px 20px",
@@ -197,9 +199,9 @@ const BeatRow = memo(function BeatRow({
         // Laufender Beat: Akzentbalken links, ohne das Layout zu verschieben.
         boxShadow: isCurrentBeat ? `inset 3px 0 0 ${C.primary}` : "none",
         cursor: "pointer",
-        transition: "background 0.12s",
+        transition: "background 0.2s, transform 0.2s",
         gap: 0,
-      }}
+      } as React.CSSProperties}
       onMouseEnter={e => {
         if (!isSelected) (e.currentTarget as HTMLElement).style.background = C.surfaceContainer;
       }}

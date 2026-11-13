@@ -63,8 +63,22 @@ function useBildFarbe(k: Artist): string {
     const bild = k.bild;
     if (farbCache.has(bild)) { setFarbe(farbCache.get(bild)!); return; }
     let weg = false;
-    api.create.readImageFile(bild).then(url => new Promise<string | null>(ok => {
+    api.create.readImageFile(bild).then(url => farbeAusBild(url)).then(f => {
+      const wert = f ?? ersatzFarbe(k.name);
+      farbCache.set(bild, wert);
+      if (!weg) setFarbe(wert);
+    }).catch(() => {});
+    return () => { weg = true; };
+  }, [k.bild, k.name]);
+  return farbe;
+}
+
+/** Kräftigste Farbe eines Bildes, aufgehellt; null bei einem grauen Bild.
+ *  Auch der Player färbt sich damit nach dem Cover. */
+export function farbeAusBild(url: string, crossOrigin = false): Promise<string | null> {
+  return new Promise<string | null>(ok => {
       const img = new Image();
+      if (crossOrigin) img.crossOrigin = "anonymous";
       img.onload = () => {
         try {
           const c = document.createElement("canvas");
@@ -84,14 +98,7 @@ function useBildFarbe(k: Artist): string {
       };
       img.onerror = () => ok(null);
       img.src = url;
-    })).then(f => {
-      const wert = f ?? ersatzFarbe(k.name);
-      farbCache.set(bild, wert);
-      if (!weg) setFarbe(wert);
-    }).catch(() => {});
-    return () => { weg = true; };
-  }, [k.bild, k.name]);
-  return farbe;
+  });
 }
 
 // ─── Leiste ──────────────────────────────────────────────────────────────────
@@ -105,42 +112,60 @@ export function ArtistLeiste({ kuenstler, gewaehlt, onWaehlen, onReihenfolge, on
   onNeu: () => void;
 }) {
   // Ziehen mit Zeiger-Ereignissen: HTML-Drag ist im Fenster für Dateien aus dem Explorer belegt.
-  const [zieht, setZieht] = useState<number | null>(null);
-  const [ueber, setUeber] = useState<number | null>(null);
-  const ueberRef = useRef<number | null>(null);
+  // Die gezogene Kachel folgt dem Zeiger, die anderen rücken live zur Seite.
+  // Nach dem Loslassen steht die neue Reihenfolge sofort; das Speichern und
+  // Neueinlesen läuft dahinter, bis die Liste von dort zurückkommt.
+  const [zug, setZug] = useState<{ i: number; startY: number; dy: number; schritt: number } | null>(null);
+  const [lokal, setLokal] = useState<string[] | null>(null);
+  // Die Elternliste wird bei jedem Rendern neu gebaut: zurücksetzen nur, wenn
+  // sich die Reihenfolge wirklich ändert (das Neueinlesen ist zurück).
+  const reihenfolge = kuenstler.map(k => k.name).join("|");
+  useEffect(() => { setLokal(null); }, [reihenfolge]);
+  const liste = lokal ? lokal.map(n => kuenstler.find(k => k.name === n)!).filter(Boolean) : kuenstler;
+  const ziel = zug ? Math.max(0, Math.min(liste.length - 1, zug.i + Math.round(zug.dy / zug.schritt))) : null;
+  const zugAn = zug !== null;
+  // Aktueller Stand für die Fenster-Ereignisse, ohne sie bei jedem Zeigerschritt neu anzumelden.
+  const stand = useRef({ zug, liste, onReihenfolge });
+  stand.current = { zug, liste, onReihenfolge };
   useEffect(() => {
-    if (zieht === null) return;
-    const bewegen = (e: PointerEvent) => {
-      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-leiste-i]");
-      const i = el ? Number(el.dataset.leisteI) : null;
-      ueberRef.current = i;
-      setUeber(i);
-    };
+    if (!zugAn) return;
+    const bewegen = (e: PointerEvent) => setZug(z => z && { ...z, dy: e.clientY - z.startY });
     const los = () => {
-      const ziel = ueberRef.current;
-      if (ziel !== null && ziel !== zieht) {
-        const namen = kuenstler.map(k => k.name);
-        const [x] = namen.splice(zieht, 1);
-        namen.splice(ziel, 0, x);
-        onReihenfolge(namen);
-      }
-      setZieht(null); setUeber(null); ueberRef.current = null;
+      const { zug: z, liste: l, onReihenfolge: speichern } = stand.current;
+      setZug(null);
+      if (!z) return;
+      const nach = Math.max(0, Math.min(l.length - 1, z.i + Math.round(z.dy / z.schritt)));
+      if (nach === z.i) return;
+      const namen = l.map(k => k.name);
+      const [x] = namen.splice(z.i, 1);
+      namen.splice(nach, 0, x);
+      setLokal(namen);
+      speichern(namen);
     };
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", los, { once: true });
     return () => { window.removeEventListener("pointermove", bewegen); window.removeEventListener("pointerup", los); };
-  }, [zieht, kuenstler, onReihenfolge]);
+  }, [zugAn]);
+  /** Versatz je Kachel: die gezogene folgt dem Zeiger, dazwischen rücken um einen Schritt. */
+  const versatz = (i: number): number | undefined => {
+    if (!zug || ziel === null) return undefined;
+    if (i === zug.i) return zug.dy;
+    if (zug.i < i && i <= ziel) return -zug.schritt;
+    if (ziel <= i && i < zug.i) return zug.schritt;
+    return 0;
+  };
 
   return (
     <nav aria-label="Artists" style={{
       background: C.surfaceContainerLow, borderRadius: radius.card, padding: 10, border: `1px solid ${C.border10}`,
-      display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 0,
-      userSelect: zieht !== null ? "none" : undefined,
+      display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 16,
+      userSelect: zug ? "none" : undefined,
     }}>
-      {kuenstler.map((k, i) => (
-        <LeistenZeile key={k.path} kuenstler={k} index={i} an={k.path === gewaehlt}
-          zieht={zieht === i} ziel={zieht !== null && ueber === i && ueber !== zieht}
-          onWaehlen={() => onWaehlen(k.path)} onGreifen={() => setZieht(i)} />
+      {liste.map((k, i) => (
+        <LeistenZeile key={k.path} kuenstler={k} an={k.path === gewaehlt}
+          zieht={zug?.i === i} versatz={versatz(i)}
+          onWaehlen={() => onWaehlen(k.path)}
+          onGreifen={(y, hoehe) => setZug({ i, startY: y, dy: 0, schritt: hoehe + 4 })} />
       ))}
       <button onClick={onNeu} style={{
         display: "flex", alignItems: "center", gap: 10, padding: "8px", marginTop: 4,
@@ -153,21 +178,30 @@ export function ArtistLeiste({ kuenstler, gewaehlt, onWaehlen, onReihenfolge, on
   );
 }
 
-function LeistenZeile({ kuenstler: k, index, an, zieht, ziel, onWaehlen, onGreifen }: {
-  kuenstler: Artist; index: number; an: boolean; zieht: boolean; ziel: boolean;
-  onWaehlen: () => void; onGreifen: () => void;
+function LeistenZeile({ kuenstler: k, an, zieht, versatz, onWaehlen, onGreifen }: {
+  kuenstler: Artist; an: boolean; zieht: boolean;
+  /** Nur während eines Zugs gesetzt: Verschiebung in px. */
+  versatz: number | undefined;
+  onWaehlen: () => void; onGreifen: (y: number, hoehe: number) => void;
 }) {
   const akzent = useAkzent(k);
   const offen = k.songs.filter(s => !s.fertig).length;
   return (
-    <div data-leiste-i={index} data-an={an} className="kw-lk" onClick={onWaehlen} style={{
+    <div data-an={an} className="kw-lk" onClick={onWaehlen} style={{
       ...cssVar({ "--akzent": akzent }),
       display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: radius.control, cursor: "pointer",
       background: an ? `linear-gradient(90deg, color-mix(in srgb, ${akzent} 22%, ${C.surfaceContainerHighest}), ${C.surfaceContainerHighest})` : "transparent",
-      opacity: zieht ? 0.5 : 1,
-      boxShadow: ziel ? `inset 0 2px 0 ${akzent}` : "none",
+      ...(versatz !== undefined && {
+        transform: `translateY(${versatz}px)${zieht ? " scale(1.03)" : ""}`,
+        transition: zieht ? "none" : "transform 0.18s cubic-bezier(.2, .9, .3, 1)",
+      }),
+      ...(zieht && {
+        position: "relative", zIndex: 2, cursor: "grabbing",
+        background: `color-mix(in srgb, ${akzent} 18%, ${C.surfaceContainerHighest})`,
+        boxShadow: `0 12px 28px rgba(0,0,0,0.55), 0 0 0 1px color-mix(in srgb, ${akzent} 60%, transparent)`,
+      }),
     }}>
-      <span onPointerDown={e => { e.preventDefault(); e.stopPropagation(); onGreifen(); }} onClick={e => e.stopPropagation()}
+      <span onPointerDown={e => { e.preventDefault(); e.stopPropagation(); onGreifen(e.clientY, (e.currentTarget.parentElement as HTMLElement).offsetHeight); }} onClick={e => e.stopPropagation()}
         title="Ziehen zum Sortieren" style={{ display: "inline-flex", color: C.onSecondaryFixedVar, cursor: "grab", touchAction: "none" }}>
         <GripVertical size={14} />
       </span>
@@ -211,11 +245,13 @@ export function ArtistBuehne({ kuenstler: k, akzent, features, bildZiel, onProfi
   return (
     <>
     {/* Höhe 0 und sticky: liegt über dem Inhalt, ohne ihn zu verschieben */}
-    <div style={{ position: "sticky", top: 0, height: 0, zIndex: 30, marginBottom: -16 }}>
+    <div style={{ position: "sticky", top: 16, height: 0, zIndex: 30, marginBottom: -16 }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 12, padding: "8px 14px", borderRadius: 14,
         background: `color-mix(in srgb, ${akzent} 14%, ${C.surfaceContainerLow})`, border: `1px solid color-mix(in srgb, ${akzent} 30%, transparent)`,
-        boxShadow: "0 10px 30px rgba(0,0,0,0.45)", backdropFilter: "blur(12px)",
+        // Der erste Schatten deckt den Spalt über der Leiste mit Seitenfarbe ab,
+        // sonst scrollt der Inhalt dort sichtbar durch.
+        boxShadow: `0 -20px 0 4px ${C.background}, 0 10px 30px rgba(0,0,0,0.45)`, backdropFilter: "blur(12px)",
         opacity: kompakt ? 1 : 0, transform: kompakt ? "none" : "translateY(-8px)", pointerEvents: kompakt ? "auto" : "none",
         transition: "opacity 0.15s, transform 0.15s",
       }}>
@@ -235,7 +271,7 @@ export function ArtistBuehne({ kuenstler: k, akzent, features, bildZiel, onProfi
     </div>
     <section ref={buehne} style={{
       position: "relative", borderRadius: 22, overflow: "hidden", padding: "48px 36px 30px", background: C.surfaceContainerLow, isolation: "isolate",
-      boxShadow: `0 30px 80px -30px color-mix(in srgb, ${akzent} 45%, transparent), inset 0 1px 0 rgba(255,255,255,0.08)`,
+      boxShadow: `0 14px 38px -14px color-mix(in srgb, ${akzent} 29%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.05)`,
     }}>
       {k.bild && (
         <div aria-hidden className="kw-drift" style={{ position: "absolute", inset: -40, filter: "blur(36px) saturate(1.6)", opacity: 0.7, zIndex: -2, display: "flex" }}>
@@ -256,7 +292,7 @@ export function ArtistBuehne({ kuenstler: k, akzent, features, bildZiel, onProfi
             <UmbenennenText text={k.name} titel="Artist" onSpeichern={onUmbenennen}
               style={{
                 fontSize: "clamp(44px, 6vw, 96px)", fontWeight: 800, lineHeight: 0.92, letterSpacing: "-0.035em", color: C.onSurface,
-                textShadow: `0 4px 40px color-mix(in srgb, ${akzent} 40%, transparent)`,
+                textShadow: `0 2px 19px color-mix(in srgb, ${akzent} 26%, transparent)`,
               }} />
           </div>
           <div className="kw-hoch-ein" style={{ ...cssVar({ "--i": 2 }), display: "flex", gap: 22, flexWrap: "wrap", alignItems: "baseline", marginTop: 14, fontSize: 14, color: C.onSurfaceVariant }}>
@@ -285,7 +321,7 @@ export function ArtistBuehne({ kuenstler: k, akzent, features, bildZiel, onProfi
           return <i key={s.path} style={{
             ...cssVar({ "--i": Math.min(i, 40) }), flex: 1, borderRadius: 3,
             background: st === 4 ? C.mint : st === 0 ? alpha(C.onSurface, 0.12) : `color-mix(in srgb, ${akzent} ${25 + st * 25}%, transparent)`,
-            boxShadow: st === 4 ? `0 0 10px ${alpha(C.mint, 0.6)}` : st === 3 ? `0 0 8px color-mix(in srgb, ${akzent} 50%, transparent)` : "none",
+            boxShadow: st === 4 ? `0 0 8px ${alpha(C.mint, 0.38)}` : st === 3 ? `0 0 6px color-mix(in srgb, ${akzent} 32%, transparent)` : "none",
           }} />;
         })}
       </div>
@@ -314,12 +350,12 @@ export function ReleaseRegal({ kuenstler: k, akzent, filter, singles, onFilter, 
         style={{ ...cssVar({ "--i": nr++ }), flex: "0 0 210px", display: "flex", flexDirection: "column", gap: 8, padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
         <span className="kw-cover-bild" style={{
           width: 210, height: 210, borderRadius: 14, overflow: "hidden", display: "flex",
-          boxShadow: an ? `0 0 0 3px ${akzent}, 0 0 40px color-mix(in srgb, ${akzent} 50%, transparent)` : "0 10px 28px rgba(0,0,0,0.4)",
+          boxShadow: an ? `0 0 0 3px color-mix(in srgb, ${akzent} 64%, transparent), 0 0 40px color-mix(in srgb, ${akzent} 32%, transparent)` : "0 10px 28px rgba(0,0,0,0.4)",
         }}>{bild}</span>
         <span style={{ fontSize: 16, fontWeight: 800, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titel}</span>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant }}>{unter} · {fertig} von {gesamt}</span>
         <span style={{ height: 5, borderRadius: 3, background: C.surfaceContainerHighest, overflow: "hidden" }}>
-          <i style={{ display: "block", height: "100%", width: `${gesamt ? fertig / gesamt * 100 : 0}%`, background: C.mint, boxShadow: `0 0 8px ${alpha(C.mint, 0.7)}` }} />
+          <i style={{ display: "block", height: "100%", width: `${gesamt ? fertig / gesamt * 100 : 0}%`, background: C.mint, boxShadow: `0 0 6px ${alpha(C.mint, 0.45)}` }} />
         </span>
       </button>
     );
@@ -337,13 +373,13 @@ export function ReleaseRegal({ kuenstler: k, akzent, filter, singles, onFilter, 
       })}
       {singles.length > 0 && karte("singles", "Singles", "Singles", singles.filter(s => s.fertig).length, singles.length,
         <span style={{ flex: 1, display: "grid", placeItems: "center", background: C.surfaceContainer, color: C.onSurfaceVariant }}><Disc size={56} strokeWidth={1.25} /></span>)}
-      <button onClick={onNeu} title="Single, EP oder Album anlegen" className="kw-plus kw-hoch-ein" style={{
+      <button onClick={onNeu} title="Neues Release" className="kw-plus kw-hoch-ein" style={{
         ...cssVar({ "--i": nr }),
         flex: "0 0 210px", height: 210, borderRadius: 14, border: `1px dashed ${C.border20}`, background: "transparent", cursor: "pointer",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
         color: C.onSurfaceVariant, fontFamily: "inherit", fontSize: 14, fontWeight: 600,
       }}>
-        <span className="kw-kreuz" style={{ width: 60, height: 60, borderRadius: "50%", display: "grid", placeItems: "center", background: akzent, color: "#120a00", boxShadow: `0 8px 24px color-mix(in srgb, ${akzent} 35%, transparent)` }}>
+        <span className="kw-kreuz" style={{ width: 60, height: 60, borderRadius: "50%", display: "grid", placeItems: "center", background: akzent, color: "#120a00", boxShadow: `0 6px 19px color-mix(in srgb, ${akzent} 22%, transparent)` }}>
           <Plus size={32} />
         </span>
         Neues Projekt

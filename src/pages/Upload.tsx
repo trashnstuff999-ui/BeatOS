@@ -27,6 +27,8 @@ import {
   UploadBeatHeader,
 } from "../components/upload";
 import { api } from "../lib/api";
+import "../components/upload/upload-wucht.css";
+import { WochenLeiste } from "../components/upload/WochenLeiste";
 import type { Beat } from "../types/browse";
 
 /** Schluessel fuer die zuletzt gewaehlte Beat-ID. */
@@ -242,7 +244,7 @@ export default function Upload() {
       </PageBody>
 
       {/* Planung — fixiert am unteren Rand, klappt nach oben auf */}
-      <PlannerDock onHoehe={setDockHoehe} open={planungOffen} setOpen={setPlanungOffen}>
+      <PlannerDock onHoehe={setDockHoehe} open={planungOffen} setOpen={setPlanungOffen} refreshKey={plannerRefresh}>
         <PlannerStrip
           refreshKey={plannerRefresh}
           beatId={data?.beat.id ?? null}
@@ -272,8 +274,10 @@ export default function Upload() {
 /** Der Planer beantwortet „was steht diese Woche an", nicht „was mache ich mit
  *  diesem Song". Deshalb liegt er als schmale Leiste am unteren Fensterrand
  *  und klappt bei Bedarf nach oben auf — ueber dem Player, wenn der laeuft. */
-function PlannerDock({ children, onHoehe, open, setOpen }: {
+function PlannerDock({ children, onHoehe, open, setOpen, refreshKey }: {
   children: React.ReactNode;
+  /** Neu laden nach Statusänderungen (Wochenleiste). */
+  refreshKey: number;
   /** Von außen steuerbar: „Planen" im Kopf klappt die Leiste auf. */
   open: boolean;
   setOpen: (f: (o: boolean) => boolean) => void;
@@ -305,24 +309,26 @@ function PlannerDock({ children, onHoehe, open, setOpen }: {
       bottom, left: SIDEBAR_WIDTH, right: 0,
       zIndex: 90,
       background: C.surfaceContainerLow,
-      borderTop: `1px solid ${C.border15}`,
-      boxShadow: open ? "0 -12px 40px rgba(0,0,0,0.45)" : "none",
+      borderTop: `1px solid ${C.border30}`,
+      boxShadow: open ? "0 -12px 40px rgba(0,0,0,0.45)" : `0 -16px 50px -20px ${alpha(C.primary, 0.35)}`,
     }}>
       <button
         onClick={() => setOpen(o => !o)}
         title={open ? "Planung zuklappen" : "Planung aufklappen"}
         style={{
           width: "100%",
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "9px 24px",
+          display: "flex", alignItems: "center", gap: 12,
+          padding: open ? "9px 24px" : "10px 24px",
           background: "transparent", border: "none",
           cursor: "pointer",
           fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
-          textTransform: "uppercase", color: C.onSurfaceVariant,
+          textTransform: "uppercase", color: C.primary,
         }}
       >
         <CalendarDays size={13} strokeWidth={1.75} />
         Planung
+        {/* Zugeklappt: die nächsten Tage auf einen Blick */}
+        {!open && <WochenLeiste refreshKey={refreshKey} />}
         <span style={{ flex: 1 }} />
         <ChevronUp
           size={14}

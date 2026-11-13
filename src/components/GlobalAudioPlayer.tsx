@@ -18,13 +18,15 @@ import {
   Play, Pause, Repeat, SkipBack, SkipForward,
   Volume2, VolumeX, Loader2, Music, AlertTriangle,
 } from "lucide-react";
-import { C, alpha } from "../lib/theme";
+import { C, alpha, radius } from "../lib/theme";
+import { ladeWelle } from "./upload/Zeitleiste";
+import { farbeAusBild } from "./studio/ArtistKopf";
 import { SIDEBAR_WIDTH } from "../lib/constants";
 import { zeitText } from "../lib/time";
 import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
 import { isStudioBeatId } from "../types/studio";
 
-export const PLAYER_HEIGHT = 84;
+export const PLAYER_HEIGHT = 104;
 
 /** `versteckt`: nach unten weggefahren (Übersicht) — Tasten wirken weiter. */
 export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }) {
@@ -33,7 +35,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
     volume, error,
     togglePlay, toggleLoop, toggleMute, seekPercent, setVolume,
     seekSeconds, getCurrentSeconds, getDurationSeconds,
-    playNext, playPrev, hasQueue,
+    playNext, playPrev, hasQueue, getGeladeneDatei,
   } = useAudioPlayerContext();
   const { progress, currentTimeFormatted, durationFormatted } = useAudioProgress();
 
@@ -86,7 +88,37 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
     return () => window.removeEventListener("keydown", aufTaste);
   }, [currentBeat, togglePlay, seekSeconds, getCurrentSeconds, setVolume]);
 
+  // ── Look „Wucht“: Wellenform der geladenen Datei, Farbe aus dem Cover ──────
+  const [welle, setWelle] = useState<number[] | null>(null);
+  useEffect(() => {
+    setWelle(null);
+    if (isLoading) return;
+    const datei = getGeladeneDatei();
+    if (!datei) return;
+    let weg = false;
+    ladeWelle(datei.pfad, datei.stand ?? 0).then(w => { if (!weg) setWelle(w.spitzen); }).catch(() => {});
+    return () => { weg = true; };
+  }, [currentBeat?.id, isLoading, getGeladeneDatei]);
+
+  const [akzent, setAkzent] = useState<string>(C.primary);
+  useEffect(() => {
+    setAkzent(C.primary);
+    if (!coverUrl) return;
+    let weg = false;
+    farbeAusBild(coverUrl, true).then(f => { if (!weg && f) setAkzent(f); });
+    return () => { weg = true; };
+  }, [coverUrl]);
+
   if (!currentBeat) return null;
+
+  const pille = (text: string, orange = false) => (
+    <span key={text} style={{
+      fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: radius.full, whiteSpace: "nowrap",
+      background: orange ? alpha(C.primary, 0.12) : "rgba(255,255,255,0.06)",
+      border: `1px solid ${orange ? alpha(C.primary, 0.4) : "rgba(255,255,255,0.12)"}`,
+      color: orange ? C.primary : C.onSurface,
+    }}>{text}</span>
+  );
 
   return (
     <div style={{
@@ -95,7 +127,7 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
       left: SIDEBAR_WIDTH,
       right: 0,
       height: PLAYER_HEIGHT,
-      background: C.surfaceContainerLowest,
+      background: `linear-gradient(90deg, color-mix(in srgb, ${akzent} 16%, ${C.surfaceContainerLowest}), ${C.surfaceContainerLowest} 45%)`,
       borderTop: `1px solid ${C.border15}`,
       overflow: "hidden",
       zIndex: 100,
@@ -107,51 +139,47 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
       transitionTimingFunction: "ease",
       transitionDelay: versteckt ? "0s, 0.3s" : "0s",
     }} aria-hidden={versteckt}>
-      {coverUrl && (
-        <>
-          <img src={coverUrl} alt="" aria-hidden style={{
-            position: "absolute", inset: -60, width: "calc(100% + 120px)", height: "calc(100% + 120px)",
-            objectFit: "cover", filter: "blur(40px) saturate(1.3)", opacity: 0.32, pointerEvents: "none",
-          }} />
-          <div style={{ position: "absolute", inset: 0, background: alpha(C.surfaceContainerLowest, 0.6), pointerEvents: "none" }} />
-        </>
-      )}
+      {/* Leuchtende Fortschrittskante oben */}
+      <div aria-hidden style={{
+        position: "absolute", left: 0, top: 0, height: 2, width: `${progress}%`,
+        background: `linear-gradient(90deg, ${C.primary}, ${akzent})`,
+        boxShadow: `0 0 10px ${akzent}`,
+      }} />
 
       <div style={{
         position: "relative", height: "100%",
         display: "flex", alignItems: "center",
-        padding: "0 24px", gap: 28,
+        padding: "0 28px", gap: 32,
       }}>
         {/* ── Links: Cover + Beat ─────────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, width: 290, flexShrink: 0, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, width: 330, flexShrink: 0, minWidth: 0 }}>
           <div style={{
-            width: 56, height: 56, borderRadius: 8, flexShrink: 0,
+            width: 68, height: 68, borderRadius: 14, flexShrink: 0,
             background: C.surfaceContainerHigh, overflow: "hidden",
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+            boxShadow: `0 0 18px color-mix(in srgb, ${akzent} 40%, transparent), 0 10px 24px rgba(0,0,0,0.6)`,
           }}>
             {coverUrl
               ? <img src={coverUrl} alt={currentBeat.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <Music size={20} color={C.onSurfaceVariant} strokeWidth={1.5} />
+              : <Music size={22} color={C.onSurfaceVariant} strokeWidth={1.5} />
             }
           </div>
 
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <span style={{
-                fontSize: 14, fontWeight: 800, color: C.onSurface, letterSpacing: "-0.01em",
+                fontSize: 20, fontWeight: 800, color: C.onSurface, letterSpacing: "-0.02em",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
                 {currentBeat.name}
               </span>
               <Pegel an={isPlaying} />
             </div>
-            {/* Der Fehler stand bisher nirgends: der Play-Knopf wurde blass und
-                das war die ganze Auskunft. Er ersetzt jetzt die Kennzeile —
-                dort, wo man ohnehin hinsieht. */}
+            {/* Der Fehler ersetzt die Kennzeile — dort, wo man ohnehin hinsieht.
+                Ein Studio-Preview hat keine Katalognummer. */}
             {error ? (
               <div style={{
-                display: "flex", alignItems: "center", gap: 5, marginTop: 3,
+                display: "flex", alignItems: "center", gap: 5,
                 fontSize: 12, color: C.error,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
@@ -159,104 +187,85 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
                 {error}
               </div>
             ) : (
-              /* Ein Studio-Preview hat keine Katalognummer — seine ID ist der
-                 Ordnerpfad und stand hier als „#studio:C:\…" quer durch die
-                 Leiste. */
-              <div style={{
-                fontSize: 12, color: C.onSurfaceVariant, marginTop: 3,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
-                {[
-                  currentBeat.key,
-                  currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
-                  isStudioBeatId(currentBeat.id) ? null : `B${currentBeat.id}`,
-                ].filter(Boolean).join(" · ")}
+              <div style={{ display: "flex", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                {currentBeat.key && pille(currentBeat.key)}
+                {currentBeat.bpm ? pille(`${currentBeat.bpm} BPM`) : null}
+                {!isStudioBeatId(currentBeat.id) && pille(`B${currentBeat.id}`, true)}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Mitte: Bedienung über der Zeitleiste ────────────────────────────
+        {/* ── Mitte: Knöpfe, dann die Wellenform als Zeitleiste ───────────────
             Die Skip-Knöpfe bleiben stehen, auch ohne Liste — sie wegzunehmen
-            verschob den Play-Knopf, je nachdem woher der Beat kam. */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-            <IconBtn onClick={toggleLoop} title={isLooped ? "Wiederholung aus" : "Diesen Beat wiederholen"} an={isLooped}>
-              <Repeat size={15} strokeWidth={2} />
-            </IconBtn>
-            <IconBtn
-              onClick={playPrev}
-              disabled={!hasQueue}
-              title="Zurück"
-            >
+            verschob alles, je nachdem woher der Beat kam. */}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+            <KachelKnopf onClick={playPrev} disabled={!hasQueue} title="Zurück">
               <SkipBack size={18} fill="currentColor" strokeWidth={1.5} />
-            </IconBtn>
-
+            </KachelKnopf>
             <button
               className="ue-hebt"
               onClick={togglePlay}
               disabled={isLoading || !!error}
               title={isPlaying ? "Pause (Leertaste)" : "Abspielen (Leertaste)"}
               style={{
-                width: 42, height: 42, borderRadius: "50%",
+                width: 58, height: 58, borderRadius: "50%",
                 background: C.primary, color: C.onPrimary,
                 border: "none", cursor: isLoading || error ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 opacity: error ? 0.4 : isLoading ? 0.7 : 1,
                 boxShadow: isPlaying
-                  ? `0 0 0 4px ${alpha(C.primary, 0.18)}, 0 6px 20px ${alpha(C.primary, 0.4)}`
+                  ? `0 0 0 5px ${alpha(C.primary, 0.16)}, 0 0 21px ${alpha(C.primary, 0.36)}`
                   : `0 4px 14px ${alpha(C.primary, 0.25)}`,
                 flexShrink: 0,
               }}
             >
               {isLoading
-                ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                ? <Loader2 size={22} style={{ animation: "spin 1s linear infinite" }} />
                 : isPlaying
-                  ? <Pause size={18} fill="currentColor" />
-                  : <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />
+                  ? <Pause size={22} fill="currentColor" />
+                  : <Play size={22} fill="currentColor" style={{ marginLeft: 2 }} />
               }
             </button>
-
-            <IconBtn onClick={playNext} disabled={!hasQueue} title="Nächster Beat in der Liste">
+            <KachelKnopf onClick={playNext} disabled={!hasQueue} title="Nächster Beat in der Liste">
               <SkipForward size={18} fill="currentColor" strokeWidth={1.5} />
-            </IconBtn>
-            {/* Platzhalter in Breite des Wiederholen-Knopfs: hält Play genau in der Mitte. */}
-            <span style={{ width: 23 }} />
+            </KachelKnopf>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Zeit>{currentTimeFormatted}</Zeit>
-            <ZiehLeiste
-              anteil={progress / 100}
-              onAnteil={a => seekPercent(a * 100)}
-              titel="Springen · ← → 5 s, Shift 30 s"
-              linie={5}
-              griffOben={10}
-              griffUnten={10}
-              knopf
-              vorschau={a => zeitText(a * getDurationSeconds())}
-              style={{ flex: 1 }}
-            />
-            <Zeit>{durationFormatted}</Zeit>
-          </div>
+          <Zeit hell>{currentTimeFormatted}</Zeit>
+          <ZiehLeiste
+            anteil={progress / 100}
+            onAnteil={a => seekPercent(a * 100)}
+            titel="Springen · ← → 5 s, Shift 30 s"
+            griffOben={0}
+            griffUnten={0}
+            vorschau={a => zeitText(a * getDurationSeconds())}
+            style={{ flex: 1, minWidth: 0 }}
+            inhalt={(a, wach) => <Wellenform spitzen={welle} anteil={a} akzent={akzent} wach={wach} />}
+          />
+          <Zeit>{durationFormatted}</Zeit>
         </div>
 
-        {/* ── Rechts: Lautstärke ──────────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, width: 200, justifyContent: "flex-end", flexShrink: 0 }}>
+        {/* ── Rechts: Wiederholen, Lautstärke als LEDs ──────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, width: 250, justifyContent: "flex-end", flexShrink: 0 }}>
+          <KachelKnopf onClick={toggleLoop} title={isLooped ? "Wiederholung aus" : "Diesen Beat wiederholen"} an={isLooped}>
+            <Repeat size={17} strokeWidth={2} />
+          </KachelKnopf>
           <IconBtn onClick={toggleMute} title={isMuted ? "Ton an" : "Ton aus"}>
             {isMuted || volume === 0
-              ? <VolumeX size={17} strokeWidth={1.75} />
-              : <Volume2 size={17} strokeWidth={1.75} />
+              ? <VolumeX size={18} strokeWidth={1.75} />
+              : <Volume2 size={18} strokeWidth={1.75} />
             }
           </IconBtn>
           <ZiehLeiste
             anteil={isMuted ? 0 : volume}
             onAnteil={setVolume}
             titel="Lautstärke · Shift ↑ ↓"
-            griffOben={10}
-            griffUnten={10}
-            knopf
-            style={{ width: 110 }}
+            griffOben={6}
+            griffUnten={6}
+            style={{ width: 100 }}
+            inhalt={a => <LautLeds anteil={a} />}
           />
         </div>
       </div>
@@ -266,11 +275,11 @@ export function GlobalAudioPlayer({ versteckt = false }: { versteckt?: boolean }
 
 // ─── Helfer ─────────────────────────────────────────────────────────────────
 
-function Zeit({ children }: { children: React.ReactNode }) {
+function Zeit({ children, hell = false }: { children: React.ReactNode; hell?: boolean }) {
   return (
     <span style={{
-      fontSize: 11, fontFamily: "monospace", color: C.onSurfaceVariant, width: 38, flexShrink: 0,
-      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", textAlign: "center",
+      fontSize: 13, fontWeight: hell ? 700 : 600, color: hell ? C.onSurface : C.onSurfaceVariant, width: 44, flexShrink: 0,
+      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", textAlign: hell ? "right" : "left",
     }}>
       {children}
     </span>
@@ -302,8 +311,10 @@ function Pegel({ an }: { an: boolean }) {
  *  Zeigererfassung fürs Ziehen, Innenabstand als unsichtbarer Griffbereich. */
 function ZiehLeiste({
   anteil, onAnteil, titel,
-  linie = 4, griffOben = 7, griffUnten = 7, knopf = false, vorschau, style,
+  linie = 4, griffOben = 7, griffUnten = 7, knopf = false, vorschau, style, inhalt,
 }: {
+  /** Statt der Linie: eigenes Bild (Wellenform, LEDs), bekommt Anteil und ob der Zeiger drauf ist. */
+  inhalt?: (anteil: number, wach: boolean) => React.ReactNode;
   /** 0 bis 1. */
   anteil: number;
   onAnteil: (anteil: number) => void;
@@ -361,7 +372,7 @@ function ZiehLeiste({
         ...style,
       }}
     >
-      <div style={{
+      {inhalt ? inhalt(Math.max(0, Math.min(1, anteil)), wach) : <div style={{
         height: hoehe,
         background: "rgba(255,255,255,0.12)",
         borderRadius: hoehe / 2,
@@ -373,7 +384,7 @@ function ZiehLeiste({
           background: `linear-gradient(90deg, ${alpha(C.primary, 0.7)}, ${C.primary})`,
           borderRadius: hoehe / 2,
         }} />
-      </div>
+      </div>}
       {/* Der Knopf erscheint erst unter dem Zeiger: als Dauergast wäre er auf
           einer langen Linie ein Punkt zu viel im Bild. */}
       {knopf && wach && (
@@ -399,6 +410,67 @@ function ZiehLeiste({
           {vorschau(zeiger)}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Zurück, Weiter, Wiederholen: Kachel mit Rand statt nacktem Symbol. */
+function KachelKnopf({ children, onClick, title, disabled, an = false }: {
+  children: React.ReactNode; onClick?: () => void; title?: string; disabled?: boolean; an?: boolean;
+}) {
+  return (
+    <button className="player-kachel" onClick={onClick} title={title} disabled={disabled} style={{
+      width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      border: `1px solid ${an ? alpha(C.primary, 0.5) : "rgba(255,255,255,0.12)"}`,
+      background: an ? alpha(C.primary, 0.12) : "rgba(255,255,255,0.04)",
+      color: an ? C.primary : C.onSurface,
+      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1,
+    }}>
+      {children}
+    </button>
+  );
+}
+
+/** Balken der Wellenform; der gespielte Teil im Verlauf Orange → Coverfarbe.
+ *  Solange sie rechnet (oder ohne Datei), gleich hohe Balken als Platzhalter. */
+function Wellenform({ spitzen, anteil, akzent, wach }: { spitzen: number[] | null; anteil: number; akzent: string; wach: boolean }) {
+  const werte = spitzen ?? PLATZHALTER;
+  const gespielt = anteil * werte.length;
+  return (
+    <div style={{ height: 52, display: "flex", alignItems: "center", gap: 2, position: "relative" }}>
+      {werte.map((v, i) => {
+        const an = i < gespielt;
+        return (
+          <i key={i} style={{
+            flex: 1, minWidth: 0, borderRadius: 2,
+            height: `${Math.round(14 + v * 86)}%`,
+            background: an ? `linear-gradient(180deg, ${C.primary}, ${akzent})` : wach ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.16)",
+            boxShadow: an ? `0 0 5px color-mix(in srgb, ${akzent} 32%, transparent)` : "none",
+          }} />
+        );
+      })}
+      <div style={{
+        position: "absolute", top: -4, bottom: -4, left: `${anteil * 100}%`, width: 2, borderRadius: 1,
+        background: "#fff", boxShadow: "0 0 8px #fff", transform: "translateX(-1px)", pointerEvents: "none",
+      }} />
+    </div>
+  );
+}
+const PLATZHALTER = Array.from({ length: 120 }, () => 0.25);
+
+/** Lautstärke als zehn LEDs, nach rechts höher. */
+function LautLeds({ anteil }: { anteil: number }) {
+  const an = Math.round(anteil * 10);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 22 }}>
+      {Array.from({ length: 10 }, (_, i) => (
+        <i key={i} style={{
+          flex: 1, borderRadius: 2, height: `${30 + i * 7.5}%`,
+          background: i < an ? C.primary : "rgba(255,255,255,0.14)",
+          transition: "background 0.1s",
+        }} />
+      ))}
     </div>
   );
 }

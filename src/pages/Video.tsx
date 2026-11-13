@@ -18,21 +18,22 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { PageHeader, PageBody, EmptyState, Button, PAGE_HEADER_HEIGHT } from "../components/ui";
 import { PLAYER_HEIGHT } from "../components/GlobalAudioPlayer";
 import { C, alpha, radius } from "../lib/theme";
-import { useAudioPlayerContext } from "../contexts/AudioPlayerContext";
+import { useAudioPlayerContext, useAudioProgress } from "../contexts/AudioPlayerContext";
 import { useVideo } from "../contexts/VideoContext";
 import { abgleich, VORLAUF } from "../lib/videoSync";
 import { isStudioBeatId } from "../types/studio";
+import "./video-wucht.css";
 
 /** So breit wie möglich, aber nie höher als der Platz zwischen Kopfzeile und
- *  Player-Leiste — abzüglich Innenabstand (64) und Zeile darunter (~80). */
-const BUEHNE_BREITE = `min(100%, calc((100vh - ${PAGE_HEADER_HEIGHT + PLAYER_HEIGHT + 64 + 80}px) * 16 / 9))`;
+ *  Player-Leiste — abzüglich Innenabstand (64) und Zeile darunter (~120, großer Titel). */
+const BUEHNE_BREITE = `min(100%, calc((100vh - ${PAGE_HEADER_HEIGHT + PLAYER_HEIGHT + 64 + 120}px) * 16 / 9))`;
 
 /** So lange bleibt das Cover stehen, bevor es ins Video ausblendet. */
 const COVER_STEHT = 1500;
 
 export default function Video() {
   const navigate = useNavigate();
-  const { currentBeat, coverUrl, isPlaying, getCurrentSeconds, getDurationSeconds } = useAudioPlayerContext();
+  const { currentBeat, coverUrl, isPlaying, getCurrentSeconds } = useAudioPlayerContext();
   const { video, pfad, fehler } = useVideo();
   const buehneRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
@@ -98,8 +99,8 @@ export default function Video() {
     else buehneRef.current?.requestFullscreen().catch(() => {});
   };
 
-  const laenge = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-  const audioLaenge = getDurationSeconds();
+  // Look „Wucht“: Amber, wenn das Video läuft; Koralle, wenn keins da ist
+  const farbe = zeigeVideo ? C.primary : "#ff6f6f";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.background }}>
@@ -115,12 +116,11 @@ export default function Video() {
               className="video-buehne"
               onDoubleClick={zeigeVideo ? vollbild : undefined}
               style={{
+                "--c": farbe,
                 position: "relative", width: BUEHNE_BREITE, aspectRatio: "16 / 9",
-                borderRadius: 14, overflow: "hidden", boxSizing: "border-box",
-                background: zeigeVideo ? "#000" : C.surfaceContainerLow,
-                border: zeigeVideo ? "none" : `1.5px dashed ${C.outlineVariant}`,
-                boxShadow: zeigeVideo ? "0 30px 80px rgba(0,0,0,0.6)" : "none",
-              }}
+                borderRadius: 22, overflow: "hidden", boxSizing: "border-box",
+                background: zeigeVideo ? "#000" : `color-mix(in srgb, ${farbe} 6%, ${C.surfaceContainerLow})`,
+              } as React.CSSProperties}
             >
               {zeigeVideo ? (
                 <>
@@ -135,35 +135,36 @@ export default function Video() {
                   }} />
                   <div className="video-overlay" style={{ position: "absolute", left: 16, right: 16, top: 16, display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px",
-                      borderRadius: radius.full, background: alpha(C.background, 0.72),
-                      fontSize: 12, fontWeight: 600, color: C.mint,
+                      display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                      borderRadius: radius.full, background: alpha(C.background, 0.72), backdropFilter: "blur(6px)",
+                      fontSize: 12, fontWeight: 800, color: C.mint,
                     }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.mint }} />
+                      <span className="vw-blink" style={{ width: 8, height: 8, borderRadius: "50%", background: C.mint, boxShadow: `0 0 8px ${alpha(C.mint, 0.64)}` }} />
                       Synchron mit dem Player
                     </span>
                     <span style={{ flex: 1 }} />
-                    <button type="button" onClick={vollbild} aria-label="Vollbild" title="Vollbild (Doppelklick)" style={{
-                      width: 40, height: 40, borderRadius: 10, border: 0, cursor: "pointer",
+                    <button type="button" className="vw-voll" onClick={vollbild} aria-label="Vollbild" title="Vollbild (Doppelklick)" style={{
+                      width: 42, height: 42, borderRadius: 12, border: 0, cursor: "pointer",
                       background: alpha(C.background, 0.72), color: C.onSurface,
                       display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
                       <Maximize size={18} />
                     </button>
                   </div>
+                  <Fortschritt />
                 </>
               ) : (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 36, padding: 32 }}>
                   {coverUrl
-                    ? <img src={coverUrl} alt={`Cover ${currentBeat.name}`} style={{ width: "min(260px, 40%)", aspectRatio: "1", objectFit: "cover", borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }} />
-                    : <div style={{ width: "min(260px, 40%)", aspectRatio: "1", borderRadius: 12, background: C.surfaceContainerHighest }} />}
+                    ? <img className="vw-cover" src={coverUrl} alt={`Cover ${currentBeat.name}`} style={{ width: "min(260px, 40%)", aspectRatio: "1", objectFit: "cover", borderRadius: 18, boxShadow: `0 11px 24px -8px ${alpha(farbe, 0.51)}` }} />
+                    : <div className="vw-cover" style={{ width: "min(260px, 40%)", aspectRatio: "1", borderRadius: 18, background: C.surfaceContainerHighest, boxShadow: `0 11px 24px -8px ${alpha(farbe, 0.51)}` }} />}
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360, minWidth: 0 }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSecondaryFixedVar }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: farbe }}>
                       <VideoOff size={16} /> {pfad === undefined ? "Suche Video …" : "Kein Video"}
                     </span>
-                    <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.1, color: C.onSurface, overflowWrap: "anywhere" }}>{currentBeat.name}</span>
+                    <span style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, color: C.onSurface, overflowWrap: "anywhere", textShadow: `0 0 19px ${alpha(farbe, 0.29)}` }}>{currentBeat.name}</span>
                     {pfad !== undefined && (
-                      <span style={{ fontSize: 14, lineHeight: 1.5, color: C.onSurfaceVariant }}>
+                      <span style={{ fontSize: 15, lineHeight: 1.5, color: C.onSurfaceVariant }}>
                         {fehler
                           ? "MP4 nicht abspielbar (H.265?). Als H.264 exportieren."
                           : "Keine MP4 im Beat-Ordner"}
@@ -175,29 +176,50 @@ export default function Video() {
             </div>
 
             {/* ── Zeile darunter ── */}
-            <div style={{ width: BUEHNE_BREITE, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: C.onSurface }}>{currentBeat.name}</span>
-                <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>
-                  {[
-                    isStudioBeatId(currentBeat.id) ? null : `B${currentBeat.id}`,
-                    currentBeat.bpm ? `${currentBeat.bpm} BPM` : null,
-                    zeigeVideo && video.duration ? `Video ${laenge(video.duration)}` : null,
-                    audioLaenge ? `Audio ${laenge(audioLaenge)}` : null,
-                  ].filter(Boolean).join(" · ")}
+            <div className="vw-unter" style={{ width: BUEHNE_BREITE, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: C.primary }}>
+                  <span className={isPlaying ? "vw-blink" : undefined} style={{ width: 9, height: 9, borderRadius: "50%", background: C.primary, boxShadow: `0 0 8px ${alpha(C.primary, 0.64)}` }} />
+                  {isPlaying ? "Läuft gerade" : "Pausiert"}
                 </span>
+                <span style={{ fontSize: "clamp(34px, 4.4vw, 60px)", fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color: C.onSurface, textShadow: `0 0 19px ${alpha(C.primary, 0.29)}`, overflowWrap: "anywhere" }}>{currentBeat.name}</span>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {!isStudioBeatId(currentBeat.id) && <Wert label="Beat" wert={`B${currentBeat.id}`} />}
+                {currentBeat.bpm ? <Wert label="BPM" wert={String(currentBeat.bpm)} /> : null}
               </div>
               <span style={{ flex: 1 }} />
               {currentBeat.path && (
                 <Button variant="secondary" icon={FolderOpen} onClick={() => openPath(currentBeat.path!)}>Ordner öffnen</Button>
               )}
               {!isStudioBeatId(currentBeat.id) && (
-                <Button variant="secondary" icon={UploadIcon} onClick={() => navigate("/upload", { state: { beatId: currentBeat.id } })}>Zum Upload</Button>
+                <Button variant="primary" icon={UploadIcon} onClick={() => navigate("/upload", { state: { beatId: currentBeat.id } })}>Zum Upload</Button>
               )}
             </div>
           </div>
         )}
       </PageBody>
+    </div>
+  );
+}
+
+/** Wert-Kachel unter der Bühne (Beat, BPM). */
+function Wert({ label, wert }: { label: string; wert: string }) {
+  return (
+    <div className="vw-wert" style={{ border: `1px solid ${C.border30}`, background: C.surfaceContainerLowest, borderRadius: 14, padding: "10px 14px", minWidth: 92 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.onSecondaryFixedVar }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: C.onSurface }}>{wert}</div>
+    </div>
+  );
+}
+
+/** Dünner Fortschritt an der Unterkante der Bühne. Eigene Komponente: der
+ *  Fortschritt tickt zehnmal pro Sekunde, so rendert nur sie neu. */
+function Fortschritt() {
+  const { progress } = useAudioProgress();
+  return (
+    <div aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, background: "rgba(255,255,255,0.12)", pointerEvents: "none" }}>
+      <div style={{ height: "100%", width: `${progress}%`, background: C.primary, boxShadow: `0 0 8px ${alpha(C.primary, 0.64)}`, transition: "width 0.1s linear" }} />
     </div>
   );
 }

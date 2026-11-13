@@ -87,6 +87,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   /** „Spiel den naechsten" — gesetzt, sobald die Warteschlange steht. */
   const weiterRef = useRef<() => void>(() => {});
   const currentBeatPathRef = useRef<string | null>(null);
+  const ladung = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoopedRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -115,6 +116,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const playBeat = useCallback((beat: Beat, preloadedCoverUrl?: string | null, startSeconds?: number, datei?: string) => {
     const beatPath = beat.path;
     if (!beatPath) return;
+    // Zwei Fassungen eines Artist-Songs teilen sich den Ordner: am Pfad ist
+    // ein überholter Ladevorgang nicht zu erkennen, an der Zählung schon.
+    const marke = ++ladung.current;
+    const ueberholt = () => ladung.current !== marke;
     startRef.current = startSeconds ?? null;
     geladenRef.current = null;
 
@@ -139,7 +144,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       (async () => {
         try {
           const p = await api.audio.getCoverPath(beatPath);
-          if (currentBeatPathRef.current !== beatPath) return;
+          if (ueberholt()) return;
           if (p) setCoverUrl(pathToAssetUrl(p));
         } catch {}
       })();
@@ -150,17 +155,17 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const ap = datei ?? await api.audio.getAudioPath(beatPath);
-        if (currentBeatPathRef.current !== beatPath) return;
+        if (ueberholt()) return;
         if (!ap) { setError("Keine Audiodatei gefunden"); setIsLoading(false); return; }
         const stand = await api.audio.getFileMtime(ap).catch(() => null);
-        if (currentBeatPathRef.current !== beatPath) return;
+        if (ueberholt()) return;
         geladenRef.current = { pfad: ap, stand };
         // ?v= bei jedem Laden: FL Studio ueberschreibt Exporte gern unter
         // demselben Namen, und mit gleicher URL lieferte die WebView die alte
         // Fassung aus ihrem Cache. Das Asset-Protokoll liest nur den Pfad.
         setAudioUrl(`${pathToAssetUrl(ap)}?v=${Date.now()}`);
       } catch {
-        if (currentBeatPathRef.current !== beatPath) return;
+        if (ueberholt()) return;
         setError("Audio konnte nicht geladen werden");
         setIsLoading(false);
       }

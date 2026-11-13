@@ -62,13 +62,14 @@ export function BrowseHeader({ search, onSearchChange, onRefresh, isLoading, onM
               value={search}
               onChange={e => onSearchChange(e.target.value)}
               placeholder="Archiv durchsuchen …"
+              className="ar-such"
               style={{
                 background: C.surfaceContainer,
                 border: `1px solid ${search ? C.border30 : C.border20}`,
-                borderRadius: radius.control,
-                padding: "8px 34px 8px 36px",
-                width: 320,
-                fontSize: 12,
+                borderRadius: 12,
+                padding: "11px 34px 11px 36px",
+                width: 380,
+                fontSize: 14,
                 fontWeight: 500,
                 fontFamily: "inherit",
                 color: C.onSurface,

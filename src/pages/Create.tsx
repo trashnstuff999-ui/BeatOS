@@ -528,7 +528,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
           fontSize: 12, fontWeight: 700, color: C.onSurfaceVariant,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
-          Aus dem Übergabe-Ordner
+          Aus dem Import-Ordner
         </span>
         <IconButton icon={RefreshCw} size={24} variant="secondary" title="Neu einlesen" onClick={laden} />
       </div>
@@ -539,7 +539,7 @@ function ImportFolderList({ onPick }: { onPick: (pfad: string) => void }) {
 
       {!fehler && ordner.length === 0 && (
         <div style={{ fontSize: 12, color: C.onSecondaryFixedVar }}>
-          Der Übergabe-Ordner ist leer.
+          Der Import-Ordner ist leer.
         </div>
       )}
 

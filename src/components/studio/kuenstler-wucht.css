@@ -4,8 +4,10 @@
 
 /* Schein hinter dem Kopf */
 .kw-schein {
-  position: absolute; top: -40px; left: 0; right: 0; height: 640px; z-index: -1; pointer-events: none;
-  background: radial-gradient(ellipse 70% 60% at 55% 0%, color-mix(in srgb, var(--akzent) 22%, transparent), transparent 70%);
+  position: absolute; top: 0; left: 0; right: 0; height: 460px; z-index: -1; pointer-events: none;
+  /* Mitte unterhalb der Oberkante: der Schein läuft nach oben aus, statt über
+     den Hinweis darüber zu leuchten oder an der Kante abzubrechen. */
+  background: radial-gradient(ellipse 55% 45% at 55% 42%, color-mix(in srgb, var(--akzent) 14%, transparent), transparent 70%);
   transition: background 0.6s;
 }
 
@@ -16,7 +18,7 @@
 .kw-lk:hover > .kw-av { transform: scale(1.08); }
 .kw-lk[data-an="true"]::before {
   content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0;
-  background: var(--akzent); box-shadow: 0 0 14px var(--akzent);
+  background: var(--akzent); box-shadow: 0 0 11px color-mix(in srgb, var(--akzent) 64%, transparent);
 }
 
 /* Bühne */
@@ -34,19 +36,19 @@
   background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 62%);
   transform: translateX(-120%); transition: transform 0.7s;
 }
-.kw-cover:hover .kw-cover-bild { transform: translateY(-8px) scale(1.03); box-shadow: 0 22px 40px -12px color-mix(in srgb, var(--akzent) 60%, transparent) !important; }
+.kw-cover:hover .kw-cover-bild { transform: translateY(-8px) scale(1.03); box-shadow: 0 11px 19px -6px color-mix(in srgb, var(--akzent) 38%, transparent) !important; }
 .kw-cover:hover .kw-cover-bild::after { transform: translateX(120%); }
 .kw-plus { transition: border-color 0.2s, background 0.2s, transform 0.3s; }
 .kw-plus:hover { background: color-mix(in srgb, var(--akzent) 10%, transparent) !important; border-color: var(--akzent) !important; transform: translateY(-4px); }
 .kw-kreuz { transition: transform 0.35s cubic-bezier(.2, .9, .3, 1.5); animation: kw-atmen 2.8s ease-in-out infinite; }
 .kw-plus:hover .kw-kreuz { transform: rotate(90deg) scale(1.1); }
-@keyframes kw-atmen { 50% { box-shadow: 0 8px 34px color-mix(in srgb, var(--akzent) 70%, transparent); } }
+@keyframes kw-atmen { 50% { box-shadow: 0 6px 27px color-mix(in srgb, var(--akzent) 45%, transparent); } }
 
 /* In Session */
-.kw-rec { width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 12px #ff4d4d; animation: kw-rec 1.6s ease-in-out infinite; }
+.kw-rec { width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 10px color-mix(in srgb, #ff4d4d 64%, transparent); animation: kw-rec 1.6s ease-in-out infinite; }
 @keyframes kw-rec { 50% { opacity: 0.35; } }
 .kw-pk { transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s; }
-.kw-pk:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--akzent) 60%, transparent) !important; box-shadow: 0 18px 40px -14px color-mix(in srgb, var(--akzent) 55%, transparent); }
+.kw-pk:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--akzent) 60%, transparent) !important; box-shadow: 0 8px 19px -7px color-mix(in srgb, var(--akzent) 35%, transparent); }
 .kw-pc { transition: transform 0.3s; }
 .kw-pk:hover .kw-pc { transform: scale(1.05) rotate(-2deg); }
 .kw-kn { transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s; }
@@ -62,7 +64,7 @@
 .kw-zl { position: relative; transition: background 0.2s, transform 0.2s; }
 .kw-zl::before {
   content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px;
-  background: var(--akzent); box-shadow: 0 0 12px var(--akzent); transform: scaleY(0); transition: transform 0.2s;
+  background: var(--akzent); box-shadow: 0 0 10px color-mix(in srgb, var(--akzent) 64%, transparent); transform: scaleY(0); transition: transform 0.2s;
 }
 .kw-zl:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--akzent) 12%, var(--kw-karte)), var(--kw-karte) 60%) !important; transform: translateX(4px); }
 .kw-zl:hover::before { transform: scaleY(1); }

@@ -17,7 +17,7 @@ const NAV = [
   { to: "/browse", icon: LibraryBig,  label: "Archiv"     },
   { to: "/upload", icon: UploadIcon,  label: "Upload"     },
   { to: "/studio", icon: Music,       label: "Studio"     },
-  { to: "/kuenstler", icon: Users,    label: "Künstler"   },
+  { to: "/kuenstler", icon: Users,    label: "Artists"    },
   { to: "/video",  icon: VideoIcon,   label: "Video"      },
 ];
 

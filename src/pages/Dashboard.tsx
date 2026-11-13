@@ -9,6 +9,7 @@ import { C, alpha, radius } from "../lib/theme";
 import { Button, PageHeader, PageBody, Segmented } from "../components/ui";
 import { Heute } from "../components/dashboard/Heute";
 import { Statistik } from "../components/dashboard/Statistik";
+import "../components/dashboard/dashboard-wucht.css";
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {

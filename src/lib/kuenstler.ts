@@ -13,7 +13,7 @@ export function songStand(song: { fertig: boolean; warten: boolean; vocals: bool
   const s = song.nur_master ? { ...song, vocals: true, mix: true } : song;
   const schritt = s.fertig ? 4 : s.master ? 3 : s.mix ? 2 : s.vocals ? 1 : 0;
   if (s.fertig) return { text: "Abgegeben", schritt, ton: "fertig" };
-  if (s.warten) return { text: "Warte auf Künstler", schritt, ton: "warten" };
+  if (s.warten) return { text: "Feedback offen", schritt, ton: "warten" };
   if (!s.vocals) return { text: "Vocals fehlen", schritt, ton: "offen" };
   if (!s.mix && !s.master) return { text: "Mix offen", schritt, ton: "offen" };
   if (!s.master) return { text: "Master offen", schritt, ton: "offen" };

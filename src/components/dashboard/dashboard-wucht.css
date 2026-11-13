@@ -1,0 +1,53 @@
+/* Übersicht (Heute + Statistik), Look „Wucht" (Entwurf uebersicht-redesign v1).
+   Leuchten gleich in der gedämpften Stufe der anderen Tabs: ~64 % Deckkraft,
+   Reichweite × 0,8. --fc: Farbe einer Fläche, --c: Farbe einer Kachel. */
+
+@keyframes ds-hoch { from { opacity: 0; transform: translateY(16px); } }
+@keyframes ds-blink { 50% { opacity: 0.3; } }
+@keyframes ds-flacker { to { transform: scale(1.12) rotate(4deg); } }
+
+.ds-fl { transition: border-color 0.3s, box-shadow 0.3s; animation: ds-hoch 0.55s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 70ms); }
+.ds-fl:hover { border-color: color-mix(in srgb, var(--fc, #fda124) 40%, transparent) !important; box-shadow: 0 10px 29px -14px color-mix(in srgb, var(--fc, #fda124) 32%, transparent); }
+.ds-punkt { box-shadow: 0 0 11px color-mix(in srgb, var(--fc, #fda124) 64%, transparent); }
+.ds-dot { animation: ds-blink 1.6s ease-in-out infinite; }
+.ds-flamme { display: inline-block; animation: ds-flacker 1.4s ease-in-out infinite alternate; }
+.ds-serie { transition: transform 0.25s; }
+.ds-serie:hover { transform: translateY(-4px) rotate(-1deg); }
+
+/* Woche */
+.ds-tag { transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s; animation: ds-hoch 0.45s backwards; animation-delay: calc(var(--i, 0) * 50ms + 0.1s); }
+.ds-tag:hover { transform: translateY(-4px); border-color: #fda124 !important; }
+
+/* Regal und Kacheln */
+.ds-rk .ds-rcov { position: relative; overflow: hidden; transition: transform 0.3s cubic-bezier(.2, .9, .3, 1.2), box-shadow 0.3s; }
+.ds-rk .ds-rcov::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 48%, transparent 62%);
+  transform: translateX(-120%); transition: transform 0.7s;
+}
+.ds-rk:hover .ds-rcov { transform: translateY(-7px); box-shadow: 0 11px 19px -7px color-mix(in srgb, var(--c) 48%, transparent), 0 0 0 2px color-mix(in srgb, var(--c) 48%, transparent); }
+.ds-rk:hover .ds-rcov::after { transform: translateX(120%); }
+.ds-hcov { transition: transform 0.45s cubic-bezier(.2, .9, .3, 1.3); }
+.ds-hcov:hover { transform: scale(1.04) rotate(-2deg); }
+.ds-led { transition: transform 0.2s; }
+.ds-led:hover { transform: translateY(-2px); }
+
+/* Listenzeilen */
+.ds-zl { position: relative; transition: background 0.2s, transform 0.2s !important; }
+.ds-zl::before {
+  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 3px;
+  background: var(--fc); box-shadow: 0 0 8px color-mix(in srgb, var(--fc) 64%, transparent);
+  transform: scaleY(0); transition: transform 0.2s;
+}
+.ds-zl:hover { background: color-mix(in srgb, var(--fc) 8%, #131313) !important; transform: translateX(4px); }
+.ds-zl:hover::before { transform: scaleY(1); }
+
+/* Statistik */
+.ds-kk { transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s; animation: ds-hoch 0.5s backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+.ds-kk:hover:not(:disabled) { transform: translateY(-5px); border-color: var(--c) !important; box-shadow: 0 11px 21px -8px color-mix(in srgb, var(--c) 52%, transparent); }
+.ue-zelle { transition: transform 0.15s; }
+.ue-zelle:hover { transform: scale(1.6); position: relative; z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="ds-"], [class*="ds-"]::before, [class*="ds-"]::after { animation: none !important; transition: none !important; }
+}

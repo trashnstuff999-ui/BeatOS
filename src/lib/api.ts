@@ -641,6 +641,10 @@ export const api = {
     applyFilenameConvention: (beatId: string) =>
       invoke<RenameResult>("apply_filename_convention", { beatId }),
 
+    /** Nur diese Arten nach Schema benennen ("cover", "thumbnail", "mp4"). */
+    applyFilenameConventionFor: (beatId: string, kinds: string[]) =>
+      invoke<RenameResult>("apply_filename_convention_for", { beatId, kinds }),
+
     /** Ältere MP3/WAV nach 02_OLD/ — die neueste bleibt. */
     cleanOldExports: (beatPath: string) =>
       invoke<number>("clean_old_exports", { beatPath }),

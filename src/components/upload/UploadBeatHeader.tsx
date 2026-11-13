@@ -9,12 +9,24 @@
 import { useState, useEffect, useRef } from "react";
 import { Music, Search, ChevronDown, X } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { C, alpha, radius } from "../../lib/theme";
+import { C, STUDIO_VERLAUF, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { naechsterSchritt } from "../../lib/uploadReady";
 import { NaechsterSchrittBlock } from "./NaechsterSchrittBlock";
 import { IconButton } from "../ui/Button";
 import type { UploadData } from "../../types/upload";
+import type { NaechsterSchritt } from "../../lib/uploadReady";
+
+/** Look „Wucht“: Farbe und Zeile über dem Titel je nach Stand des Beats. */
+export function buehnenStand(schritt: NaechsterSchritt | null): { farbe: string; text: string } {
+  switch (schritt?.art) {
+    case "termin":  return { farbe: STUDIO_VERLAUF.ready.glow, text: "Ready" };
+    case "geplant": return { farbe: STUDIO_VERLAUF.priority.glow, text: "Scheduled" };
+    case "fertig":  return { farbe: C.mint, text: "Überall live" };
+    case undefined: return { farbe: C.primary, text: "Upload" };
+    default:        return { farbe: STUDIO_VERLAUF.wip.glow, text: "Draft" };
+  }
+}
 import type { Beat } from "../../types/browse";
 
 interface UploadBeatHeaderProps {
@@ -107,43 +119,22 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
   // Länge kommt aus der Audiodatei selbst — dafür braucht es kein Backend,
   // das Abspielelement kennt sie, sobald es die Kopfdaten gelesen hat.
   const laenge = useTrackLength(data?.beat.path ?? null);
+  const stand = buehnenStand(schritt);
+  const c = stand.farbe;
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      <div style={{
+      <div className="ul-buehne" style={{
         // Kein overflow:hidden hier: das Fenster „Exportnamen" darf über den
-        // Rand hinaus. Abgeschnitten wird nur der Hintergrund, in eigener Ebene.
+        // Rand hinaus.
+        "--c": c,
         position: "relative",
-        background: C.surfaceContainerLow,
-        border: `1px solid ${open ? C.primary + "50" : C.border10}`,
-        borderRadius: radius.card,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-        transition: "border-color 0.15s",
-      }}>
-      {/* Das Cover färbt die Karte: verschwommen, gedämpft, nach rechts
-          auslaufend. So hat jeder Beat seine eigene Stimmung — der Kopf soll
-          nach dem Beat aussehen, nicht nach einem Formular. */}
-      {coverUrl && (
-        <div aria-hidden style={{
-          position: "absolute", inset: 0, overflow: "hidden",
-          borderRadius: radius.card, pointerEvents: "none",
-        }}>
-          <div style={{
-            position: "absolute", inset: -60,
-            backgroundImage: `url("${coverUrl}")`,
-            backgroundSize: "cover", backgroundPosition: "center",
-            filter: "blur(60px) saturate(1.3)",
-            opacity: 0.28,
-            pointerEvents: "none",
-          }} />
-          <div aria-hidden style={{
-            position: "absolute", inset: 0,
-            background: `linear-gradient(90deg, transparent 0%, ${alpha(C.surfaceContainerLow, 0.85)} 75%)`,
-            pointerEvents: "none",
-          }} />
-        </div>
-      )}
-
+        background: `color-mix(in srgb, ${c} 7%, ${C.surfaceContainerLow})`,
+        border: `1px solid ${open ? c : alpha(c, 0.35)}`,
+        borderRadius: 24,
+        boxShadow: beatId ? `0 14px 38px -14px ${alpha(c, 0.35)}, inset 0 1px 0 rgba(255, 255, 255, 0.04)` : "none",
+        transition: "border-color 0.15s, background 0.4s",
+      } as React.CSSProperties}>
       {/* Auswahl aufheben — fest in der Ecke. Am Ende der Titelzeile hing es
           mitten im Kopf, seit rechts der nächste Schritt steht. */}
       {selectedBeat && (
@@ -155,16 +146,16 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
 
       <div style={{
         position: "relative",
-        display: "flex", alignItems: beatId ? "stretch" : "center", gap: 24,
-        padding: 20,
+        display: "flex", alignItems: "center", gap: beatId ? 34 : 24, flexWrap: "wrap",
+        padding: beatId ? 32 : 20,
       }}>
         {/* Cover — groß, sobald ein Beat gewählt ist */}
-        <div style={{
-          width: beatId ? 152 : 56, height: beatId ? 152 : 56,
-          borderRadius: beatId ? radius.card : radius.control, flexShrink: 0,
+        <div className={beatId ? "ul-cover" : undefined} style={{
+          width: beatId ? 200 : 56, height: beatId ? 200 : 56,
+          borderRadius: beatId ? 18 : radius.control, flexShrink: 0,
           background: C.surfaceContainerHigh,
           border: `1px solid ${C.border15}`,
-          boxShadow: coverUrl ? "0 14px 36px rgba(0,0,0,0.5)" : "none",
+          boxShadow: beatId ? `0 11px 24px -8px ${alpha(c, 0.51)}, 0 0 0 1px rgba(255, 255, 255, 0.05)` : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
           overflow: "hidden",
         }}>
@@ -174,12 +165,19 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
           }
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: "1 1 380px", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+          {beatId && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: c }}>
+              <span className="ul-dot" style={{ width: 9, height: 9, borderRadius: "50%", background: c, boxShadow: `0 0 10px color-mix(in srgb, ${c} 64%, transparent)` }} />
+              {stand.text}
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
             {/* Title — click opens the picker */}
             <button
               onClick={() => setOpen(o => !o)}
               title={title ? "Beat wechseln" : "Beat wählen"}
+              className="ul-wahl"
               style={{
                 flex: 1, minWidth: 0,
                 display: "flex", alignItems: "center", gap: 8,
@@ -188,17 +186,20 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
               }}
             >
               <span style={{
-                fontSize: beatId ? 26 : 20, fontWeight: 700,
+                fontSize: beatId ? "clamp(40px, 5.6vw, 88px)" : 20, fontWeight: 700,
                 color: title ? C.onSurface : C.onSurfaceVariant,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                lineHeight: 1.2, letterSpacing: "-0.01em",
+                lineHeight: beatId ? 1.05 : 1.2, letterSpacing: "-0.02em",
+                textShadow: beatId ? `0 0 19px ${alpha(c, 0.29)}` : "none",
+                padding: beatId ? "6px 0" : 0,
               }}>
                 {title ?? "Beat wählen…"}
               </span>
               <ChevronDown
-                size={16}
+                size={beatId ? 30 : 16}
                 color={C.onSurfaceVariant}
-                strokeWidth={2}
+                strokeWidth={2.5}
+                className="ul-pfeil"
                 style={{
                   flexShrink: 0,
                   transition: "transform 0.15s",
@@ -210,10 +211,10 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
           </div>
 
           {/* Eine Zeile statt fünf Pillen — dieselben Angaben, ruhiger. */}
-          <div style={{ fontSize: 12, color: C.onSurfaceVariant, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ fontSize: beatId ? 18 : 12, fontWeight: beatId ? 700 : 400, color: C.onSurfaceVariant, display: "flex", flexWrap: "wrap", gap: beatId ? 12 : 8 }}>
             {beatId
               ? [
-                  <span key="id" style={{ fontFamily: "monospace" }}>B{beatId}</span>,
+                  <span key="id" style={{ color: C.onSurface }}>B{beatId}</span>,
                   key && <span key="key">{key}</span>,
                   bpm != null && <span key="bpm">{bpm} BPM</span>,
                   laenge && <span key="len" style={{ fontVariantNumeric: "tabular-nums" }}>{laenge}</span>,
@@ -229,7 +230,7 @@ export function UploadBeatHeader({ selectedBeat, onSelect, data, children, onCha
 
           {/* Asset-Kacheln: gehören zu „wie weit bin ich" — unten in der Spalte */}
           {children && (
-            <div style={{ marginTop: "auto", paddingTop: 12 }}>
+            <div style={{ paddingTop: 16 }}>
               {children}
             </div>
           )}

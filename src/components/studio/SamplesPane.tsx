@@ -120,14 +120,11 @@ export function SamplesPane() {
   };
 
   return (
-    <section aria-label="Samples" style={{ padding: "8px 16px 0" }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        paddingBottom: 12, borderBottom: `1px solid ${C.border20}`,
-      }}>
-        <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", color: C.onSurface }}>SAMPLES</h2>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.onSurfaceVariant }}>{samples.length}</span>
-        <span title={root} style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>06_SAMPLES</span>
+    <section aria-label="Samples" style={{ margin: "0 16px", padding: 24, borderRadius: 22, border: `1px solid ${C.border30}`, background: C.surfaceContainerLow, marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", paddingBottom: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: C.onSurface }}>Samples</h2>
+        <span style={{ fontSize: 20, fontWeight: 700, color: C.onSurfaceVariant }}>{samples.length}</span>
+        <span title={root} style={{ fontSize: 14, color: C.onSecondaryFixedVar }}>06_SAMPLES</span>
         <div style={{ flex: 1 }} />
         <Button size="sm" variant="ghost" icon={RefreshCw} onClick={scan} loading={isLoading} title="Ordner neu einlesen">
           Scan
@@ -146,31 +143,28 @@ export function SamplesPane() {
       )}
 
       <div style={{ paddingTop: 8 }}>
-        {samples.map(p => (
-          <SampleZeile key={p.path} sample={p} onOpen={() => handleOpen(p)} onPreview={() => handlePreview(p)} />
+        {samples.map((p, i) => (
+          <SampleZeile key={p.path} index={i} sample={p} onOpen={() => handleOpen(p)} onPreview={() => handlePreview(p)} />
         ))}
       </div>
     </section>
   );
 }
 
-function SampleZeile({ sample: p, onOpen, onPreview }: {
+function SampleZeile({ index, sample: p, onOpen, onPreview }: {
+  index: number;
   sample: StudioProject;
   onOpen: () => void;
   onPreview: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const { nummer, titel } = sampleName(p);
   const canPreview = p.has_mp3 || p.has_wav;
   const keyBpm = [p.key, p.bpm != null ? `${p.bpm} BPM` : null].filter(Boolean).join(" · ");
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", alignItems: "center", gap: 4 }}
-    >
+    <div className="sw-zl" style={{ display: "flex", alignItems: "center", gap: 4, "--i": Math.min(index, 20) } as React.CSSProperties}>
       <button
+        className="sw-zp"
         onClick={() => { if (canPreview) onPreview(); }}
         disabled={!canPreview}
         aria-label={canPreview ? "Export anhören" : "Noch kein Export"}
@@ -178,29 +172,29 @@ function SampleZeile({ sample: p, onOpen, onPreview }: {
         style={{
           flex: "0 0 36px", width: 36, height: 36, borderRadius: "50%", border: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: canPreview ? alpha(C.mint, 0.10) : "transparent",
+          background: canPreview ? alpha(C.mint, 0.14) : "transparent",
           color: canPreview ? C.mint : C.surfaceContainerHighest,
           cursor: canPreview ? "pointer" : "default",
         }}
       >
-        <Play size={12} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />
+        <Play size={13} fill="currentColor" strokeWidth={1.5} style={{ marginLeft: 1 }} />
       </button>
       <button
+        className="sw-zb"
         onClick={onOpen}
         disabled={!p.newest_flp}
         title="In FL öffnen"
         style={{
-          flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", gap: 12,
-          padding: "0 12px", border: "none", borderRadius: 8, textAlign: "left", color: "inherit",
-          cursor: "pointer", userSelect: "none",
-          background: hovered ? "rgba(255,255,255,0.03)" : "transparent",
+          flex: 1, minWidth: 0, minHeight: 54, display: "flex", alignItems: "center", gap: 12,
+          padding: "0 12px 0 16px", border: "none", borderRadius: 12, textAlign: "left", color: "inherit",
+          cursor: "pointer", userSelect: "none", background: "transparent",
         }}
       >
-        <span style={{ flex: "0 0 52px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 12, color: C.onSecondaryFixedVar }}>
+        <span className="sw-nr" style={{ flex: "0 0 52px", fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, color: C.onSecondaryFixedVar }}>
           {nummer ?? ""}
         </span>
         <span style={{
-          flex: "1 1 auto", minWidth: 0, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          flex: "1 1 auto", minWidth: 0, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           fontWeight: titel ? 700 : 500, color: titel ? C.onSurface : C.onSecondaryFixedVar,
         }}>
           {titel ?? "ohne Namen"}

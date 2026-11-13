@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Loader2, AlertCircle, LayoutGrid, List, Shuffle, RotateCcw, LibraryBig } from "lucide-react";
+import { Loader2, AlertCircle, LayoutGrid, List, RotateCcw, LibraryBig } from "lucide-react";
 import { C, alpha, radius } from "../lib/theme";
 import { BROWSE_PANEL_WIDTH } from "../lib/constants";
 import { useBeats } from "../hooks/useBeats";
@@ -20,6 +20,8 @@ import {
   type AngleichModus,
 } from "../components/browse";
 import { BeatGrid } from "../components/browse/BeatGrid";
+import { ArchivBand } from "../components/browse/ArchivBand";
+import "../components/browse/archiv-wucht.css";
 import { FundstueckeDialog } from "../components/browse/FundstueckeDialog";
 import { PageBody, EmptyState, Button, Select, Segmented } from "../components/ui";
 import type { Beat, SortColumn } from "../types/browse";
@@ -278,6 +280,20 @@ export default function Browse() {
           {/* Klicks bleiben in der Bedienreihe: hier wird eingestellt, nicht
               „ins Leere" geklickt — ein Griff daneben soll nicht das Panel
               zumachen. */}
+          {/* Look „Wucht“: Zahlenband — Treffer, Status zum Filtern, Zufall */}
+          {!isInitialLoad && !error && (
+            <div onClick={e => e.stopPropagation()}>
+              <ArchivBand
+                anzahl={pagination.totalCount}
+                gefiltert={hasActiveFilters}
+                status={filters.status}
+                onStatus={s => setFilters(prev => ({ ...prev, status: s }))}
+                onZufall={handleRandomBeat}
+                refreshKey={beats}
+              />
+            </div>
+          )}
+
           <div onClick={e => e.stopPropagation()}>
             <FilterBar
               filters={filters}
@@ -316,10 +332,6 @@ export default function Browse() {
                     ]}
                   />
 
-                  <Button size="sm" variant="secondary" icon={Shuffle} disabled={pagination.totalCount === 0}
-                    title="Zufälliger Beat" style={{ flexShrink: 0 }} onClick={handleRandomBeat}>
-                    Zufall
-                  </Button>
                 </>
               )}
             />
@@ -434,6 +446,7 @@ export default function Browse() {
           }}
           onUploadsChanged={refreshUploadBadges}
           onRenamed={refresh}
+          onAssetsChanged={refresh}
           onOpenInUpload={(b) => navigate("/upload", { state: { beatId: b.id } })}
           onDelete={async (b) => {
             if (!settings.archivePath) {

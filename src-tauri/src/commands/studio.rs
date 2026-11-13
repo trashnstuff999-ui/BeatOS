@@ -2500,10 +2500,15 @@ pub fn assign_asset_to_project(
     // den Asset-Ordner. Vorher blieb es liegen — beide Dateien im Projekt, und
     // die Erkennung (erstes passendes Bild) blieb bei der alten.
     // Erst nach dem Einsetzen der neuen: scheitert etwas, ist nie beides weg.
+    // Alte Videos braucht Stephan nie wieder: die gehen in den Papierkorb.
     if let Some(slot) = slot.as_deref() {
         if root.is_dir() {
             for alt in slot_occupants(target_dir, slot) {
                 if alt == dest { continue; }
+                if slot == "video" {
+                    trash::delete(&alt).map_err(|e| format!("Altes Video nicht in den Papierkorb: {e}"))?;
+                    continue;
+                }
                 let name = alt.file_name().and_then(|n| n.to_str()).unwrap_or("asset");
                 let ziel = crate::utils::unique_dest(root, name);
                 if std::fs::rename(&alt, &ziel).is_err() {
@@ -4056,6 +4061,24 @@ mod asset_tests {
         namen.sort();
         assert_eq!(namen, vec!["Cover_1.png", "Cover_2.jpg", "Logo.png", "Thumbnail_1.png", "home again_video.mp4"],
             "Thumbnail_2 rutscht auf 1, Videos und Unnummeriertes bleiben");
+        let _ = std::fs::remove_dir_all(&basis);
+    }
+
+    #[test]
+    fn ersetzen_bild_zurueck_video_weg() {
+        let basis = std::env::temp_dir().join(format!("beatos_ersetzen_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&basis);
+        let (media, beat) = (basis.join("MEDIA"), basis.join("Beat"));
+        std::fs::create_dir_all(&media).unwrap();
+        std::fs::create_dir_all(&beat).unwrap();
+        for n in ["neu_cover.png", "neu.mp4"] { std::fs::write(media.join(n), b"x").unwrap(); }
+        for n in ["alt_cover.png", "alt.mp4"] { std::fs::write(beat.join(n), b"x").unwrap(); }
+        let s = |p: &Path| p.to_string_lossy().to_string();
+        assign_asset_to_project(s(&media.join("neu_cover.png")), s(&media), s(&beat), Some("cover".into())).unwrap();
+        assign_asset_to_project(s(&media.join("neu.mp4")), s(&media), s(&beat), Some("video".into())).unwrap();
+        assert!(media.join("alt_cover.png").is_file(), "altes Cover zurück in den Asset-Ordner");
+        assert!(!media.join("alt.mp4").exists() && !beat.join("alt.mp4").exists(), "altes Video im Papierkorb");
+        assert!(beat.join("neu.mp4").is_file() && beat.join("neu_cover.png").is_file());
         let _ = std::fs::remove_dir_all(&basis);
     }
 }

@@ -196,7 +196,36 @@ pub fn backup_db() -> Result<(), String> {
 
     let _ = std::fs::remove_file(&final_path);
     std::fs::rename(&tmp_path, &final_path).map_err(|e| format!("backup swap failed: {}", e))?;
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    tagessicherung(&backup_dir, &final_path, &crate::utils::secs_to_date(jetzt));
     Ok(())
+}
+
+/// Wie viele Tagessicherungen bleiben.
+const TAGESSICHERUNGEN: usize = 7;
+
+/// Eine Kopie je Tag (`beats.backup.JJJJ-MM-TT.db`), die letzten sieben bleiben.
+/// Der Schnappschuss oben wird bei jedem Start überschrieben, auch mit einer
+/// kaputten Datenbank. Die Kopie eines Tages entsteht nur einmal.
+fn tagessicherung(dir: &Path, schnappschuss: &Path, heute: &str) {
+    let ziel = dir.join(format!("beats.backup.{heute}.db"));
+    if !ziel.exists() {
+        if let Err(e) = std::fs::copy(schnappschuss, &ziel) {
+            eprintln!("WARNING: Tagessicherung fehlgeschlagen: {}", e);
+            return;
+        }
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let mut alle: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path())
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n|
+            // "beats.backup." + Datum (10) + ".db"
+            n.len() == 26 && n.starts_with("beats.backup.") && n.ends_with(".db")))
+        .collect();
+    alle.sort();
+    for alt in alle.iter().rev().skip(TAGESSICHERUNGEN) {
+        let _ = std::fs::remove_file(alt);
+    }
 }
 
 /// Initialize database schema - called ONCE at app startup
@@ -514,8 +543,37 @@ pub fn init_db() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::library_dir_from_archive;
+    use super::{library_dir_from_archive, tagessicherung};
     use std::path::PathBuf;
+
+    #[test]
+    fn tagessicherung_einmal_je_tag_und_sieben_bleiben() {
+        let dir = std::env::temp_dir().join(format!("beatos_tagessicherung_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let schnappschuss = dir.join("beats.backup.db");
+
+        std::fs::write(&schnappschuss, b"gut").unwrap();
+        tagessicherung(&dir, &schnappschuss, "2026-11-01");
+        // Zweiter Start am selben Tag mit kaputter Datenbank: die Kopie bleibt gut
+        std::fs::write(&schnappschuss, b"kaputt").unwrap();
+        tagessicherung(&dir, &schnappschuss, "2026-11-01");
+        assert_eq!(std::fs::read(dir.join("beats.backup.2026-11-01.db")).unwrap(), b"gut");
+
+        for tag in 2..=9 {
+            tagessicherung(&dir, &schnappschuss, &format!("2026-11-{tag:02}"));
+        }
+        let mut da: Vec<String> = std::fs::read_dir(&dir).unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        da.sort();
+        // Sieben Tage plus der laufende Schnappschuss; 01. und 02. sind raus
+        assert_eq!(da.len(), 8);
+        assert_eq!(da[0], "beats.backup.2026-11-03.db");
+        assert_eq!(da[6], "beats.backup.2026-11-09.db");
+        assert_eq!(da[7], "beats.backup.db");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn sicherung_landet_eine_ebene_ueber_dem_archiv() {

@@ -17,7 +17,7 @@ import { Flame, Play, Pause } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { api } from "../../lib/api";
-import { C, alpha, radius } from "../../lib/theme";
+import { C, STUDIO_VERLAUF, alpha, radius } from "../../lib/theme";
 import { useSettings, parseProductionPaths, kuenstlerOrdner } from "../../contexts/SettingsContext";
 import { parseRhythmus, naechsterFreierTag, wochenanfang, addDays, toISO } from "../../lib/planung";
 import { woche, alsNaechstes, liegengeblieben, tageAufzaehlen, type TagZelle } from "../../lib/heute";
@@ -31,21 +31,37 @@ import type { ArtistSong } from "../../types/artists";
 
 const bild = (pfad: string) => convertFileSrc(pfad.replace(/\\/g, "/"));
 const KURZ = ["SO", "MO", "DI", "MI", "DO", "FR", "SA"];
+/** Bereit (Neongrün) und es fehlt etwas (Koralle) — wie im Studio */
+const BEREIT = STUDIO_VERLAUF.ready.glow;
+const WARN = STUDIO_VERLAUF.wip.glow;
 const LANG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const datum = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("de-DE", { day: "numeric", month: "long" });
 const tagMonat = (iso: string) => `${LANG[new Date(`${iso}T12:00:00`).getDay()]}, ${Number(iso.slice(8, 10))}.`;
 const mehrzahl = (n: number, eins: string, viele: string) => (n === 1 ? eins : viele);
 
+// Look „Wucht“: große Überschriften, Abschnitte als Flächen mit Leuchtpunkt
 const ueberschrift: React.CSSProperties = {
-  margin: 0, fontSize: 12, fontWeight: 700, textTransform: "uppercase",
-  letterSpacing: "0.08em", color: C.onSurfaceVariant,
+  margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em", color: C.onSurface,
 };
+const flaeche = (farbe: string, i: number): React.CSSProperties => ({
+  "--fc": farbe, "--i": i,
+  padding: 24, borderRadius: 22, border: `1px solid ${C.border30}`, background: C.surfaceContainerLow, minWidth: 0,
+} as React.CSSProperties);
+function Kopf({ farbe, children, unter }: { farbe: string; children: React.ReactNode; unter?: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+      <span className="ds-punkt" style={{ width: 12, height: 12, borderRadius: "50%", background: farbe, flexShrink: 0 }} />
+      <h2 style={ueberschrift}>{children}</h2>
+      {unter}
+    </div>
+  );
+}
 /** Listenzeile als Knopf: der Hover-Hintergrund ragt 8 px über den Text hinaus. */
 function Zeile({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
   return (
-    <button type="button" className="ue-zeile" onClick={onClick} title={title} style={{
-      display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 8px", margin: "0 -8px",
-      width: "calc(100% + 16px)", border: 0, borderTop: `1px solid ${C.border10}`, borderRadius: 0,
+    <button type="button" className="ue-zeile ds-zl" onClick={onClick} title={title} style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "14px 12px", margin: "0 -12px",
+      width: "calc(100% + 24px)", border: 0, borderRadius: 12, minHeight: 52, boxSizing: "border-box",
       font: "inherit", fontSize: 14, color: "inherit", textAlign: "left", cursor: "pointer",
     }}>
       {children}
@@ -125,6 +141,7 @@ export function Heute({ actions, recent, refreshKey }: {
 
   // Aus den Startlöchern angeklickt, sonst der, dem am wenigsten fehlt.
   const held = queue.find(q => q.id === gewaehlt) ?? alsNaechstes(queue);
+  const heldFarbe = held && held.fehlt.length > 0 ? WARN : BEREIT;
   const regal = queue.filter(q => q.id !== held?.id);
   const freierTag = naechsterFreierTag(rhythmus, belegt, heute);
 
@@ -150,10 +167,10 @@ export function Heute({ actions, recent, refreshKey }: {
   const serie = actions.current_streak_weeks;
   const hinweis = rhythmus.length === 0 ? null
     : draussen === 0 && diese.every(t => t.beats.length === 0)
-      ? { text: "Serie in Gefahr", gut: false }
+      ? { text: "Streak reißt", gut: false }
       : naechsteLeer
         ? { text: "Nächste Woche nichts geplant", gut: false }
-        : { text: "Serie gesichert", gut: true };
+        : { text: "Streak hält", gut: true };
 
   const einplanen = async (tag = freierTag) => {
     if (!held || !tag) return;
@@ -191,40 +208,54 @@ export function Heute({ actions, recent, refreshKey }: {
   const liegen = projekte ? liegengeblieben(projekte, jetzt) : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      {/* ── Aussage ── */}
-      <section style={{ padding: "24px 0 36px" }}>
-        <div style={{ fontSize: 13, color: C.onSecondaryFixedVar, fontWeight: 500, marginBottom: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 30, paddingTop: 8 }}>
+      {/* ── Aussage: Bühne mit der Serie rechts ── */}
+      <section className="ds-fl" style={{
+        "--fc": C.primary,
+        padding: 34, borderRadius: 24, display: "flex", gap: 30, flexWrap: "wrap", alignItems: "center",
+        background: `color-mix(in srgb, ${C.primary} 6%, ${C.surfaceContainerLow})`,
+        border: `1px solid ${alpha(C.primary, 0.28)}`,
+        boxShadow: `0 14px 38px -14px ${alpha(C.primary, 0.35)}`,
+      } as React.CSSProperties}>
+       <div style={{ flex: "1 1 460px", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: C.primary }}>
+          <span className="ds-dot" style={{ width: 9, height: 9, borderRadius: "50%", background: C.primary, boxShadow: `0 0 10px ${alpha(C.primary, 0.64)}` }} />
           {heute.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}
         </div>
-        <h1 style={{ margin: 0, fontSize: 40, lineHeight: 1.12, fontWeight: 800, letterSpacing: "-0.02em", color: C.onSurface, maxWidth: 820 }}>
+        <h1 style={{ margin: "12px 0 12px", fontSize: "clamp(34px, 4.6vw, 64px)", lineHeight: 1.02, fontWeight: 700, letterSpacing: "-0.02em", color: C.onSurface, maxWidth: 900, textShadow: `0 0 19px ${alpha(C.primary, 0.26)}` }}>
           {titel}
         </h1>
-        <p style={{ margin: "14px 0 0", fontSize: 15, lineHeight: 1.5, color: C.onSurfaceVariant, maxWidth: 720 }}>{satz}</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px",
-            borderRadius: radius.full, background: C.surfaceContainerHigh,
-            fontSize: 12, fontWeight: 700, color: serie > 0 ? C.primary : C.onSecondaryFixedVar,
-          }}>
-            <Flame size={13} />
-            {serie > 0 ? `${serie} ${mehrzahl(serie, "Woche", "Wochen")} Serie` : "keine Serie"}
-          </span>
-          {hinweis && (
-            <span style={{ fontSize: 13, fontWeight: 600, color: hinweis.gut ? C.mint : C.primary }}>{hinweis.text}</span>
-          )}
+        <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5, color: C.onSurfaceVariant, maxWidth: 720 }}>{satz}</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
           {rhythmus.length === 0 && (
             <Button size="sm" variant="secondary" onClick={() => navigate("/upload")}>Zum Upload-Tab</Button>
           )}
           {fehler && <span style={{ fontSize: 12, color: C.error }} title={fehler}>Nicht alles geladen</span>}
         </div>
+       </div>
+        {/* Serie als eigene Kachel */}
+        <div className="ds-serie" style={{
+          flex: "0 0 auto", minWidth: 150, borderRadius: 20, padding: "20px 24px", textAlign: "center",
+          background: "rgba(14,14,14,0.55)", border: `1px solid ${alpha(C.primary, 0.4)}`,
+        }}>
+          <span className={serie > 0 ? "ds-flamme" : undefined}><Flame size={30} color={serie > 0 ? C.primary : C.onSecondaryFixedVar} /></span>
+          <div style={{ fontSize: 64, fontWeight: 700, lineHeight: 1, color: serie > 0 ? C.primary : C.onSecondaryFixedVar, textShadow: serie > 0 ? `0 0 24px ${alpha(C.primary, 0.4)}` : "none" }}>{serie}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.onSurfaceVariant, marginTop: 4 }}>{mehrzahl(serie, "Woche", "Wochen")} Streak</div>
+          {hinweis && (
+            <span style={{
+              display: "inline-block", marginTop: 10, padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 800,
+              background: alpha(hinweis.gut ? C.mint : C.primary, 0.14), color: hinweis.gut ? C.mint : C.primary,
+            }}>{hinweis.text}</span>
+          )}
+        </div>
       </section>
 
       {/* ── Woche ── */}
       {rhythmus.length > 0 && (
-        <section aria-label="Woche" style={{ paddingBottom: 48 }}>
+        <section aria-label="Woche" className="ds-fl" style={flaeche(C.primary, 1)}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
-            <h2 style={ueberschrift}>
+            <h2 style={{ ...ueberschrift, display: "flex", alignItems: "center", gap: 12 }}>
+              <span className="ds-punkt" style={{ width: 12, height: 12, borderRadius: "50%", background: C.primary }} />
               {ansicht === "diese" ? "Diese Woche" : "Nächste Woche"} · {datum(toISO(ansicht === "diese" ? montag : naechsterMontag))} – {datum(toISO(addDays(ansicht === "diese" ? montag : naechsterMontag, 6)))}
             </h2>
             <Segmented
@@ -234,9 +265,9 @@ export function Heute({ actions, recent, refreshKey }: {
               options={[{ value: "diese", label: "Diese Woche" }, { value: "naechste", label: "Nächste Woche" }]}
             />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12, borderTop: `1px solid ${C.border10}`, paddingTop: 16 }}>
-            {(ansicht === "diese" ? diese : naechste).map(t => (
-              <Tag key={t.iso} tag={t} onOpen={zumUpload} planName={held?.name ?? null} onPlan={iso => einplanen(iso)} onLoesen={terminLoesen} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12 }}>
+            {(ansicht === "diese" ? diese : naechste).map((t, i) => (
+              <Tag key={t.iso} index={i} tag={t} onOpen={zumUpload} planName={held?.name ?? null} onPlan={iso => einplanen(iso)} onLoesen={terminLoesen} />
             ))}
           </div>
         </section>
@@ -251,36 +282,40 @@ export function Heute({ actions, recent, refreshKey }: {
 
       {/* ── Als Nächstes ── */}
       {held && (
-        <section ref={heldRef} aria-label="Als Nächstes hochladen" style={{ position: "relative", overflow: "hidden", borderRadius: 16, marginBottom: 56, background: C.surfaceContainer }}>
-          {held.cover && (
-            <>
-              <img src={bild(held.cover)} alt="" aria-hidden style={{ position: "absolute", inset: -40, width: "calc(100% + 80px)", height: "calc(100% + 80px)", objectFit: "cover", filter: "blur(48px) saturate(1.2)", opacity: 0.45 }} />
-              <div style={{ position: "absolute", inset: 0, background: alpha(C.background, 0.55) }} />
-            </>
-          )}
-          <div style={{ position: "relative", display: "flex", gap: 32, padding: 28, alignItems: "center", flexWrap: "wrap" }}>
-            {held.cover
-              ? <img src={bild(held.cover)} alt={`Cover ${held.name}`} style={{ width: 200, height: 200, objectFit: "cover", borderRadius: 10, boxShadow: "0 20px 50px rgba(0,0,0,0.5)", flexShrink: 0 }} />
-              : <Platzhalter name={held.name} groesse={200} />}
+        <section ref={heldRef} aria-label="Als Nächstes hochladen" className="ds-fl" style={{
+          "--fc": heldFarbe, "--i": 2,
+          position: "relative", borderRadius: 24,
+          background: `color-mix(in srgb, ${heldFarbe} 6%, ${C.surfaceContainerLow})`,
+          border: `1px solid ${alpha(heldFarbe, 0.3)}`,
+          boxShadow: `0 14px 38px -14px ${alpha(heldFarbe, 0.35)}`,
+        } as React.CSSProperties}>
+          <div style={{ position: "relative", display: "flex", gap: 32, padding: 30, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="ds-hcov" style={{ flexShrink: 0, borderRadius: 18, boxShadow: `0 11px 24px -8px ${alpha(heldFarbe, 0.52)}` }}>
+              {held.cover
+                ? <img src={bild(held.cover)} alt={`Cover ${held.name}`} style={{ width: 200, height: 200, objectFit: "cover", borderRadius: 18, display: "block" }} />
+                : <Platzhalter name={held.name} groesse={200} />}
+            </div>
             <div style={{ flex: "1 1 320px", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.primary }}>
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.24em", textTransform: "uppercase", color: heldFarbe }}>
                 Als Nächstes hochladen{held.fehlt.length === 0 && " · alles da"}
               </span>
-              <h2 style={{ margin: 0, fontSize: 48, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <h2 style={{ margin: 0, fontSize: "clamp(40px, 5vw, 72px)", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "4px 0", textShadow: `0 0 19px ${alpha(heldFarbe, 0.3)}` }}>
                 {held.name}
               </h2>
-              <div style={{ fontSize: 14, color: C.onSurfaceVariant }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.onSurfaceVariant }}>
                 {[held.key, held.bpm ? `${held.bpm} BPM` : null, held.created_date ? `archiviert am ${datum(held.created_date)}` : null].filter(Boolean).join(" · ")}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
                 {["Infos", "Audio", "Cover"].map(w => {
                   const fehlt = held.fehlt.includes(w);
                   return (
-                    <span key={w} style={{
-                      padding: "5px 11px", borderRadius: radius.full, fontSize: 12, fontWeight: 600,
-                      background: alpha(fehlt ? C.primary : C.mint, 0.14), color: fehlt ? C.primary : C.mint,
+                    <span key={w} className="ds-led" style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      padding: "8px 14px", borderRadius: radius.full, fontSize: 13, fontWeight: 800,
+                      background: "rgba(14,14,14,0.55)", border: `1px solid ${C.border30}`, color: C.onSurface,
                     }}>
-                      {fehlt ? `fehlt: ${w}` : `✓ ${w}`}
+                      <i style={{ width: 12, height: 12, borderRadius: "50%", background: fehlt ? WARN : C.mint, boxShadow: `0 0 10px ${alpha(fehlt ? WARN : C.mint, 0.64)}` }} />
+                      {fehlt ? `fehlt: ${w}` : w}
                     </span>
                   );
                 })}
@@ -300,24 +335,25 @@ export function Heute({ actions, recent, refreshKey }: {
 
       {/* ── Startlöcher ── */}
       {(regal.length > 0 || (actions.studio_by_status.exported ?? 0) > 0) && (
-        <section aria-label="In den Startlöchern" style={{ marginBottom: 56 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            <h2 style={ueberschrift}>In den Startlöchern</h2>
-            <span style={{ fontSize: 13, color: C.onSecondaryFixedVar }}>archiviert, noch ohne Termin</span>
-          </div>
+        <section aria-label="Up next" className="ds-fl" style={flaeche(BEREIT, 3)}>
+          <Kopf farbe={BEREIT} unter={<span style={{ fontSize: 14, color: C.onSecondaryFixedVar }}>archiviert, noch ohne Termin</span>}>
+            Up next
+          </Kopf>
           {regal.length > 0 && (
-            <div style={{ display: "flex", gap: 20, overflowX: "auto", padding: "8px 0", marginTop: -8 }}>
+            <div style={{ display: "flex", gap: 20, overflowX: "auto", padding: "10px 4px 6px", margin: "-10px -4px 0" }}>
               {/* Scrollt waagerecht und schneidet damit auch oben ab — der Rand
                   oben gibt dem Anheben beim Hover Platz. */}
               {regal.map(q => (
-                <button key={q.id} className="ue-hebt" title={`${q.name} oben zeigen`}
+                <button key={q.id} className="ds-rk" title={`${q.name} oben zeigen`}
                   onClick={() => { setGewaehlt(q.id); heldRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }}
-                  style={{ flex: "0 0 150px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}>
-                  {q.cover
-                    ? <img src={bild(q.cover)} alt="" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 8, display: "block" }} />
-                    : <Platzhalter name={q.name} groesse={150} />}
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.onSurface, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: q.fehlt.length ? C.primary : C.mint }}>
+                  style={{ "--c": q.fehlt.length ? WARN : BEREIT, flex: "0 0 170px", background: "none", border: 0, padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
+                  <div className="ds-rcov" style={{ borderRadius: 16 }}>
+                    {q.cover
+                      ? <img src={bild(q.cover)} alt="" style={{ width: 170, height: 170, objectFit: "cover", borderRadius: 16, display: "block" }} />
+                      : <Platzhalter name={q.name} groesse={170} />}
+                  </div>
+                  <span style={{ marginTop: 4, fontSize: 15, fontWeight: 800, color: C.onSurface, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: q.fehlt.length ? WARN : BEREIT }}>
                     {q.fehlt.length ? `fehlt: ${q.fehlt.join(", ")}` : "bereit"}
                   </span>
                 </button>
@@ -334,11 +370,11 @@ export function Heute({ actions, recent, refreshKey }: {
       )}
 
       {/* ── Drei ruhige Listen ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 40 }}>
-        <div>
-          <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Liegengeblieben</h2>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
+        <div className="ds-fl" style={flaeche(WARN, 4)}>
+          <Kopf farbe={WARN}>Überfällig</Kopf>
           {liegen === null && <Leise>Studio wird gelesen …</Leise>}
-          {liegen?.length === 0 && <Leise>Nichts liegengeblieben</Leise>}
+          {liegen?.length === 0 && <Leise>Nichts überfällig</Leise>}
           {liegen?.slice(0, 3).map(p => (
             <Zeile key={p.path} onClick={() => p.newest_flp && openPath(p.newest_flp)} title={p.newest_flp ? "In FL Studio öffnen" : "Keine FLP gefunden"}>
               <span style={{ fontWeight: 600, color: C.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.song_name ?? p.parsed_name ?? p.name}</span>
@@ -348,9 +384,9 @@ export function Heute({ actions, recent, refreshKey }: {
           {liegen && liegen.length > 3 && <Leise>+ {liegen.length - 3} weitere</Leise>}
         </div>
 
-        <div>
-          <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Künstler · offen</h2>
-          {songs === null && <Leise>Künstler werden gelesen …</Leise>}
+        <div className="ds-fl" style={flaeche(STUDIO_VERLAUF.exported.glow, 5)}>
+          <Kopf farbe={STUDIO_VERLAUF.exported.glow}>Artists · offen</Kopf>
+          {songs === null && <Leise>Artists werden gelesen …</Leise>}
           {songs?.length === 0 && <Leise>Alles abgegeben</Leise>}
           {songs?.slice(0, 3).map(({ kuenstler, song }) => (
             <Zeile key={song.path} onClick={() => navigate("/kuenstler")} title="Öffnen">
@@ -359,15 +395,15 @@ export function Heute({ actions, recent, refreshKey }: {
                 <span style={{ fontWeight: 600, color: C.onSurface }}>{song.name}</span>
               </span>
               <span style={{ color: song.warten ? C.onSecondaryFixedVar : C.primary, whiteSpace: "nowrap" }}>
-                {song.warten ? "wartet auf Künstler" : song.master ? "nicht abgegeben" : "Master fehlt"}
+                {song.warten ? "Feedback offen" : song.master ? "nicht abgegeben" : "Master fehlt"}
               </span>
             </Zeile>
           ))}
           {songs && songs.length > 3 && <Leise>+ {songs.length - 3} weitere</Leise>}
         </div>
 
-        <div>
-          <h2 style={{ ...ueberschrift, marginBottom: 14 }}>Diese Woche geschafft</h2>
+        <div className="ds-fl" style={flaeche(C.mint, 6)}>
+          <Kopf farbe={C.mint}>Diese Woche geschafft</Kopf>
           {geschafft.length === 0 && <Leise>Noch nichts</Leise>}
           {geschafft.map(g => (
             <Zeile key={g.key} onClick={() => zumUpload(g.id)} title="Im Upload öffnen">
@@ -384,7 +420,8 @@ export function Heute({ actions, recent, refreshKey }: {
   );
 }
 
-function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
+function Tag({ index, tag, onOpen, planName, onPlan, onLoesen }: {
+  index: number;
   tag: TagZelle;
   onOpen: (beatId: string) => void;
   /** Der Beat aus „Als Nächstes" — ein freier Upload-Tag plant ihn per Klick ein. */
@@ -400,12 +437,17 @@ function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
     fontSize: 12, fontWeight: 600,
   };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-      <div style={{
-        fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
-        color: tag.heute ? C.primary : tag.uploadTag ? C.onSurface : C.onSecondaryFixedVar,
-      }}>
-        {KURZ[tag.wochentag]} <span style={{ fontWeight: 500, color: C.onSecondaryFixedVar }}>{Number(tag.iso.slice(8, 10))}.</span>
+    <div className="ds-tag" style={{
+      "--i": index,
+      display: "flex", flexDirection: "column", gap: 10, minWidth: 0,
+      padding: 12, borderRadius: 18, background: C.surfaceContainerLowest,
+      border: `1px solid ${tag.uploadTag ? alpha(C.primary, 0.35) : C.border30}`,
+      boxShadow: tag.heute ? `0 0 0 2px ${C.primary}, 0 8px 19px -8px ${alpha(C.primary, 0.64)}` : "none",
+      opacity: tag.vorbei && !beat ? 0.6 : 1,
+    } as React.CSSProperties}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6 }}>
+        <span style={{ fontSize: 22, fontWeight: 700, color: tag.heute ? C.primary : C.onSurface }}>{Number(tag.iso.slice(8, 10))}.</span>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", color: tag.heute ? C.primary : C.onSecondaryFixedVar }}>{KURZ[tag.wochentag]}</span>
       </div>
       {beat ? (<>
         <button className="ue-hebt" onClick={() => onOpen(beat.id)} title="Im Upload öffnen"
@@ -421,7 +463,7 @@ function Tag({ tag, onOpen, planName, onPlan, onLoesen }: {
           </span>
         </button>
         {!beat.hochgeladen && !tag.vorbei && (
-          <Button size="sm" variant="ghost" onClick={() => onLoesen(beat.id)} title="Termin entfernen">Termin lösen</Button>
+          <Button size="sm" variant="ghost" onClick={() => onLoesen(beat.id)} title="Termin entfernen">Termin entfernen</Button>
         )}
       </>) : tag.uploadTag && !tag.vorbei && planName ? (
         <button className="ue-hell" onClick={() => onPlan(tag.iso)} title={`${planName} hier planen`} style={{
@@ -463,7 +505,7 @@ function Platzhalter({ name, groesse }: { name: string; groesse?: number }) {
 }
 
 function Leise({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: "12px 0", borderTop: `1px solid ${C.border10}`, fontSize: 13, color: C.onSecondaryFixedVar }}>{children}</div>;
+  return <div style={{ padding: "12px 0", fontSize: 13, color: C.onSecondaryFixedVar }}>{children}</div>;
 }
 
 /** Reinhören in „Als Nächstes": Play und Zeitleiste auf Glas, wie die Kachel.

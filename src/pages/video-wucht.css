@@ -1,0 +1,21 @@
+/* Video-Tab, Look „Wucht" (Entwurf video-redesign v1), Leuchten in der kleinen Stufe.
+   --c: Amber, wenn das Video läuft; Koralle, wenn keins da ist. */
+@keyframes vw-hoch { from { opacity: 0; transform: translateY(16px); } }
+@keyframes vw-blink { 50% { opacity: 0.3; } }
+.video-buehne {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent), 0 14px 38px -14px color-mix(in srgb, var(--c) 45%, transparent);
+  transition: box-shadow 0.3s; animation: vw-hoch 0.55s cubic-bezier(.2, .9, .3, 1) backwards;
+}
+.video-buehne:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 14px 38px -12px color-mix(in srgb, var(--c) 55%, transparent); }
+.video-buehne:fullscreen { border-radius: 0; box-shadow: none; }
+.vw-blink { animation: vw-blink 1.6s ease-in-out infinite; }
+.vw-voll { transition: transform 0.2s, background 0.2s, color 0.2s; }
+.vw-voll:hover { transform: scale(1.1); background: #fda124 !important; color: #2a1700 !important; }
+.vw-cover { transition: transform 0.45s cubic-bezier(.2, .9, .3, 1.3); }
+.vw-cover:hover { transform: scale(1.04) rotate(-2deg); }
+.vw-unter { animation: vw-hoch 0.55s 0.1s cubic-bezier(.2, .9, .3, 1) backwards; }
+.vw-wert { transition: transform 0.2s, border-color 0.2s; }
+.vw-wert:hover { transform: translateY(-3px); border-color: #fda124 !important; }
+@media (prefers-reduced-motion: reduce) {
+  [class*="vw-"], .video-buehne { animation: none !important; transition: none !important; }
+}

@@ -84,3 +84,5 @@ html, body, #root {
 /* ── Video-Tab: Overlay nur beim Überfahren ── */
 .video-buehne .video-overlay { opacity: 0; transition: opacity .2s; }
 .video-buehne:hover .video-overlay, .video-buehne:focus-within .video-overlay { opacity: 1; }
+.player-kachel { transition: transform .15s, border-color .15s, color .15s; }
+.player-kachel:not(:disabled):hover, .player-kachel:focus-visible { transform: translateY(-2px); border-color: #fda124 !important; color: #fff; }
