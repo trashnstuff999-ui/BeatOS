@@ -32,6 +32,8 @@ export interface AppSettings {
   downloadsPath: string;
   /** Alte Song-Ordner für die Fundstücke, einer pro Zeile. */
   altbestandPaths: string;
+  /** Gelernte Spur-Kürzel, mit Komma getrennt. `-WORT`: gefragt, ist keins. */
+  sampleKuerzel: string;
 }
 
 export const DEFAULTS: AppSettings = {
@@ -50,6 +52,7 @@ export const DEFAULTS: AppSettings = {
   artistsPath: "",
   downloadsPath: "",
   altbestandPaths: "",
+  sampleKuerzel: "",
 };
 
 const STORAGE_KEY = "beatos_settings";
@@ -71,6 +74,7 @@ const KEY_MAP: Record<keyof AppSettings, string> = {
   artistsPath: "artists_path",
   downloadsPath: "downloads_path",
   altbestandPaths: "altbestand_paths",
+  sampleKuerzel: "sample_kuerzel",
 };
 
 function settingsFromDbMap(map: Record<string, string>): AppSettings {

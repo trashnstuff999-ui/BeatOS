@@ -205,7 +205,7 @@ pub fn schoener_name(eingabe: &str, sample: bool) -> String {
         if trenner { nach.push(t) } else { vor.push(t) }
     }
     let (instrument, titel) = if sample && trenner && !nach.is_empty() {
-        (vor.join("-"), nach.join(" "))
+        (spur_kurz(&vor.join(" ")), nach.join(" "))
     } else {
         (String::new(), vor.into_iter().chain(nach).collect::<Vec<_>>().join(" "))
     };
@@ -223,6 +223,62 @@ pub fn schoener_name(eingabe: &str, sample: bool) -> String {
     }
     s.push_str(zusatz);
     s
+}
+
+/// Stephans Kürzel (13.11.2026) mit den Schreibweisen, die darauf fallen. Die
+/// Reihenfolge entscheidet, welches Wort nach vorn kommt: BASS und LEAD stehen
+/// hinten, weil sie auch Sorte sein können (`GTR BASS`, `KEYS LEAD`).
+const KUERZEL: [(&str, &[&str]); 11] = [
+    ("GTR", &["GTR", "GUITAR", "GUITARS", "GITARRE"]),
+    ("KEYS", &["KEYS", "PIANO", "KLAVIER"]),
+    ("BELL", &["BELL", "BELLS"]),
+    ("PAD", &["PAD", "PADS"]),
+    ("SYNTH", &["SYNTH", "SYNTHS", "SYN"]),
+    ("VOX", &["VOX", "VOCAL", "VOCALS"]),
+    ("DRUMS", &["DRUMS", "DRUM", "DRM"]),
+    ("808", &["808"]),
+    ("FX", &["FX"]),
+    ("BASS", &["BASS"]),
+    ("LEAD", &["LEAD", "LEADS"]),
+];
+
+/// Kürzel, die BeatOS dazugelernt hat (Einstellung `sample_kuerzel`). Gesetzt
+/// beim Start und nach jedem Speichern der Einstellungen.
+static GELERNT: std::sync::RwLock<Vec<String>> = std::sync::RwLock::new(Vec::new());
+
+/// `FLUTE,-HIHAT,SAX` → FLUTE und SAX gelten als Kürzel, `-WORT` ist abgelehnt.
+pub fn kuerzel_gelernt_setzen(liste: &str) {
+    let neu = liste.split(',').map(str::trim).filter(|w| !w.is_empty() && !w.starts_with('-')).map(str::to_uppercase).collect();
+    if let Ok(mut g) = GELERNT.write() { *g = neu; }
+}
+
+/// Spurname: Kürzel zuerst, danach Sorte und Part wie getippt.
+/// `Acoustic-Guitar` → `GTR ACOUSTIC`, `keys lead` → `KEYS LEAD`. Ohne
+/// bekanntes Kürzel bleibt die Reihenfolge (`HIHAT`), geraten wird nichts.
+pub fn spur_kurz(instrument: &str) -> String {
+    spur_kurz_mit(instrument, &GELERNT.read().map(|g| g.clone()).unwrap_or_default())
+}
+
+/// Wie `spur_kurz`, mit den gelernten Kürzeln: `Jazz-Flute` → `FLUTE JAZZ`.
+/// Gelernte stehen vor BASS und LEAD, die auch Sorte sein können.
+pub fn spur_kurz_mit(instrument: &str, gelernt: &[String]) -> String {
+    let mut w: Vec<String> = instrument
+        .split(|c: char| c.is_whitespace() || c == '-')
+        .filter(|t| !t.is_empty())
+        .map(|t| {
+            let g = t.to_uppercase();
+            KUERZEL.iter().find(|(_, s)| s.contains(&g.as_str())).map(|(k, _)| k.to_string()).unwrap_or(g)
+        })
+        .collect();
+    let fest = KUERZEL.len() - 2;
+    let reihe = KUERZEL[..fest].iter().map(|(k, _)| *k)
+        .chain(gelernt.iter().map(String::as_str))
+        .chain(KUERZEL[fest..].iter().map(|(k, _)| *k));
+    if let Some(i) = reihe.into_iter().find_map(|k| w.iter().position(|t| t == k)) {
+        let k = w.remove(i);
+        w.insert(0, k);
+    }
+    w.join(" ")
 }
 
 /// `bm` → `Bmin`, `b` → `Bmaj`, `f#m` → `F#min`, `bbm` → `Bbmin`, `Cmaj` → `Cmaj`.
@@ -246,6 +302,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn gelernte_kuerzel_kommen_nach_vorn() {
+        let gelernt = vec!["FLUTE".to_string()];
+        assert_eq!(spur_kurz_mit("Jazz-Flute", &gelernt), "FLUTE JAZZ");
+        assert_eq!(spur_kurz_mit("Jazz-Flute", &[]), "JAZZ FLUTE");
+        assert_eq!(spur_kurz_mit("flute bass", &gelernt), "FLUTE BASS");
+        assert_eq!(spur_kurz_mit("Acoustic-Guitar", &gelernt), "GTR ACOUSTIC");
+        assert_eq!(spur_kurz_mit("flute guitar", &gelernt), "GTR FLUTE", "feste Kürzel gehen vor");
+    }
+
+    #[test]
     fn schoener_name_nach_stephans_tabelle() {
         for (ein, aus) in [
             ("dont cry - 150 bm", "DONT CRY [150 Bmin]"),
@@ -266,12 +332,20 @@ mod tests {
             assert_eq!(schoener_name(ein, false), aus, "Beat: {ein}");
         }
         for (ein, aus) in [
-            ("pads - dont cry 150 bm", "PADS - DONT CRY [150 Bmin]"),
-            ("acoustic-guitar - dont cry 150 f#m_LEFT", "ACOUSTIC-GUITAR - DONT CRY [150 F#min]_LEFT"),
-            ("wide lead - dont cry bm 150", "WIDE-LEAD - DONT CRY [150 Bmin]"),
+            ("pads - dont cry 150 bm", "PAD - DONT CRY [150 Bmin]"),
+            ("acoustic-guitar - dont cry 150 f#m_LEFT", "GTR ACOUSTIC - DONT CRY [150 F#min]_LEFT"),
+            ("wide lead - dont cry bm 150", "LEAD WIDE - DONT CRY [150 Bmin]"),
+            // Stephans lose Dateien und Spuren vom 13.11.
+            ("Acoustig-GTR-Verse - Blue Hour - 150 bm", "GTR ACOUSTIG VERSE - BLUE HOUR [150 Bmin]"),
+            ("Bass-GTR - Blue Hour - 150 bm", "GTR BASS - BLUE HOUR [150 Bmin]"),
+            ("bell - GHOST TOWN - G#m 127 ", "BELL - GHOST TOWN [127 G#min]"),
+            ("keys lead - NO ROOM FOR EMOTIONS - F#m 145", "KEYS LEAD - NO ROOM FOR EMOTIONS [145 F#min]"),
+            ("piano - dont cry 150 bm", "KEYS - DONT CRY [150 Bmin]"),
+            ("bass - dont cry 150 bm", "BASS - DONT CRY [150 Bmin]"),
+            ("hihat - bounce 150", "HIHAT - BOUNCE [150]"),
             ("dont cry - 150 bm", "DONT CRY [150 Bmin]"), // nach „-“ kein Titel: kein Instrument
             ("dont cry 150 bm", "DONT CRY [150 Bmin]"),   // ohne Trenner: volle Version
-            ("PADS - DONT CRY [150 Bmin]_2", "PADS - DONT CRY [150 Bmin]_2"),
+            ("GTR ACOUSTIC - DONT CRY [150 Bmin]_2", "GTR ACOUSTIC - DONT CRY [150 Bmin]_2"),
         ] {
             assert_eq!(schoener_name(ein, true), aus, "Sample: {ein}");
         }

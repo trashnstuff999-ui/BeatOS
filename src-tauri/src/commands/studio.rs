@@ -909,6 +909,45 @@ pub fn create_project_folder(
     Ok(dest.to_string_lossy().to_string())
 }
 
+/// „Beat daraus machen“: neues Projekt aus der Beat-Vorlage im ersten
+/// Produktions-Ordner, die WAVs des Samples nach `Audio/` (Arbeitsmaterial,
+/// kein Export), in der Notiz steht das Sample samt Tempo und Tonart. Das Tempo
+/// in der FLP setzt BeatOS nicht. Gibt die neue FLP zurück.
+#[tauri::command]
+pub fn beat_aus_sample(sample: String, template_flp: String) -> Result<String, String> {
+    let flp = beat_aus_sample_in(&production_roots(), Path::new(&sample), template_flp)?;
+    let ordner = Path::new(&flp).parent().unwrap_or(Path::new("")).to_string_lossy().to_string();
+    let woher = Path::new(&sample).file_name().unwrap_or_default().to_string_lossy().to_string();
+    if let Ok(conn) = open_db() {
+        let _ = conn.execute(
+            "INSERT INTO studio_projects (path, status, notes) VALUES (?1, 'idea', ?2)
+             ON CONFLICT(path) DO UPDATE SET notes = excluded.notes",
+            rusqlite::params![ordner, format!("Aus Sample {}", woher)],
+        );
+    }
+    Ok(flp)
+}
+
+fn beat_aus_sample_in(roots: &[String], sample: &Path, template_flp: String) -> Result<String, String> {
+    let root = roots.first().ok_or("Kein Produktions-Ordner (Einstellungen → Pfade)")?.clone();
+    let flp = create_project_folder(root, next_project_name(roots.to_vec())?, template_flp)?;
+    let audio: Vec<PathBuf> = std::fs::read_dir(sample).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()).is_some_and(crate::utils::is_audio_extension))
+        .collect();
+    // WAVs, wo es welche gibt: MP3 daneben ist nur dieselbe Spur noch einmal
+    let ist_wav = |p: &&PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("wav"));
+    let quelle: Vec<&PathBuf> = if audio.iter().any(|p| ist_wav(&p)) { audio.iter().filter(ist_wav).collect() } else { audio.iter().collect() };
+    if !quelle.is_empty() {
+        let ziel = Path::new(&flp).parent().ok_or("Kein Projektordner")?.join("Audio");
+        std::fs::create_dir_all(&ziel).map_err(|e| format!("Projekt liegt bereit, Audio-Ordner fehlt: {}", e))?;
+        for p in quelle {
+            crate::utils::copy_and_verify(p, &ziel.join(p.file_name().unwrap_or_default()))
+                .map_err(|e| format!("Projekt liegt bereit, Spur nicht kopiert: {}", e))?;
+        }
+    }
+    Ok(flp)
+}
+
 /// Neues Sample in `06_SAMPLES`: Ordner `S0001 Name` (Name optional) mit einer
 /// Kopie der Sample-Vorlage, sonst wie ein Studio-Projekt. Eigene `S`-Nummern,
 /// damit sie den Projektnummern nicht in die Quere kommen. Den Samples-Ordner
@@ -1014,6 +1053,170 @@ pub async fn scan_samples(root: String) -> Result<Vec<StudioProject>, String> {
     })
     .await
     .map_err(|e| format!("Sample-Scan abgestürzt: {}", e))
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct SampleSpur {
+    /// Dateiname ohne Endung
+    pub name: String,
+    pub audio: Option<String>,
+    pub midi: Option<String>,
+}
+
+/// Spuren eines Samples (oberste Ebene): WAV/MP3 und MIDI mit gleichem Namen
+/// sind eine Spur. Bei WAV und MP3 nebeneinander gewinnt die WAV.
+#[tauri::command]
+pub fn sample_spuren(path: String) -> Vec<SampleSpur> {
+    let mut spuren: std::collections::BTreeMap<String, SampleSpur> = std::collections::BTreeMap::new();
+    for p in std::fs::read_dir(&path).into_iter().flatten().flatten().map(|e| e.path()) {
+        if !p.is_file() || !ist_spur(&p) { continue; }
+        let name = stamm(&p);
+        let ext = p.extension().unwrap_or_default().to_string_lossy().to_lowercase();
+        let pfad = Some(p.to_string_lossy().to_string());
+        let s = spuren.entry(name.clone()).or_insert(SampleSpur { name, audio: None, midi: None });
+        if ext == "mid" { s.midi = pfad } else if s.audio.is_none() || ext == "wav" { s.audio = pfad }
+    }
+    spuren.into_values().collect()
+}
+
+#[derive(Debug, Default, Serialize, PartialEq)]
+pub struct MidiVorschau {
+    /// Ticks je Viertel, 0 wenn die Datei in Timecode zählt
+    pub ppq: u32,
+    /// Erstes Tempo aus der Datei, falls eins drinsteht
+    pub bpm: Option<f64>,
+    /// `[Start, Länge, Tonhöhe]` in Ticks, alle Spuren und Kanäle zusammen
+    pub noten: Vec<[u32; 3]>,
+}
+
+/// Noten einer MIDI-Datei für die Vorschau. Unlesbare Datei = keine Noten.
+#[tauri::command]
+pub fn midi_noten(path: String) -> MidiVorschau {
+    std::fs::read(&path).map(|b| noten_aus_midi(&b)).unwrap_or_default()
+}
+
+/// Tempo-Event → BPM. Die Norm schreibt Mikrosekunden je Viertel; FL Studio
+/// schreibt in seine Exporte das Tempo selbst (145 statt 413 793). Was in
+/// keiner Lesart ein Tempo ergibt, zählt nicht.
+fn tempo_aus_midi(wert: u32) -> Option<f64> {
+    if (40..=300).contains(&wert) { return Some(wert as f64); }
+    Some(60_000_000.0 / wert.max(1) as f64).filter(|b| (20.0..=400.0).contains(b))
+}
+
+fn noten_aus_midi(bytes: &[u8]) -> MidiVorschau {
+    use midly::{MetaMessage, MidiMessage, Timing, TrackEventKind};
+    let Ok(smf) = midly::Smf::parse(bytes) else { return MidiVorschau::default() };
+    let ppq = match smf.header.timing { Timing::Metrical(t) => t.as_int() as u32, _ => 0 };
+    let mut bpm = None;
+    let mut noten = Vec::new();
+    for spur in &smf.tracks {
+        let mut zeit = 0u32;
+        // (Kanal, Tonhöhe) → Start der klingenden Note
+        let mut offen: std::collections::HashMap<(u8, u8), u32> = std::collections::HashMap::new();
+        for ev in spur {
+            zeit += ev.delta.as_int();
+            if let TrackEventKind::Meta(MetaMessage::Tempo(us)) = ev.kind {
+                if bpm.is_none() { bpm = tempo_aus_midi(us.as_int()); }
+            }
+            let TrackEventKind::Midi { channel, message } = ev.kind else { continue };
+            let (key, an) = match message {
+                MidiMessage::NoteOn { key, vel } => (key.as_int(), vel.as_int() > 0),
+                MidiMessage::NoteOff { key, .. } => (key.as_int(), false),
+                _ => continue,
+            };
+            // Neue Note oder Ende: eine noch klingende auf derselben Taste endet hier
+            if let Some(start) = offen.remove(&(channel.as_int(), key)) {
+                noten.push([start, zeit - start, key as u32]);
+            }
+            if an { offen.insert((channel.as_int(), key), zeit); }
+        }
+    }
+    noten.sort();
+    MidiVorschau { ppq, bpm, noten }
+}
+
+/// MIDI zum Herausziehen: transponiert und/oder auf die Takte `von..bis` (ab 0,
+/// `bis` ausgeschlossen) gekürzt. Liegt danach unter dem gewünschten Namen im
+/// Temp-Ordner, das Original bleibt unberührt.
+#[tauri::command]
+pub fn midi_ausschnitt(path: String, name: String, halbtoene: i32, von: Option<u32>, bis: Option<u32>) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let neu = midi_umbauen(&bytes, halbtoene, von.zip(bis))?;
+    // ponytail: die Dateien bleiben im Temp-Ordner liegen (je wenige KB); aufräumen, falls es stört
+    let ordner = std::env::temp_dir().join("BeatOS-MIDI");
+    std::fs::create_dir_all(&ordner).map_err(|e| e.to_string())?;
+    let sauber: String = name.chars().map(|c| if r#"/:*?"<>|"#.contains(c) { '_' } else { c }).collect();
+    let ziel = ordner.join(format!("{sauber}.mid"));
+    std::fs::write(&ziel, neu).map_err(|e| e.to_string())?;
+    Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Takte zählen als 4/4, wie in der Vorschau. Beim Kürzen fallen Noten weg, die
+/// vor dem Ausschnitt beginnen; was hineinragt, endet an seiner Grenze. Tempo
+/// und Einstellungen von davor gelten ab dem ersten Tick.
+fn midi_umbauen(bytes: &[u8], halbtoene: i32, takte: Option<(u32, u32)>) -> Result<Vec<u8>, String> {
+    use midly::{num::{u28, u4, u7}, MetaMessage, MidiMessage, Timing, TrackEvent, TrackEventKind};
+    let mut smf = midly::Smf::parse(bytes).map_err(|e| e.to_string())?;
+    let bereich = match (takte, smf.header.timing) {
+        (Some((von, bis)), Timing::Metrical(t)) if bis > von => {
+            let takt = t.as_int() as u32 * 4;
+            Some((von * takt, bis * takt))
+        }
+        (Some(_), _) => return Err("MIDI ohne Takt-Raster".into()),
+        _ => None,
+    };
+    let hoch = |k: u7| u7::new((k.as_int() as i32 + halbtoene).clamp(0, 127) as u8);
+    for spur in &mut smf.tracks {
+        for ev in spur.iter_mut() {
+            if let TrackEventKind::Midi { message, .. } = &mut ev.kind {
+                match message {
+                    MidiMessage::NoteOn { key, .. } | MidiMessage::NoteOff { key, .. } | MidiMessage::Aftertouch { key, .. } => *key = hoch(*key),
+                    _ => {}
+                }
+            }
+        }
+        let Some((a, b)) = bereich else { continue };
+        let mut zeit = 0u32;
+        // (Kanal, Tonhöhe) → im Ausschnitt begonnene, noch klingende Noten
+        let mut offen: HashMap<(u8, u8), u32> = HashMap::new();
+        let mut raus: Vec<(u32, TrackEventKind)> = Vec::new();
+        for ev in spur.iter() {
+            zeit += ev.delta.as_int();
+            match ev.kind {
+                TrackEventKind::Meta(MetaMessage::EndOfTrack) => {}
+                TrackEventKind::Midi { channel, message: MidiMessage::NoteOn { key, vel } } if vel.as_int() > 0 => {
+                    if zeit >= a && zeit < b {
+                        *offen.entry((channel.as_int(), key.as_int())).or_default() += 1;
+                        raus.push((zeit - a, ev.kind));
+                    }
+                }
+                TrackEventKind::Midi { channel, message: MidiMessage::NoteOn { key, .. } | MidiMessage::NoteOff { key, .. } } => {
+                    if let Some(n) = offen.get_mut(&(channel.as_int(), key.as_int())).filter(|n| **n > 0) {
+                        *n -= 1;
+                        raus.push((zeit.min(b) - a, ev.kind));
+                    }
+                }
+                _ => if zeit < b { raus.push((zeit.saturating_sub(a), ev.kind)) },
+            }
+        }
+        // Ohne Ende in der Datei klänge die Note in FL ewig
+        for ((kanal, key), n) in offen {
+            for _ in 0..n {
+                raus.push((b - a, TrackEventKind::Midi { channel: u4::new(kanal), message: MidiMessage::NoteOff { key: u7::new(key), vel: u7::new(0) } }));
+            }
+        }
+        raus.sort_by_key(|(t, _)| *t);
+        raus.push((b - a, TrackEventKind::Meta(MetaMessage::EndOfTrack)));
+        let mut davor = 0u32;
+        *spur = raus.into_iter().map(|(t, kind)| {
+            let delta = u28::new(t - davor);
+            davor = t;
+            TrackEvent { delta, kind }
+        }).collect();
+    }
+    let mut out = Vec::new();
+    smf.write_std(&mut out).map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1135,6 +1338,149 @@ pub struct NeuGefunden {
     /// Lose FLP statt Ordner
     pub lose: bool,
     pub in_fl: bool,
+    /// Lose Spuren (WAV/MIDI ohne FLP) mit demselben Titel: Anzahl, sonst 0
+    pub spuren: u32,
+    /// Titel, Tempo und Tonart da, in FL zu, seit 2 Minuten unverändert:
+    /// BeatOS ordnet es ohne Klick ein
+    pub fertig: bool,
+}
+
+/// So lange muss alles ruhen, bevor BeatOS von selbst einordnet. Sonst risse
+/// ein laufender Export aus FL die Spuren auf zwei Ordner auseinander.
+const RUHE_SEK: u64 = 120;
+
+/// Steht kein Tempo im Namen, das aus der FLP dazu: `DONT CRY` → `DONT CRY [140]`.
+fn mit_flp_tempo(titel: String, p: &Path) -> String {
+    use std::io::Read;
+    if titel.contains('[') || ist_spur(p) { return titel; }
+    let flp = if p.is_dir() {
+        std::fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path()).find(|f| is_flp(f))
+    } else { Some(p.to_path_buf()) };
+    let mut kopf = Vec::new();
+    let tempo = flp.and_then(|f| std::fs::File::open(f).ok())
+        .and_then(|f| f.take(65_536).read_to_end(&mut kopf).ok())
+        .and_then(|_| super::flp::tempo(&kopf))
+        .map(|t| t.round() as u32).filter(|t| (40..=300).contains(t));
+    let Some(t) = tempo else { return titel };
+    let (basis, zusatz) = titel.split_at(titel.find('_').unwrap_or(titel.len()));
+    format!("{} [{}]{}", basis.trim_end(), t, zusatz).trim_start().to_string()
+}
+
+/// Jüngste Änderung an dem, was umziehen würde. Lose Spuren: alle im Stamm,
+/// ein laufender Export hält also jede Gruppe an.
+fn juengste_secs(p: &Path, root: &Path) -> u64 {
+    let dir = if p.is_dir() { p } else if ist_spur(p) { root } else { return file_modified_secs(p).unwrap_or(0) };
+    std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|f| f.is_file() && (p.is_dir() || ist_spur(f)))
+        .filter_map(|f| file_modified_secs(&f)).max().unwrap_or(0)
+}
+
+/// `[150 Bmin]`: Tempo und Tonart stehen beide da.
+fn komplett(titel: &str) -> bool {
+    titel.split_once('[').is_some_and(|(t, k)| !t.trim().is_empty()
+        && k.split(']').next().unwrap_or("").split_whitespace().count() == 2)
+}
+
+/// WAV, MP3 … oder MIDI: was BeatOS in einem Sample als Spur benennt.
+fn ist_spur(p: &Path) -> bool {
+    p.extension().and_then(|e| e.to_str())
+        .is_some_and(|e| crate::utils::is_audio_extension(e) || e.eq_ignore_ascii_case("mid"))
+}
+
+fn stamm(p: &Path) -> String {
+    p.file_stem().unwrap_or_default().to_string_lossy().to_string()
+}
+
+/// Titel, zu dem eine lose Spur gehört: `Bass-GTR - Blue Hour - 150 bm` →
+/// `BLUE HOUR [150 Bmin]`. Ohne Instrument ist der ganze Name der Titel.
+fn gruppen_titel(stem: &str) -> String {
+    let s = crate::utils::schoener_name(stem.split('_').next().unwrap_or(""), true);
+    match s.split_once(" - ") { Some((_, t)) => t.to_string(), None => s }
+}
+
+/// Voller Spurname ohne Endung. `alt_titel` = Titel, wie er bisher im Namen stand.
+/// `keys lead` → `KEYS LEAD - TITEL [145 F#min]`, die ganze Version → `TITEL [145 F#min]`.
+fn spur_name(stem: &str, alt_titel: &str, titel: &str) -> String {
+    let (basis, zusatz) = stem.split_at(stem.find('_').unwrap_or(stem.len()));
+    let ohne_klammer = |t: &str| t.split(" [").next().unwrap_or("").to_string();
+    let sauber = crate::utils::schoener_name(basis, true);
+    let traegt_titel = |t: &str| [alt_titel, titel].iter().any(|x| ohne_klammer(x) == ohne_klammer(t));
+    let spur = match sauber.split_once(" - ") {
+        Some((inst, t)) if traegt_titel(t) => inst.to_string(),
+        None if traegt_titel(&sauber) => String::new(),
+        _ => crate::utils::spur_kurz(basis),
+    };
+    if spur.is_empty() { format!("{}{}", titel, zusatz) } else { format!("{} - {}{}", spur, titel, zusatz) }
+}
+
+/// Welche Spuren im Ordner (nur oberste Ebene) wie heißen müssten: (jetzt, voll benannt).
+/// Was schon stimmt oder auf einen belegten Namen fiele, fehlt in der Liste.
+fn spuren_plan(ordner: &Path, alt_titel: &str, titel: &str) -> Vec<(PathBuf, PathBuf)> {
+    let mut plan: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for p in std::fs::read_dir(ordner).into_iter().flatten().flatten().map(|e| e.path()) {
+        if !p.is_file() || !ist_spur(&p) { continue; }
+        let ext = p.extension().unwrap_or_default().to_string_lossy().to_string();
+        let ziel = ordner.join(sanitize_filename_part(&format!("{}.{}", spur_name(&stamm(&p), alt_titel, titel), ext)));
+        if ziel != p && !ziel.exists() && !plan.iter().any(|(_, z)| *z == ziel) { plan.push((p, ziel)); }
+    }
+    plan
+}
+
+/// Alte Samples nachziehen: Spuren in nummerierten Sample-Ordnern, die noch
+/// nicht den vollen Namen tragen. Nur wo Titel, Tempo und Tonart im Ordnernamen
+/// stehen; FLPs bleiben, wie sie sind. Je Eintrag: Ordner, Dateiname jetzt,
+/// Dateiname danach. `anwenden` benennt um und gibt zurück, was umbenannt wurde.
+#[tauri::command]
+pub fn samples_nachziehen(root: String, anwenden: bool) -> Vec<[String; 3]> {
+    let datei = |p: &Path| p.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let mut ordner: Vec<PathBuf> = std::fs::read_dir(&root).into_iter().flatten().flatten()
+        .map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    ordner.sort();
+    let mut liste = Vec::new();
+    for o in ordner {
+        let name = datei(&o);
+        // `S0039 - RUNAWAY [158 Dmin]` → `RUNAWAY [158 Dmin]`
+        let Some(rest) = name.strip_prefix('S') else { continue };
+        let titel = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+        if titel.len() == rest.len() { continue; }
+        let titel = titel.trim_start_matches([' ', '-']);
+        if !komplett(titel) { continue; }
+        for (von, nach) in spuren_plan(&o, titel, titel) {
+            if !anwenden || std::fs::rename(&von, &nach).is_ok() {
+                liste.push([name.clone(), datei(&von), datei(&nach)]);
+            }
+        }
+    }
+    liste
+}
+
+/// Spuren im Sample-Ordner (nur oberste Ebene) auf den vollen Namen bringen.
+/// FLPs bleiben, die benennt der Ordner-Umzug. Belegte Zielnamen bleiben liegen.
+// ponytail: steht nicht im Umzugs-Protokoll; Rückgängig stellt den Ordner zurück, die Spurnamen nicht.
+fn spuren_benennen(ordner: &Path, alt_titel: &str, titel: &str) {
+    for (von, nach) in spuren_plan(ordner, alt_titel, titel) { let _ = std::fs::rename(&von, &nach); }
+    // Genau eine FLP, die anders heißt als der Ordner (in FL frei benannt): heißt jetzt wie er
+    let flps: Vec<PathBuf> = std::fs::read_dir(ordner).into_iter().flatten().flatten()
+        .map(|e| e.path()).filter(|p| is_flp(p)).collect();
+    if let ([flp], Some(name)) = (flps.as_slice(), ordner.file_name()) {
+        let ziel = ordner.join(format!("{}.flp", name.to_string_lossy()));
+        if !ziel.exists() { let _ = std::fs::rename(flp, &ziel); }
+    }
+}
+
+/// Lose Spuren mit demselben Titel wie `pfad` in einen neuen Ordner, voll benannt.
+fn lose_spuren_einordnen(pfad: &Path, ziel: &Path, titel: &str) -> Result<(), String> {
+    let root = pfad.parent().ok_or("Kein Elternordner")?;
+    let gruppe = gruppen_titel(&stamm(pfad));
+    std::fs::create_dir(ziel).map_err(|e| format!("Ordner nicht anlegbar: {}", e))?;
+    for p in std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path()) {
+        if p.is_file() && ist_spur(&p) && gruppen_titel(&stamm(&p)) == gruppe {
+            std::fs::rename(&p, ziel.join(p.file_name().unwrap()))
+                .map_err(|e| format!("„{}“ nicht verschiebbar: {}", stamm(&p), e))?;
+        }
+    }
+    spuren_benennen(ziel, &gruppe, titel);
+    Ok(())
 }
 
 fn samples_root() -> Option<PathBuf> {
@@ -1172,6 +1518,7 @@ pub(crate) fn in_fl(titel: &Option<String>, name: &str) -> bool {
 fn neues_in(root: &Path, sample: bool, start: u32, fl: &Option<String>) -> Vec<NeuGefunden> {
     let Ok(rd) = std::fs::read_dir(root) else { return Vec::new() };
     let mut alle: Vec<(PathBuf, String, bool)> = Vec::new();
+    let mut spuren: Vec<PathBuf> = Vec::new();
     for e in rd.filter_map(|e| e.ok()) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
@@ -1183,16 +1530,33 @@ fn neues_in(root: &Path, sample: bool, start: u32, fl: &Option<String>) -> Vec<N
         } else if p.is_file() && is_flp(&p) {
             let stem = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
             alle.push((p, stem, true));
+        } else if sample && p.is_file() && ist_spur(&p) {
+            spuren.push(p);
         }
+    }
+    // Lose Spuren: eine Zeile je Titel. Exporte einer losen FLP ziehen mit ihr um.
+    spuren.retain(|p| !alle.iter().any(|(_, a, lose)| *lose && *a == stamm(p)));
+    spuren.sort();
+    let mut anzahl: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    for p in spuren {
+        let t = gruppen_titel(&stamm(&p));
+        if !anzahl.contains_key(&t) { alle.push((p.clone(), stamm(&p), true)); }
+        *anzahl.entry(t).or_default() += 1;
     }
     alle.sort_by_key(|(p, _, _)| file_modified_secs(p));
     let prefix = if sample { "S" } else { PROJECT_PREFIX };
-    alle.into_iter().enumerate().map(|(i, (p, alt, lose))| NeuGefunden {
-        pfad: p.to_string_lossy().to_string(),
-        titel: crate::utils::schoener_name(&alt, sample),
-        nummer: format!("{}{:04}", prefix, start + i as u32 + 1),
-        in_fl: fl_namen(&p).iter().any(|n| in_fl(fl, n)),
-        alt, sample, lose,
+    let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    alle.into_iter().enumerate().map(|(i, (p, alt, lose))| {
+        let titel = if ist_spur(&p) { gruppen_titel(&alt) } else { mit_flp_tempo(crate::utils::schoener_name(&alt, sample), &p) };
+        let offen = fl_namen(&p).iter().any(|n| in_fl(fl, n));
+        NeuGefunden {
+            pfad: p.to_string_lossy().to_string(),
+            spuren: if ist_spur(&p) { anzahl.get(&gruppen_titel(&alt)).copied().unwrap_or(0) } else { 0 },
+            nummer: format!("{}{:04}", prefix, start + i as u32 + 1),
+            fertig: !offen && komplett(&titel) && jetzt.saturating_sub(juengste_secs(&p, root)) >= RUHE_SEK,
+            in_fl: offen,
+            titel, alt, sample, lose,
+        }
     }).collect()
 }
 
@@ -1286,10 +1650,15 @@ fn lose_flp_einordnen(pfad: &Path, ziel: &Path, neu: &str, alt: &str) -> Result<
 
 fn neu_uebernehmen_in(roots: &[String], sample_root: Option<&Path>, pfad: &Path, titel: &str, fl: &Option<String>) -> Result<String, String> {
     let (ziel, neu, alt) = neu_ziel(roots, sample_root, pfad, titel, fl)?;
+    // Titel ohne Nummer, so wie er im Ordnernamen steht
+    let titel_neu = neu.split_once(" - ").map(|(_, t)| t.to_string()).unwrap_or_default();
     if pfad.is_file() {
-        lose_flp_einordnen(pfad, &ziel, &neu, &alt)?;
+        if ist_spur(pfad) { lose_spuren_einordnen(pfad, &ziel, &titel_neu)?; }
+        else { lose_flp_einordnen(pfad, &ziel, &neu, &alt)?; }
         return Ok(ziel.to_string_lossy().to_string());
     }
+    let sample = sample_root.is_some_and(|s| Some(s) == pfad.parent());
+    let alt_titel = crate::utils::schoener_name(&alt, true);
     // Ordner: derselbe Weg wie das Nachrücken (Protokoll, FLP-Pfade, DB-Zeilen)
     let r = apply_steps(vec![MergeStep {
         from: pfad.to_string_lossy().to_string(),
@@ -1299,6 +1668,7 @@ fn neu_uebernehmen_in(roots: &[String], sample_root: Option<&Path>, pfad: &Path,
     if r.moved == 0 || !r.failed.is_empty() {
         return Err(if r.failed.is_empty() { "Nicht umbenannt".into() } else { r.failed.join("; ") });
     }
+    if sample && !titel_neu.is_empty() { spuren_benennen(&ziel, &alt_titel, &titel_neu); }
     Ok(ziel.to_string_lossy().to_string())
 }
 
@@ -3417,7 +3787,7 @@ mod tests {
         assert_eq!(kurz, ["P0006 DONT CRY [150 Bmin] false", "P0007 NO WAY [140 Amin] true"]);
         let s = super::neues_in(&samples, true, 2, &None);
         assert_eq!(s.len(), 1);
-        assert_eq!(format!("{} {}", s[0].nummer, s[0].titel), "S0003 PADS - X [140 Amin]");
+        assert_eq!(format!("{} {}", s[0].nummer, s[0].titel), "S0003 PAD - X [140 Amin]");
 
         // FL zeigt das Projekt im Titel → gesperrt, sonst frei
         let fl = Some("dont cry 150 bm - fl studio 2024".to_string());
@@ -3435,6 +3805,156 @@ mod tests {
         assert!(ziel.join("P0006 - NO WAY [140 Amin].flp").is_file());
         assert!(ziel.join("no way 140 am.mp3").is_file());
         assert!(!flp.exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn midi_noten_mit_start_laenge_tonhoehe() {
+        // Eine Spur, 96 Ticks je Viertel: C4 von 0 bis 96, E4 von 96 bis 144 (Ende per NoteOn vel 0)
+        let mut m = b"MThd\x00\x00\x00\x06\x00\x00\x00\x01\x00\x60MTrk\x00\x00\x00\x14".to_vec();
+        m[21] = 0x1A; // Spurlänge mit Tempo-Event
+        m.extend([0x00, 0xFF, 0x51, 0x03, 0x06, 0x1A, 0x80]); // 400 000 µs je Viertel = 150 BPM
+        m.extend([0x00, 0x90, 60, 100, 0x60, 0x80, 60, 0, 0x00, 0x90, 64, 100, 0x30, 0x90, 64, 0, 0x00, 0xFF, 0x2F, 0x00]);
+        let v = super::noten_aus_midi(&m);
+        assert_eq!(v.noten, [[0, 96, 60], [96, 48, 64]]);
+        assert_eq!((v.ppq, v.bpm), (96, Some(150.0)));
+        assert!(super::noten_aus_midi(b"kaputt").noten.is_empty());
+        // FL schreibt das Tempo roh ins Event (Stephans KEYS LEAD: ff 51 03 00 00 91)
+        assert_eq!(super::tempo_aus_midi(0x91), Some(145.0));
+        assert_eq!(super::tempo_aus_midi(5), None);
+    }
+
+    #[test]
+    fn beat_aus_sample_kopiert_die_wavs_nach_audio() {
+        let tmp = std::env::temp_dir().join(format!("beatos_beat_aus_sample_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sample = tmp.join("S0041 - NO ROOM [145 F#min]");
+        std::fs::create_dir_all(tmp.join("Produktion")).unwrap();
+        std::fs::create_dir_all(&sample).unwrap();
+        for f in ["BASS - NO ROOM [145 F#min].wav", "BASS - NO ROOM [145 F#min].mid", "NO ROOM [145 F#min].wav", "NO ROOM [145 F#min].mp3", "S0041.flp"] {
+            std::fs::write(sample.join(f), b"x").unwrap();
+        }
+        std::fs::write(tmp.join("Beat.flp"), b"flp").unwrap();
+        let roots = vec![tmp.join("Produktion").to_string_lossy().to_string()];
+        let flp = super::beat_aus_sample_in(&roots, &sample, tmp.join("Beat.flp").to_string_lossy().to_string()).unwrap();
+        let audio = std::path::Path::new(&flp).parent().unwrap().join("Audio");
+        let mut drin: Vec<String> = std::fs::read_dir(&audio).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        drin.sort();
+        assert_eq!(drin, ["BASS - NO ROOM [145 F#min].wav", "NO ROOM [145 F#min].wav"]);
+        assert!(sample.join("NO ROOM [145 F#min].wav").is_file(), "das Sample bleibt, wie es ist");
+        assert!(super::beat_aus_sample_in(&[], &sample, String::new()).is_err());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn alte_samples_nachziehen_mit_vorschau() {
+        let tmp = std::env::temp_dir().join(format!("beatos_nachziehen_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let voll = tmp.join("S0039 - RUNAWAY [158 Dmin]");
+        let ohne = tmp.join("S0033 - MORNING SUN");
+        for (o, dateien) in [(&voll, &["bass-guitar - runaway - Dm 158.wav", "runaway - Dm 158.wav", "S0039 - RUNAWAY [158 Dmin].flp"][..]), (&ohne, &["loop.wav"][..])] {
+            std::fs::create_dir_all(o).unwrap();
+            for f in dateien { std::fs::write(o.join(f), b"x").unwrap(); }
+        }
+        let root = tmp.to_string_lossy().to_string();
+        let ordner = "S0039 - RUNAWAY [158 Dmin]".to_string();
+        let soll = vec![
+            [ordner.clone(), "bass-guitar - runaway - Dm 158.wav".into(), "GTR BASS - RUNAWAY [158 Dmin].wav".into()],
+            [ordner.clone(), "runaway - Dm 158.wav".into(), "RUNAWAY [158 Dmin].wav".into()],
+        ];
+        let mut vorschau = super::samples_nachziehen(root.clone(), false);
+        vorschau.sort();
+        assert_eq!(vorschau, soll);
+        assert!(voll.join("runaway - Dm 158.wav").is_file(), "Vorschau benennt nichts um");
+
+        assert_eq!(super::samples_nachziehen(root.clone(), true).len(), 2);
+        assert!(voll.join("GTR BASS - RUNAWAY [158 Dmin].wav").is_file());
+        assert!(voll.join("RUNAWAY [158 Dmin].wav").is_file());
+        assert!(voll.join("S0039 - RUNAWAY [158 Dmin].flp").is_file());
+        assert!(ohne.join("loop.wav").is_file(), "ohne Tempo und Tonart bleibt alles");
+        assert!(super::samples_nachziehen(root, false).is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn midi_transponieren_und_takte_ausschneiden() {
+        // 96 Ticks je Viertel, ein Takt = 384. C in Takt 1, E von Takt 2 bis in Takt 3, G in Takt 3
+        let mut m = b"MThd       `MTrk    ".to_vec();
+        let spur = [
+            0x00, 0x90, 60, 100, 0x60, 0x80, 60, 0,       // C: 0..96
+            0x82, 0x20, 0x90, 64, 100,                    // E ab 384
+            0x83, 0x00, 0x90, 67, 100,                    // G ab 768
+            0x60, 0x80, 64, 0, 0x00, 0x80, 67, 0,         // beide enden bei 864
+            0x00, 0xFF, 0x2F, 0x00,
+        ];
+        m[21] = spur.len() as u8;
+        m.extend(spur);
+        assert_eq!(super::noten_aus_midi(&m).noten, [[0, 96, 60], [384, 480, 64], [768, 96, 67]]);
+
+        let hoeher = super::midi_umbauen(&m, 3, None).unwrap();
+        assert_eq!(super::noten_aus_midi(&hoeher).noten, [[0, 96, 63], [384, 480, 67], [768, 96, 70]]);
+
+        // Nur Takt 2: das E beginnt bei 0 und endet an der Taktgrenze, C und G fehlen
+        let takt2 = super::midi_umbauen(&m, 0, Some((1, 2))).unwrap();
+        assert_eq!(super::noten_aus_midi(&takt2).noten, [[0, 384, 64]]);
+        assert!(super::midi_umbauen(b"kaputt", 0, None).is_err());
+    }
+
+    #[test]
+    fn lose_spuren_und_spurnamen_im_sample() {
+        let tmp = std::env::temp_dir().join(format!("beatos_spuren_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let samples = tmp.join("06_SAMPLES");
+        let ordner = samples.join("S0040 - NO ROOM FOR EMOTIONS [145 F#min]");
+        std::fs::create_dir_all(&ordner).unwrap();
+        for f in ["Bass-GTR - Blue Hour - 150 bm.wav", "Nylon-Gtr - blue hour - 150 bm.wav", "bell - GHOST TOWN - G#m 127 .wav", "Metal-Sample_1.mp3", "notiz.txt"] {
+            std::fs::write(samples.join(f), b"x").unwrap();
+        }
+        for f in ["keys lead.wav", "keys lead.mid", "bass.wav", "NO ROOM FOR EMOTIONS - 145 F#m.wav", "NO ROOM FOR EMOTIONS - 145 F#m.flp"] {
+            std::fs::write(ordner.join(f), b"x").unwrap();
+        }
+
+        // Eine Zeile je Titel, mit Anzahl
+        let neu = super::neues_in(&samples, true, 40, &None);
+        let mut kurz: Vec<_> = neu.iter().map(|n| format!("{} {}", n.titel, n.spuren)).collect();
+        kurz.sort();
+        assert_eq!(kurz, ["BLUE HOUR [150 Bmin] 2", "GHOST TOWN [127 G#min] 1", "METAL-SAMPLE 1"]);
+        // Frisch geschrieben: nichts geht von selbst. Ohne Tempo und Tonart nie.
+        assert!(neu.iter().all(|n| !n.fertig));
+        assert!(super::komplett("BLUE HOUR [150 Bmin]"));
+        assert!(!super::komplett("HIHAT [150]") && !super::komplett("METAL-SAMPLE") && !super::komplett("[150 Bmin]"));
+        // Tempo aus der FLP, wenn keins im Namen steht (Event 156, Wert mal 1000)
+        let mut flp = b"FLhd\x06\x00\x00\x00\x00\x00\x01\x00\x60\x00FLdt\x05\x00\x00\x00\x9c".to_vec();
+        flp.extend(140_000u32.to_le_bytes());
+        std::fs::write(samples.join("dont cry.flp"), &flp).unwrap();
+        assert_eq!(super::mit_flp_tempo("DONT CRY_2".into(), &samples.join("dont cry.flp")), "DONT CRY [140]_2");
+        assert_eq!(super::mit_flp_tempo("DONT CRY [150 Bmin]".into(), &samples.join("dont cry.flp")), "DONT CRY [150 Bmin]");
+        std::fs::remove_file(samples.join("dont cry.flp")).unwrap();
+
+        // Einordnen: beide Blue-Hour-Spuren in einen Ordner, voll benannt
+        let ziel = samples.join("S0041 - BLUE HOUR [150 Bmin]");
+        super::lose_spuren_einordnen(&samples.join("Nylon-Gtr - blue hour - 150 bm.wav"), &ziel, "BLUE HOUR [150 Bmin]").unwrap();
+        assert!(ziel.join("GTR BASS - BLUE HOUR [150 Bmin].wav").is_file());
+        assert!(ziel.join("GTR NYLON - BLUE HOUR [150 Bmin].wav").is_file());
+        assert!(samples.join("bell - GHOST TOWN - G#m 127 .wav").is_file());
+
+        // Spuren im Ordner: kurz exportiert, voll benannt; WAV und MIDI bleiben ein Paar
+        let t = "NO ROOM FOR EMOTIONS [145 F#min]";
+        super::spuren_benennen(&ordner, t, t);
+        for f in ["KEYS LEAD - NO ROOM FOR EMOTIONS [145 F#min].wav", "KEYS LEAD - NO ROOM FOR EMOTIONS [145 F#min].mid",
+                  "BASS - NO ROOM FOR EMOTIONS [145 F#min].wav", "NO ROOM FOR EMOTIONS [145 F#min].wav", "S0040 - NO ROOM FOR EMOTIONS [145 F#min].flp"] {
+            assert!(ordner.join(f).is_file(), "{f}");
+        }
+        // Aufklappen: WAV und MIDI mit gleichem Namen sind eine Spur
+        let sp = super::sample_spuren(ordner.to_string_lossy().to_string());
+        assert_eq!(sp.len(), 3);
+        assert_eq!(sp[1].name, "KEYS LEAD - NO ROOM FOR EMOTIONS [145 F#min]");
+        assert!(sp[1].audio.as_deref().is_some_and(|a| a.ends_with(".wav")) && sp[1].midi.is_some());
+        assert!(sp[0].midi.is_none());
+        // Zweiter Lauf ändert nichts mehr
+        super::spuren_benennen(&ordner, t, t);
+        assert_eq!(std::fs::read_dir(&ordner).unwrap().count(), 5);
+        assert_eq!(super::spur_name("GTR NYLON - BLUE HOUR [150 Bmin]_LEFT", "x", "BLUE HOUR [150 Bmin]"), "GTR NYLON - BLUE HOUR [150 Bmin]_LEFT");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

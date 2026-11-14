@@ -13,6 +13,10 @@ export interface FlVorlage { ordner: string; name: string; pfad: string }
 export interface NeuGefunden {
   pfad: string; alt: string; titel: string; nummer: string;
   sample: boolean; lose: boolean; in_fl: boolean;
+  /** Lose Spuren mit demselben Titel, sonst 0 */
+  spuren: number;
+  /** Sample komplett benannt, in FL zu, ruht: wird ohne Klick eingeordnet */
+  fertig: boolean;
 }
 import type { Beat, BeatStatus, SortColumn, SortDirection, UpdateBeatParams } from "../types/browse";
 import type {
@@ -429,6 +433,21 @@ export const api = {
     /** Alle Sample-Ordner in `root`, ohne DB (kein Status, keine Statistik). */
     scanSamples: (root: string) =>
       invoke<StudioProject[]>("scan_samples", { root }),
+    /** Spuren eines Samples: WAV und MIDI mit gleichem Namen sind eine. */
+    sampleSpuren: (path: string) =>
+      invoke<{ name: string; audio: string | null; midi: string | null }[]>("sample_spuren", { path }),
+    /** Noten einer MIDI: [Start, Länge, Tonhöhe] in Ticks; `ppq` 0 = kein Takt-Raster. */
+    midiNoten: (path: string) =>
+      invoke<{ ppq: number; bpm: number | null; noten: [number, number, number][] }>("midi_noten", { path }),
+    /** „Beat daraus machen“: Projekt aus der Vorlage, WAVs des Samples nach Audio/, Notiz. Gibt die neue FLP zurück. */
+    beatAusSample: (sample: string, templateFlp: string) =>
+      invoke<string>("beat_aus_sample", { sample, templateFlp }),
+    /** Spuren alter Samples, die noch nicht voll benannt sind: [Ordner, Datei jetzt, Datei danach]. `anwenden` benennt um. */
+    samplesNachziehen: (root: string, anwenden: boolean) =>
+      invoke<[string, string, string][]>("samples_nachziehen", { root, anwenden }),
+    /** MIDI zum Ziehen: transponiert und/oder auf Takte `von..bis` gekürzt (ab 0, `bis` ausgeschlossen). Gibt den Pfad der neuen Datei. */
+    midiAusschnitt: (path: string, name: string, halbtoene: number, von: number | null, bis: number | null) =>
+      invoke<string>("midi_ausschnitt", { path, name, halbtoene, von, bis }),
 
     /** Alte Ideen aus `_IDEEN/<Jahr>/` aller Produktions-Ordner, ohne DB. */
     scanAlteIdeen: () =>

@@ -3,24 +3,40 @@
 // es mit Nummer und Namen nach der Regel. Übernehmen benennt um. Solange FL das
 // Projekt offen hat, gesperrt: FL legte beim nächsten Speichern den alten Ordner neu an.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { C, alpha, radius } from "../../lib/theme";
 import { api, type NeuGefunden } from "../../lib/api";
 import { useDialog } from "../../contexts/DialogContext";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
 import { Button } from "../ui";
 
-export function NeuesZeile({ onUebernommen }: { onUebernommen: () => void }) {
+export function NeuesZeile({ onUebernommen, nurSamples }: { onUebernommen: () => void; nurSamples?: boolean }) {
   const { melde } = useDialog();
   const [liste, setListe] = useState<NeuGefunden[]>([]);
   const [titel, setTitel] = useState<Record<string, string>>({});
   const [laeuft, setLaeuft] = useState<string | null>(null);
 
-  const laden = useCallback(() => {
-    api.studio.scanNeues().then(l => setListe(l ?? [])).catch(() => setListe([]));
-  }, []);
-  useEffect(laden, [laden]);
-  useFocusRefresh(laden, 2_000);
+  // Von selbst versucht und gescheitert: bleibt als Zeile stehen, kein zweiter Anlauf
+  const gescheitert = useRef(new Set<string>());
+  const autoLaeuft = useRef(false);
+
+  const laden = useCallback(async () => {
+    const lesen = async () => ((await api.studio.scanNeues().catch(() => [])) ?? []).filter(n => !nurSamples || n.sample);
+    const l = await lesen();
+    setListe(l);
+    // Fertige Samples (Name komplett, in FL zu, Export ruht) ohne Klick einordnen
+    const fertig = l.filter(n => n.fertig && !gescheitert.current.has(n.pfad));
+    if (fertig.length === 0 || autoLaeuft.current) return;
+    autoLaeuft.current = true;
+    for (const n of fertig) {
+      await api.studio.neuUebernehmen(n.pfad, n.titel).catch(() => gescheitert.current.add(n.pfad));
+    }
+    autoLaeuft.current = false;
+    onUebernommen();
+    setListe(await lesen());
+  }, [onUebernommen, nurSamples]);
+  useEffect(() => { laden(); }, [laden]);
+  useFocusRefresh(() => { laden(); }, 2_000);
 
   if (liste.length === 0) return null;
 
@@ -48,7 +64,9 @@ export function NeuesZeile({ onUebernommen }: { onUebernommen: () => void }) {
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.primary }}>
             {n.sample ? "NEUES SAMPLE" : "NEU"}
           </span>
-          <span title={n.pfad} style={{ color: C.onSurfaceVariant, minWidth: 120 }}>{n.alt}{n.lose ? ".flp" : ""}</span>
+          <span title={n.pfad} style={{ color: C.onSurfaceVariant, minWidth: 120 }}>
+            {n.spuren ? (n.spuren === 1 ? "1 Spur" : `${n.spuren} Spuren`) : `${n.alt}${n.lose ? ".flp" : ""}`}
+          </span>
           <span style={{ color: C.onSurfaceVariant }}>→</span>
           <span style={{ fontWeight: 700, color: C.onSurface }}>{n.nummer} -</span>
           <input

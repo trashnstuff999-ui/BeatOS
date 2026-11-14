@@ -299,13 +299,38 @@ Sample-Browser, der nur Passendes zeigt und direkt nach FL liefert.
       Crate `midly`, zeichnen als SVG/Canvas, Ziehen über dasselbe Drag-Plugin
       wie bei den WAVs. Vorhören mit Ton erst einmal nicht (bräuchte einen
       Synth)
-- [ ] **„Passt zu“-Filter**: Tempo und Tonart des laufenden Beats angeben, nur
+- [x] **Sample aufklappen** (14.11., Stephan; gebaut, Abnahme offen): Klick auf ein Sample im
+      Samples-Tab klappt es auf. Darin jede Spur einzeln: abspielen, bei MIDIs
+      die Noten sehen, WAV oder MIDI herausziehen und in FL ablegen. Eine MIDI
+      klingt über die gleich benannte WAV (`KEYS LEAD - … .mid` und `.wav` sind
+      ein Paar), ein Synth ist dafür nicht nötig
+- [x] **Liste neu geordnet** (14.11., gebaut, Abnahme offen): Karte je Sample mit
+      Kürzel-Marken, Spuren auf einem Takt-Raster, Griffe WAV und MIDI zum Ziehen
+      nach FL (`tauri-plugin-drag`), Filter nach Kürzel und „Mit MIDI“
+- [x] **MIDI lesbar und ziehbar** (14.11., gebaut, Abnahme offen): Akkorde je
+      Takt unter der Bahn, Klick auf den Namen macht die Noten groß (Tasten,
+      Notenname beim Überfahren, Töne außerhalb der Tonart umrandet), Tonart
+      versetzen und Takte markieren, der MIDI-Griff zieht genau das
+- [x] **Einordnen mit Kürzeln** (13.11.): Ordner ohne Nummer und lose Spuren in
+      `06_SAMPLES` bekommen per „Übernehmen“ die nächste S-Nummer, Spuren den
+      vollen Namen (`GTR ACOUSTIC - BLUE HOUR [150 Bmin].wav`). Kürzel zuerst:
+      GTR KEYS BELL PAD SYNTH VOX DRUMS 808 FX BASS LEAD, danach Sorte und Part
+- [x] **Einordnen ohne Klick**: BeatOS ordnet von selbst ein, sobald das
+      Projekt in FL zu ist und Titel, Tempo und Tonart da sind. Fehlt etwas,
+      bleibt die Zeile zum Nachfragen stehen
+- [x] **Alte Samples nachziehen** (14.11., gebaut, Abnahme offen): ein Knopf benennt die Spuren in S0001 bis
+      S0039 nach derselben Regel, mit Vorschau
+- [x] **Tempo aus der FLP**: steht keins im Namen, liest BeatOS es aus der FLP
+      und schlägt es vor
+- [x] **Kürzel lernen** (15.11., gebaut, Abnahme offen): bei unbekanntem ersten Wort (z. B. „Flute“) fragt
+      BeatOS einmal und merkt sich das Kürzel
+- [x] **„Passt zu“-Filter** (14.11., gebaut, Abnahme offen): Tempo und Tonart des laufenden Beats angeben, nur
       passende Samples sehen (gleiche Tonart, Paralleltonart; gleiches, halbes,
       doppeltes Tempo). Werte stehen im Namen (`PADS - DONT CRY [150 Bmin]`)
-- [ ] **Spuren eines Samples zusammen anhören**: alle Instrument-Spuren einer
+- [x] **Spuren eines Samples zusammen anhören** (15.11., gebaut, Abnahme offen): alle Instrument-Spuren einer
       Idee gleichzeitig abspielen, einzelne stummschalten (z. B. „Blue Hour“:
       Acoustic-Guitar, Bass-GTR, Nylon-Gtr, Rhythm-Gtr)
-- [ ] **„Beat daraus machen“**: am Sample ein Knopf, legt ein Projekt aus der
+- [x] **„Beat daraus machen“** (15.11., gebaut, Abnahme offen): am Sample ein Knopf, legt ein Projekt aus der
       Beat-Vorlage an, kopiert die WAVs hinein, Tempo und Tonart in die Notiz,
       öffnet FL. Tempo in der FLP setzen erst einmal nicht (hieße FLP schreiben)
 

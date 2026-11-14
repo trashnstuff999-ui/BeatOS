@@ -23,6 +23,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 base64 = "0.22"
 trash = "5"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+midly = { version = "0.5.3", default-features = false, features = ["std", "alloc"] }
+tauri-plugin-drag = "2.1.1"
 
 # Cover-Vorschauen: Bild-Entpacken ist unoptimiert ~10x langsamer, auch in `tauri dev`
 [profile.dev.package.image]

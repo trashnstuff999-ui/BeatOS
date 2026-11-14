@@ -116,6 +116,11 @@ use commands::{
     scan_neues,
     neu_uebernehmen,
     scan_samples,
+    sample_spuren,
+    midi_noten,
+    midi_ausschnitt,
+    beat_aus_sample,
+    samples_nachziehen,
     scan_alte_ideen,
     idee_in_produktion,
     move_to_samples,
@@ -184,6 +189,8 @@ pub(crate) fn asset_scope_freigeben(app: &tauri::AppHandle) {
     use tauri::Manager;
     let scope = app.asset_protocol_scope();
     if let Ok(settings) = commands::get_settings() {
+        // Läuft beim Start und nach jedem Speichern: auch die gelernten Kürzel frisch halten
+        utils::kuerzel_gelernt_setzen(settings.get("sample_kuerzel").map(String::as_str).unwrap_or(""));
         let mut dirs: Vec<String> = Vec::new();
         if let Some(archive) = settings.get("archive_path") {
             if !archive.trim().is_empty() {
@@ -240,6 +247,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_drag::init())
         // Merkt sich Größe und Position des Fensters über Neustarts hinweg —
         // Voraussetzung dafür, BeatOS dauerhaft neben FL Studio liegen zu haben.
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -371,6 +379,11 @@ pub fn run() {
             scan_neues,
             neu_uebernehmen,
             scan_samples,
+            sample_spuren,
+            midi_noten,
+            midi_ausschnitt,
+            beat_aus_sample,
+            samples_nachziehen,
             scan_alte_ideen,
             idee_in_produktion,
             move_to_samples,

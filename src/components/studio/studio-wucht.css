@@ -61,7 +61,7 @@
 /* Ideen-Zeilen */
 .sw-zl { position: relative; transition: background 0.2s, transform 0.2s; animation: sw-hoch 0.45s cubic-bezier(.2, .9, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 30ms + 0.1s); }
 .sw-zl::before {
-  content: ""; position: absolute; left: 40px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px;
+  content: ""; position: absolute; left: var(--leiste, 40px); top: 12px; bottom: 12px; width: 3px; border-radius: 3px;
   background: #fda124; box-shadow: 0 0 10px color-mix(in srgb, #fda124 64%, transparent); transform: scaleY(0); transition: transform 0.2s; z-index: 1;
 }
 .sw-zl:hover { transform: translateX(5px); }
@@ -93,6 +93,9 @@
 .sw-pcov:hover:not(:disabled) { transform: scale(1.05) rotate(-2deg); }
 
 @keyframes sw-hoch { from { opacity: 0; transform: translateY(18px); } }
+
+/* Samples: Wechsel zwischen Liste und Fokusansicht */
+.sw-fokus { animation: sw-hoch 0.3s cubic-bezier(.2, .9, .3, 1) backwards; }
 
 @media (prefers-reduced-motion: reduce) {
   [class*="sw-"], [class*="sw-"]::before, [class*="sw-"]::after, [class*="sw-"] * { animation: none !important; transition: none !important; }

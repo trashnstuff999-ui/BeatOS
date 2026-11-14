@@ -11,6 +11,7 @@
       "allow": [{ "path": "**" }]
     },
     "dialog:default",
+    "drag:default",
     "core:window:allow-set-always-on-top"
   ],
   "security": {
