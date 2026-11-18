@@ -70,10 +70,11 @@ pub fn parse_beat_folder_for_create(folder_path: String) -> Result<ParsedBeatFol
             .unwrap_or("")
             .to_lowercase();
         
-        if !is_audio_extension(&extension) {
+        // Stems sind kein Export: der Titel käme sonst aus `STEM - Drums.wav`
+        if !is_audio_extension(&extension) || crate::utils::ist_stem(&file_name) {
             continue;
         }
-        
+
         let meta = std::fs::metadata(&file_path).ok();
         let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
         let modified_secs = file_modified_secs(&file_path).unwrap_or(0);

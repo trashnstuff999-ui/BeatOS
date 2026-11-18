@@ -281,8 +281,45 @@ pub fn spur_kurz_mit(instrument: &str, gelernt: &[String]) -> String {
     w.join(" ")
 }
 
+/// Die Klammer der Namensregel mit Leerzeichen davor: ` [130 F#min]`, ` [130]`,
+/// ` [F#min]` oder leer. Jede Stelle, die Namen baut, holt sie hier
+/// (docs/namensregeln.md). Eine Tonart, die keine ist, bleibt wie getippt.
+pub fn klammer(key: Option<&str>, bpm: Option<i32>) -> String {
+    let key = key.map(str::trim).filter(|k| !k.is_empty())
+        .map(|k| if is_valid_key(k) { key_lang(k) } else { k.to_string() });
+    match (bpm, key) {
+        (Some(b), Some(k)) => format!(" [{} {}]", b, k),
+        (Some(b), None) => format!(" [{}]", b),
+        (None, Some(k)) => format!(" [{}]", k),
+        (None, None) => String::new(),
+    }
+}
+
+/// Zusatz einer Exportdatei, klein: das Wort hinter dem letzten `_`
+/// (`X_mix` → `mix`, `X_untagged_2` → `untagged`). Zähler und Namen ohne
+/// Wort dahinter (`Project_9`) haben keinen.
+pub fn export_zusatz(stem: &str) -> Option<String> {
+    let ohne_zaehler = match stem.rsplit_once('_') {
+        Some((b, z)) if !z.is_empty() && z.chars().all(|c| c.is_ascii_digit()) => b,
+        _ => stem,
+    };
+    let (_, z) = ohne_zaehler.rsplit_once('_')?;
+    (!z.is_empty() && z.chars().all(|c| c.is_ascii_alphabetic())).then(|| z.to_lowercase())
+}
+
+/// Etikett für einen Export: der eigene Zusatz bleibt (`_mix`, `_loop`), sonst
+/// WAV = `_untagged`, MP3 = `_tagged` (Stephan, 16.11.2026).
+pub fn export_etikett(stem: &str, ext: &str) -> String {
+    match (export_zusatz(stem), ext.to_lowercase().as_str()) {
+        (Some(z), _) => format!("_{}", z),
+        (None, "wav") => "_untagged".to_string(),
+        (None, "mp3") => "_tagged".to_string(),
+        _ => String::new(),
+    }
+}
+
 /// `bm` → `Bmin`, `b` → `Bmaj`, `f#m` → `F#min`, `bbm` → `Bbmin`, `Cmaj` → `Cmaj`.
-fn key_lang(k: &str) -> String {
+pub fn key_lang(k: &str) -> String {
     let mut c = k.chars();
     let wurzel = c.next().unwrap().to_ascii_uppercase();
     let rest = c.as_str().to_lowercase();
@@ -309,6 +346,21 @@ mod tests {
         assert_eq!(spur_kurz_mit("flute bass", &gelernt), "FLUTE BASS");
         assert_eq!(spur_kurz_mit("Acoustic-Guitar", &gelernt), "GTR ACOUSTIC");
         assert_eq!(spur_kurz_mit("flute guitar", &gelernt), "GTR FLUTE", "feste Kürzel gehen vor");
+    }
+
+    #[test]
+    fn klammer_und_etikett_nach_namensregel() {
+        assert_eq!(klammer(Some("f#m"), Some(130)), " [130 F#min]");
+        assert_eq!(klammer(Some("Bb"), None), " [Bbmaj]");
+        assert_eq!(klammer(Some(" "), Some(140)), " [140]");
+        assert_eq!(klammer(Some("C# minor"), None), " [C# minor]");
+        assert_eq!(klammer(None, None), "");
+        for (stem, ext, soll) in [("X [130 F#min]", "wav", "_untagged"), ("X", "mp3", "_tagged"), ("Project_9", "mp3", "_tagged"),
+            ("x_Mix", "wav", "_mix"), ("x_loop", "mp3", "_loop"), ("X_untagged_2", "wav", "_untagged"), ("X", "flp", "")] {
+            assert_eq!(export_etikett(stem, ext), soll, "{stem}.{ext}");
+        }
+        assert!(crate::utils::ist_stem("DRUMS - X [130 F#min]_stem.wav") && crate::utils::ist_stem("STEM - 808.wav"));
+        assert!(!crate::utils::ist_stem("X [130 F#min]_untagged.wav"));
     }
 
     #[test]
@@ -416,7 +468,7 @@ mod tests {
         assert_eq!((id.as_str(), name.as_str(), key.as_deref(), bpm), ("0145", "ANGER", Some("Am"), Some(160.0)));
         // Ein Titel, der mit B anfängt, bleibt Titel; „Bxyz“ ist keine Nummer
         assert_eq!(parse_beat_folder("Bounce - Night [140]").unwrap().0, "Bounce");
-        assert_eq!(crate::commands::build_archive_folder_name(145, "ANGER", Some("Am"), Some(160)), "B0145 - ANGER [Am 160]");
+        assert_eq!(crate::commands::build_archive_folder_name(145, "ANGER", Some("Am"), Some(160)), "B0145 - ANGER [160 Amin]");
     }
 
     #[test]

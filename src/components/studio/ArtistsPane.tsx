@@ -25,8 +25,10 @@ import { C, alpha, radius } from "../../lib/theme";
 import { api } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/time";
 import { useFocusRefresh } from "../../hooks/useFocusRefresh";
-import { useSettings } from "../../contexts/SettingsContext";
+import { useSettings, parseProductionPaths } from "../../contexts/SettingsContext";
+import { projectDisplayName, type StudioProject } from "../../types/studio";
 import { useFlVorlagen } from "../../hooks/useFlVorlagen";
+import { Griff } from "./SamplesPane";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { FlVorlage } from "../../lib/api";
 import { EmptyState, Button, IconButton, Modal, Segmented, Select } from "../ui";
@@ -331,7 +333,7 @@ export function ArtistsPane({ root, archivePath, active }: { root: string; archi
                 vorlagen={vorlagenVon("kuenstler")} onGeaendert={laden} />
             ) : (
               <SongDetail key={gewaehlt.s.path} song={gewaehlt.s} artist={gewaehlt.k} alleKuenstler={alleNamen} kuenstler={gewaehlt.k.name} bild={gewaehlt.k.bild} akzent={akzent}
-                onGeaendert={laden} onErledigt={l => erledigtSetzen(gewaehlt.s, l)} onVerschoben={p => { setAuswahl(p); laden(); }} downloads={downloads} uebernehmen={uebernehmen} />
+                vorlagen={vorlagenVon("kuenstler")} onGeaendert={laden} onErledigt={l => erledigtSetzen(gewaehlt.s, l)} onVerschoben={p => { setAuswahl(p); laden(); }} downloads={downloads} uebernehmen={uebernehmen} />
             )}
               </DetailPanel>
             )}
@@ -977,6 +979,7 @@ function SongDialog({ kuenstler, vorlagen, start, onClose }: {
   const vorlage = gewaehlteVorlage ?? vorlagen[0]?.pfad ?? "";
   const [name, setName] = useState("");
   const [nurMaster, setNurMaster] = useState(false);
+  const [beat, setBeat] = useState<BeatWahl | null>(null);
   const [downloads, setDownloads] = useState<{ name: string; path: string; geaendert: number }[]>([]);
   const [vonHand, setVonHand] = useState<Record<string, boolean>>({});
   const [laeuft, setLaeuft] = useState(false);
@@ -1002,11 +1005,24 @@ function SongDialog({ kuenstler, vorlagen, start, onClose }: {
       // FLP liegt in <Song>/01_SAVEFILES/ — zwei Ebenen hoch.
       const songPfad = flp.replace(/[\\/][^\\/]+[\\/][^\\/]+$/, "");
       if (nurMaster) await api.artists.setNurMaster(songPfad, true);
-      if (mit.length > 0) {
-        const erg = await api.artists.assetsFuellen(songPfad, mit.map(d => d.path));
-        const schief = erg.filter(e => !e.ok);
+      // Der Song steht: was jetzt schiefgeht, wird gemeldet, nicht verschluckt.
+      const schief: string[] = [];
+      if (beat) {
+        try {
+          await api.artists.setBeat(songPfad, beat.beatId, beat.projekt);
+          if (beat.beatId) {
+            const daten = await api.upload.getData(beat.beatId);
+            await api.artists.beatHolen(songPfad, daten.beat.path, daten.assets.wav);
+          } else if (beat.projekt) {
+            await api.artists.beatHolen(songPfad, beat.projekt, null);
+          }
+        } catch (e) { schief.push(`Beat ${beat.nummer}: ${String(e)}`); }
+      }
+      if (mit.length > 0 || schief.length > 0) {
+        const erg = mit.length > 0 ? await api.artists.assetsFuellen(songPfad, mit.map(d => d.path)) : [];
+        schief.push(...erg.filter(e => !e.ok).map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`));
         if (schief.length > 0) {
-          setFehler(`Song angelegt, aber: ${schief.map(e => `${e.pfad.split(/[\\/]/).pop()} ${e.meldung}`).join("; ")}`);
+          setFehler(`Song angelegt, aber: ${schief.join("; ")}`);
           setAngelegt(true);
           setLaeuft(false);
           return;
@@ -1072,6 +1088,21 @@ function SongDialog({ kuenstler, vorlagen, start, onClose }: {
             panelWidth={300} triggerStyle={{ width: "100%", height: 36 }} />
         </label>
       )}
+
+      <div style={{ marginTop: 16 }}>
+        <span style={beschriftung}>Mein Beat</span>
+        {beat ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.onSurface }}>
+            <Music2 size={13} color={C.primary} />
+            <span style={{ fontWeight: 600 }}>{beat.nummer} · {beat.text}</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>WAV + Stems nach 02_ASSETS</span>
+            <IconButton icon={X} size={28} variant="ghost" title="Ohne Beat" onClick={() => setBeat(null)} />
+          </div>
+        ) : (
+          <BeatSuche onWahl={setBeat} platzhalter="Beat suchen: Katalog oder Produktion (Name oder Nummer)" />
+        )}
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <span style={beschriftung}>Aus den Downloads in 02_ASSETS</span>
@@ -1198,7 +1229,7 @@ const HOEREN: { art: ArtistSong["audio"][number]["art"]; label: string }[] = [
 
 /** Song-Panel: Kopf mit Cover, eine Aktionszeile, Stand, Hinweise nur bei Bedarf,
  *  Versionen, Credits, Notiz, Abgeben unten fest. Seltenes hinter ⋯. */
-function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, onGeaendert, onErledigt, onVerschoben, downloads, uebernehmen }: {
+function SongDetail({ song: s, artist, alleKuenstler, kuenstler, vorlagen, bild, akzent, onGeaendert, onErledigt, onVerschoben, downloads, uebernehmen }: {
   /** Haken setzen, wirkt sofort. */
   onErledigt: (liste: string[]) => void;
   /** Nach dem Verschieben in ein Release: neuer Pfad. */
@@ -1209,6 +1240,8 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
   /** Namen aller Künstler, als Gäste wählbar. */
   alleKuenstler: string[];
   kuenstler: string;
+  /** FLPs aus FL/Mix-Master und FL/Recording, für „Neuer Mix" */
+  vorlagen: FlVorlage[];
   /** Profilbild des Künstlers — als Cover im Player. */
   bild: string | null;
   akzent: string;
@@ -1218,7 +1251,7 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
 }) {
   const [abgabeOffen, setAbgabeOffen] = useState(false);
   const [menue, setMenue] = useState(false);
-  const [dialog, setDialog] = useState<"verschieben" | "zusammen" | null>(null);
+  const [dialog, setDialog] = useState<"verschieben" | "zusammen" | "mix" | null>(null);
   const [notiz, setNotiz] = useState(s.notiz ?? "");
   const [fehler, setFehler] = useState<string | null>(null);
   // Standard: die neueste FLP. Neuer Song gewählt → wieder die neueste.
@@ -1237,6 +1270,15 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
       .catch(e => setFehler(String(e)));
   };
   const fehlerVon = (e: unknown) => setFehler(String(e));
+  // Neuer Mix: FLP aus der Vorlage, in FL öffnen, Mix/Master/Abgegeben zurück.
+  const neuerMix = (vorlage: string) => {
+    setDialog(null);
+    api.artists.neuerMix(s.path, vorlage).then(neu => {
+      setFlp(neu);
+      openPath(neu).catch(e => setFehler(`FLP ließ sich nicht öffnen: ${String(e)}`));
+      onErledigt(s.vocals ? ["vocals"] : []);
+    }).catch(fehlerVon);
+  };
   const datum = (t: number) => new Date(t * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const abspielen = (pfad: string, label: string) => {
     const id = `kuenstler:${pfad}`;
@@ -1287,6 +1329,11 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
                 position: "absolute", top: 34, right: 0, zIndex: 2, minWidth: 220, padding: 4, display: "flex", flexDirection: "column",
                 background: C.surfaceContainerHigh, border: `1px solid ${C.border30}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
               }}>
+                {!s.im_fertig && menuePunkt("Neuer Mix", () => {
+                  if (vorlagen.length === 0) setFehler("Keine Vorlage in FL/Mix-Master oder FL/Recording");
+                  else if (vorlagen.length === 1) neuerMix(vorlagen[0].pfad);
+                  else setDialog("mix");
+                })}
                 {menuePunkt("Verschieben nach …", () => setDialog("verschieben"))}
                 {menuePunkt("Zusammenführen mit …", () => setDialog("zusammen"))}
                 {!s.fertig && menuePunkt(s.nur_master ? "Mix & Master" : "Nur Master", () => api.artists.setNurMaster(s.path, !s.nur_master).then(onGeaendert).catch(fehlerVon))}
@@ -1424,6 +1471,21 @@ function SongDetail({ song: s, artist, alleKuenstler, kuenstler, bild, akzent, o
       {dialog === "verschieben" && (
         <VerschiebenDialog song={s} artist={artist} onClose={() => setDialog(null)} onFertig={p => { setDialog(null); onVerschoben(p); }} />
       )}
+      {dialog === "mix" && (
+        <Modal icon={FolderPlus} title="Neuer Mix" subtitle="Vorlage wählen" width={420} onClose={() => setDialog(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {vorlagen.map(v => (
+              <button key={v.pfad} onClick={() => neuerMix(v.pfad)} className="kw-heben" style={{
+                display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 8, textAlign: "left",
+                border: `1px solid ${C.border10}`, background: C.surfaceContainerLow, color: C.onSurface, fontFamily: "inherit", fontSize: 13, cursor: "pointer",
+              }}>
+                <span style={{ fontWeight: 600 }}>{v.name}</span>
+                <span style={{ color: C.onSurfaceVariant }}>{v.ordner}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
       {dialog === "zusammen" && (
         <ZusammenDialog song={s} artist={artist} onClose={() => setDialog(null)} onFertig={p => { setDialog(null); onVerschoben(p); }} />
       )}
@@ -1446,20 +1508,31 @@ function Versionen({ song: s, abspielen, laeuftPfad, stil, ueber }: {
   const [alle, setAlle] = useState(false);
   if (s.audio.length === 0) return null;
   const label = (art: string) => HOEREN.find(h => h.art === art)?.label ?? art;
-  const neueste = HOEREN.map(h => s.audio.find(a => a.art === h.art)).filter((a): a is ArtistSong["audio"][number] => !!a);
-  const zeilen = alle ? s.audio : neueste;
-  const rest = s.audio.length - neueste.length;
+  // Stems stehen alle nebeneinander, jeder ein Griff.
+  const stems = s.audio.filter(a => a.art === "stems").sort((a, b) => a.name.localeCompare(b.name));
+  const audio = s.audio.filter(a => a.art !== "stems");
+  const neueste = HOEREN.map(h => audio.find(a => a.art === h.art)).filter((a): a is ArtistSong["audio"][number] => !!a);
+  const zeilen = alle ? audio : neueste;
+  const rest = audio.length - neueste.length;
   return (
     <div style={stil}>
       <span style={ueber}>Versionen</span>
       {zeilen.map(a => (
-        <div key={a.path} style={{ display: "grid", gridTemplateColumns: "60px minmax(0, 1fr) auto 28px", gap: 8, alignItems: "center", fontSize: 12 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant }}>{label(a.art)}</span>
+        <div key={a.path} style={{ display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) auto 28px", gap: 8, alignItems: "center", fontSize: 12 }}>
+          <span><Griff pfad={a.path} text={label(a.art)} farbe={C.primary} hinweis={`${a.name} nach FL ziehen`} /></span>
           <span title={a.name} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.onSurface }}>{a.name}</span>
           <span style={{ fontSize: 11, color: C.onSecondaryFixedVar, whiteSpace: "nowrap" }}>{formatRelativeTime(a.geaendert)}</span>
           <IconButton icon={laeuftPfad === a.path ? Pause : Play} size={26} variant="secondary" title={`${a.name} abspielen`} onClick={() => abspielen(a.path, label(a.art))} />
         </div>
       ))}
+      {stems.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {stems.map(a => (
+            <Griff key={a.path} pfad={a.path} farbe={C.primary} hinweis={`${a.name} nach FL ziehen`}
+              text={a.name.replace(/^stem - /i, "").replace(/\.[^.]+$/, "")} />
+          ))}
+        </div>
+      )}
       {rest > 0 && (
         <button onClick={() => setAlle(x => !x)} style={{ alignSelf: "flex-start", border: "none", background: "transparent", color: C.onSurfaceVariant, fontFamily: "inherit", fontSize: 12, fontWeight: 600, padding: 0, cursor: "pointer" }}>
           {alle ? "Nur die neuesten" : `+ ${rest} ältere`}
@@ -1469,6 +1542,76 @@ function Versionen({ song: s, abspielen, laeuftPfad, stil, ueber }: {
   );
 }
 
+/** Meldung nach „Beat holen": was kopiert wurde. */
+function geholtText(g: { wav: boolean; stems: number; schon_da: number }): string {
+  const neu = [g.wav ? "WAV" : null, g.stems === 1 ? "1 Stem" : g.stems > 1 ? `${g.stems} Stems` : null].filter(Boolean);
+  if (neu.length > 0) return `${neu.join(" + ")} kopiert`;
+  return g.schon_da > 0 ? "Schon im Song" : "Keine WAV, keine Stems im Beat-Ordner";
+}
+
+/** „Mein Beat": ein Katalog-Beat oder ein Projekt aus der Produktion. */
+type BeatWahl = { beatId: string | null; projekt: string | null; nummer: string; text: string };
+
+/** Beat-Suche: Katalog und Projekte aus der Produktion. Feld und Trefferliste, Klick wählt. */
+function BeatSuche({ onWahl, platzhalter }: { onWahl: (w: BeatWahl) => void; platzhalter: string }) {
+  const { settings } = useSettings();
+  const [suche, setSuche] = useState("");
+  const [beats, setBeats] = useState<Beat[]>([]);
+  const [projekte, setProjekte] = useState<StudioProject[]>([]);
+  // Projekte einmal scannen, sobald gesucht wird.
+  const aktiv = suche.trim() !== "";
+  useEffect(() => {
+    const roots = parseProductionPaths(settings.productionPath);
+    if (!aktiv || roots.length === 0) return;
+    let ab = false;
+    api.studio.scanProjects(roots).then(p => { if (!ab) setProjekte(p); }).catch(() => {});
+    return () => { ab = true; };
+  }, [aktiv, settings.productionPath]);
+  useEffect(() => {
+    if (!suche.trim()) { setBeats([]); return; }
+    let ab = false;
+    const t = setTimeout(() => {
+      api.beats.getAll({ search: suche.trim(), onlyFavs: false, limit: 6, offset: 0 })
+        .then(b => { if (!ab) setBeats(b); }).catch(() => {});
+    }, 150);
+    return () => { ab = true; clearTimeout(t); };
+  }, [suche]);
+  const q = suche.trim().toLowerCase();
+  const treffer: BeatWahl[] = !q ? [] : [
+    ...beats.map(b => ({ beatId: b.id, projekt: null, nummer: b.id, text: beatInfo(b) })),
+    ...projekte.filter(p => `${p.name} ${p.song_name ?? ""}`.toLowerCase().includes(q)).slice(0, 4)
+      .map(p => ({ beatId: null, projekt: p.path, nummer: p.name.split(/[ _-]/)[0], text: beatInfo({ name: projectDisplayName(p), bpm: p.bpm, key: p.key }) })),
+  ];
+  return (
+    <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 6 }}>
+      <input value={suche} onChange={e => setSuche(e.target.value)} placeholder={platzhalter} aria-label="Beat suchen"
+        style={{
+          padding: "5px 8px", fontSize: 12, fontFamily: "inherit", background: C.surfaceContainerLowest, color: C.onSurface,
+          outline: "none", border: `1px solid ${C.border20}`, borderRadius: radius.control,
+        }} />
+      {treffer.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", border: `1px solid ${C.border10}`, borderRadius: radius.control }}>
+          {treffer.map(w => (
+            <button key={w.beatId ?? w.projekt} onClick={() => { setSuche(""); onWahl(w); }} style={{
+              display: "flex", gap: 8, padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, color: C.onSurface, textAlign: "left",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ color: C.onSecondaryFixedVar, width: 44 }}>{w.nummer}</span>
+              {w.text}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const beatInfo = (b: { name: string; bpm: number | null; key: string | null }) =>
+  [b.name, b.bpm ? `${Math.round(b.bpm)} BPM` : null, b.key].filter(Boolean).join(" · ");
+
 /** „Mein Beat": welcher Katalog-Beat im Song steckt — mit BPM und Tonart,
  *  die WAV in 02_ASSETS kopieren oder für Stems die FLP des Beats öffnen.
  *  Verwendet die FLP schon Dateien eines Beats, wird er vorgeschlagen. */
@@ -1476,8 +1619,6 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
   const id = s.beat_id ?? null;
   const [daten, setDaten] = useState<UploadData | null>(null);
   const [vorschlag, setVorschlag] = useState<UploadData | null>(null);
-  const [suche, setSuche] = useState("");
-  const [treffer, setTreffer] = useState<Beat[]>([]);
   const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -1488,23 +1629,15 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
     setVorschlag(null);
     if (!id && s.beat_vorschlag) api.upload.getData(s.beat_vorschlag).then(setVorschlag).catch(() => {});
   }, [id, s.beat_vorschlag]);
-  useEffect(() => {
-    if (id || !suche.trim()) { setTreffer([]); return; }
-    let ab = false;
-    const t = setTimeout(() => {
-      api.beats.getAll({ search: suche.trim(), onlyFavs: false, limit: 6, offset: 0 })
-        .then(b => { if (!ab) setTreffer(b); }).catch(() => {});
-    }, 150);
-    return () => { ab = true; clearTimeout(t); };
-  }, [suche, id]);
 
-  const setzen = (beatId: string | null) => {
+  const setzen = (beatId: string | null, projekt: string | null = null) => {
     setMeldung(null);
-    setSuche("");
-    api.artists.setBeat(s.path, beatId).then(onGeaendert).catch(e => setMeldung({ ok: false, text: String(e) }));
+    api.artists.setBeat(s.path, beatId, projekt).then(onGeaendert).catch(e => setMeldung({ ok: false, text: String(e) }));
   };
-  const info = (b: { name: string; bpm: number | null; key: string | null }) =>
-    [b.name, b.bpm ? `${Math.round(b.bpm)} BPM` : null, b.key].filter(Boolean).join(" · ");
+  const holen = (ordner: string, wav: string | null) => api.artists.beatHolen(s.path, ordner, wav)
+    .then(g => { setMeldung({ ok: true, text: geholtText(g) }); onGeaendert(); })
+    .catch(e => setMeldung({ ok: false, text: String(e) }));
+  const info = beatInfo;
 
   const zeile: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 };
   const beschriftung = (
@@ -1514,22 +1647,17 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
   );
 
   if (id) {
-    const wav = daten?.assets.wav ?? null;
-    const wavPfad = wav && daten ? `${daten.beat.path.replace(/[\\/]+$/, "")}\\${wav}` : null;
-    const schonDa = !!wav && s.dateien.includes(wav);
     return (
       <div style={zeile}>
         {beschriftung}
         <Music2 size={13} color={C.primary} />
         <span style={{ fontWeight: 600, color: C.onSurface }}>{daten ? info(daten.beat) : id}</span>
         <span style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon={FolderInput} disabled={!wavPfad || schonDa}
-          title={!wav ? "Keine WAV im Beat-Ordner" : schonDa ? `${wav} liegt schon im Song` : `${wav} nach 02_ASSETS kopieren`}
-          onClick={() => wavPfad && api.artists.beatKopieren(s.path, wavPfad)
-            .then(() => { setMeldung({ ok: true, text: `${wav} kopiert` }); onGeaendert(); })
-            .catch(e => setMeldung({ ok: false, text: String(e) }))}
+        <Button variant="secondary" size="sm" icon={FolderInput} disabled={!daten}
+          title="WAV und Stems nach 02_ASSETS kopieren"
+          onClick={() => daten && holen(daten.beat.path, daten.assets.wav)}
         >
-          WAV kopieren
+          Beat holen
         </Button>
         <Button variant="secondary" size="sm" icon={FolderTree} disabled={!daten?.assets.flp_path}
           title={daten?.assets.flp_path ? "FLP des Beats öffnen" : "Keine FLP im Beat-Ordner"}
@@ -1543,9 +1671,29 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
     );
   }
 
+  // Noch in der Produktion: der Projektordner. Beim Archivieren wird daraus der Katalog-Beat.
+  if (s.projekt) {
+    const ordner = s.projekt;
+    return (
+      <div style={zeile}>
+        {beschriftung}
+        <Music2 size={13} color={C.primary} />
+        <span style={{ fontWeight: 600, color: C.onSurface }}>{ordner.split(/[\\/]/).pop()}</span>
+        <span style={{ color: C.onSurfaceVariant }}>In Produktion</span>
+        <span style={{ flex: 1 }} />
+        <Button variant="secondary" size="sm" icon={FolderInput} title="Neuesten Export und Stems nach 02_ASSETS kopieren"
+          onClick={() => holen(ordner, null)}>Beat holen</Button>
+        <Button variant="secondary" size="sm" icon={FolderTree} title="Projektordner öffnen"
+          onClick={() => openPath(ordner).catch(e => setMeldung({ ok: false, text: String(e) }))}>Ordner</Button>
+        <IconButton icon={X} size={28} variant="ghost" title="Verknüpfung lösen" onClick={() => setzen(null)} />
+        {meldung && <span style={{ width: "100%", paddingLeft: 88, color: meldung.ok ? C.mint : C.error }}>{meldung.text}</span>}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={zeile}>
+      <div style={{ ...zeile, alignItems: "flex-start" }}>
         {beschriftung}
         {vorschlag && (
           <Button variant="secondary" size="sm" icon={Music2}
@@ -1555,34 +1703,9 @@ function MeinBeat({ song: s, onGeaendert }: { song: ArtistSong; onGeaendert: () 
             {info(vorschlag.beat)} verknüpfen
           </Button>
         )}
-        <input
-          value={suche}
-          onChange={e => setSuche(e.target.value)}
-          placeholder={vorschlag ? "… oder einen anderen Beat suchen" : "Beat aus dem Katalog suchen (Name oder Nummer)"}
-          aria-label="Beat suchen"
-          style={{
-            flex: 1, minWidth: 200, padding: "5px 8px", fontSize: 12, fontFamily: "inherit",
-            background: C.surfaceContainerLowest, color: C.onSurface, outline: "none",
-            border: `1px solid ${C.border20}`, borderRadius: radius.control,
-          }}
-        />
+        <BeatSuche onWahl={w => setzen(w.beatId, w.projekt)}
+          platzhalter={vorschlag ? "… oder einen anderen Beat suchen" : "Beat suchen: Katalog oder Produktion (Name oder Nummer)"} />
       </div>
-      {treffer.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", marginLeft: 88, border: `1px solid ${C.border10}`, borderRadius: radius.control }}>
-          {treffer.map(b => (
-            <button key={b.id} onClick={() => setzen(b.id)} style={{
-              display: "flex", gap: 8, padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer",
-              fontFamily: "inherit", fontSize: 12, color: C.onSurface, textAlign: "left",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = C.surfaceContainerHigh; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ color: C.onSecondaryFixedVar, width: 36 }}>{b.id}</span>
-              {info(b)}
-            </button>
-          ))}
-        </div>
-      )}
       {meldung && <span style={{ marginLeft: 88, fontSize: 12, color: meldung.ok ? C.mint : C.error }}>{meldung.text}</span>}
     </div>
   );

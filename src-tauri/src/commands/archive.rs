@@ -424,7 +424,8 @@ pub(crate) fn build_archive_folder_name(
     key: Option<&str>,
     bpm: Option<i32>,
 ) -> String {
-    ordnername_mit('B', catalog_id, title, key, bpm)
+    // Namensregel: der Titel eines Beats steht groß
+    ordnername_mit('B', catalog_id, &title.to_uppercase(), key, bpm)
 }
 
 /// „B0145 - Titel [Key BPM]“, „S0012 - …“, „R0003 - …“: Präfix je Bibliotheksteil
@@ -435,17 +436,12 @@ pub(crate) fn ordnername_mit(
     key: Option<&str>,
     bpm: Option<i32>,
 ) -> String {
-    let key_bpm = match (key, bpm) {
-        (Some(k), Some(b)) => format!("[{} {}]", k, b),
-        (Some(k), None) => format!("[{}]", k),
-        (None, Some(b)) => format!("[{}]", b),
-        (None, None) => String::new(),
-    };
+    let key_bpm = crate::utils::klammer(key, bpm);
     // Titles come from user input / parsed filenames — strip anything Windows
     // refuses in a folder name before building the path.
     let safe_title = crate::utils::sanitize_filename_part(title);
     crate::utils::sanitize_filename_part(
-        format!("{}{:04} - {} {}", praefix, catalog_id, safe_title, key_bpm).trim(),
+        format!("{}{:04} - {}{}", praefix, catalog_id, safe_title, key_bpm).trim(),
     )
 }
 
@@ -592,6 +588,10 @@ fn archive_beat_inner(
                 || file_name.eq_ignore_ascii_case("03_PROJECTS")
             {
                 savefiles_dir.to_path_buf()
+            } else if file_name.eq_ignore_ascii_case(crate::utils::STEMS_PROJEKT) {
+                // `Stems` aus der Produktion wird `03_STEMS`; ein leerer Ordner zieht nicht um
+                if std::fs::read_dir(&path).map_or(true, |mut d| d.next().is_none()) { continue; }
+                target_path.join(crate::utils::STEMS_ORDNER)
             } else {
                 unique_dest(savefiles_dir, &file_name)
             };
@@ -606,13 +606,19 @@ fn archive_beat_inner(
             //   audio / video / image  -> beat root, original name
             //   flp / everything else  -> 01_SAVEFILES/, original name
             // No renaming happens here; that's the job of the convert tool.
-            let dest_dir = if is_audio_extension(&ext)
+            // Stems (`STEM - Drums.wav`) sind kein Export: eigener Ordner,
+            // damit WAV-Erkennung und 02_OLD-Aufräumen sie nicht anfassen.
+            let stems_dir = target_path.join(crate::utils::STEMS_ORDNER);
+            let dest_dir = if is_audio_extension(&ext) && crate::utils::ist_stem(&file_name) {
+                std::fs::create_dir_all(&stems_dir).map_err(|e| format!("Cannot create {}: {}", crate::utils::STEMS_ORDNER, e))?;
+                stems_dir.as_path()
+            } else if is_audio_extension(&ext)
                 || is_video_extension(&ext)
                 || is_image_extension(&ext)
             {
-                &target_path
+                target_path
             } else {
-                &savefiles_dir
+                savefiles_dir
             };
 
             let dest = unique_dest(dest_dir, &file_name);
@@ -681,6 +687,9 @@ fn archive_beat_inner(
     ).map_err(|e| format!("DB insert error: {}", e))?;
     tx.execute("UPDATE beats SET alte_id = ?1, begonnen = ?2 WHERE id = ?3", rusqlite::params![alte_id, begonnen, beat_id])
         .map_err(|e| format!("DB insert error: {}", e))?;
+    // Artist-Songs, die das Projekt als „Mein Beat" hatten, zeigen jetzt auf den Katalog-Beat.
+    crate::commands::artists::projekt_ist_beat(&tx, params.source_folder.trim_end_matches(['/', '\\']), &beat_id)
+        .map_err(|e| format!("DB insert error: {}", e))?;
     tx.commit().map_err(|e| format!("DB commit error: {}", e))?;
 
     // Auto-rename: apply the same filename convention as the Upload-tab
@@ -697,6 +706,14 @@ fn archive_beat_inner(
         // Ohne Auto-Rename bleiben die Originalnamen — aber im Root soll trotzdem
         // nur die neueste MP3/WAV liegen, der Rest wandert nach 02_OLD/.
         crate::commands::sweep_old_audio(target_path);
+    }
+
+    // Die FLPs zeigen noch in den Produktionsordner, der gleich in den Papierkorb
+    // geht: was sie von dort brauchen, liegt jetzt im Beat (sonst wird es geholt),
+    // die Verweise ziehen um. Ein Problem dabei ist eine Warnung, kein Abbruch.
+    if let Err(e) = crate::commands::pfadreparatur::unsichere_holen(target_path, true) {
+        let w = format!("FLP-Pfade nicht nachgezogen: {}", e);
+        warning = Some(warning.map_or(w.clone(), |v| format!("{}; {}", v, w)));
     }
 
     // Refresh the OneDrive snapshot in the background after a successful write.

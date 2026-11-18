@@ -269,13 +269,18 @@ fn flp_work_minutes_from(b: &[u8]) -> Option<u32> {
 }
 
 /// One project folder → StudioProject (None if it contains no FLP).
-fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
+fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> { scan_dir(dir, root, false) }
+
+/// `ohne_flp`: ein Sample aus losen Spuren hat keine FLP und zählt trotzdem,
+/// sobald Audio oder MIDI im Ordner liegt.
+fn scan_dir(dir: &Path, root: &str, ohne_flp: bool) -> Option<StudioProject> {
     let mut flps: Vec<(u64, PathBuf)> = Vec::new();
     let mut has_mp3 = false;
     let mut has_wav = false;
     let mut has_cover = false;
     let mut has_thumbnail = false;
     let mut has_video = false;
+    let mut has_midi = false;
     // (Rang, Pfad): 0 = heißt „Cover…", 1 = irgendein anderes Bild
     let mut cover: Option<(u8, String)> = None;
     // Exported audio: (rank, modified, filename) — rank 1 = mp3 beats wav.
@@ -301,6 +306,8 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
             let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
             let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
             let name_lower = file_name.to_lowercase();
+            // Stems sind Einzelspuren, kein Export: weder „WAV da" noch Songtitel.
+            if crate::utils::ist_stem(&file_name) { continue; }
             if ext == "mp3" { has_mp3 = true; }
             if ext == "wav" { has_wav = true; }
             if ext == "mp3" || ext == "wav" {
@@ -317,6 +324,7 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
                 }
             }
             if is_video_extension(&ext) { has_video = true; }
+            if ext == "mid" { has_midi = true; }
         }
     };
 
@@ -336,11 +344,12 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         }
     }
 
-    if flps.is_empty() {
+    if flps.is_empty() && !(ohne_flp && (has_wav || has_mp3 || has_midi)) {
         return None;
     }
     flps.sort_by_key(|(secs, _)| *secs);
-    let (newest_secs, newest_flp) = flps.last().cloned()?;
+    let newest_secs = flps.last().map_or(0, |(s, _)| *s);
+    let newest_flp = flps.last().map(|(_, p)| p.to_string_lossy().to_string());
 
     // Newest first for the inspector's version list
     let flp_entries: Vec<FlpEntry> = flps
@@ -382,7 +391,7 @@ fn scan_project_dir(dir: &Path, root: &str) -> Option<StudioProject> {
         song_name,
         key,
         bpm,
-        newest_flp: Some(newest_flp.to_string_lossy().to_string()),
+        newest_flp,
         flp_count: flps.len(),
         // Die Zeit läuft über „Speichern unter" weiter — die größte zählt
         work_minutes: flps.iter().filter_map(|(_, p)| flp_work_minutes(p)).max(),
@@ -657,9 +666,9 @@ fn duplicate_project_ids(paths: &[String]) -> Vec<(u32, Vec<String>)> {
 }
 
 // ─── Beat benennen (docs/beat-umbenennen.md) ─────────────────────────────────
-// Name, Tonart und BPM landen im Ordnernamen (`Project_0796 - NAME [Cm 140]`),
+// Name, Tonart und BPM landen im Ordnernamen (`Project_0796 - NAME [140 Cmin]`),
 // der Scan liest sie von dort zurück. Die Exporte im Ordner-Root ziehen mit
-// (`NAME [Cm 140]_untagged.wav`), von den FLPs nur die neueste. Ältere
+// (`NAME [140 Cmin]_untagged.wav`), von den FLPs nur die neueste. Ältere
 // Versionen behalten ihren Namen (Entscheidung 29.10.2026: die Herkunft bleibt
 // erkennbar).
 
@@ -677,18 +686,9 @@ pub struct ProjectRenamePlan {
     pub files: Vec<RenameOp>,
 }
 
-/// Rollen-Endungen, die beim Umbenennen erhalten bleiben (wie parse_audio_filename).
-const EXPORT_ROLLEN: [&str; 5] = ["untagged", "tagged", "unmastered", "master", "final"];
-
-/// `NAME [Cm 140]`, `NAME [Cm]`, `NAME [140]` oder nur `NAME`.
+/// `NAME [140 Cmin]`, `NAME [Cmin]`, `NAME [140]` oder nur `NAME` (docs/namensregeln.md).
 fn beat_basisname(name: &str, key: Option<&str>, bpm: Option<i32>) -> String {
-    let klammer = match (key, bpm) {
-        (Some(k), Some(b)) => format!(" [{} {}]", k, b),
-        (Some(k), None) => format!(" [{}]", k),
-        (None, Some(b)) => format!(" [{}]", b),
-        (None, None) => String::new(),
-    };
-    sanitize_filename_part(&format!("{}{}", sanitize_filename_part(name.trim()), klammer))
+    sanitize_filename_part(&format!("{}{}", sanitize_filename_part(name.trim()).to_uppercase(), crate::utils::klammer(key, bpm)))
 }
 
 /// Ordnername: die Nummer bleibt (auf `Project_0796` normalisiert), der Rest
@@ -725,7 +725,7 @@ fn plan_rename(dir: &Path, name: &str, key: Option<&str>, bpm: Option<i32>) -> R
     let mut files = Vec::new();
     // Exporte im Root: je (Endung, Rolle) bekommt der neueste den sauberen
     // Namen, ältere _2, _3 … in Altersreihenfolge.
-    let mut gruppen: HashMap<(String, Option<String>), Vec<(u64, String)>> = HashMap::new();
+    let mut gruppen: HashMap<(String, String), Vec<(u64, String)>> = HashMap::new();
     for e in std::fs::read_dir(dir).map_err(|e| e.to_string())?.filter_map(|e| e.ok()) {
         let p = e.path();
         let Some(ext) = p.extension().and_then(|x| x.to_str()).map(str::to_lowercase) else { continue };
@@ -733,10 +733,11 @@ fn plan_rename(dir: &Path, name: &str, key: Option<&str>, bpm: Option<i32>) -> R
             continue;
         }
         let datei = e.file_name().to_string_lossy().to_string();
+        // Stems tragen keinen Beat-Namen als Export: sie bleiben, wie sie sind
+        if crate::utils::ist_stem(&datei) { continue; }
         let stamm = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let rolle = stamm.rsplit_once('_')
-            .map(|(_, r)| r.to_lowercase())
-            .filter(|r| EXPORT_ROLLEN.contains(&r.as_str()));
+        // Eigener Zusatz (`_mix`) bleibt, sonst WAV `_untagged`, MP3 `_tagged`
+        let rolle = crate::utils::export_etikett(stamm, &ext);
         let zeit = e.metadata().and_then(|m| m.modified()).ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
         gruppen.entry((ext, rolle)).or_default().push((zeit, datei));
@@ -744,7 +745,6 @@ fn plan_rename(dir: &Path, name: &str, key: Option<&str>, bpm: Option<i32>) -> R
     for ((ext, rolle), mut liste) in gruppen {
         liste.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         for (i, (_, from)) in liste.into_iter().enumerate() {
-            let rolle = rolle.as_deref().map(|r| format!("_{}", r)).unwrap_or_default();
             let nr = if i == 0 { String::new() } else { format!("_{}", i + 1) };
             files.push(RenameOp { to: format!("{}{}{}.{}", basis, rolle, nr, ext), from });
         }
@@ -790,6 +790,7 @@ pub fn apply_project_rename(path: String, name: String, key: Option<String>, bpm
             "UPDATE OR REPLACE studio_projects SET path = ?1 WHERE path = ?2",
             rusqlite::params![neu, path],
         ).map_err(|e| e.to_string())?;
+        crate::commands::artists::projekt_umhaengen(&conn, &path, &neu).map_err(|e| e.to_string())?;
     }
     Ok(neu)
 }
@@ -894,6 +895,10 @@ pub fn create_project_folder(
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Ordner konnte nicht angelegt werden: {}", e))?;
 
+    // Ein Projekt (P-Nummer) bekommt gleich seinen Stems-Ordner; Samples und Songs nicht
+    if parse_project_id(&folder).is_some() {
+        let _ = std::fs::create_dir(dir.join(crate::utils::STEMS_PROJEKT));
+    }
     let dest = dir.join(format!("{}.flp", folder));
     if let Err(e) = crate::utils::copy_and_verify(template, &dest) {
         // Halbfertigen Ordner nicht liegen lassen
@@ -1048,7 +1053,7 @@ pub async fn scan_samples(root: String) -> Result<Vec<StudioProject>, String> {
             .filter(|e| e.path().is_dir())
             // `_MIDI` und Co. sind Ablagen, keine Samples
             .filter(|e| !e.file_name().to_string_lossy().starts_with('_'))
-            .filter_map(|e| scan_project_dir(&e.path(), &root))
+            .filter_map(|e| scan_dir(&e.path(), &root, true))
             .collect()
     })
     .await
@@ -1437,6 +1442,7 @@ pub fn samples_nachziehen(root: String, anwenden: bool) -> Vec<[String; 3]> {
         .map(|e| e.path()).filter(|p| p.is_dir()).collect();
     ordner.sort();
     let mut liste = Vec::new();
+    let mut umbenannt: Vec<(PathBuf, PathBuf)> = Vec::new();
     for o in ordner {
         let name = datei(&o);
         // `S0039 - RUNAWAY [158 Dmin]` → `RUNAWAY [158 Dmin]`
@@ -1448,17 +1454,86 @@ pub fn samples_nachziehen(root: String, anwenden: bool) -> Vec<[String; 3]> {
         for (von, nach) in spuren_plan(&o, titel, titel) {
             if !anwenden || std::fs::rename(&von, &nach).is_ok() {
                 liste.push([name.clone(), datei(&von), datei(&nach)]);
+                if anwenden { umbenannt.push((von, nach)); }
             }
         }
     }
+    beats_nachziehen(umbenannt);
     liste
+}
+
+const NACHZUG_ANLASS: &str = "vor Sample-Umbenennung";
+
+/// Beats, die ein umbenanntes Sample benutzen, ziehen nach (alt → neu, Ordner oder
+/// Datei). Im Hintergrund, weil dafür jede FLP der Bibliothek gelesen wird (6000+, ~45 s).
+/// In FL offene Beats warten, bis FL sie schließt: sonst schriebe FL beim Speichern die
+/// alten Pfade zurück. Die Warteliste liegt als Datei neben der DB und übersteht einen
+/// Neustart (`nachzuege_fortsetzen`).
+fn beats_nachziehen(paare: Vec<(PathBuf, PathBuf)>) {
+    if paare.is_empty() { return; }
+    std::thread::spawn(move || {
+        let mut wurzeln: Vec<PathBuf> = production_roots().into_iter().map(PathBuf::from).collect();
+        if let Some(lib) = samples_root().and_then(|s| s.parent().map(Path::to_path_buf)) {
+            wurzeln.extend(["03_ARCHIVE", "05_ARTISTS", "07_REMIXES"].map(|o| lib.join(o)));
+        }
+        let fl = fl_fenstertitel();
+        let n = crate::commands::pfadreparatur::verweise_umbiegen(&paare, &wurzeln, NACHZUG_ANLASS, &|p| in_fl(&fl, &stamm(p)));
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        nachzug_abschliessen(paare, n, nachzug_ordner().join(format!("nachzug-{}.json", nanos)));
+    });
+}
+
+fn nachzug_ordner() -> PathBuf {
+    crate::db::get_db_path().parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Meldet den Stand und wartet auf die offenen Beats, bis keiner mehr offen ist.
+fn nachzug_abschliessen(paare: Vec<(PathBuf, PathBuf)>, mut n: crate::commands::pfadreparatur::Nachzug, datei: PathBuf) {
+    let mut gemeldet = usize::MAX;
+    loop {
+        if n.offen.len() != gemeldet { nachzug_melden(&n); gemeldet = n.offen.len(); }
+        if n.offen.is_empty() { let _ = std::fs::remove_file(&datei); return; }
+        if let Ok(j) = serde_json::to_vec(&(&paare, &n.offen)) { let _ = std::fs::write(&datei, j); }
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        let fl = fl_fenstertitel();
+        let r = crate::commands::pfadreparatur::verweise_in(&paare, &n.offen, NACHZUG_ANLASS, &|p| in_fl(&fl, &stamm(p)));
+        n.geaendert += r.geaendert;
+        n.fehler.extend(r.fehler);
+        n.offen = r.offen;
+    }
+}
+
+/// Ereignis `beats-nachgezogen` an die Oberfläche (NachzugHinweis.tsx).
+fn nachzug_melden(n: &crate::commands::pfadreparatur::Nachzug) {
+    if n.geaendert == 0 && n.offen.is_empty() && n.fehler.is_empty() { return; }
+    eprintln!("Sample umbenannt: {} FLPs nachgezogen, {} warten auf FL, {} Fehler", n.geaendert, n.offen.len(), n.fehler.len());
+    if let Some(app) = crate::APP.get() {
+        use tauri::Emitter;
+        let offen: Vec<String> = n.offen.iter().map(|p| stamm(p)).collect();
+        let _ = app.emit("beats-nachgezogen", serde_json::json!({ "geaendert": n.geaendert, "offen": offen, "fehler": n.fehler }));
+    }
+}
+
+/// Beim Start: Wartelisten vom letzten Mal weiterführen.
+pub(crate) fn nachzuege_fortsetzen() {
+    for e in std::fs::read_dir(nachzug_ordner()).into_iter().flatten().flatten() {
+        let datei = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if !(name.starts_with("nachzug-") && name.ends_with(".json")) { continue; }
+        let Ok((paare, offen)) = std::fs::read(&datei).map_err(|_| ())
+            .and_then(|b| serde_json::from_slice::<(Vec<(PathBuf, PathBuf)>, Vec<PathBuf>)>(&b).map_err(|_| ())) else { continue };
+        let n = crate::commands::pfadreparatur::Nachzug { offen, ..Default::default() };
+        std::thread::spawn(move || nachzug_abschliessen(paare, n, datei));
+    }
 }
 
 /// Spuren im Sample-Ordner (nur oberste Ebene) auf den vollen Namen bringen.
 /// FLPs bleiben, die benennt der Ordner-Umzug. Belegte Zielnamen bleiben liegen.
 // ponytail: steht nicht im Umzugs-Protokoll; Rückgängig stellt den Ordner zurück, die Spurnamen nicht.
-fn spuren_benennen(ordner: &Path, alt_titel: &str, titel: &str) {
-    for (von, nach) in spuren_plan(ordner, alt_titel, titel) { let _ = std::fs::rename(&von, &nach); }
+/// Gibt zurück, welche Spuren umbenannt wurden (jetzt, danach).
+fn spuren_benennen(ordner: &Path, alt_titel: &str, titel: &str) -> Vec<(PathBuf, PathBuf)> {
+    let umbenannt: Vec<(PathBuf, PathBuf)> = spuren_plan(ordner, alt_titel, titel).into_iter()
+        .filter(|(von, nach)| std::fs::rename(von, nach).is_ok()).collect();
     // Genau eine FLP, die anders heißt als der Ordner (in FL frei benannt): heißt jetzt wie er
     let flps: Vec<PathBuf> = std::fs::read_dir(ordner).into_iter().flatten().flatten()
         .map(|e| e.path()).filter(|p| is_flp(p)).collect();
@@ -1466,21 +1541,27 @@ fn spuren_benennen(ordner: &Path, alt_titel: &str, titel: &str) {
         let ziel = ordner.join(format!("{}.flp", name.to_string_lossy()));
         if !ziel.exists() { let _ = std::fs::rename(flp, &ziel); }
     }
+    umbenannt
 }
 
 /// Lose Spuren mit demselben Titel wie `pfad` in einen neuen Ordner, voll benannt.
-fn lose_spuren_einordnen(pfad: &Path, ziel: &Path, titel: &str) -> Result<(), String> {
+/// Gibt je Spur zurück, wo sie lag und wo sie jetzt liegt.
+fn lose_spuren_einordnen(pfad: &Path, ziel: &Path, titel: &str) -> Result<Vec<(PathBuf, PathBuf)>, String> {
     let root = pfad.parent().ok_or("Kein Elternordner")?;
     let gruppe = gruppen_titel(&stamm(pfad));
-    std::fs::create_dir(ziel).map_err(|e| format!("Ordner nicht anlegbar: {}", e))?;
+    if !ziel.exists() { std::fs::create_dir(ziel).map_err(|e| format!("Ordner nicht anlegbar: {}", e))?; }
+    let mut wege: Vec<(PathBuf, PathBuf)> = Vec::new();
     for p in std::fs::read_dir(root).into_iter().flatten().flatten().map(|e| e.path()) {
         if p.is_file() && ist_spur(&p) && gruppen_titel(&stamm(&p)) == gruppe {
-            std::fs::rename(&p, ziel.join(p.file_name().unwrap()))
-                .map_err(|e| format!("„{}“ nicht verschiebbar: {}", stamm(&p), e))?;
+            let neu = ziel.join(p.file_name().unwrap());
+            std::fs::rename(&p, &neu).map_err(|e| format!("„{}“ nicht verschiebbar: {}", stamm(&p), e))?;
+            wege.push((p, neu));
         }
     }
-    spuren_benennen(ziel, &gruppe, titel);
-    Ok(())
+    for (von, nach) in spuren_benennen(ziel, &gruppe, titel) {
+        if let Some(w) = wege.iter_mut().find(|w| w.1 == von) { w.1 = nach; }
+    }
+    Ok(wege)
 }
 
 fn samples_root() -> Option<PathBuf> {
@@ -1491,14 +1572,19 @@ fn samples_root() -> Option<PathBuf> {
 /// Titel des FL-Fensters, kleingeschrieben. `Some("")`, wenn FL läuft, der Titel
 /// aber nicht lesbar ist; `None`, wenn FL nicht läuft.
 pub(crate) fn fl_fenstertitel() -> Option<String> {
-    let mut c = std::process::Command::new("tasklist");
-    c.args(["/V", "/NH", "/FO", "CSV"]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        c.creation_flags(0x0800_0000);
+    // Je Name gefiltert: `/V` über alle Prozesse braucht 20 Sekunden, mit Filter 0,1.
+    let mut out = String::new();
+    for exe in ["FL64.exe", "FL.exe"] {
+        let mut c = std::process::Command::new("tasklist");
+        c.args(["/V", "/NH", "/FO", "CSV", "/FI", &format!("IMAGENAME eq {}", exe)]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            c.creation_flags(0x0800_0000);
+        }
+        out.push_str(&String::from_utf8_lossy(&c.output().ok()?.stdout).to_lowercase());
+        out.push('\n');
     }
-    let out = String::from_utf8_lossy(&c.output().ok()?.stdout).to_lowercase();
     let zeilen: Vec<&str> = out.lines().filter(|l| l.starts_with("\"fl64.exe\"") || l.starts_with("\"fl.exe\"")).collect();
     if zeilen.is_empty() { return None; }
     // Letzte CSV-Spalte = Fenstertitel
@@ -1534,8 +1620,10 @@ fn neues_in(root: &Path, sample: bool, start: u32, fl: &Option<String>) -> Vec<N
             spuren.push(p);
         }
     }
-    // Lose Spuren: eine Zeile je Titel. Exporte einer losen FLP ziehen mit ihr um.
-    spuren.retain(|p| !alle.iter().any(|(_, a, lose)| *lose && *a == stamm(p)));
+    // Lose Spuren: eine Zeile je Titel. Exporte einer losen FLP ziehen mit ihr um,
+    // bei Samples auch Spuren mit ihrem Titel (`gtr - sunrise - f#m 132.wav` zu `sunrise - f#m 132.flp`).
+    spuren.retain(|p| !alle.iter().any(|(f, a, lose)| *lose
+        && (*a == stamm(p) || (sample && gruppen_titel(&stamm(f)) == gruppen_titel(&stamm(p))))));
     spuren.sort();
     let mut anzahl: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     for p in spuren {
@@ -1574,6 +1662,13 @@ pub async fn scan_neues() -> Result<Vec<NeuGefunden>, String> {
         let mut liste = Vec::new();
         let mut naechste = highest_project_number(&roots);
         for r in &roots {
+            // Stems, die seit dem letzten Blick dazugekommen sind, benennen
+            for p in std::fs::read_dir(r).into_iter().flatten().flatten().map(|e| e.path()) {
+                if p.join(crate::utils::STEMS_PROJEKT).is_dir() { stems_benennen(&p, RUHE_SEK); }
+                // Frische Exporte: nur wo der Ordner schon einen Titel trägt
+                let titel = p.file_name().and_then(|n| parse_project_id(&n.to_string_lossy())).and_then(|id| id.name);
+                if let Some(t) = titel.filter(|t| !t.trim().is_empty()) { exporte_benennen(&p, &t, &t, RUHE_SEK); }
+            }
             let neu = neues_in(Path::new(r), false, naechste, &fl);
             naechste += neu.len() as u32;
             liste.extend(neu);
@@ -1653,8 +1748,13 @@ fn neu_uebernehmen_in(roots: &[String], sample_root: Option<&Path>, pfad: &Path,
     // Titel ohne Nummer, so wie er im Ordnernamen steht
     let titel_neu = neu.split_once(" - ").map(|(_, t)| t.to_string()).unwrap_or_default();
     if pfad.is_file() {
-        if ist_spur(pfad) { lose_spuren_einordnen(pfad, &ziel, &titel_neu)?; }
-        else { lose_flp_einordnen(pfad, &ziel, &neu, &alt)?; }
+        if ist_spur(pfad) { beats_nachziehen(lose_spuren_einordnen(pfad, &ziel, &titel_neu)?); }
+        else {
+            lose_flp_einordnen(pfad, &ziel, &neu, &alt)?;
+            if sample_root != pfad.parent() { exporte_benennen(&ziel, &alt, &titel_neu, 0); }
+            // Sample-FLP: Spuren mit demselben Titel gehören dazu
+            else { beats_nachziehen(lose_spuren_einordnen(pfad, &ziel, &titel_neu)?); }
+        }
         return Ok(ziel.to_string_lossy().to_string());
     }
     let sample = sample_root.is_some_and(|s| Some(s) == pfad.parent());
@@ -1668,8 +1768,118 @@ fn neu_uebernehmen_in(roots: &[String], sample_root: Option<&Path>, pfad: &Path,
     if r.moved == 0 || !r.failed.is_empty() {
         return Err(if r.failed.is_empty() { "Nicht umbenannt".into() } else { r.failed.join("; ") });
     }
-    if sample && !titel_neu.is_empty() { spuren_benennen(&ziel, &alt_titel, &titel_neu); }
+    if sample {
+        // Wer das Sample schon in einem Beat benutzt, zeigt noch auf den alten Ordner
+        let mut wege = vec![(pfad.to_path_buf(), ziel.clone())];
+        if !titel_neu.is_empty() {
+            wege.extend(spuren_benennen(&ziel, &alt_titel, &titel_neu).into_iter()
+                .map(|(von, nach)| (pfad.join(von.file_name().unwrap_or_default()), nach)));
+        }
+        beats_nachziehen(wege);
+    }
+    if !sample {
+        exporte_benennen(&ziel, &alt_titel, &titel_neu, 0);
+        let _ = std::fs::create_dir(ziel.join(crate::utils::STEMS_PROJEKT));
+    }
     Ok(ziel.to_string_lossy().to_string())
+}
+
+/// Stems eines Projekts auf die Regel bringen: `DRUMS - TITEL [130 F#min]_stem.wav`.
+/// Was im Ordner `Stems` liegt, ist ein Stem, egal wie FL die Datei genannt hat;
+/// `STEM - x.wav` aus dem Root zieht dorthin. FL schreibt Einzelspuren als
+/// `getippt_Spur.wav`: der gemeinsame Anfang bis zum `_` fällt weg, der Rest ist
+/// die Spur. Erst wenn der Ordner `ruhe_sek` ruht, sonst träfe es einen laufenden
+/// Export. Ohne Titel im Ordnernamen passiert nichts. Gibt die Zahl der Umbenannten zurück.
+fn stems_benennen(projekt: &Path, ruhe_sek: u64) -> usize {
+    let ordner = projekt.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let Some(titel) = parse_project_id(&ordner).and_then(|id| id.name).filter(|t| !t.trim().is_empty()) else { return 0 };
+    let stems = projekt.join(crate::utils::STEMS_PROJEKT);
+    let audio = |d: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(d).into_iter().flatten().flatten().map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()).is_some_and(crate::utils::is_audio_extension))
+            .collect()
+    };
+    let alt_praefix = |s: &str| s.get(..7).is_some_and(|a| a.eq_ignore_ascii_case("stem - "));
+    for p in audio(projekt).into_iter().filter(|p| alt_praefix(&stamm(p))) {
+        let ziel = stems.join(p.file_name().unwrap_or_default());
+        if std::fs::create_dir_all(&stems).is_ok() && !ziel.exists() { let _ = std::fs::rename(&p, &ziel); }
+    }
+    // Was `_stem` schon trägt, ist fertig
+    let offen: Vec<PathBuf> = audio(&stems).into_iter()
+        .filter(|p| crate::utils::export_zusatz(&stamm(p)).as_deref() != Some("stem")).collect();
+    let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let juengste = offen.iter().filter_map(|p| file_modified_secs(p)).max().unwrap_or(0);
+    if offen.is_empty() || jetzt.saturating_sub(juengste) < ruhe_sek { return 0; }
+
+    // Gemeinsamer Anfang der FL-Namen, zurückgeschnitten auf das letzte `_`.
+    // `STEM - x` trägt seine Spur schon und zählt dabei nicht mit.
+    let fl: Vec<String> = offen.iter().map(|p| stamm(p)).filter(|s| !alt_praefix(s)).collect();
+    let gemeinsam: String = match fl.as_slice() {
+        [] => String::new(),
+        [einer] => einer.rsplit_once('_').map(|(a, _)| format!("{}_", a)).unwrap_or_default(),
+        _ => {
+            let erster: Vec<char> = fl[0].chars().collect();
+            let n = fl.iter().map(|s| s.chars().zip(&erster).take_while(|(a, b)| a == *b).count()).min().unwrap_or(0);
+            let anfang: String = erster[..n].iter().collect();
+            anfang.rfind('_').map(|i| anfang[..=i].to_string()).unwrap_or_default()
+        }
+    };
+    let mut umbenannt = 0;
+    for p in &offen {
+        let s = stamm(p);
+        let name = if alt_praefix(&s) { &s[7..] } else { &s[gemeinsam.len()..] };
+        let spur = name.replace('_', " ").trim_matches([' ', '-']).to_uppercase();
+        if spur.is_empty() { continue; }
+        let ext = p.extension().unwrap_or_default().to_string_lossy().to_lowercase();
+        let ziel = stems.join(sanitize_filename_part(&format!("{} - {}_stem.{}", spur, titel.trim(), ext)));
+        if !ziel.exists() && std::fs::rename(p, &ziel).is_ok() { umbenannt += 1; }
+    }
+    umbenannt
+}
+
+/// Exporte im Projektordner auf den Titel bringen: WAV immer `_untagged`, MP3 immer
+/// `_tagged` (Stephan, 16.11.2026), ein eigener Zusatz (`_mix`) bleibt. Nur Dateien,
+/// die zum Beat gehören: sie tragen den Titel oder heißen wie FLP bzw. Ordner (so
+/// nennt FL den Export von sich aus). Alles andere, Stems und ältere Fassungen
+/// (`_2`) bleiben liegen. Erst wenn die Datei `ruhe_sek` ruht.
+fn exporte_benennen(ordner: &Path, alt_titel: &str, titel: &str, ruhe_sek: u64) {
+    let ohne_klammer = |t: &str| crate::utils::schoener_name(t, false).split(" [").next().unwrap_or("").to_string();
+    let titel = titel.split('_').next().unwrap_or("");
+    if ohne_klammer(titel).is_empty() { return; }
+    // So nennt FL einen Export von sich aus: wie die FLP bzw. der Ordner
+    let fl = fl_namen(ordner);
+    let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    for p in std::fs::read_dir(ordner).into_iter().flatten().flatten().map(|e| e.path()) {
+        let ext = p.extension().unwrap_or_default().to_string_lossy().to_lowercase();
+        if !matches!(ext.as_str(), "wav" | "mp3") { continue; }
+        let stem = stamm(&p);
+        if !p.is_file() || crate::utils::ist_stem(&stem) { continue; }
+        // Ältere Fassungen (`…_2`) bleiben, wie sie sind
+        if stem.rsplit_once('_').is_some_and(|(_, z)| !z.is_empty() && z.chars().all(|c| c.is_ascii_digit())) && !fl.contains(&stem) { continue; }
+        let geaendert = file_modified_secs(&p).unwrap_or(0);
+        if jetzt.saturating_sub(geaendert) < ruhe_sek { continue; }
+        let basis = match crate::utils::export_zusatz(&stem) {
+            Some(_) if !fl.contains(&stem) => stem.rsplit_once('_').map_or(stem.as_str(), |(b, _)| b),
+            _ => stem.as_str(),
+        };
+        let t = ohne_klammer(basis);
+        let gehoert_dazu = fl.iter().any(|n| n.eq_ignore_ascii_case(basis)) || t == ohne_klammer(alt_titel) || t == ohne_klammer(titel);
+        if !gehoert_dazu { continue; }
+        let etikett = crate::utils::export_etikett(if fl.contains(&stem) { "" } else { &stem }, &ext);
+        let name = sanitize_filename_part(&format!("{}{}.{}", titel, etikett, ext));
+        let ziel = ordner.join(&name);
+        if ziel == p { continue; }
+        // Nur Groß/Klein anders: Windows meldet das Ziel als vorhanden, umbenennen geht trotzdem
+        let nur_schreibweise = p.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&name));
+        if ziel.exists() && !nur_schreibweise {
+            // Neu exportiert: die neue Datei bekommt den Namen, die bisherige eine Nummer
+            // ponytail: nächste freie Nummer, also nicht streng nach Alter sortiert
+            if geaendert <= file_modified_secs(&ziel).unwrap_or(0) { continue; }
+            let Some(frei) = (2..100).map(|i| ordner.join(sanitize_filename_part(&format!("{}{}_{}.{}", titel, etikett, i, ext)))).find(|z| !z.exists()) else { continue };
+            if std::fs::rename(&ziel, &frei).is_err() { continue; }
+        }
+        let _ = std::fs::rename(&p, &ziel);
+    }
 }
 
 /// „S0012 Nachtzug" → 12. Nur ein großes S mit Ziffern direkt dahinter.
@@ -2370,6 +2580,8 @@ fn repath_studio_rows(
             "UPDATE studio_projects SET path = ?1 WHERE path = ?2",
             rusqlite::params![format!("{}{}", MERGE_TEMP_PREFIX, i), s.from],
         )?;
+        // Artist-Songs mit diesem Projekt als „Mein Beat" ziehen genauso mit.
+        crate::commands::artists::projekt_umhaengen(&tx, &s.from, &format!("{}{}", MERGE_TEMP_PREFIX, i))?;
     }
 
     // Eine Zeile, die schon auf dem Zielpfad sitzt, ist verwaist: der Umzug auf
@@ -2387,6 +2599,7 @@ fn repath_studio_rows(
             "UPDATE studio_projects SET path = ?1 WHERE path = ?2",
             rusqlite::params![s.to, format!("{}{}", MERGE_TEMP_PREFIX, i)],
         )?;
+        crate::commands::artists::projekt_umhaengen(&tx, &format!("{}{}", MERGE_TEMP_PREFIX, i), &s.to)?;
     }
 
     tx.commit()
@@ -3507,12 +3720,15 @@ mod tests {
             [],
         )
         .unwrap();
+        // Artist-Songs, die diese Projekte als „Mein Beat" haben, ziehen mit
+        conn.execute("CREATE TABLE artist_songs (path TEXT PRIMARY KEY, beat_id TEXT, projekt TEXT)", []).unwrap();
         for (p, n) in [(r"C:\P\Project_5", "alt"), (r"C:\P\Project_0005", "besetzt")] {
             conn.execute(
                 "INSERT INTO studio_projects (path, notes) VALUES (?1, ?2)",
                 rusqlite::params![p, n],
             )
             .unwrap();
+            conn.execute("INSERT INTO artist_songs (path, projekt) VALUES (?1, ?2)", rusqlite::params![n, p]).unwrap();
         }
 
         let step = |from: &str, to: &str| MergeStep {
@@ -3546,6 +3762,16 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM studio_projects", [], |r| r.get(0))
             .unwrap();
         assert_eq!(anzahl, 2);
+
+        let projekt = |song: &str| -> Option<String> {
+            conn.query_row("SELECT projekt FROM artist_songs WHERE path = ?1", [song], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(projekt("alt").as_deref(), Some(r"C:\P\Project_0005"));
+        assert_eq!(projekt("besetzt").as_deref(), Some(r"C:\P\Project_0012"), "Verknüpfungen nicht vertauscht");
+        // Archiviert: aus dem Projekt wird der Katalog-Beat
+        crate::commands::artists::projekt_ist_beat(&conn, r"c:\p\project_0012", "B0404").unwrap();
+        let beat: Option<String> = conn.query_row("SELECT beat_id FROM artist_songs WHERE path = 'besetzt'", [], |r| r.get(0)).unwrap();
+        assert_eq!((beat.as_deref(), projekt("besetzt")), (Some("B0404"), None));
     }
 
 
@@ -3805,6 +4031,101 @@ mod tests {
         assert!(ziel.join("P0006 - NO WAY [140 Amin].flp").is_file());
         assert!(ziel.join("no way 140 am.mp3").is_file());
         assert!(!flp.exists());
+
+        // Exporte heißen danach wie der Titel: WAV _untagged, MP3 _tagged; Fremdes bleibt
+        for n in ["no way - am 140.wav", "STEM - Drums.wav", "no way 140 am_v2.wav", "hook.wav"] { std::fs::write(ziel.join(n), b"x").unwrap(); }
+        super::exporte_benennen(&ziel, &alt, "NO WAY [140 Amin]", 0);
+        for n in ["NO WAY [140 Amin]_tagged.mp3", "NO WAY [140 Amin]_untagged.wav", "STEM - Drums.wav", "no way 140 am_v2.wav", "hook.wav"] {
+            assert!(ziel.join(n).is_file(), "{}", n);
+        }
+        assert!(!ziel.join("no way 140 am.mp3").exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn lose_sample_flp_nimmt_ihre_spuren_mit() {
+        let tmp = std::env::temp_dir().join(format!("beatos_sflp_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let samples = tmp.join("06_SAMPLES");
+        std::fs::create_dir_all(samples.join("S0044 - ALT")).unwrap();
+        for n in ["gtr - sunrise - f#m 132.wav", "gtr - sunrise - f#m 132_raw.wav", "gtr - sunrise - f#m 132.mid", "pad - anderes 120 am.wav"] {
+            std::fs::write(samples.join(n), b"x").unwrap();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(samples.join("sunrise - f#m 132.flp"), b"x").unwrap();
+
+        let s = super::neues_in(&samples, true, 44, &None);
+        let mut kurz: Vec<_> = s.iter().map(|n| n.titel.clone()).collect();
+        kurz.sort();
+        assert_eq!(kurz, ["ANDERES [120 Amin]", "SUNRISE [132 F#min]"], "Sunrise ist eine Zeile");
+
+        let flp = samples.join("sunrise - f#m 132.flp");
+        let ziel = std::path::PathBuf::from(super::neu_uebernehmen_in(&[], Some(&samples), &flp, "sunrise - f#m 132", &None).unwrap());
+        assert_eq!(ziel, samples.join("S0045 - SUNRISE [132 F#min]"));
+        for n in ["S0045 - SUNRISE [132 F#min].flp", "GTR - SUNRISE [132 F#min].wav", "GTR - SUNRISE [132 F#min]_raw.wav", "GTR - SUNRISE [132 F#min].mid"] {
+            assert!(ziel.join(n).is_file(), "{}", n);
+        }
+        assert!(samples.join("pad - anderes 120 am.wav").is_file(), "fremde Spur bleibt");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn sample_aus_losen_spuren_zaehlt_ohne_flp() {
+        let tmp = std::env::temp_dir().join(format!("beatos_ohneflp_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let s = tmp.join("S0044 - IM NOT READY [130 F#min]");
+        std::fs::create_dir_all(&s).unwrap();
+        std::fs::create_dir_all(tmp.join("S0045 - LEER")).unwrap();
+        std::fs::write(s.join("PAD - IM NOT READY [130 F#min].wav"), "x").unwrap();
+        assert!(scan_project_dir(&s, "").is_none(), "Projekte brauchen weiter eine FLP");
+        let p = super::scan_dir(&s, "", true).expect("Sample ohne FLP");
+        assert!(p.newest_flp.is_none() && p.bpm.is_some_and(|b| b as i64 == 130) && p.has_wav);
+        assert!(super::scan_dir(&tmp.join("S0045 - LEER"), "", true).is_none());
+        std::fs::write(tmp.join("S0045 - LEER").join("LEAD.mid"), "x").unwrap();
+        assert!(super::scan_dir(&tmp.join("S0045 - LEER"), "", true).is_some(), "nur MIDI zählt auch");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn stems_im_ordner_bekommen_spur_und_titel() {
+        let tmp = std::env::temp_dir().join(format!("beatos_stems_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let p = tmp.join("P0776 - IM NOT READY [130 F#min]");
+        let stems = p.join("Stems");
+        std::fs::create_dir_all(&stems).unwrap();
+        // FL: getippter Name + `_` + Mixerspur; dazu ein alter `STEM - x` im Root und der Export
+        for f in ["Stems/im not ready_Drums.wav", "Stems/im not ready_808 Sub.wav", "Stems/im not ready_Master.wav",
+                  "STEM - Melody.wav", "IM NOT READY [130 F#min]_untagged.wav"] {
+            std::fs::write(p.join(f), b"x").unwrap();
+        }
+        assert_eq!(super::stems_benennen(&p, 3600), 0, "frisch exportiert: noch nichts anfassen");
+        assert_eq!(super::stems_benennen(&p, 0), 4);
+        for f in ["DRUMS", "808 SUB", "MASTER", "MELODY"] {
+            assert!(stems.join(format!("{} - IM NOT READY [130 F#min]_stem.wav", f)).is_file(), "{}", f);
+        }
+        assert!(p.join("IM NOT READY [130 F#min]_untagged.wav").is_file());
+        assert_eq!(super::stems_benennen(&p, 0), 0, "zweimal: nichts mehr zu tun");
+
+        // Neu aus FL exportiert (heißt wie die FLP): bekommt den Namen, die bisherige WAV eine Nummer
+        let t = "IM NOT READY [130 F#min]";
+        std::fs::write(p.join(format!("P0776 - {t}.flp")), b"x").unwrap();
+        let alt = std::fs::File::options().write(true).open(p.join(format!("{t}_untagged.wav"))).unwrap();
+        alt.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600)).unwrap();
+        for f in [format!("P0776 - {t}.wav"), format!("P0776 - {t}.mp3"), "im not ready 130 f#m_mix.wav".into(), "fremd.wav".into()] {
+            std::fs::write(p.join(f), b"neu").unwrap();
+        }
+        super::exporte_benennen(&p, t, t, 3600);
+        assert!(p.join(format!("P0776 - {t}.wav")).is_file(), "frisch: noch nichts anfassen");
+        super::exporte_benennen(&p, t, t, 0);
+        assert_eq!(std::fs::read(p.join(format!("{t}_untagged.wav"))).unwrap(), b"neu");
+        for f in [format!("{t}_untagged_2.wav"), format!("{t}_tagged.mp3"), format!("{t}_mix.wav"), "fremd.wav".into()] {
+            assert!(p.join(&f).is_file(), "{}", f);
+        }
+        // Ohne Titel im Ordnernamen wird nichts benannt
+        let ohne = tmp.join("P0777");
+        std::fs::create_dir_all(ohne.join("Stems")).unwrap();
+        std::fs::write(ohne.join("Stems/x_Drums.wav"), b"x").unwrap();
+        assert_eq!(super::stems_benennen(&ohne, 0), 0);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -4010,13 +4331,13 @@ mod tests {
     #[test]
     fn beat_benennen_ordnername_bleibt_beim_zweiten_mal_gleich() {
         let basis = super::beat_basisname("MEMORIES", Some("Am"), Some(140));
-        assert_eq!(basis, "MEMORIES [Am 140]");
+        assert_eq!(basis, "MEMORIES [140 Amin]");
         let einmal = super::beat_ordnername("Project_243", &basis);
-        assert_eq!(einmal, "P0243 - MEMORIES [Am 140]");
+        assert_eq!(einmal, "P0243 - MEMORIES [140 Amin]");
         assert_eq!(super::beat_ordnername(&einmal, &basis), einmal);
         assert_eq!(super::beat_ordnername("NO MORE RUNNING", "X [140]"), "X [140]");
         assert_eq!(super::beat_basisname("X", None, None), "X");
-        assert_eq!(super::beat_basisname("X", Some("Cm"), None), "X [Cm]");
+        assert_eq!(super::beat_basisname("X", Some("Cm"), None), "X [Cmin]");
     }
 
     #[test]
@@ -4037,25 +4358,28 @@ mod tests {
         schreibe("bounce.mp3", 1);
         schreibe("alt.mp3", 24);
         schreibe("mix_untagged.wav", 1);
+        schreibe("STEM - Drums.wav", 1);
+        schreibe("demo_mix.wav", 1);
         schreibe("cover.png", 1);
 
         let plan = super::plan_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
-        assert_eq!(plan.folder_to, "P0796 - MEMORIES [Am 140]");
+        assert_eq!(plan.folder_to, "P0796 - MEMORIES [140 Amin]");
         let ziele: Vec<(&str, &str)> = plan.files.iter().map(|o| (o.from.as_str(), o.to.as_str())).collect();
         assert_eq!(ziele, vec![
-            ("Project_797.flp", "MEMORIES [Am 140].flp"),
-            ("alt.mp3", "MEMORIES [Am 140]_2.mp3"),
-            ("bounce.mp3", "MEMORIES [Am 140].mp3"),
-            ("mix_untagged.wav", "MEMORIES [Am 140]_untagged.wav"),
+            ("Project_797.flp", "MEMORIES [140 Amin].flp"),
+            ("alt.mp3", "MEMORIES [140 Amin]_tagged_2.mp3"),
+            ("bounce.mp3", "MEMORIES [140 Amin]_tagged.mp3"),
+            ("demo_mix.wav", "MEMORIES [140 Amin]_mix.wav"),
+            ("mix_untagged.wav", "MEMORIES [140 Amin]_untagged.wav"),
         ]);
         assert!(super::plan_rename(&dir, "  ", None, None).is_err());
         assert!(super::plan_rename(&dir, "X", Some("Qm"), None).is_err());
         assert!(super::plan_rename(&dir, "X", None, Some(20)).is_err());
 
         let neu = super::apply_rename(&dir, "MEMORIES", Some("Am"), Some(140)).unwrap();
-        assert_eq!(neu, tmp.join("P0796 - MEMORIES [Am 140]"));
-        for f in ["MEMORIES [Am 140].flp", "hook_v3.flp", "MEMORIES [Am 140].mp3", "MEMORIES [Am 140]_2.mp3",
-                  "MEMORIES [Am 140]_untagged.wav", "cover.png"] {
+        assert_eq!(neu, tmp.join("P0796 - MEMORIES [140 Amin]"));
+        for f in ["MEMORIES [140 Amin].flp", "hook_v3.flp", "MEMORIES [140 Amin]_tagged.mp3", "MEMORIES [140 Amin]_tagged_2.mp3",
+                  "MEMORIES [140 Amin]_untagged.wav", "MEMORIES [140 Amin]_mix.wav", "STEM - Drums.wav", "cover.png"] {
             assert!(neu.join(f).is_file(), "{f} fehlt");
         }
         // Zweimal hintereinander: nichts mehr zu tun

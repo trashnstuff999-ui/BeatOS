@@ -15,6 +15,7 @@ mod audio;
 mod flp;
 pub(crate) mod pfadreparatur;
 mod nummerieren;
+mod klammern;
 mod kanal;
 mod artists;
 mod relocate;

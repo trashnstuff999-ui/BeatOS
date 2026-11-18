@@ -804,7 +804,7 @@ function Welle({ audio, stand, bpm, farbe, onTakte, onPlay }: {
 }
 
 /** Griff zum Ziehen einer Datei nach FL. Zieht erst nach ein paar Pixeln, ein Klick tut nichts. */
-function Griff({ pfad, text, farbe, betont = false, hinweis }: {
+export function Griff({ pfad, text, farbe, betont = false, hinweis }: {
   pfad: string; text: string; farbe: string;
   /** Zieht etwas anderes als die Datei im Ordner (versetzt, Ausschnitt) */
   betont?: boolean;

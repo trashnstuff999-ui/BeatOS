@@ -591,10 +591,10 @@ mod tests {
         assert_eq!(r.fertig.len(), 1);
         assert_eq!(r.ausgelassen.len(), 1, "{:?}", r.ausgelassen);
         let ziel = PathBuf::from(&r.fertig[0].ordner);
-        assert!(ziel.ends_with("B0939 - Stay [Em 120]"), "{}", ziel.display());
-        assert_eq!(fs::read(ziel.join("Stay [Em 120].mp3")).unwrap(), b"stay2"); // neuester in den Root
+        assert!(ziel.ends_with("B0939 - STAY [120 Emin]"), "{}", ziel.display());
+        assert_eq!(fs::read(ziel.join("STAY [120 Emin].mp3")).unwrap(), b"stay2"); // neuester in den Root
         assert_eq!(fs::read(ziel.join("02_OLD/[532] Stay - 120 Em.mp3")).unwrap(), b"stay1");
-        assert!(ziel.join("01_SAVEFILES/Stay [Em 120].flp").is_file());
+        assert!(ziel.join("01_SAVEFILES/STAY [120 Emin].flp").is_file());
         assert_eq!(fs::read(ziel.join("01_SAVEFILES/Samples/kick.wav")).unwrap(), b"kick");
         let (alte_id, begonnen): (String, String) = conn.query_row("SELECT alte_id, begonnen FROM beats WHERE id = '0939'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
         assert_eq!(alte_id, "532");
@@ -710,8 +710,8 @@ mod tests {
         let r = einsammeln_mit(&conn, vec![e], &arch, &t.join("_BEATOS"), Art::Sample).unwrap();
         assert!(r.fehler.is_none(), "{:?}", r.fehler);
         let ziel = PathBuf::from(&r.fertig[0].ordner);
-        assert_eq!(ziel, t.join("LIB/06_SAMPLES/S0006 - Dark Loop [Am 140]"));
-        assert!(ziel.join("Dark Loop [Am 140].mp3").is_file());
+        assert_eq!(ziel, t.join("LIB/06_SAMPLES/S0006 - Dark Loop [140 Amin]"));
+        assert!(ziel.join("DARK LOOP [140 Amin].mp3").is_file());
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM beats", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
         let _ = fs::remove_dir_all(&t);
@@ -733,8 +733,8 @@ mod tests {
         let ein = |id: u32, titel: &str, d: &str| EinsammelEintrag { id: Some(id), titel: titel.into(), key: None, bpm: None, dateien: vec![s(&alt.join(d))], archiv: None };
         let r = einsammeln_mit(&conn, vec![ein(630, "Bloom", "[630] Bloom - 138 D#m.mp3"), ein(397, "Master", "397 . Master.mp3")], &arch, &t.join("_BEATOS"), Art::Archiv).unwrap();
         let p = PathBuf::from(r.protokoll.unwrap());
-        let master = r.fertig.iter().find(|g| g.ordner.contains("Master")).unwrap().clone();
-        let bloom = r.fertig.iter().find(|g| g.ordner.contains("Bloom")).unwrap().clone();
+        let master = r.fertig.iter().find(|g| g.ordner.contains("MASTER")).unwrap().clone();
+        let bloom = r.fertig.iter().find(|g| g.ordner.contains("BLOOM")).unwrap().clone();
         rueckgaengig_teil(&conn, &p, Some(&[master.beat_id.clone()])).unwrap();
         assert!(!Path::new(&master.ordner).exists());
         assert!(Path::new(&bloom.ordner).exists());

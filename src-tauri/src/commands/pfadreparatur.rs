@@ -244,6 +244,48 @@ pub(crate) fn von_hand(beat: &Path, alt: &str, quelle: &Path) -> Result<usize, S
     Ok(n)
 }
 
+/// Etwas wurde umbenannt (alt → neu, Ordner oder Datei): jede FLP unter `wurzeln`,
+/// die noch auf den alten Pfad zeigt, auf den neuen umbiegen. Eine umbenannte
+/// Datei geht vor ihrem umbenannten Ordner. Gibt die Zahl der geänderten FLPs
+/// zurück; eine gesperrte FLP (in FL offen) bleibt, wie sie ist.
+pub(crate) fn verweise_umbiegen(paare: &[(PathBuf, PathBuf)], wurzeln: &[PathBuf], anlass: &str, offen: &dyn Fn(&Path) -> bool) -> Nachzug {
+    let mut alle = Vec::new();
+    for w in wurzeln { dateien(w, true, &mut alle); }
+    alle.retain(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("flp")));
+    verweise_in(paare, &alle, anlass, offen)
+}
+
+/// Was beim Nachziehen herauskam. `offen` = in FL offen, nicht angefasst
+/// (FL schriebe beim Speichern die alten Pfade zurück).
+#[derive(Default)]
+pub(crate) struct Nachzug { pub geaendert: usize, pub offen: Vec<PathBuf>, pub fehler: Vec<String> }
+
+/// Wie `verweise_umbiegen`, nur über diese FLPs.
+pub(crate) fn verweise_in(paare: &[(PathBuf, PathBuf)], flps: &[PathBuf], anlass: &str, offen: &dyn Fn(&Path) -> bool) -> Nachzug {
+    let klein = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+    let karte: HashMap<String, &PathBuf> = paare.iter().map(|(a, n)| (klein(a), n)).collect();
+    let mut n = Nachzug::default();
+    for flp in flps {
+        let Ok(bytes) = std::fs::read(flp) else { continue };
+        let ersatz: Vec<(String, String)> = audio_pfade(&bytes).into_iter().filter_map(|p| {
+            let pp = PathBuf::from(p.replace('/', "\\"));
+            // `join` mit leerem Rest hängte einen Schrägstrich an: die Datei selbst getrennt
+            let ziel = pp.ancestors().find_map(|a| karte.get(&klein(a)).map(|neu| {
+                if a == pp { (*neu).clone() } else { neu.join(pp.strip_prefix(a).unwrap()) }
+            }))?;
+            (klein(&ziel) != klein(&pp)).then(|| (p, ziel.to_string_lossy().to_string()))
+        }).collect();
+        if ersatz.is_empty() { continue; }
+        if offen(flp) { n.offen.push(flp.clone()); continue; }
+        match flp_umschreiben(flp, &ersatz, anlass) {
+            Ok(k) if k > 0 => n.geaendert += 1,
+            Ok(_) => {}
+            Err(e) => n.fehler.push(e),
+        }
+    }
+    n
+}
+
 /// Nach dem Umbenennen eines Projektordners: Verweise ins Leere auf die Datei
 /// gleichen Namens im eigenen Ordner umbiegen. Nur der eigene Ordner, nie ein
 /// anderes Projekt: beim Nachrücken trägt ein anderes Projekt den alten Namen.
@@ -275,6 +317,36 @@ mod tests {
         b.extend(6u32.to_le_bytes()); b.extend([0u8; 6]);
         b.extend(b"FLdt"); b.extend((daten.len() as u32).to_le_bytes()); b.extend(daten);
         b
+    }
+
+    #[test]
+    fn umbenanntes_sample_zieht_die_beats_nach() {
+        let t = std::env::temp_dir().join(format!("beatos_verweise_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let alt = t.join("06_SAMPLES").join("dont cry 150 bm");
+        let neu = t.join("06_SAMPLES").join("S0044 - DONT CRY [150 Bmin]");
+        let beat = t.join("01_ACTIVE_PRODUCTION").join("P0001");
+        for (p, x) in [(neu.join("PAD - DONT CRY [150 Bmin].wav"), "p"), (neu.join("roh.wav"), "r"), (t.join("fremd.wav"), "f")] {
+            fs::create_dir_all(p.parent().unwrap()).unwrap(); fs::write(&p, x).unwrap();
+        }
+        fs::create_dir_all(&beat).unwrap();
+        let s = |p: PathBuf| p.to_string_lossy().to_string();
+        let flp = beat.join("P0001.flp");
+        fs::write(&flp, flp_mit(&[s(alt.join("pads.wav")), s(alt.join("roh.wav")), s(t.join("fremd.wav"))])).unwrap();
+        // Ordner umbenannt, eine Spur darin auch
+        let paare = vec![(alt.clone(), neu.clone()), (alt.join("pads.wav"), neu.join("PAD - DONT CRY [150 Bmin].wav"))];
+        let wurzel = [t.join("01_ACTIVE_PRODUCTION")];
+        // In FL offen: nicht anfassen, sondern melden
+        let n = verweise_umbiegen(&paare, &wurzel, "vor Sample-Umbenennung", &|_| true);
+        assert_eq!((n.geaendert, n.offen.clone()), (0, vec![flp.clone()]));
+        assert_eq!(audio_pfade(&fs::read(&flp).unwrap())[0], s(alt.join("pads.wav")));
+        // FL hat sie geschlossen: jetzt nachziehen
+        assert_eq!(verweise_in(&paare, &n.offen, "vor Sample-Umbenennung", &|_| false).geaendert, 1);
+        let jetzt = audio_pfade(&fs::read(&flp).unwrap());
+        assert_eq!(jetzt, [s(neu.join("PAD - DONT CRY [150 Bmin].wav")), s(neu.join("roh.wav")), s(t.join("fremd.wav"))]);
+        assert!(beat.join("Backup/P0001 (vor Sample-Umbenennung).flp").is_file());
+        assert_eq!(verweise_umbiegen(&paare, &wurzel, "x", &|_| false).geaendert, 0, "zweimal: nichts mehr zu tun");
+        let _ = fs::remove_dir_all(&t);
     }
 
     #[test]

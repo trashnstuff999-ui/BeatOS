@@ -68,13 +68,14 @@ use commands::{
     artist_assets_fuellen,
     artist_abgeben,
     artist_wieder_oeffnen,
+    artist_neuer_mix,
     artist_pfade_reparieren,
     artist_ordner_aufraeumen,
     set_artist_beat,
     get_beat_placements,
     set_artist_nur_master,
     set_artist_erledigt,
-    artist_beat_kopieren,
+    artist_beat_holen,
     set_artist_links,
     create_artist_release,
     artist_song_verschieben,
@@ -229,6 +230,9 @@ pub(crate) fn asset_scope_freigeben(app: &tauri::AppHandle) {
     }
 }
 
+/// Für Meldungen aus Hintergrund-Threads (`emit`).
+pub(crate) static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize database schema ONCE at startup
@@ -276,6 +280,8 @@ pub fn run() {
                 Ok(_) => {}
                 Err(e) => eprintln!("WARNING: Herkunft nachtragen: {}", e),
             });
+            let _ = APP.set(app.handle().clone());
+            commands::nachzuege_fortsetzen();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -333,13 +339,14 @@ pub fn run() {
             artist_assets_fuellen,
             artist_abgeben,
             artist_wieder_oeffnen,
+            artist_neuer_mix,
             artist_pfade_reparieren,
             artist_ordner_aufraeumen,
             set_artist_beat,
             get_beat_placements,
             set_artist_nur_master,
             set_artist_erledigt,
-            artist_beat_kopieren,
+            artist_beat_holen,
             set_artist_links,
             create_artist_release,
             artist_song_verschieben,

@@ -28,6 +28,7 @@ import { DialogProvider } from "./contexts/DialogContext";
 import { AllTagsModal } from "./components/create/dialogs/AllTagsModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Schnellsuche } from "./components/Schnellsuche";
+import { NachzugHinweis } from "./components/NachzugHinweis";
 
 function AppRoutes() {
   const location = useLocation();
@@ -124,6 +125,7 @@ function AppContent() {
       <GlobalAudioPlayer versteckt={playerVersteckt} />
       <GlobalTagManager />
       <Schnellsuche />
+      <NachzugHinweis />
     </div>
   );
 }

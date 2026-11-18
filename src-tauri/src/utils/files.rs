@@ -43,6 +43,19 @@ pub fn copy_and_verify(source: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Stems heißen `STEM - Drums.wav`, `STEM - 808.wav` …: Einzelspuren eines
+/// Beats, kein Export. Im Archiv liegen sie in `03_STEMS`.
+/// Nach der Namensregel tragen sie `_stem` (`DRUMS - TITEL [130 F#min]_stem.wav`).
+pub fn ist_stem(name: &str) -> bool {
+    let n = name.to_lowercase();
+    let stamm = n.rsplit_once('.').map_or(n.as_str(), |(s, _)| s);
+    n.starts_with("stem - ") || super::export_zusatz(stamm).as_deref() == Some("stem")
+}
+
+pub const STEMS_ORDNER: &str = "03_STEMS";
+/// Stems-Ordner im Projekt (Produktion). Beim Archivieren wird daraus `03_STEMS`.
+pub const STEMS_PROJEKT: &str = "Stems";
+
 /// True if the path is an FL Studio project file (case-insensitive `.flp`)
 pub fn is_flp(path: &Path) -> bool {
     path.extension()

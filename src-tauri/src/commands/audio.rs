@@ -29,6 +29,8 @@ pub fn get_beat_audio_path(beat_path: String) -> Result<Option<String>, String> 
             let path = e.path();
             let ext = path.extension()?.to_string_lossy().to_lowercase();
             if !path.is_file() || !matches!(ext.as_str(), "mp3" | "wav" | "flac" | "m4a") { return None; }
+            // Stems liegen in der Produktion neben dem Export, der Player spielt den Export.
+            if crate::utils::ist_stem(&e.file_name().to_string_lossy()) { return None; }
             let zeit = e.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
             Some((path.to_string_lossy().to_string(), zeit))
         })

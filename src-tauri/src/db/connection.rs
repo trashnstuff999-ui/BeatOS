@@ -440,6 +440,9 @@ pub fn init_db() -> Result<(), String> {
                 // Bibliothek-Umbau Scheibe 7: Haken von Hand, z. B. "vocals,mix".
                 // NULL = nie angefasst, dann gilt die Vermutung aus den Dateien.
                 let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN erledigt TEXT", []);
+                // „Mein Beat" aus der Produktion: der Projektordner, solange
+                // der Beat noch nicht im Katalog steht.
+                let _ = conn.execute("ALTER TABLE artist_songs ADD COLUMN projekt TEXT", []);
                 // „Nicht hochladen": der Beat fällt aus der Warteschlange.
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN upload_skip INTEGER NOT NULL DEFAULT 0", []);
                 // Bibliothek-Umbau: alte Nummer ("630", "Project_0121") und wann der

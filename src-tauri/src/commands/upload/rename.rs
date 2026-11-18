@@ -204,7 +204,7 @@ pub fn sweep_old_exports(beat_root: &Path) -> usize {
 pub fn count_old_audio(beat_root: &Path) -> usize {
     let files = list_files(beat_root);
     ["mp3", "wav"].iter()
-        .map(|ext| files.iter().filter(|(n, _)| ext_lower(n) == *ext).count().saturating_sub(1))
+        .map(|ext| files.iter().filter(|(n, _)| ist_hauptexport(n, ext)).count().saturating_sub(1))
         .sum()
 }
 
@@ -214,7 +214,7 @@ fn sweep(beat_root: &Path, neueste: bool) -> usize {
 
     for ext in ["mp3", "wav"] {
         let matching: Vec<&(String, SystemTime)> = files.iter()
-            .filter(|(n, _)| ext_lower(n) == ext)
+            .filter(|(n, _)| ist_hauptexport(n, ext))
             .collect();
         if matching.len() < 2 { continue; }
 
@@ -276,12 +276,7 @@ fn load_naming_context(beat_id: &str) -> Result<(PathBuf, NamingContext), String
     }
 
     let title_upper = sanitize_filename_part(&name).to_uppercase();
-    let key_bpm = match (key.as_deref().map(str::trim).filter(|s| !s.is_empty()), bpm) {
-        (Some(k), Some(b)) => format!(" [{} {}]", k, b as i64),
-        (Some(k), None)    => format!(" [{}]", k),
-        (None, Some(b))    => format!(" [{}]", b as i64),
-        (None, None)       => String::new(),
-    };
+    let key_bpm = crate::utils::klammer(key.as_deref(), bpm.map(|b| b as i32));
     let mp4_basename = build_mp4_basename(
         &title_upper,
         tbm.as_deref().map(str::trim).filter(|s| !s.is_empty()),
@@ -397,6 +392,18 @@ fn list_files(dir: &Path) -> Vec<(String, SystemTime)> {
     out
 }
 
+/// Zählt die Datei als DER Export ihrer Endung? Stems und Fassungen mit eigenem
+/// Zusatz (`_mix`, `_loop`) nicht: sie bleiben liegen, wie sie heißen.
+// ponytail: ihr Titel zieht bei einer Umbenennung des Beats nicht mit; nachziehen, wenn es stört
+fn ist_hauptexport(name: &str, ext: &str) -> bool {
+    let stamm = name.rsplit_once('.').map_or(name, |(s, _)| s);
+    if ext_lower(name) != ext { return false; }
+    if ext != "wav" && ext != "mp3" { return true; }
+    !crate::utils::ist_stem(name)
+        && crate::utils::export_zusatz(stamm)
+            .is_none_or(|z| ["untagged", "tagged", "unmastered", "master", "final"].contains(&z.as_str()))
+}
+
 fn ext_lower(name: &str) -> String {
     Path::new(name).extension()
         .and_then(|e| e.to_str())
@@ -421,7 +428,7 @@ fn plan_single_kind(
     vacating: &mut std::collections::HashSet<String>,
 ) {
     let matching: Vec<&(String, SystemTime)> = files.iter()
-        .filter(|(n, _)| ext_lower(n) == ext)
+        .filter(|(n, _)| ist_hauptexport(n, ext))
         .collect();
     if matching.is_empty() { return; }
 

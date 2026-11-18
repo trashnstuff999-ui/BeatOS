@@ -366,6 +366,9 @@ export const api = {
     /** Neuer Song: 01_SAVEFILES mit Template-FLP, 02_ASSETS, 03_VERSIONS; gibt den FLP-Pfad zurück. */
     createSong: (artistPath: string, name: string, templateFlp: string) =>
       invoke<string>("create_artist_song", { artistPath, name, templateFlp }),
+    /** Neuer Mix: Vorlage als `<Song> (Mix N).flp` in 01_SAVEFILES; gibt den FLP-Pfad zurück. */
+    neuerMix: (songPath: string, templateFlp: string) =>
+      invoke<string>("artist_neuer_mix", { songPath, templateFlp }),
     /** Gäste eines Songs („ft."); leere Liste löscht. */
     setFeatures: (artistPath: string, song: string, features: string[]) =>
       invoke<void>("set_artist_features", { artistPath, song, features }),
@@ -384,19 +387,21 @@ export const api = {
     /** Profilbild von einer Profilseite holen (og:image). */
     bildHolen: (artistPath: string, url: string) => invoke<string>("artist_bild_holen", { artistPath, url }),
     /** „Mein Beat" verknüpfen (null = lösen). Nur im Song vermerkt. */
-    setBeat: (path: string, beatId: string | null) => invoke<void>("set_artist_beat", { path, beatId }),
+    setBeat: (path: string, beatId: string | null, projekt: string | null = null) =>
+      invoke<void>("set_artist_beat", { path, beatId, projekt }),
     /** Placements: Artist-Songs, in denen der Beat als „Mein Beat" steckt. */
     placements: (beatId: string) =>
       invoke<{ artist: string; song: string; path: string }[]>("get_beat_placements", { beatId }),
-    /** Eine Datei des Beats nach 02_ASSETS kopieren (das Archiv bleibt); gibt den neuen Pfad zurück. */
-    beatKopieren: (songPath: string, quelle: string) => invoke<string>("artist_beat_kopieren", { songPath, quelle }),
+    /** WAV nach 02_ASSETS, Stems (`STEM - …`) nach 02_ASSETS/Stems kopieren; der Beat-Ordner bleibt. */
+    beatHolen: (songPath: string, beatOrdner: string, wav: string | null) =>
+      invoke<{ wav: boolean; stems: number; schon_da: number }>("artist_beat_holen", { songPath, beatOrdner, wav }),
     /** Songs ins Schema 01_SAVEFILES / 02_ASSETS / 03_VERSIONS bringen, danach FLP-Pfade nachziehen. */
     ordnerAufraeumen: (songs: string[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_ordner_aufraeumen", { songs }),
     /** Dateien nach <Song>/02_ASSETS verschieben; Gleichnamiges wird übersprungen. */
     assetsFuellen: (songPath: string, dateien: string[]) =>
       invoke<{ pfad: string; ok: boolean; meldung: string }[]>("artist_assets_fuellen", { songPath, dateien }),
-    /** Export umbenennen („<Künstler> - <Song> (Master).wav"), Song nach _Fertig/; gibt den Dateipfad zurück. */
+    /** Export umbenennen („<Künstler> - <Song> _master.wav"), Song nach _Fertig/; gibt den Dateipfad zurück. */
     abgeben: (songPath: string, datei: string, art: "Master" | "Mix") =>
       invoke<string>("artist_abgeben", { songPath, datei, art }),
     /** Song aus _Fertig/ zurückholen. */

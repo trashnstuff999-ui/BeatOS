@@ -36,12 +36,20 @@ export function projectDisplayName(p: StudioProject): string {
   return p.song_name?.trim() || p.parsed_name || p.name;
 }
 
-/** Der Name, unter dem der Export gespeichert gehört: „TITEL [Am 140]" — genau
+/** Der Name, unter dem der Export gespeichert gehört: „TITEL [140 Amin]" — genau
  *  die Schreibweise, die parse_audio_filename später wieder auseinandernimmt. */
 export function projectExportName(p: StudioProject): string {
-  const keyBpm = [p.key, p.bpm].filter(x => x != null && x !== "").join(" ");
-  const title = projectDisplayName(p);
+  const keyBpm = [p.bpm, p.key ? keyLang(p.key) : null].filter(x => x != null && x !== "").join(" ");
+  const title = projectDisplayName(p).toUpperCase();
   return keyBpm ? `${title} [${keyBpm}]` : title;
+}
+
+/** Tonart lang wie in der Namensregel (Rust: `key_lang`): `f#m` → `F#min`, `Bb` → `Bbmaj`.
+ *  Was keine Tonart ist, bleibt wie es ist. */
+export function keyLang(k: string): string {
+  const m = /^([A-Ga-g])([#b]?)(m|min|maj)?$/i.exec(k.trim());
+  if (!m) return k.trim();
+  return m[1].toUpperCase() + m[2].toLowerCase() + (/^m(in)?$/i.test(m[3] ?? "") ? "min" : "maj");
 }
 
 /** Ordnername als Sekundär-Info — null, wenn er nichts Neues sagt. */
