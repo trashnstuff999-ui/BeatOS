@@ -102,7 +102,10 @@ Scheibe 6: gelaufen am 16.11.2026. Sechs Sample-Ordner (S0022, S0026, S0027,
 S0028, S0031, S0035) samt Exporten und die vier Dateien in `_MIDI` nach Regel.
 Rückgängig: `_BEATOS/namensregel_samples.json`. Offen: Sample-Ordner ohne Tempo
 und Tonart (34) heißen weiter wie bisher, und die Spuren in S0039 warten auf
-„Nachziehen" in der App. Das Werkzeug `klammern.rs` kann weg.
+„Nachziehen" in der App. Das Werkzeug `klammern.rs` ist am 18.11.2026 entfernt
+(liegt in 2e499c3); die Protokolle in `_BEATOS` bleiben.
+
+Abgenommen am 18.11.2026, committet als 2e499c3.
 
 1. **Ein Baustein.** Eine Stelle im Code baut und liest Namen
    (`utils/parsing.rs`, neben `schoener_name`). Übernehmen, Beat benennen,
