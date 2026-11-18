@@ -135,7 +135,8 @@ Platzhalter also noch nicht. Im Template-Editor einmal eintragen:
   von `{{PRODUCER_PROD}}`
 - `{{COLLAB_SOCIALS}}` als eigene Zeile unter den eigenen Socials
 
-- [ ] Vorlagen auf der Platte um die drei Platzhalter ergänzen
+- [x] Vorlagen auf der Platte um die drei Platzhalter ergänzen (18.11.2026, YouTube und
+      SoundCloud; Sicherung `*.template.vor-credits.bak`)
 
 ---
 
