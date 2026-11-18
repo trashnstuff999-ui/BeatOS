@@ -287,7 +287,7 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [loadUploadBadges]);
 
   // ─── Single Effect for Loading ───────────────────────────────────────────────
   // Hängt nur an `sig` — jede Abfrage-Änderung ändert die Signatur, aber ein
@@ -304,6 +304,8 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
     }
 
     loadBeatsInternal(effectiveFilters, sort, pagination.page, pagination.pageSize);
+    // Absicht: sig deckt Filter und Sortierung ab (siehe oben)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, pagination.page, pagination.pageSize, loadBeatsInternal]);
 
   // Stand für den nächsten Tab-Wechsel sichern (Beats selbst nicht — die sind
@@ -314,6 +316,8 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
       page: pagination.page, pageSize: pagination.pageSize,
     };
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(query)); } catch { /* voll o.ä. */ }
+    // Absicht: sig deckt Filter und Sortierung ab
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, pagination.page, pagination.pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize));
@@ -362,7 +366,9 @@ export function useBeats(initialFilters?: Partial<FilterState>): UseBeatsReturn 
       console.error("Failed to load queue:", e);
       return beatsRef.current; // Fallback: wenigstens die aktuelle Seite
     }
-  }, [sig]); // effectiveFilters/sort sind durch sig abgedeckt
+    // effectiveFilters/sort sind durch sig abgedeckt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
 
   /** Optimistisches Feld-Update auf Liste UND Auswahl in einem Rutsch. */
   const patchBeat = useCallback((beatId: string, patch: Partial<Beat>) => {

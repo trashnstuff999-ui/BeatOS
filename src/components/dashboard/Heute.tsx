@@ -134,6 +134,8 @@ export function Heute({ actions, recent, refreshKey }: {
       })
       .catch(() => { if (!weg) setSongs([]); });
     return () => { weg = true; };
+    // Absicht: nur die drei Pfade, die kuenstlerOrdner liest, nicht jede Einstellung
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, settings.productionPath, settings.artistsPath, settings.archivePath]);
 
   const diese = woche(montag, rhythmus, eintraege, heute);

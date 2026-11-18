@@ -152,6 +152,8 @@ export function DetailPanel({
   useEffect(() => {
     setForm(beatToEditForm(beat));
     setSaveError(null);
+    // Absicht: an den Werten, nicht am Objekt (siehe oben)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat.id, beat.name, beat.bpm, beat.key, beat.notes, beat.sold_to]);
 
   const original = beatToEditForm(beat);
@@ -173,6 +175,8 @@ export function DetailPanel({
     if (e.form.notes !== e.original.notes || e.form.sold_to !== e.original.sold_to) {
       onSaveBeat({ id: e.id, notes: e.form.notes, sold_to: e.form.sold_to.trim() }).catch(() => {});
     }
+    // Absicht: nur beim Beat-Wechsel oder Schließen speichern
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat.id, isOpen]);
   // Nach dem Effekt darüber: der liest noch den Stand des vorigen Beats.
   useEffect(() => { entwurf.current = { id: beat.id, form, original }; });
@@ -395,7 +399,8 @@ export function DetailPanel({
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [beat.id, preloadedCoverUrl]);
+    // beat.path: Umbenennen behält die ID, der Ordner (und das Cover) zieht um
+  }, [beat.id, beat.path, preloadedCoverUrl]);
 
   const coverUrl = playerCover ?? localCoverUrl ?? null;
   const ordnerAssets = useFolderAssets(beat.path ?? null);

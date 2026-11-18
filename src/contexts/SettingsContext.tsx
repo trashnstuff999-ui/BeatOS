@@ -201,6 +201,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         // DB unreachable — localStorage stays authoritative for this session.
         setIsLoaded(true);
       });
+    // Absicht: einmal beim Start; melde ist stabil (useCallback im DialogContext)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Schlug das Schreiben in die Datenbank fehl, stand der Wert weiter im Feld

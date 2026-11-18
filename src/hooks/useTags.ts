@@ -72,13 +72,6 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [customTags, setCustomTags] = useState<CustomTag[]>([]);
 
-  // ─── Load Custom Tags from DB on Mount ─────────────────────────────────────
-  useEffect(() => {
-    if (autoLoadCustomTags) {
-      loadCustomTags();
-    }
-  }, [autoLoadCustomTags]);
-
   const loadCustomTags = useCallback(async () => {
     try {
       const loadedTags = await api.tags.getAll();
@@ -88,6 +81,13 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
       console.error("Failed to load custom tags:", err);
     }
   }, []);
+
+  // ─── Load Custom Tags from DB on Mount ─────────────────────────────────────
+  useEffect(() => {
+    if (autoLoadCustomTags) {
+      loadCustomTags();
+    }
+  }, [autoLoadCustomTags, loadCustomTags]);
 
   // ─── Tag Suggestions (filtered by input) ───────────────────────────────────
   const tagSuggestions = useMemo(() => {

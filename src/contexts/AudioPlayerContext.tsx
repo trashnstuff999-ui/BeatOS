@@ -251,6 +251,9 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("canplay", onCanPlay);
     };
+    // Absicht: nur bei neuer Datei neu laden. Lautstärke/Stumm setzt der Effekt darunter,
+    // sonst finge jeder Dreh am Regler den Song von vorn an.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl]);
 
   // Sync volume / loop / mute

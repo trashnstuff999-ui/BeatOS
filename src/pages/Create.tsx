@@ -78,7 +78,7 @@ export default function Create() {
 
   // ─── Tags Hook ─────────────────────────────────────────────────────────────
   const tagsHook = useTags();
-  const { tags, clearTags } = tagsHook;
+  const { tags, clearTags, setTags, reloadCustomTags } = tagsHook;
 
   // ─── Asset-Slots (Cover/Thumbnail/Video im Beat-Ordner) ────────────────────
   const [coverImage, setCoverImage] = useState<string | null>(null);   // base64-Preview
@@ -95,12 +95,12 @@ export default function Create() {
     openTagManager({
       initialSelected: tags,
       onConfirm: (newTags) => {
-        tagsHook.setTags(newTags);
-        tagsHook.reloadCustomTags();
+        setTags(newTags);
+        reloadCustomTags();
       },
       editMode: true,
     });
-  }, [tags, tagsHook.setTags, tagsHook.reloadCustomTags, openTagManager]);
+  }, [tags, setTags, reloadCustomTags, openTagManager]);
 
   // ─── Reset Handler ─────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
@@ -274,7 +274,7 @@ export default function Create() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyAssetSlots]);
 
   const handleSelectFolder = useCallback(async () => {
     setParseError(null);
