@@ -144,7 +144,7 @@ export function FilterBar({ filters, onChange, onReset, resultCount, actions }: 
         </button>
 
         <span style={{ fontSize: 12, fontWeight: 600, color: C.onSecondaryFixedVar, flexShrink: 0 }}>
-          {resultCount} Beats
+          {resultCount} {resultCount === 1 ? "Beat" : "Beats"}
         </span>
 
         {chips.length > 0 && (

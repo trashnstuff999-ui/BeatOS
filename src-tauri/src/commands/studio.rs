@@ -1414,6 +1414,8 @@ fn spur_name(stem: &str, alt_titel: &str, titel: &str) -> String {
     let traegt_titel = |t: &str| [alt_titel, titel].iter().any(|x| ohne_klammer(x) == ohne_klammer(t));
     let spur = match sauber.split_once(" - ") {
         Some((inst, t)) if traegt_titel(t) => inst.to_string(),
+        // Umgekehrt getippt: `NO MORE TIME - Piano`
+        Some((t, inst)) if traegt_titel(t) => crate::utils::spur_kurz(inst),
         None if traegt_titel(&sauber) => String::new(),
         _ => crate::utils::spur_kurz(basis),
     };
@@ -4052,6 +4054,13 @@ mod tests {
         }
         assert!(!ziel.join("no way 140 am.mp3").exists());
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn spur_name_auch_mit_titel_vorn() {
+        let t = "NO MORE TIME [160 Emaj]";
+        assert_eq!(super::spur_name("NO MORE TIME - Piano", t, t), "KEYS - NO MORE TIME [160 Emaj]");
+        assert_eq!(super::spur_name("Keys - runaway - Dm 158", "RUNAWAY [158 Dmin]", "RUNAWAY [158 Dmin]"), "KEYS - RUNAWAY [158 Dmin]");
     }
 
     #[test]

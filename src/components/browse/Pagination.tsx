@@ -97,8 +97,8 @@ export function Pagination({ pagination, totalPages, onPageChange, onPageSizeCha
     }}>
       {/* Left: Info */}
       <div style={{ fontSize: 12, color: C.onSurfaceVariant }}>
-        Showing <span style={{ color: C.onSurface, fontWeight: 600 }}>{startItem}-{endItem}</span> of{" "}
-        <span style={{ color: C.onSurface, fontWeight: 600 }}>{totalCount}</span> beats
+        <span style={{ color: C.onSurface, fontWeight: 600 }}>{startItem}–{endItem}</span> von{" "}
+        <span style={{ color: C.onSurface, fontWeight: 600 }}>{totalCount}</span> {totalCount === 1 ? "Beat" : "Beats"}
       </div>
 
       {/* Center: Page Numbers */}
