@@ -145,6 +145,9 @@ fn lesen(b: &[u8]) -> Option<Flp> {
 // 18.10.2026). Die Folge „196, Länge, Pfad, \0" ist eindeutig genug.
 
 const PFAD: u8 = 196;
+/// Datenordner des Projekts (Aufnahmen, Renders), gleicher Aufbau, endet auf `\`.
+/// Gemessen an B0369 am 18.11.2026: blieb beim Umbenennen auf dem alten Ordner stehen.
+const DATENORDNER: u8 = 202;
 
 fn varint(mut n: usize) -> Vec<u8> {
     let mut out = Vec::new();
@@ -156,19 +159,26 @@ fn varint(mut n: usize) -> Vec<u8> {
     }
 }
 
-pub(crate) fn pfad_ereignis(pfad: &str) -> Vec<u8> {
+pub(crate) fn pfad_ereignis(pfad: &str) -> Vec<u8> { ereignis(PFAD, pfad) }
+
+fn ereignis(id: u8, pfad: &str) -> Vec<u8> {
     let daten: Vec<u8> = pfad.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect();
-    let mut e = vec![PFAD];
+    let mut e = vec![id];
     e.extend(varint(daten.len()));
     e.extend(daten);
     e
 }
 
 /// Alle Audio-Pfade, die die FLP verwendet (ohne Doppelte, in Reihenfolge).
-pub(crate) fn audio_pfade(b: &[u8]) -> Vec<String> {
+pub(crate) fn audio_pfade(b: &[u8]) -> Vec<String> { pfade_mit(b, PFAD) }
+
+/// Datenordner, falls die FLP einen trägt.
+pub(crate) fn datenordner(b: &[u8]) -> Option<String> { pfade_mit(b, DATENORDNER).into_iter().next() }
+
+fn pfade_mit(b: &[u8], id: u8) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for i in 0..b.len() {
-        if b[i] != PFAD { continue; }
+        if b[i] != id { continue; }
         let (mut len, mut p, mut shift) = (0usize, i + 1, 0);
         while let Some(&c) = b.get(p) {
             p += 1;
@@ -206,6 +216,10 @@ pub(crate) fn flp_angelegt(b: &[u8]) -> Option<String> {
 /// Pfade austauschen (alt → neu). Gibt die neue Datei und die Zahl der
 /// Ersetzungen zurück; None, wenn die Datei kein FLP-Aufbau hat.
 pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(Vec<u8>, usize)> {
+    ersetzen_mit(b, PFAD, ersatz)
+}
+
+fn ersetzen_mit(b: &[u8], id: u8, ersatz: &[(String, String)]) -> Option<(Vec<u8>, usize)> {
     if b.get(0..4)? != b"FLhd" { return None; }
     let kopf = u32::from_le_bytes(b.get(4..8)?.try_into().ok()?) as usize;
     let dt = 8 + kopf;
@@ -214,7 +228,7 @@ pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(V
     let mut out = b.to_vec();
     let mut zahl = 0;
     for (alt, neu) in ersatz {
-        let (a, n) = (pfad_ereignis(alt), pfad_ereignis(neu));
+        let (a, n) = (ereignis(id, alt), ereignis(id, neu));
         let mut i = dt + 8;
         while let Some(pos) = out[i..].windows(a.len()).position(|w| w == a.as_slice()) {
             let start = i + pos;
@@ -234,7 +248,15 @@ pub(crate) fn pfade_ersetzen(b: &[u8], ersatz: &[(String, String)]) -> Option<(V
 pub(crate) fn flp_umschreiben(flp: &std::path::Path, ersatz: &[(String, String)], anlass: &str) -> Result<usize, String> {
     use std::fs;
     let alt = fs::read(flp).map_err(|e| format!("{} nicht lesbar: {e}", flp.display()))?;
-    let (neu, zahl) = pfade_ersetzen(&alt, ersatz).ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
+    let (mut neu, mut zahl) = pfade_ersetzen(&alt, ersatz).ok_or_else(|| format!("{} ist keine gültige FLP", flp.display()))?;
+    // Datenordner ins Leere (Ordner umbenannt, Projekt archiviert): der eigene Ordner,
+    // wie FL ihn für neue Projekte nimmt. Sonst legte FL beim Aufnehmen den alten neu an.
+    if let (Some(d), Some(eigen)) = (datenordner(&neu), flp.parent()) {
+        if !std::path::Path::new(&d).is_dir() {
+            let ziel = format!("{}\\", eigen.to_string_lossy().trim_end_matches('\\'));
+            if let Some((n, k)) = ersetzen_mit(&neu, DATENORDNER, &[(d, ziel)]) { neu = n; zahl += k; }
+        }
+    }
     if zahl == 0 { return Ok(0); }
     let stamm = flp.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let backup_dir = flp.parent().ok_or("FLP ohne Ordner")?.join("Backup");
@@ -287,6 +309,30 @@ mod tests {
         assert_eq!(dt_len, neu.len() - 22);
         assert_eq!(lesen(&neu).unwrap().tempo, Some(140.0));
         assert!(pfade_ersetzen(b"RIFF....", &[]).is_none());
+    }
+
+    #[test]
+    fn datenordner_ins_leere_wird_der_eigene() {
+        let t = std::env::temp_dir().join(format!("beatos_datenordner_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&t);
+        let beat = t.join("B0369 - CALL ME [135 Emin]").join("01_SAVEFILES");
+        std::fs::create_dir_all(&beat).unwrap();
+        let alt_ordner = format!(r"{}\", t.join("B0369 - CALL ME [Em 135]").join("01_SAVEFILES").display());
+        let mut e = ereignis(DATENORDNER, &alt_ordner);
+        e.extend(pfad_ereignis(r"C:\weg\a.wav"));
+        let flp_datei = beat.join("CALL ME.flp");
+        std::fs::write(&flp_datei, flp(e)).unwrap();
+
+        // Auch ohne Audio-Ersatz: nur der Datenordner zählt
+        assert_eq!(flp_umschreiben(&flp_datei, &[], "vor Datenordner").unwrap(), 1);
+        let b = std::fs::read(&flp_datei).unwrap();
+        assert_eq!(datenordner(&b), Some(format!(r"{}\", beat.display())));
+        assert_eq!(audio_pfade(&b), [r"C:\weg\a.wav"], "Audio bleibt");
+        let dt_len = u32::from_le_bytes(b[18..22].try_into().unwrap()) as usize;
+        assert_eq!(dt_len, b.len() - 22);
+        // Existiert er, bleibt er
+        assert_eq!(flp_umschreiben(&flp_datei, &[], "x").unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&t);
     }
 
     fn ev_dword(b: &mut Vec<u8>, id: u8, v: u32) { b.push(id); b.extend(v.to_le_bytes()); }
