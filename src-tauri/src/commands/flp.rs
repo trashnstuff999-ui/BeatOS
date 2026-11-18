@@ -159,6 +159,7 @@ fn varint(mut n: usize) -> Vec<u8> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn pfad_ereignis(pfad: &str) -> Vec<u8> { ereignis(PFAD, pfad) }
 
 fn ereignis(id: u8, pfad: &str) -> Vec<u8> {

@@ -1,5 +1,5 @@
 // Meldung, wenn BeatOS nach einer Sample-Umbenennung die Beats nachzieht
-// (Ereignis `beats-nachgezogen` aus studio.rs, nachzug_melden).
+// (Ereignis `beats-nachgezogen` aus studio/neu.rs, nachzug_melden).
 
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";

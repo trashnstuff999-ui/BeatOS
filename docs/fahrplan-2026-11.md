@@ -101,6 +101,9 @@ nächsten Features der Ballast weg soll.
    drüben ist.
 3. **Umbau-Werkzeuge löschen**: Fundstücke, Einsammeln, Artist-Ordner,
    `pfadreparatur.rs`, die Handproben-Tests (mittel, fast nur Löschen).
+   Stephan 18.11.2026: erst, wenn sie zu 100 % nicht mehr gebraucht werden.
+   Vorher `verweise_umbiegen`/`verweise_in` und `dateien` aus `pfadreparatur.rs`
+   nach `flp.rs` holen, Studio braucht sie für das Nachziehen der Samplepfade.
 4. **App-Durchgang**: was brauchen wir nicht mehr? Dabei die Tab-Durchsicht per
    Screenshot nach der Schrift-Umstellung miterledigen.
 

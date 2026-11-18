@@ -1,6 +1,6 @@
 // src/types/studio.ts
 // ═══════════════════════════════════════════════════════════════════════════════
-// Studio tab shapes — mirror the Rust structs in commands/studio.rs
+// Studio tab shapes — mirror the Rust structs in commands/studio/
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type StudioStatus = "idea" | "wip" | "exported" | "ready" | "discard";
@@ -14,7 +14,7 @@ export function isManualStatus(s: StudioStatus): s is ManualStatus {
 }
 
 /**
- * Dieselbe Regel wie derive_stage in commands/studio.rs. Gebraucht wird sie
+ * Dieselbe Regel wie derive_stage in commands/studio/. Gebraucht wird sie
  * hier, wenn du einen Handstatus wieder abwählst: dann gilt sofort wieder die
  * automatische Stufe, ohne auf den nächsten Scan zu warten.
  */
