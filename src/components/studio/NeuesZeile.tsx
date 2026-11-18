@@ -86,6 +86,11 @@ export function NeuesZeile({ onUebernommen, nurSamples }: { onUebernommen: () =>
             onClick={() => uebernehmen(n)}>
             Übernehmen
           </Button>
+          {n.dateien.length > 1 && (
+            <div style={{ flexBasis: "100%", fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+              {n.dateien.length} Dateien: {n.dateien.join(" · ")}
+            </div>
+          )}
         </div>
       ))}
     </div>

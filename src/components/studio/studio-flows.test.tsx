@@ -781,7 +781,7 @@ describe("N1 — neues Projekt aus einer vorhandenen FLP", () => {
 });
 
 describe("Scheibe 6 — Neues erkennen", () => {
-  const NEU = { pfad: "C:\PROD\dont cry 150 bm", alt: "dont cry 150 bm", titel: "DONT CRY [150 Bmin]", nummer: "P0858", sample: false, lose: false, in_fl: false };
+  const NEU = { pfad: "C:\PROD\dont cry 150 bm", alt: "dont cry 150 bm", titel: "DONT CRY [150 Bmin]", nummer: "P0858", sample: false, lose: false, in_fl: false, spuren: 0, fertig: false, dateien: [] as string[] };
   function mitNeuem(neu: object[]) {
     const calls = stubInvoke();
     vi.mocked(invoke).mockImplementation(((orig) => (cmd: string, args?: unknown) => {

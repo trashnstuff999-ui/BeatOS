@@ -1348,6 +1348,8 @@ pub struct NeuGefunden {
     /// Titel, Tempo und Tonart da, in FL zu, seit 2 Minuten unverändert:
     /// BeatOS ordnet es ohne Klick ein
     pub fertig: bool,
+    /// Lose: welche Dateien beim Übernehmen mitgehen (Dateinamen). Ordner: leer
+    pub dateien: Vec<String>,
 }
 
 /// So lange muss alles ruhen, bevor BeatOS von selbst einordnet. Sonst risse
@@ -1634,16 +1636,26 @@ fn neues_in(root: &Path, sample: bool, start: u32, fl: &Option<String>) -> Vec<N
     alle.sort_by_key(|(p, _, _)| file_modified_secs(p));
     let prefix = if sample { "S" } else { PROJECT_PREFIX };
     let jetzt = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let lose_dateien: Vec<PathBuf> = std::fs::read_dir(root).into_iter().flatten().flatten()
+        .map(|e| e.path()).filter(|p| p.is_file()).collect();
     alle.into_iter().enumerate().map(|(i, (p, alt, lose))| {
         let titel = if ist_spur(&p) { gruppen_titel(&alt) } else { mit_flp_tempo(crate::utils::schoener_name(&alt, sample), &p) };
         let offen = fl_namen(&p).iter().any(|n| in_fl(fl, n));
+        // Wie lose_flp_einordnen / lose_spuren_einordnen: gleicher Name, bei Samples gleicher Titel
+        let gruppe = gruppen_titel(&alt);
+        let mut dateien: Vec<String> = if !lose { Vec::new() } else {
+            lose_dateien.iter().filter(|f| **f == p || (is_flp(&p) && stamm(f) == alt)
+                || (sample && ist_spur(f) && gruppen_titel(&stamm(f)) == gruppe))
+                .map(|f| f.file_name().unwrap_or_default().to_string_lossy().to_string()).collect()
+        };
+        dateien.sort();
         NeuGefunden {
             pfad: p.to_string_lossy().to_string(),
             spuren: if ist_spur(&p) { anzahl.get(&gruppen_titel(&alt)).copied().unwrap_or(0) } else { 0 },
             nummer: format!("{}{:04}", prefix, start + i as u32 + 1),
             fertig: !offen && komplett(&titel) && jetzt.saturating_sub(juengste_secs(&p, root)) >= RUHE_SEK,
             in_fl: offen,
-            titel, alt, sample, lose,
+            titel, alt, sample, lose, dateien,
         }
     }).collect()
 }
@@ -4058,6 +4070,9 @@ mod tests {
         let mut kurz: Vec<_> = s.iter().map(|n| n.titel.clone()).collect();
         kurz.sort();
         assert_eq!(kurz, ["ANDERES [120 Amin]", "SUNRISE [132 F#min]"], "Sunrise ist eine Zeile");
+        let sunrise = s.iter().find(|n| n.titel.starts_with("SUNRISE")).unwrap();
+        assert_eq!(sunrise.dateien, ["gtr - sunrise - f#m 132.mid", "gtr - sunrise - f#m 132.wav", "gtr - sunrise - f#m 132_raw.wav", "sunrise - f#m 132.flp"]);
+        assert_eq!(s.iter().find(|n| n.titel.starts_with("ANDERES")).unwrap().dateien, ["pad - anderes 120 am.wav"]);
 
         let flp = samples.join("sunrise - f#m 132.flp");
         let ziel = std::path::PathBuf::from(super::neu_uebernehmen_in(&[], Some(&samples), &flp, "sunrise - f#m 132", &None).unwrap());

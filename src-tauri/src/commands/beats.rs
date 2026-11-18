@@ -341,7 +341,8 @@ pub fn update_beat(params: UpdateBeatParams) -> Result<(), String> {
     
     if let Some(ref name) = params.name {
         updates.push("name = ?".to_string());
-        values.push(Box::new(name.clone()));
+        // Namensregel: Titel stehen groß, wie im Ordnernamen
+        values.push(Box::new(name.to_uppercase()));
     }
     
     if let Some(bpm) = params.bpm {

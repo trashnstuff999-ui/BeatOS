@@ -17,6 +17,8 @@ export interface NeuGefunden {
   spuren: number;
   /** Sample komplett benannt, in FL zu, ruht: wird ohne Klick eingeordnet */
   fertig: boolean;
+  /** Lose: was beim Übernehmen mitgeht. Ordner: leer */
+  dateien: string[];
 }
 import type { Beat, BeatStatus, SortColumn, SortDirection, UpdateBeatParams } from "../types/browse";
 import type {

@@ -232,6 +232,15 @@ fn tagessicherung(dir: &Path, schnappschuss: &Path, heute: &str) {
 static DB_INIT: Once = Once::new();
 static DB_INIT_ERROR: OnceLock<Option<String>> = OnceLock::new();
 
+fn titel_gross(conn: &Connection) -> usize {
+    let zeilen: Vec<(String, String)> = conn.prepare("SELECT id, name FROM beats WHERE name IS NOT NULL")
+        .and_then(|mut s| s.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect())
+        .unwrap_or_default();
+    zeilen.into_iter().filter(|(_, n)| n.to_uppercase() != *n)
+        .filter(|(id, n)| conn.execute("UPDATE beats SET name = ?1 WHERE id = ?2", [n.to_uppercase(), id.clone()]).is_ok())
+        .count()
+}
+
 pub fn init_db() -> Result<(), String> {
     let mut init_error: Option<String> = None;
     
@@ -451,6 +460,9 @@ pub fn init_db() -> Result<(), String> {
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN begonnen TEXT", []);
                 // Scheibe 4: Katalognummer vor der Neu-Nummerierung (B-Nummern), suchbar
                 let _ = conn.execute("ALTER TABLE beats ADD COLUMN frueher_nr TEXT", []);
+                // Namensregel (18.11.2026): Titel stehen groß. In Rust, weil upper()
+                // in SQLite nur A-Z kennt (ä bliebe klein). Ändert nur, was noch nicht stimmt.
+                titel_gross(&conn);
 
                 // Studio tab: per-project status/priority, keyed by folder path
                 if let Err(e) = conn.execute(
@@ -538,8 +550,20 @@ pub fn init_db() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{library_dir_from_archive, tagessicherung};
+    use super::{library_dir_from_archive, tagessicherung, titel_gross};
     use std::path::PathBuf;
+
+    #[test]
+    fn titel_werden_gross_auch_mit_umlaut() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE beats (id TEXT, name TEXT);
+            INSERT INTO beats VALUES ('1', 'Make No Drama'), ('2', 'Träume'), ('3', 'SCHON GROSS'), ('4', NULL);").unwrap();
+        assert_eq!(titel_gross(&conn), 2);
+        let namen: Vec<String> = conn.prepare("SELECT name FROM beats WHERE name IS NOT NULL ORDER BY id").unwrap()
+            .query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+        assert_eq!(namen, ["MAKE NO DRAMA", "TRÄUME", "SCHON GROSS"]);
+        assert_eq!(titel_gross(&conn), 0, "zweiter Start: nichts mehr zu tun");
+    }
 
     #[test]
     fn tagessicherung_einmal_je_tag_und_sieben_bleiben() {
